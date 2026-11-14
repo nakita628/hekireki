@@ -7,6 +7,7 @@ export default defineConfig({
       'bin/hekireki': './src/bin/hekireki.ts',
       'bin/atlas': './src/bin/atlas.ts',
       'bin/zod': './src/bin/zod.ts',
+      'bin/zod-openapi-hono': './src/bin/zod-openapi-hono.ts',
       'bin/valibot': './src/bin/valibot.ts',
       'bin/ecto': './src/bin/ecto.ts',
       'bin/arktype': './src/bin/arktype.ts',
@@ -808,6 +809,34 @@ export default defineConfig({
         },
       },
       {
+        // database/domain is the pure half of src/database: a URL's text and a driver's result
+        // in, what they say out (the dialect, the URL that wins, the rows as Driver answers them).
+        // It reads no environment, opens no connection and imports nothing of Effect: url.ts reads
+        // the environment, resolve.ts the files, driver.ts the database. Its fixed values live in
+        // src/constants and its words in src/types, the two shared leaves.
+        files: ['src/database/domain/**'],
+        rules: {
+          'custom/generator-pure': 'error',
+          'no-restricted-imports': [
+            'error',
+            {
+              paths: [
+                { name: 'node:fs', message: 'file I/O belongs in src/file' },
+                { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
+                { name: 'effect', message: 'domain depends on zod at most, never on effect' },
+              ],
+              patterns: [
+                {
+                  group: ['../**', '!../../constants/**', '!../../types/**'],
+                  message:
+                    'database/domain must stay pure: it imports nothing of src/database or the rest of hekireki but the shared constants and types',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
         // The studio client is browser code bundled by Vite: it only takes the contract types
         // from the server side.
         files: ['src/studio/client/**'],
@@ -1057,6 +1086,8 @@ export default defineConfig({
           'src/seed/discover.ts',
           'src/seed/load-config.ts',
           'src/database/url.ts',
+          'src/database/errors.ts',
+          'src/file/project.ts',
           'src/core/errors.ts',
           'src/migrate/errors.ts',
           'src/format/index.ts',

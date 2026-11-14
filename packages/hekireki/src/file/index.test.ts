@@ -8,6 +8,8 @@ import type { FileSystem, PlatformError } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 import {
+  importFromProject,
+  ProjectImportError,
   exists,
   isDirectory,
   makeDirectory,
@@ -112,5 +114,24 @@ describe('watch', () => {
   it('fails for a missing directory', async () => {
     const error = await fail(Stream.runDrain(watch(path.join(tmp(), 'missing'))))
     expect(error.message).toContain('NotFound')
+  })
+})
+
+describe('importFromProject', () => {
+  const project = path.resolve(import.meta.dirname, '..', '..')
+
+  it('loads a package as the project resolves it', async () => {
+    const zod: unknown = await Effect.runPromise(importFromProject('zod', project))
+    expect(typeof zod === 'object' && zod !== null && 'object' in zod).toBe(true)
+  })
+
+  it('says which package the project could not load, and from where', async () => {
+    const failure = await Effect.runPromise(
+      Effect.flip(importFromProject('hekireki-no-such-package', project)),
+    )
+    expect(failure).toBeInstanceOf(ProjectImportError)
+    expect(failure.specifier).toBe('hekireki-no-such-package')
+    expect(failure.cwd).toBe(project)
+    expect(failure.message).toContain('hekireki-no-such-package')
   })
 })

@@ -1,5 +1,7 @@
 import { Effect, FileSystem, Option, Stream } from 'effect'
 
+export { importFromProject, ProjectImportError } from './project.js'
+
 export function readFile(path: string) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem

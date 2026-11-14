@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -27,6 +27,7 @@ import { seaOrm } from './sea-orm.js'
 import { sqlalchemy } from './sqlalchemy.js'
 import { typebox } from './typebox.js'
 import { valibot } from './valibot.js'
+import { zodOpenapiHono } from './zod-openapi-hono.js'
 import { zod } from './zod.js'
 
 const dirs: string[] = []
@@ -246,6 +247,7 @@ describe.each([
   ['typebox', typebox, 'Hekireki-TypeBox'],
   ['valibot', valibot, 'Hekireki-Valibot'],
   ['zod', zod, 'Hekireki-Zod'],
+  ['zod-openapi-hono', zodOpenapiHono, 'Hekireki-ZodOpenAPIHono'],
 ])('%s', (_name, generator, prettyName) => {
   it('says which generator is missing its output', async () => {
     expect(failure(await run(generator, null))).toContain(
@@ -661,6 +663,92 @@ describe('datasource provider', () => {
     const dir = tmp()
     await run(drizzle, dir, {}, 'mongodb')
     expect(readdirSync(dir)).toStrictEqual([])
+  })
+})
+
+describe('ZodOpenAPIHono', () => {
+  it('writes the document and the app Hono Takibi makes of it, the handlers calling prisma', async () => {
+    const dir = tmp()
+    const exit = await run(zodOpenapiHono, dir)
+    expect(failure(exit)).toBe('')
+    expect(readdirSync(dir).toSorted()).toStrictEqual([
+      'handlers',
+      'index.ts',
+      'openapi.yaml',
+      'routes.ts',
+    ])
+    const user = readFileSync(path.join(dir, 'handlers', 'user.ts'), 'utf8')
+    expect(user).toContain("import { prisma } from '../prisma'")
+    expect(user).toContain('const rows = await prisma.user.findMany()')
+    expect(user).toContain("const data = c.req.valid('param')")
+    expect(user).toContain('const row = await prisma.user.findFirst({ where: { id: data.id } })')
+    expect(user).not.toContain('async (c) => {}')
+  })
+
+  it('keeps a handler written by hand when it runs again', async () => {
+    const dir = tmp()
+    expect(Exit.isSuccess(await run(zodOpenapiHono, dir))).toBe(true)
+    const file = path.join(dir, 'handlers', 'user.ts')
+    const edited = readFileSync(file, 'utf8').replace(
+      'await prisma.user.findMany()',
+      "await prisma.user.findMany({ orderBy: { name: 'asc' } })",
+    )
+    writeFileSync(file, edited)
+    expect(Exit.isSuccess(await run(zodOpenapiHono, dir))).toBe(true)
+    expect(readFileSync(file, 'utf8')).toContain("findMany({ orderBy: { name: 'asc' } })")
+  })
+
+  it('imports prisma from the module prisma names, as the handlers see it', async () => {
+    const dir = tmp()
+    expect(Exit.isSuccess(await run(zodOpenapiHono, dir, { prisma: '../lib/db' }))).toBe(true)
+    expect(readFileSync(path.join(dir, 'handlers', 'post.ts'), 'utf8')).toContain(
+      "import { prisma } from '../../lib/db'",
+    )
+    const aliased = tmp()
+    expect(Exit.isSuccess(await run(zodOpenapiHono, aliased, { prisma: '@/db' }))).toBe(true)
+    expect(readFileSync(path.join(aliased, 'handlers', 'post.ts'), 'utf8')).toContain(
+      "import { prisma } from '@/db'",
+    )
+  })
+
+  it('guards every model with the JWT auth.ts, keeping an auth.ts that is there', async () => {
+    const dir = tmp()
+    expect(failure(await run(zodOpenapiHono, dir, { auth: 'jwt' }))).toBe('')
+    expect(readFileSync(path.join(dir, 'auth.ts'), 'utf8')).toContain(
+      "jwt({ secret: JWT_SECRET, alg: 'HS256' })",
+    )
+    const entry = readFileSync(path.join(dir, 'index.ts'), 'utf8')
+    expect(entry).toContain("import { auth } from './auth'")
+    expect(entry).toContain("app.use('/users/*', auth)")
+    expect(entry).toContain("app.use('/posts/*', auth)")
+    expect(readFileSync(path.join(dir, 'openapi.yaml'), 'utf8')).toContain('bearerAuth:')
+    writeFileSync(path.join(dir, 'auth.ts'), 'export const auth = custom\n')
+    expect(failure(await run(zodOpenapiHono, dir, { auth: 'jwt' }))).toBe('')
+    expect(readFileSync(path.join(dir, 'auth.ts'), 'utf8')).toBe('export const auth = custom\n')
+    // Hono Takibi sorts the imports it merges, so the entry is compared by its guards.
+    const again = readFileSync(path.join(dir, 'index.ts'), 'utf8')
+    expect(again.match(/app\.use\('\/users\/\*', auth\)/gu)).toHaveLength(1)
+    expect(again.match(/import \{ auth \} from '\.\/auth'/gu)).toHaveLength(1)
+  })
+
+  it('refuses an auth it does not know', async () => {
+    expect(failure(await run(zodOpenapiHono, tmp(), { auth: 'session' }))).toContain(
+      'auth for Hekireki-ZodOpenAPIHono must be "jwt": session',
+    )
+  })
+
+  it('refuses an output that names a file', async () => {
+    const dir = tmp()
+    expect(failure(await run(zodOpenapiHono, path.join(dir, 'app.ts')))).toContain(
+      'output for Hekireki-ZodOpenAPIHono is the directory of the app, not a file',
+    )
+  })
+
+  it('writes no auth without the option', async () => {
+    const dir = tmp()
+    expect(failure(await run(zodOpenapiHono, dir))).toBe('')
+    expect(readdirSync(dir)).not.toContain('auth.ts')
+    expect(readFileSync(path.join(dir, 'index.ts'), 'utf8')).not.toContain('auth')
   })
 })
 

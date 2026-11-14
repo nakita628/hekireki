@@ -1,13 +1,13 @@
 import { existsSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { Effect } from 'effect'
 import type * as z from 'zod'
 
+import { adapterOf, makeAdapterArgs } from '../database/domain/adapter.js'
 import type { Dialect } from '../database/url.js'
-import { makePostgresSchema, makeSqliteFilePath } from '../database/url.js'
+import { importFromProject } from '../file/index.js'
 import type { GeneratorBlock } from '../schema/index.js'
 import { SeedDatabaseError } from './errors.js'
 
@@ -41,33 +41,22 @@ export function clientSource(generators: readonly z.infer<typeof GeneratorBlock>
 }
 
 /** A package as the project resolves it, so the adapter and the client are the project's own. */
-function importFromProject(specifier: string, cwd: string) {
-  return Effect.tryPromise({
-    try: async () => {
-      const resolved = createRequire(path.join(cwd, 'package.json')).resolve(specifier)
-      const loaded: unknown = await import(pathToFileURL(resolved).href)
-      return loaded
-    },
-    catch: (error) =>
-      new SeedDatabaseError({
-        message: `Cannot load "${specifier}" from ${cwd}: ${error instanceof Error ? error.message : String(error)}`,
-      }),
-  })
+function importForSeed(specifier: string, cwd: string) {
+  return importFromProject(specifier, cwd).pipe(
+    Effect.mapError(
+      (error) =>
+        new SeedDatabaseError({
+          message: `Cannot load "${specifier}" from ${cwd}: ${error.message}`,
+        }),
+    ),
+  )
 }
-
-/** The driver adapter package and class Prisma publishes for each dialect. */
-export const ADAPTERS: Readonly<Record<Dialect, { readonly pkg: string; readonly name: string }>> =
-  {
-    postgresql: { pkg: '@prisma/adapter-pg', name: 'PrismaPg' },
-    mysql: { pkg: '@prisma/adapter-mariadb', name: 'PrismaMariaDb' },
-    sqlite: { pkg: '@prisma/adapter-better-sqlite3', name: 'PrismaBetterSqlite3' },
-  }
 
 /** The driver adapter for the dialect, built from the project's package, or the reason there is none. */
 function makeAdapter(dialect: Dialect, url: string, cwd: string, schemaDir: string) {
   return Effect.gen(function* () {
-    const { pkg, name } = ADAPTERS[dialect]
-    const loaded = yield* importFromProject(pkg, cwd).pipe(
+    const { pkg, name } = adapterOf(dialect, url)
+    const loaded = yield* importForSeed(pkg, cwd).pipe(
       Effect.match({
         onFailure: (error) => ({
           module: null,
@@ -81,15 +70,7 @@ function makeAdapter(dialect: Dialect, url: string, cwd: string, schemaDir: stri
     if (typeof factory !== 'function') {
       return { adapter: null, reason: `${pkg} does not export ${name}` }
     }
-    // The SQLite file, or the URL — and for PostgreSQL the schema of its `?schema=`, which the pg
-    // driver does not read and PrismaPg takes as an option.
-    const schema = dialect === 'postgresql' ? makePostgresSchema({ url }) : null
-    const args: readonly unknown[] =
-      dialect === 'sqlite'
-        ? [{ url: makeSqliteFilePath({ url, baseDir: schemaDir }) }]
-        : schema === null
-          ? [url]
-          : [url, { schema }]
+    const args = makeAdapterArgs({ dialect, url, schemaDir })
     return yield* Effect.try({
       try: (): unknown => Reflect.construct(factory, [...args]),
       catch: (error) =>
@@ -133,7 +114,7 @@ export function discoverClient(input: {
     if (source === null) return { client: null, source: null, reason }
     const loaded = yield* (
       source === '@prisma/client'
-        ? importFromProject(source, input.cwd)
+        ? importForSeed(source, input.cwd)
         : Effect.tryPromise({
             try: async () => {
               const namespace: unknown = await import(

@@ -2,9 +2,9 @@ import path from 'node:path'
 
 import { Effect } from 'effect'
 
+import type { Driver } from '../../database/driver.js'
 import { exists, fileStamp, makeDirectory, readDirectory, writeFile } from '../../file/index.js'
 import { quoteIdentifier, stringLiteral } from '../../sql/index.js'
-import type { Driver } from '../../studio/server/services/database.js'
 import { MigrateConfigError } from '../errors.js'
 import { createPostgresBackup, restorePostgresBackup } from './backup-postgres.js'
 
@@ -43,6 +43,12 @@ export function createBackup(input: { readonly driver: Driver; readonly schemaDi
       .toISOString()
       .replaceAll(/[-:T.Z]/gu, '')
       .slice(0, 17)}`
+    if (driver.remote === true) {
+      return yield* new MigrateConfigError({
+        message:
+          'Studio cannot back up a remote SQLite database (Turso, a libSQL server): there is no file here to copy. Use the point-in-time restore of the service.',
+      })
+    }
     if (driver.dialect === 'sqlite') {
       const directory = backupsDirectory(input.schemaDir)
       yield* makeDirectory(directory)
@@ -77,6 +83,8 @@ export function createBackup(input: { readonly driver: Driver; readonly schemaDi
 export function listBackups(input: { readonly driver: Driver; readonly schemaDir: string }) {
   return Effect.gen(function* () {
     const { driver } = input
+    // A remote database is never backed up here, so the files of the directory are not its.
+    if (driver.remote === true) return []
     if (driver.dialect === 'sqlite') {
       const directory = backupsDirectory(input.schemaDir)
       const names = yield* readDirectory(directory).pipe(
@@ -128,7 +136,7 @@ export function restoreBackup(input: {
 }) {
   return Effect.gen(function* () {
     const { driver } = input
-    if (driver.dialect === 'mysql' || !/^backup_\d+$/u.test(input.name)) {
+    if (driver.dialect === 'mysql' || driver.remote === true || !/^backup_\d+$/u.test(input.name)) {
       return yield* new MigrateConfigError({ message: `There is no backup ${input.name}.` })
     }
     if (driver.dialect === 'postgresql') return yield* restorePostgresBackup(driver, input.name)

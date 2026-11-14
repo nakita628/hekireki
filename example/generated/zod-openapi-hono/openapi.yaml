@@ -1,0 +1,1872 @@
+openapi: 3.1.0
+info:
+  title: Generated from schema.prisma
+  version: 1.0.0
+paths:
+  "/users":
+    get:
+      tags:
+        - User
+      summary: List users
+      operationId: listUsers
+      responses:
+        "200":
+          description: The users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+    post:
+      tags:
+        - User
+      summary: Create an user
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreate"
+      responses:
+        "201":
+          description: The user made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+  "/users/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - User
+      summary: Get an user
+      operationId: getUser
+      responses:
+        "200":
+          description: The user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No user has this key.
+      security:
+        - bearerAuth: []
+    patch:
+      tags:
+        - User
+      summary: Update an user
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: The user changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No user has this key.
+      security:
+        - bearerAuth: []
+    delete:
+      tags:
+        - User
+      summary: Delete an user
+      operationId: deleteUser
+      responses:
+        "204":
+          description: The user is deleted.
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No user has this key.
+      security:
+        - bearerAuth: []
+  "/profiles":
+    get:
+      tags:
+        - Profile
+      summary: List profiles
+      operationId: listProfiles
+      responses:
+        "200":
+          description: The profiles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Profile"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+    post:
+      tags:
+        - Profile
+      summary: Create a profile
+      operationId: createProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileCreate"
+      responses:
+        "201":
+          description: The profile made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+  "/profiles/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Profile
+      summary: Get a profile
+      operationId: getProfile
+      responses:
+        "200":
+          description: The profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No profile has this key.
+      security:
+        - bearerAuth: []
+    patch:
+      tags:
+        - Profile
+      summary: Update a profile
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: The profile changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No profile has this key.
+      security:
+        - bearerAuth: []
+    delete:
+      tags:
+        - Profile
+      summary: Delete a profile
+      operationId: deleteProfile
+      responses:
+        "204":
+          description: The profile is deleted.
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No profile has this key.
+      security:
+        - bearerAuth: []
+  "/posts":
+    get:
+      tags:
+        - Post
+      summary: List posts
+      operationId: listPosts
+      responses:
+        "200":
+          description: The posts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Post"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+    post:
+      tags:
+        - Post
+      summary: Create a post
+      operationId: createPost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostCreate"
+      responses:
+        "201":
+          description: The post made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+  "/posts/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Post
+      summary: Get a post
+      operationId: getPost
+      responses:
+        "200":
+          description: The post.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No post has this key.
+      security:
+        - bearerAuth: []
+    patch:
+      tags:
+        - Post
+      summary: Update a post
+      operationId: updatePost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostUpdate"
+      responses:
+        "200":
+          description: The post changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No post has this key.
+      security:
+        - bearerAuth: []
+    delete:
+      tags:
+        - Post
+      summary: Delete a post
+      operationId: deletePost
+      responses:
+        "204":
+          description: The post is deleted.
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No post has this key.
+      security:
+        - bearerAuth: []
+  "/tags":
+    get:
+      tags:
+        - Tag
+      summary: List tags
+      operationId: listTags
+      responses:
+        "200":
+          description: The tags.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tag"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+    post:
+      tags:
+        - Tag
+      summary: Create a tag
+      operationId: createTag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagCreate"
+      responses:
+        "201":
+          description: The tag made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+  "/tags/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Tag
+      summary: Get a tag
+      operationId: getTag
+      responses:
+        "200":
+          description: The tag.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No tag has this key.
+      security:
+        - bearerAuth: []
+    patch:
+      tags:
+        - Tag
+      summary: Update a tag
+      operationId: updateTag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagUpdate"
+      responses:
+        "200":
+          description: The tag changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No tag has this key.
+      security:
+        - bearerAuth: []
+    delete:
+      tags:
+        - Tag
+      summary: Delete a tag
+      operationId: deleteTag
+      responses:
+        "204":
+          description: The tag is deleted.
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No tag has this key.
+      security:
+        - bearerAuth: []
+  "/comments":
+    get:
+      tags:
+        - Comment
+      summary: List comments
+      operationId: listComments
+      responses:
+        "200":
+          description: The comments.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Comment"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+    post:
+      tags:
+        - Comment
+      summary: Create a comment
+      operationId: createComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentCreate"
+      responses:
+        "201":
+          description: The comment made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+  "/comments/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Comment
+      summary: Get a comment
+      operationId: getComment
+      responses:
+        "200":
+          description: The comment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No comment has this key.
+      security:
+        - bearerAuth: []
+    patch:
+      tags:
+        - Comment
+      summary: Update a comment
+      operationId: updateComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentUpdate"
+      responses:
+        "200":
+          description: The comment changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No comment has this key.
+      security:
+        - bearerAuth: []
+    delete:
+      tags:
+        - Comment
+      summary: Delete a comment
+      operationId: deleteComment
+      responses:
+        "204":
+          description: The comment is deleted.
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No comment has this key.
+      security:
+        - bearerAuth: []
+  "/follows":
+    get:
+      tags:
+        - Follow
+      summary: List follows
+      operationId: listFollows
+      responses:
+        "200":
+          description: The follows.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Follow"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+    post:
+      tags:
+        - Follow
+      summary: Create a follow
+      operationId: createFollow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FollowCreate"
+      responses:
+        "201":
+          description: The follow made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Follow"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+  "/follows/{followerId}/{followingId}":
+    parameters:
+      - name: followerId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: followingId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Follow
+      summary: Get a follow
+      operationId: getFollow
+      responses:
+        "200":
+          description: The follow.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Follow"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No follow has this key.
+      security:
+        - bearerAuth: []
+    patch:
+      tags:
+        - Follow
+      summary: Update a follow
+      operationId: updateFollow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FollowUpdate"
+      responses:
+        "200":
+          description: The follow changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Follow"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No follow has this key.
+      security:
+        - bearerAuth: []
+    delete:
+      tags:
+        - Follow
+      summary: Delete a follow
+      operationId: deleteFollow
+      responses:
+        "204":
+          description: The follow is deleted.
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No follow has this key.
+      security:
+        - bearerAuth: []
+  "/categories":
+    get:
+      tags:
+        - Category
+      summary: List categories
+      operationId: listCategories
+      responses:
+        "200":
+          description: The categories.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+    post:
+      tags:
+        - Category
+      summary: Create a category
+      operationId: createCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryCreate"
+      responses:
+        "201":
+          description: The category made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+  "/categories/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Category
+      summary: Get a category
+      operationId: getCategory
+      responses:
+        "200":
+          description: The category.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No category has this key.
+      security:
+        - bearerAuth: []
+    patch:
+      tags:
+        - Category
+      summary: Update a category
+      operationId: updateCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryUpdate"
+      responses:
+        "200":
+          description: The category changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No category has this key.
+      security:
+        - bearerAuth: []
+    delete:
+      tags:
+        - Category
+      summary: Delete a category
+      operationId: deleteCategory
+      responses:
+        "204":
+          description: The category is deleted.
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No category has this key.
+      security:
+        - bearerAuth: []
+  "/orders":
+    get:
+      tags:
+        - Order
+      summary: List orders
+      operationId: listOrders
+      responses:
+        "200":
+          description: The orders.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+    post:
+      tags:
+        - Order
+      summary: Create an order
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderCreate"
+      responses:
+        "201":
+          description: The order made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+  "/orders/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Order
+      summary: Get an order
+      operationId: getOrder
+      responses:
+        "200":
+          description: The order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No order has this key.
+      security:
+        - bearerAuth: []
+    patch:
+      tags:
+        - Order
+      summary: Update an order
+      operationId: updateOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderUpdate"
+      responses:
+        "200":
+          description: The order changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No order has this key.
+      security:
+        - bearerAuth: []
+    delete:
+      tags:
+        - Order
+      summary: Delete an order
+      operationId: deleteOrder
+      responses:
+        "204":
+          description: The order is deleted.
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No order has this key.
+      security:
+        - bearerAuth: []
+  "/order-items":
+    get:
+      tags:
+        - OrderItem
+      summary: List order items
+      operationId: listOrderItems
+      responses:
+        "200":
+          description: The order items.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrderItem"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+    post:
+      tags:
+        - OrderItem
+      summary: Create an order item
+      operationId: createOrderItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderItemCreate"
+      responses:
+        "201":
+          description: The order item made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderItem"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+  "/order-items/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - OrderItem
+      summary: Get an order item
+      operationId: getOrderItem
+      responses:
+        "200":
+          description: The order item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderItem"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No order item has this key.
+      security:
+        - bearerAuth: []
+    patch:
+      tags:
+        - OrderItem
+      summary: Update an order item
+      operationId: updateOrderItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderItemUpdate"
+      responses:
+        "200":
+          description: The order item changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderItem"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No order item has this key.
+      security:
+        - bearerAuth: []
+    delete:
+      tags:
+        - OrderItem
+      summary: Delete an order item
+      operationId: deleteOrderItem
+      responses:
+        "204":
+          description: The order item is deleted.
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No order item has this key.
+      security:
+        - bearerAuth: []
+  "/audit-logs":
+    get:
+      tags:
+        - AuditLog
+      summary: List audit logs
+      operationId: listAuditLogs
+      responses:
+        "200":
+          description: The audit logs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLog"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+    post:
+      tags:
+        - AuditLog
+      summary: Create an audit log
+      operationId: createAuditLog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuditLogCreate"
+      responses:
+        "201":
+          description: The audit log made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLog"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+  "/audit-logs/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - AuditLog
+      summary: Get an audit log
+      operationId: getAuditLog
+      responses:
+        "200":
+          description: The audit log.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLog"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No audit log has this key.
+      security:
+        - bearerAuth: []
+    patch:
+      tags:
+        - AuditLog
+      summary: Update an audit log
+      operationId: updateAuditLog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuditLogUpdate"
+      responses:
+        "200":
+          description: The audit log changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLog"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No audit log has this key.
+      security:
+        - bearerAuth: []
+    delete:
+      tags:
+        - AuditLog
+      summary: Delete an audit log
+      operationId: deleteAuditLog
+      responses:
+        "204":
+          description: The audit log is deleted.
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No audit log has this key.
+      security:
+        - bearerAuth: []
+  "/actors":
+    get:
+      tags:
+        - Actor
+      summary: List actors
+      operationId: listActors
+      responses:
+        "200":
+          description: The actors.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Actor"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+    post:
+      tags:
+        - Actor
+      summary: Create an actor
+      operationId: createActor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActorCreate"
+      responses:
+        "201":
+          description: The actor made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Actor"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+  "/actors/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Actor
+      summary: Get an actor
+      operationId: getActor
+      responses:
+        "200":
+          description: The actor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Actor"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No actor has this key.
+      security:
+        - bearerAuth: []
+    patch:
+      tags:
+        - Actor
+      summary: Update an actor
+      operationId: updateActor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActorUpdate"
+      responses:
+        "200":
+          description: The actor changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Actor"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No actor has this key.
+      security:
+        - bearerAuth: []
+    delete:
+      tags:
+        - Actor
+      summary: Delete an actor
+      operationId: deleteActor
+      responses:
+        "204":
+          description: The actor is deleted.
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No actor has this key.
+      security:
+        - bearerAuth: []
+  "/films":
+    get:
+      tags:
+        - Film
+      summary: List films
+      operationId: listFilms
+      responses:
+        "200":
+          description: The films.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Film"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+    post:
+      tags:
+        - Film
+      summary: Create a film
+      operationId: createFilm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FilmCreate"
+      responses:
+        "201":
+          description: The film made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Film"
+        "401":
+          description: No valid bearer token.
+      security:
+        - bearerAuth: []
+  "/films/{id}":
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Film
+      summary: Get a film
+      operationId: getFilm
+      responses:
+        "200":
+          description: The film.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Film"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No film has this key.
+      security:
+        - bearerAuth: []
+    patch:
+      tags:
+        - Film
+      summary: Update a film
+      operationId: updateFilm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FilmUpdate"
+      responses:
+        "200":
+          description: The film changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Film"
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No film has this key.
+      security:
+        - bearerAuth: []
+    delete:
+      tags:
+        - Film
+      summary: Delete a film
+      operationId: deleteFilm
+      responses:
+        "204":
+          description: The film is deleted.
+        "401":
+          description: No valid bearer token.
+        "404":
+          description: No film has this key.
+      security:
+        - bearerAuth: []
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Primary key (UUIDv7)
+        email:
+          type: string
+          description: Unique login email
+        name:
+          type: string
+          description: Display name
+        role:
+          type: string
+          enum:
+            - ADMIN
+            - EDITOR
+            - VIEWER
+        interests:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - email
+        - name
+        - role
+        - interests
+        - createdAt
+        - updatedAt
+      description: |-
+        Application user. Fully annotated for every validator generator,
+        with a UUIDv7 primary key, enum default, scalar list, @map columns,
+        @updatedAt, and relations of every cardinality.
+    UserCreate:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Primary key (UUIDv7)
+        email:
+          type: string
+          description: Unique login email
+        name:
+          type: string
+          description: Display name
+        role:
+          type: string
+          enum:
+            - ADMIN
+            - EDITOR
+            - VIEWER
+        interests:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - email
+        - name
+    UserUpdate:
+      type: object
+      properties:
+        email:
+          type: string
+          description: Unique login email
+        name:
+          type: string
+          description: Display name
+        role:
+          type: string
+          enum:
+            - ADMIN
+            - EDITOR
+            - VIEWER
+        interests:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Profile:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        bio:
+          type: [string, "null"]
+        nickname:
+          type: string
+        age:
+          type: [integer, "null"]
+        balance:
+          type: string
+        verified:
+          type: boolean
+        meta: {}
+        avatar:
+          type: [string, "null"]
+          format: byte
+        lastSeen:
+          type: [string, "null"]
+          format: date-time
+      required:
+        - id
+        - userId
+        - bio
+        - nickname
+        - age
+        - balance
+        - verified
+        - meta
+        - avatar
+        - lastSeen
+      description: |-
+        One-to-one relation with native @db.* types, literal defaults,
+        and optional scalars of every flavour. ConfigDict passthrough: the
+        Pydantic model rejects unknown keys (extra='forbid').
+    ProfileCreate:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        bio:
+          type: [string, "null"]
+        nickname:
+          type: string
+        age:
+          type: [integer, "null"]
+        balance:
+          type: string
+        verified:
+          type: boolean
+        meta: {}
+        avatar:
+          type: [string, "null"]
+          format: byte
+        lastSeen:
+          type: [string, "null"]
+          format: date-time
+      required:
+        - userId
+    ProfileUpdate:
+      type: object
+      properties:
+        userId:
+          type: string
+        bio:
+          type: [string, "null"]
+        nickname:
+          type: string
+        age:
+          type: [integer, "null"]
+        balance:
+          type: string
+        verified:
+          type: boolean
+        meta: {}
+        avatar:
+          type: [string, "null"]
+          format: byte
+        lastSeen:
+          type: [string, "null"]
+          format: date-time
+    Post:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Primary key
+        title:
+          type: string
+          description: Article title
+        content:
+          type: [string, "null"]
+        visibility:
+          type: string
+          enum:
+            - PUBLIC
+            - PRIVATE
+            - LINK_ONLY
+        published:
+          type: boolean
+        viewCount:
+          type: integer
+        authorId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - content
+        - visibility
+        - published
+        - viewCount
+        - authorId
+        - createdAt
+      description: |-
+        @@map + @map column names, FK with a referential action,
+        mapped-enum default, and an implicit many-to-many to Tag.
+    PostCreate:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Primary key
+        title:
+          type: string
+          description: Article title
+        content:
+          type: [string, "null"]
+        visibility:
+          type: string
+          enum:
+            - PUBLIC
+            - PRIVATE
+            - LINK_ONLY
+        published:
+          type: boolean
+        viewCount:
+          type: integer
+        authorId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - title
+        - authorId
+    PostUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Article title
+        content:
+          type: [string, "null"]
+        visibility:
+          type: string
+          enum:
+            - PUBLIC
+            - PRIVATE
+            - LINK_ONLY
+        published:
+          type: boolean
+        viewCount:
+          type: integer
+        authorId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Tag:
+      type: object
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+      required:
+        - id
+        - label
+      description: "Implicit many-to-many partner of Post (join table `_PostToTag`)."
+    TagCreate:
+      type: object
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+      required:
+        - label
+    TagUpdate:
+      type: object
+      properties:
+        label:
+          type: string
+    Comment:
+      type: object
+      properties:
+        id:
+          type: integer
+        body:
+          type: string
+        postId:
+          type: string
+        authorId:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - body
+        - postId
+        - authorId
+        - createdAt
+      description: |-
+        Two foreign keys with different referential actions
+        (Cascade vs SetNull) and a composite index.
+    CommentCreate:
+      type: object
+      properties:
+        id:
+          type: integer
+        body:
+          type: string
+        postId:
+          type: string
+        authorId:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - body
+        - postId
+    CommentUpdate:
+      type: object
+      properties:
+        body:
+          type: string
+        postId:
+          type: string
+        authorId:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+    Follow:
+      type: object
+      properties:
+        followerId:
+          type: string
+        followingId:
+          type: string
+        since:
+          type: string
+          format: date-time
+      required:
+        - followerId
+        - followingId
+        - since
+      description: Composite primary key + two named relations to the same model.
+    FollowCreate:
+      type: object
+      properties:
+        followerId:
+          type: string
+        followingId:
+          type: string
+        since:
+          type: string
+          format: date-time
+      required:
+        - followerId
+        - followingId
+    FollowUpdate:
+      type: object
+      properties:
+        since:
+          type: string
+          format: date-time
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        parentId:
+          type: [integer, "null"]
+      required:
+        - id
+        - name
+        - parentId
+      description: Self-relation (adjacency-list tree) with a composite unique.
+    CategoryCreate:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        parentId:
+          type: [integer, "null"]
+      required:
+        - name
+    CategoryUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        parentId:
+          type: [integer, "null"]
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+        total:
+          type: string
+        placedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - total
+        - placedAt
+      description: BigInt autoincrement primary key (bigserial) and money as Decimal.
+    OrderCreate:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+        total:
+          type: string
+        placedAt:
+          type: string
+          format: date-time
+      required:
+        - userId
+        - total
+    OrderUpdate:
+      type: object
+      properties:
+        userId:
+          type: string
+        total:
+          type: string
+        placedAt:
+          type: string
+          format: date-time
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderId:
+          type: integer
+        sku:
+          type: string
+        qty:
+          type: integer
+        price:
+          type: string
+      required:
+        - id
+        - orderId
+        - sku
+        - qty
+        - price
+      description: Child of Order with a composite unique constraint.
+    OrderItemCreate:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderId:
+          type: integer
+        sku:
+          type: string
+        qty:
+          type: integer
+        price:
+          type: string
+      required:
+        - orderId
+        - sku
+        - price
+    OrderItemUpdate:
+      type: object
+      properties:
+        orderId:
+          type: integer
+        sku:
+          type: string
+        qty:
+          type: integer
+        price:
+          type: string
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+        action:
+          type: string
+        payload: {}
+        signature:
+          type: [string, "null"]
+          format: byte
+        loggedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - action
+        - payload
+        - signature
+        - loggedAt
+      description: DB-side generated defaults (dbgenerated) plus Json / Bytes payloads.
+    AuditLogCreate:
+      type: object
+      properties:
+        id:
+          type: string
+        action:
+          type: string
+        payload: {}
+        signature:
+          type: [string, "null"]
+          format: byte
+        loggedAt:
+          type: string
+          format: date-time
+      required:
+        - action
+    AuditLogUpdate:
+      type: object
+      properties:
+        action:
+          type: string
+        payload: {}
+        signature:
+          type: [string, "null"]
+          format: byte
+        loggedAt:
+          type: string
+          format: date-time
+    Actor:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+      required:
+        - id
+        - name
+      description: |-
+        Named implicit many-to-many: the join table is `_cast`,
+        not `_ActorToFilm`.
+    ActorCreate:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+      required:
+        - name
+    ActorUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+    Film:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+      required:
+        - id
+        - title
+    FilmCreate:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+      required:
+        - title
+    FilmUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

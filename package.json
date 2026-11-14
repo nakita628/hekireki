@@ -25,7 +25,9 @@
     "hekireki": "link:packages/hekireki"
   },
   "devDependencies": {
+    "@libsql/client": "^0.17.0",
     "@prisma/adapter-better-sqlite3": "8.1.0-dev.9",
+    "@prisma/adapter-libsql": "8.1.0-dev.9",
     "@prisma/adapter-mariadb": "8.1.0-dev.9",
     "@prisma/adapter-pg": "8.1.0-dev.9",
     "@prisma/client": "8.1.0-dev.9",

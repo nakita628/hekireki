@@ -48,6 +48,7 @@ const SHIMS = [
   'typebox',
   'valibot',
   'zod',
+  'zod-openapi-hono',
 ] as const
 
 /** The handler object the last `registerGenerator` call handed to prisma. */
@@ -85,6 +86,7 @@ describe('registerGenerator', () => {
     ['typebox', 'Hekireki-TypeBox'],
     ['valibot', 'Hekireki-Valibot'],
     ['zod', 'Hekireki-Zod'],
+    ['zod-openapi-hono', 'Hekireki-ZodOpenAPIHono'],
   ] as const)('announces %s to prisma as its pretty name', (name, prettyName) => {
     registerGenerator(name)
     expect(generatorHandler).toHaveBeenCalledTimes(1)

@@ -1,5 +1,5 @@
 export * from './client.js'
-export * from './database.js'
+export * from '../../../database/driver.js'
 export * from './defaults.js'
 export * from './language.js'
 export * from './load.js'

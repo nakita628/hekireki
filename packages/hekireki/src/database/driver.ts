@@ -1,27 +1,41 @@
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 import { layer as nodeFileSystemLayer } from '@effect/platform-node/NodeFileSystem'
 import { Effect } from 'effect'
 import * as z from 'zod'
 
-import { resolveDatabaseUrl } from '../../../database/resolve.js'
+import { DISCONNECTED, NO_SQLITE, READ_STATEMENT } from '../constants/index.js'
+import { importFromProject, removePath } from '../file/index.js'
+import { quoteIdentifier, stringLiteral } from '../sql/index.js'
+import type { Dialect, UrlSource } from '../types/index.js'
 import {
+  LibsqlResultSet,
+  makeLibsqlQueryResult,
+  makeLibsqlRawResult,
+  makeMysqlChanges,
+  makeMysqlQueryResult,
+  makeMysqlRawResult,
+  makePgChanges,
+  makePgQueryResult,
+  makePgRawResult,
+  makeSqliteChanges,
+  makeSqliteRawResult,
+  makeSqliteReadResult,
+} from './domain/results.js'
+import {
+  isLibsqlUrl,
   makeDialect,
   makePostgresSchema,
   makeRedactedUrl,
   makeSqliteFilePath,
-} from '../../../database/url.js'
-import type { UrlSource } from '../../../database/url.js'
-import { removePath } from '../../../file/index.js'
-import { quoteIdentifier, stringLiteral } from '../../../sql/index.js'
-import { DatabaseError, DatabaseUnavailableError } from '../errors/index.js'
+} from './domain/url.js'
+import { DatabaseError, DatabaseUnavailableError } from './errors.js'
+import { resolveDatabaseUrl } from './resolve.js'
 
 /** An open connection: every operation is an Effect that fails with the driver's message. */
 export type Driver = {
-  readonly dialect: 'postgresql' | 'mysql' | 'sqlite'
+  readonly dialect: Dialect
   readonly query: (statement: {
     readonly sql: string
     readonly params: readonly unknown[]
@@ -59,16 +73,12 @@ export type Driver = {
   /** Several statements separated by semicolons, run as one script. */
   readonly executeScript: (script: string) => Effect.Effect<void, DatabaseError>
   readonly close: Effect.Effect<void>
+  /**
+   * A SQLite database reached over the network (Turso, a libSQL server) rather than a file: there
+   * is no file to copy for a backup or a rehearsal, and `VACUUM INTO` would write on the server.
+   */
+  readonly remote?: boolean
 }
-
-// Driver results as the packages return them, read through zod rather than hand-written guards.
-const DriverRows = z
-  .array(z.record(z.string(), z.unknown()))
-  .meta({ description: 'Rows keyed by column name, as a driver returns them' })
-
-const DriverFields = z
-  .array(z.object({ name: z.string().meta({ description: 'The column name.', example: 'id' }) }))
-  .meta({ description: 'The column descriptors of a result set' })
 
 const ModuleNamespace = z
   .object({
@@ -76,20 +86,24 @@ const ModuleNamespace = z
   })
   .meta({ description: 'An imported module namespace' })
 
-/** The package as the user's project resolves it: Studio ships no database drivers of its own. */
-function importFromProject(specifier: string, cwd: string) {
-  return Effect.tryPromise({
-    try: async (): Promise<unknown> => {
-      const resolved = createRequire(path.join(cwd, 'package.json')).resolve(specifier)
-      const namespace: unknown = await import(pathToFileURL(resolved).href)
+/**
+ * A database driver as the user's project resolves it (Studio ships none of its own), the default
+ * export of a CommonJS package taken for the module, and a package that is not there said with
+ * the way out.
+ */
+function importDriver(specifier: string, cwd: string) {
+  return importFromProject(specifier, cwd).pipe(
+    Effect.map((namespace) => {
       const result = ModuleNamespace.safeParse(namespace)
       return result.success ? result.data.default : namespace
-    },
-    catch: (error) =>
-      new DatabaseUnavailableError({
-        reason: `Cannot load "${specifier}" from ${cwd}: ${error instanceof Error ? error.message : String(error)}\n   Install it in your project (npm install ${specifier}) so Hekireki can connect to the database.`,
-      }),
-  })
+    }),
+    Effect.mapError(
+      (error) =>
+        new DatabaseUnavailableError({
+          reason: `Cannot load "${specifier}" from ${cwd}: ${error.message}\n   Install it in your project (npm install ${specifier}) so Hekireki can connect to the database.`,
+        }),
+    ),
+  )
 }
 
 const SqliteModule = z
@@ -109,28 +123,6 @@ const SqliteModule = z
       .meta({ description: 'The synchronous database class of node:sqlite.' }),
   })
   .meta({ description: 'The node:sqlite module' })
-
-const SqliteColumns = z
-  .array(
-    z.object({
-      name: z.string().meta({ description: 'The column name in the result.', example: 'id' }),
-      type: z
-        .string()
-        .nullable()
-        .meta({ description: 'The declared type, null for an expression.', example: 'TEXT' }),
-    }),
-  )
-  .meta({ description: 'What node:sqlite returns from statement.columns()' })
-
-const SqliteRunInfo = z
-  .object({ changes: z.number().meta({ description: 'Rows the statement changed.', example: 1 }) })
-  .meta({ description: 'What node:sqlite returns from statement.run()' })
-
-// A statement node:sqlite answers with rows (`all`) rather than a change count (`run`).
-const READ_STATEMENT = /^\s*(?:select|with|pragma|explain|show|describe|values)\b/iu
-
-const NO_SQLITE =
-  'SQLite support needs the built-in node:sqlite module (Node.js 22.13 or newer).\n   Upgrade Node.js or pass --url pointing at a PostgreSQL/MySQL database.'
 
 function openSqlite(url: string, baseDir: string) {
   return Effect.gen(function* () {
@@ -153,16 +145,13 @@ function openSqlite(url: string, baseDir: string) {
         Effect.try({
           try: () => {
             const prepared = db.prepare(statement.sql)
-            if (READ_STATEMENT.test(statement.sql)) {
-              // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-              const rows = DriverRows.catch([]).parse(prepared.all(...statement.params))
-              return { columns: Object.keys(rows[0] ?? {}), rows, rowCount: rows.length }
-            }
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const info = SqliteRunInfo.catch({ changes: 0 }).parse(
-              prepared.run(...statement.params),
-            )
-            return { columns: [], rows: [], rowCount: info.changes }
+            return READ_STATEMENT.test(statement.sql)
+              ? makeSqliteReadResult({ rows: prepared.all(...statement.params) })
+              : {
+                  columns: [],
+                  rows: [],
+                  rowCount: makeSqliteChanges({ info: prepared.run(...statement.params) }),
+                }
           },
           catch: driverError,
         }),
@@ -170,26 +159,17 @@ function openSqlite(url: string, baseDir: string) {
         Effect.try({
           try: () => {
             const prepared = db.prepare(statement.sql)
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const rows = DriverRows.catch([]).parse(prepared.all(...statement.params))
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const columns = SqliteColumns.catch([]).parse(prepared.columns())
-            return {
-              columns: columns.map((column) => ({ name: column.name, nativeType: column.type })),
-              rows: rows.map((row) => columns.map((column) => row[column.name] ?? null)),
-            }
+            return makeSqliteRawResult({
+              rows: prepared.all(...statement.params),
+              columns: prepared.columns(),
+            })
           },
           catch: driverError,
         }),
       executeRaw: (statement) =>
         Effect.try({
-          try: () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const info = SqliteRunInfo.catch({ changes: 0 }).parse(
-              db.prepare(statement.sql).run(...statement.params),
-            )
-            return info.changes
-          },
+          try: () =>
+            makeSqliteChanges({ info: db.prepare(statement.sql).run(...statement.params) }),
           catch: driverError,
         }),
       executeScript: (script) =>
@@ -201,6 +181,81 @@ function openSqlite(url: string, baseDir: string) {
         }),
       close: Effect.sync(() => {
         db.close()
+      }),
+    }
+    return driver
+  })
+}
+
+const LibsqlModule = z
+  .object({
+    createClient: z
+      .custom<
+        (config: { readonly url: string }) => {
+          readonly execute: (statement: {
+            readonly sql: string
+            readonly args: readonly unknown[]
+          }) => Promise<unknown>
+          readonly executeMultiple: (sql: string) => Promise<void>
+          readonly close: () => void
+        }
+      >((value) => typeof value === 'function')
+      .meta({ description: 'The client factory of @libsql/client.' }),
+  })
+  .meta({ description: 'The @libsql/client module' })
+
+/**
+ * A libSQL server (Turso, or `sqld`) through the project's `@libsql/client`: SQLite's SQL over
+ * the network, the `?authToken=` of the URL read by the client itself.
+ */
+function openLibsql(url: string, cwd: string) {
+  return Effect.gen(function* () {
+    const module = yield* importDriver('@libsql/client', cwd)
+    const result = LibsqlModule.safeParse(module)
+    if (!result.success) {
+      return yield* new DatabaseUnavailableError({
+        reason: 'The "@libsql/client" package does not export createClient.',
+      })
+    }
+    const client = yield* Effect.try({
+      try: () => result.data.createClient({ url }),
+      catch: (error) =>
+        new DatabaseUnavailableError({
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+    })
+    const execute = (statement: { readonly sql: string; readonly params: readonly unknown[] }) =>
+      Effect.tryPromise({
+        try: async () =>
+          LibsqlResultSet.parse(
+            await client.execute({ sql: statement.sql, args: statement.params }),
+          ),
+        catch: driverError,
+      })
+    // A remote database refuses no connection until it is asked something: ask now, so a wrong
+    // URL or token is said when Studio starts rather than at the first page.
+    yield* execute({ sql: 'SELECT 1', params: [] }).pipe(
+      Effect.mapError((error) => new DatabaseUnavailableError({ reason: error.cause })),
+      Effect.tapError(() =>
+        Effect.sync(() => {
+          client.close()
+        }),
+      ),
+    )
+    const driver: Driver = {
+      dialect: 'sqlite',
+      remote: true,
+      query: (statement) =>
+        execute(statement).pipe(
+          Effect.map((set) => makeLibsqlQueryResult({ sql: statement.sql, set })),
+        ),
+      queryRaw: (statement) =>
+        execute(statement).pipe(Effect.map((set) => makeLibsqlRawResult({ set }))),
+      executeRaw: (statement) => execute(statement).pipe(Effect.map((set) => set.rowsAffected)),
+      executeScript: (script) =>
+        Effect.tryPromise({ try: () => client.executeMultiple(script), catch: driverError }),
+      close: Effect.sync(() => {
+        client.close()
       }),
     }
     return driver
@@ -230,40 +285,9 @@ const PgModule = z
   })
   .meta({ description: 'The pg module' })
 
-const PgResult = z
-  .object({
-    rows: DriverRows,
-    fields: DriverFields.optional(),
-    rowCount: z
-      .number()
-      .nullable()
-      .optional()
-      .meta({ description: 'Rows affected or returned.', example: 1 }),
-  })
-  .meta({ description: 'What pg returns from client.query()' })
-
-const PgRawResult = z
-  .object({
-    rows: z
-      .array(z.array(z.unknown()))
-      .meta({ description: 'Rows as arrays, in the order of `fields`.' }),
-    fields: z
-      .array(
-        z.object({
-          name: z.string().meta({ description: 'The column name.', example: 'id' }),
-          dataTypeID: z
-            .number()
-            .meta({ description: 'The OID of the column type in pg_type.', example: 23 }),
-        }),
-      )
-      .optional()
-      .meta({ description: 'The column descriptors, when the statement returned rows.' }),
-  })
-  .meta({ description: 'What pg returns from client.query() with rowMode: array' })
-
 function openPostgres(url: string, cwd: string) {
   return Effect.gen(function* () {
-    const result = PgModule.safeParse(yield* importFromProject('pg', cwd))
+    const result = PgModule.safeParse(yield* importDriver('pg', cwd))
     if (!result.success) {
       return yield* new DatabaseUnavailableError({
         reason: 'The "pg" package does not export Client.',
@@ -291,50 +315,26 @@ function openPostgres(url: string, cwd: string) {
       dialect: 'postgresql',
       query: (statement) =>
         Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const { rows, fields, rowCount } = PgResult.catch({ rows: [] }).parse(
-              await client.query(statement.sql, statement.params),
-            )
-            const columns = (fields ?? []).map((field) => field.name)
-            return {
-              columns: columns.length > 0 ? columns : Object.keys(rows[0] ?? {}),
-              rows,
-              rowCount: rowCount ?? rows.length,
-            }
-          },
+          try: async () =>
+            makePgQueryResult({ result: await client.query(statement.sql, statement.params) }),
           catch: driverError,
         }),
       queryRaw: (statement) =>
         Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const { rows, fields } = PgRawResult.catch({ rows: [] }).parse(
-              await client.query({
+          try: async () =>
+            makePgRawResult({
+              result: await client.query({
                 text: statement.sql,
                 values: statement.params,
                 rowMode: 'array',
               }),
-            )
-            return {
-              columns: (fields ?? []).map((field) => ({
-                name: field.name,
-                nativeType: field.dataTypeID,
-              })),
-              rows,
-            }
-          },
+            }),
           catch: driverError,
         }),
       executeRaw: (statement) =>
         Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const { rowCount } = PgResult.catch({ rows: [] }).parse(
-              await client.query(statement.sql, statement.params),
-            )
-            return rowCount ?? 0
-          },
+          try: async () =>
+            makePgChanges({ result: await client.query(statement.sql, statement.params) }),
           catch: driverError,
         }),
       executeScript: (script) =>
@@ -372,41 +372,9 @@ const MysqlModule = z
   })
   .meta({ description: 'The mysql2/promise module' })
 
-const MysqlResult = z
-  .tuple([
-    z.union([
-      DriverRows,
-      z.object({
-        affectedRows: z.number().meta({ description: 'Rows a write changed.', example: 1 }),
-      }),
-    ]),
-    DriverFields.optional(),
-  ])
-  .meta({ description: 'What mysql2 returns from connection.query(): [rows or header, fields]' })
-
-const MysqlRawResult = z
-  .tuple([
-    z.union([
-      z.array(z.array(z.unknown())),
-      z.object({
-        affectedRows: z.number().meta({ description: 'Rows a write changed.', example: 1 }),
-      }),
-    ]),
-    z
-      .array(
-        z.object({
-          name: z.string().meta({ description: 'The column name.', example: 'id' }),
-          type: z.number().meta({ description: 'The MySQL type code of the column.', example: 3 }),
-        }),
-      )
-      .optional()
-      .meta({ description: 'The column descriptors, when the statement returned rows.' }),
-  ])
-  .meta({ description: 'What mysql2 returns with rowsAsArray: [rows or header, fields]' })
-
 function openMysql(url: string, cwd: string) {
   return Effect.gen(function* () {
-    const result = MysqlModule.safeParse(yield* importFromProject('mysql2/promise', cwd))
+    const result = MysqlModule.safeParse(yield* importDriver('mysql2/promise', cwd))
     if (!result.success) {
       return yield* new DatabaseUnavailableError({
         reason: 'The "mysql2/promise" module does not export createConnection.',
@@ -423,51 +391,28 @@ function openMysql(url: string, cwd: string) {
       dialect: 'mysql',
       query: (statement) =>
         Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const [data, fields] = MysqlResult.catch([[], undefined]).parse(
-              await connection.query(statement.sql, statement.params),
-            )
-            if (!Array.isArray(data)) return { columns: [], rows: [], rowCount: data.affectedRows }
-            const columns = (fields ?? []).map((field) => field.name)
-            return {
-              columns: columns.length > 0 ? columns : Object.keys(data[0] ?? {}),
-              rows: data,
-              rowCount: data.length,
-            }
-          },
+          try: async () =>
+            makeMysqlQueryResult({
+              result: await connection.query(statement.sql, statement.params),
+            }),
           catch: driverError,
         }),
       queryRaw: (statement) =>
         Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const [data, fields] = MysqlRawResult.catch([[], undefined]).parse(
-              await connection.query({
+          try: async () =>
+            makeMysqlRawResult({
+              result: await connection.query({
                 sql: statement.sql,
                 values: statement.params,
                 rowsAsArray: true,
               }),
-            )
-            return {
-              columns: (fields ?? []).map((field) => ({
-                name: field.name,
-                nativeType: field.type,
-              })),
-              rows: Array.isArray(data) ? data : [],
-            }
-          },
+            }),
           catch: driverError,
         }),
       executeRaw: (statement) =>
         Effect.tryPromise({
-          try: async () => {
-            // oxlint-disable-next-line promise/prefer-await-to-then -- zod's .catch(), not a promise
-            const [data] = MysqlResult.catch([[], undefined]).parse(
-              await connection.query(statement.sql, statement.params),
-            )
-            return Array.isArray(data) ? data.length : data.affectedRows
-          },
+          try: async () =>
+            makeMysqlChanges({ result: await connection.query(statement.sql, statement.params) }),
           catch: driverError,
         }),
       executeScript: (script) =>
@@ -482,14 +427,6 @@ function openMysql(url: string, cwd: string) {
     return driver
   })
 }
-
-const DISCONNECTED = {
-  connected: false,
-  dialect: null,
-  url: null,
-  source: null,
-  error: null,
-} as const
 
 /**
  * The database as the use cases see it while none is open: its status, a driver that fails with
@@ -506,7 +443,7 @@ const DISCONNECTED = {
 export function disconnectedDatabase(input?: { readonly reason: string | null }): {
   readonly status: {
     readonly connected: boolean
-    readonly dialect: 'postgresql' | 'mysql' | 'sqlite' | null
+    readonly dialect: Dialect | null
     readonly url: string | null
     readonly source: UrlSource | null
     readonly error: string | null
@@ -586,6 +523,12 @@ function driverError(error: unknown) {
  */
 export function openSqliteCopy(input: { readonly driver: Driver; readonly cwd: string }) {
   return Effect.gen(function* () {
+    if (input.driver.remote === true) {
+      return yield* new DatabaseUnavailableError({
+        reason:
+          'A rehearsal runs on a copy of the database file, and a remote SQLite database (Turso, a libSQL server) has none here to copy.',
+      })
+    }
     const file = path.join(tmpdir(), `hekireki-rehearsal-${globalThis.crypto.randomUUID()}.db`)
     yield* input.driver.executeScript(`VACUUM INTO ${stringLiteral('sqlite', file)}`).pipe(
       Effect.mapError(
@@ -869,7 +812,9 @@ export function connectDatabase(input: z.infer<typeof ConnectDatabaseInput>) {
     }
     const driver =
       dialect === 'sqlite'
-        ? yield* openSqlite(found.url, input.schemaDir)
+        ? isLibsqlUrl({ url: found.url })
+          ? yield* openLibsql(found.url, input.cwd)
+          : yield* openSqlite(found.url, input.schemaDir)
         : dialect === 'postgresql'
           ? yield* openPostgres(found.url, input.cwd)
           : yield* openMysql(found.url, input.cwd)

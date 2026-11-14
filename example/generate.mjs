@@ -36,6 +36,7 @@ const GENERATORS = [
   'typebox',
   'valibot',
   'zod',
+  'zod-openapi-hono',
 ]
 
 // kind 'file' checks a single non-empty file; kind 'dir' checks a directory
@@ -53,6 +54,7 @@ const EXPECTED = [
   { name: 'seed', kind: 'dir', path: 'generated/seed' },
   { name: 'atlas', kind: 'file', path: 'generated/atlas/schema.hcl' },
   { name: 'openapi', kind: 'file', path: 'generated/openapi/openapi.yaml' },
+  { name: 'zod-openapi-hono', kind: 'dir', path: 'generated/zod-openapi-hono/handlers' },
   { name: 'sqlalchemy', kind: 'file', path: 'generated/sqlalchemy/models.py' },
   { name: 'django', kind: 'file', path: 'generated/django/models.py' },
   { name: 'pydantic', kind: 'file', path: 'generated/pydantic/models.py' },

@@ -7,7 +7,7 @@ import { NodeFileSystem } from '@effect/platform-node'
 import { Effect } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { connectDatabase, openSqliteCopy } from '../../studio/server/services/database.js'
+import { connectDatabase, openSqliteCopy } from '../../database/driver.js'
 import { makeSchemaEngineAdapter } from './engine-adapter.js'
 import { openSchemaEngine } from './engine.js'
 import { rehearseMigration } from './rehearse.js'

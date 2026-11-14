@@ -26,6 +26,7 @@ import { seed } from '../core/seed.js'
 import { sqlalchemy } from '../core/sqlalchemy.js'
 import { typebox } from '../core/typebox.js'
 import { valibot } from '../core/valibot.js'
+import { zodOpenapiHono } from '../core/zod-openapi-hono.js'
 import { zod } from '../core/zod.js'
 
 const GENERATORS = {
@@ -55,6 +56,8 @@ const GENERATORS = {
   typebox: { prettyName: 'Hekireki-TypeBox', handler: typebox },
   valibot: { prettyName: 'Hekireki-Valibot', handler: valibot },
   zod: { prettyName: 'Hekireki-Zod', handler: zod },
+  // The OpenAPI document of the CRUD, and the Hono app Hono Takibi's template makes of it.
+  'zod-openapi-hono': { prettyName: 'Hekireki-ZodOpenAPIHono', handler: zodOpenapiHono },
 } as const
 
 export function registerGenerator(name: keyof typeof GENERATORS) {

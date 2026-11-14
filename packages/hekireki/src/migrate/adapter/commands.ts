@@ -1,7 +1,7 @@
 import { Effect } from 'effect'
 
+import type { Driver } from '../../database/driver.js'
 import { quoteIdentifier } from '../../sql/index.js'
-import type { Driver } from '../../studio/server/services/database.js'
 import { MIGRATIONS_TABLE_DDL } from '../domain/history.js'
 import { MigrateConfigError } from '../errors.js'
 import { engineCommand } from './engine.js'

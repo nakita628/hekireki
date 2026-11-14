@@ -34,6 +34,7 @@ import { seed } from './seed.js'
 import { sqlalchemy } from './sqlalchemy.js'
 import { typebox } from './typebox.js'
 import { valibot } from './valibot.js'
+import { zodOpenapiHono } from './zod-openapi-hono.js'
 import { zod } from './zod.js'
 
 /**
@@ -74,6 +75,7 @@ const HANDLERS: Record<
   'hekireki-typebox': typebox,
   'hekireki-valibot': valibot,
   'hekireki-zod': zod,
+  'hekireki-zod-openapi-hono': zodOpenapiHono,
 }
 
 const ConfigValue = z

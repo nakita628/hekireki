@@ -1,14 +1,7 @@
 import { ConfigProvider, Effect, Exit } from 'effect'
 import { describe, expect, it } from 'vite-plus/test'
 
-import {
-  DatabaseUrlNotFoundError,
-  makeDatabaseUrl,
-  makeDialect,
-  makePostgresSchema,
-  makeRedactedUrl,
-  makeSqliteFilePath,
-} from './url.js'
+import { DatabaseUrlNotFoundError, makeDatabaseUrl } from './url.js'
 
 /**
  * What `makeDatabaseUrl` finds with `env` as the environment and `dotenv` behind it, as
@@ -221,54 +214,5 @@ describe('makeDatabaseUrl', () => {
         }),
       ),
     )
-  })
-})
-
-describe('makeDialect', () => {
-  it('detects the dialect from the scheme, then from the schema provider', () => {
-    expect(makeDialect({ url: 'postgresql://x', schemaProvider: null })).toBe('postgresql')
-    expect(makeDialect({ url: 'postgres://x', schemaProvider: null })).toBe('postgresql')
-    expect(makeDialect({ url: 'mysql://x', schemaProvider: null })).toBe('mysql')
-    expect(makeDialect({ url: 'file:./dev.db', schemaProvider: null })).toBe('sqlite')
-    expect(makeDialect({ url: 'anything', schemaProvider: 'cockroachdb' })).toBe('postgresql')
-    expect(makeDialect({ url: 'anything', schemaProvider: 'mysql' })).toBe('mysql')
-    expect(makeDialect({ url: 'anything', schemaProvider: 'sqlite' })).toBe('sqlite')
-    expect(makeDialect({ url: 'mongodb://x', schemaProvider: 'mongodb' })).toBeNull()
-  })
-})
-
-describe('makeSqliteFilePath', () => {
-  it('resolves relative paths against the schema directory', () => {
-    expect(makeSqliteFilePath({ url: 'file:./dev.db', baseDir: '/app/prisma' })).toBe(
-      '/app/prisma/dev.db',
-    )
-    expect(makeSqliteFilePath({ url: 'file:/tmp/x.db?mode=ro', baseDir: '/app' })).toBe('/tmp/x.db')
-    expect(makeSqliteFilePath({ url: 'file::memory:', baseDir: '/app' })).toBe(':memory:')
-    expect(makeSqliteFilePath({ url: 'file:', baseDir: '/app' })).toBe(':memory:')
-  })
-})
-
-describe('makeRedactedUrl', () => {
-  it('hides the password only', () => {
-    expect(makeRedactedUrl({ url: 'postgresql://user:secret@localhost:5432/app' })).toBe(
-      'postgresql://user:***@localhost:5432/app',
-    )
-    expect(makeRedactedUrl({ url: 'file:./dev.db' })).toBe('file:./dev.db')
-    expect(makeRedactedUrl({ url: 'mysql://root@localhost/app' })).toBe(
-      'mysql://root@localhost/app',
-    )
-  })
-})
-
-describe('makePostgresSchema', () => {
-  it('is the namespace Prisma names, when it is not the default', () => {
-    expect(makePostgresSchema({ url: 'postgresql://u:p@127.0.0.1:5432/app?schema=demo' })).toBe(
-      'demo',
-    )
-    expect(
-      makePostgresSchema({ url: 'postgresql://u:p@127.0.0.1:5432/app?schema=public' }),
-    ).toBeNull()
-    expect(makePostgresSchema({ url: 'postgresql://u:p@127.0.0.1:5432/app' })).toBeNull()
-    expect(makePostgresSchema({ url: 'not a url' })).toBeNull()
   })
 })

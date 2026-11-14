@@ -1,8 +1,8 @@
 import { Effect } from 'effect'
 
+import type { Driver } from '../../database/driver.js'
 import type { Dialect } from '../../database/url.js'
 import { splitStatements } from '../../sql/index.js'
-import type { Driver } from '../../studio/server/services/database.js'
 import { COLUMN_TYPE, columnTypeOfNative, columnTypeOfValue } from './column-types.js'
 
 /**

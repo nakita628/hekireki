@@ -131,6 +131,16 @@ generator Hekireki-OpenAPI {
   paths    = true
 }
 
+// The CRUD of each model as a Hono app: `openapi.yaml` in Prisma Client's shape, and what Hono
+// Takibi's template makes of it, every handler calling Prisma Client as the `prisma` that the
+// module `prisma` names exports; `auth` guards every model's paths with the JWT `auth.ts` checks.
+generator Hekireki-ZodOpenAPIHono {
+  provider = "hekireki-zod-openapi-hono"
+  output   = "generated/zod-openapi-hono"
+  prisma   = "./prisma"
+  auth     = "jwt"
+}
+
 generator Hekireki-Atlas {
   provider = "hekireki-atlas"
   output   = "generated/atlas/schema.hcl"

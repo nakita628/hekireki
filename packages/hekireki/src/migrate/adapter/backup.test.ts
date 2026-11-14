@@ -8,8 +8,8 @@ import { Effect } from 'effect'
 import type { FileSystem } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { connectDatabase } from '../../studio/server/services/database.js'
-import type { Driver } from '../../studio/server/services/database.js'
+import { connectDatabase } from '../../database/driver.js'
+import type { Driver } from '../../database/driver.js'
 import { backupsDirectory, createBackup, listBackups, restoreBackup } from './backup.js'
 
 const dirs: string[] = []
@@ -114,5 +114,34 @@ describe('backups of a SQLite database', () => {
         restoreBackup({ driver, schemaDir: dir, name: 'backup_20260101000000000' }),
       ),
     ).rejects.toThrow('There is no backup')
+  })
+})
+
+describe('backups of a remote SQLite database', () => {
+  // A libSQL server (Turso, sqld), as the driver marks it: what a statement would do is never asked.
+  const remote: Driver = {
+    dialect: 'sqlite',
+    remote: true,
+    query: () => Effect.die('no statement is run'),
+    queryRaw: () => Effect.die('no statement is run'),
+    executeRaw: () => Effect.die('no statement is run'),
+    executeScript: () => Effect.die('no statement is run'),
+    close: Effect.void,
+  }
+
+  it('takes none, lists none and restores none, with nothing written to the server', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'hekireki-backup-remote-'))
+    dirs.push(dir)
+    const run = <A, E>(effect: Effect.Effect<A, E, FileSystem.FileSystem>) =>
+      Effect.runPromise(effect.pipe(Effect.provide(NodeFileSystem.layer)))
+    const taken = await run(Effect.flip(createBackup({ driver: remote, schemaDir: dir })))
+    expect(taken.message).toContain('Studio cannot back up a remote SQLite database')
+    expect(await run(listBackups({ driver: remote, schemaDir: dir }))).toStrictEqual([])
+    const restored = await run(
+      Effect.flip(
+        restoreBackup({ driver: remote, schemaDir: dir, name: 'backup_20260101000000000' }),
+      ),
+    )
+    expect(restored.message).toBe('There is no backup backup_20260101000000000.')
   })
 })

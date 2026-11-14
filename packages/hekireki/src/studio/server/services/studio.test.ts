@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 
+import { disconnectedDatabase } from '../../../database/driver.js'
 import { createProjectClient } from './client.js'
-import { disconnectedDatabase } from './database.js'
 import { createMigratePaths } from './migrate.js'
 import { createStudioState } from './state.js'
 import { configureStudio, studio } from './studio.js'

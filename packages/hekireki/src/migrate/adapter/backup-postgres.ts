@@ -1,7 +1,7 @@
 import { Effect } from 'effect'
 import * as z from 'zod'
 
-import type { Driver } from '../../studio/server/services/database.js'
+import type { Driver } from '../../database/driver.js'
 import {
   POSTGRES_ENUM_COLUMNS,
   POSTGRES_RESTORE_CATALOGUE,

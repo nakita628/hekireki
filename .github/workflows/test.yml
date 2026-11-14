@@ -12,6 +12,14 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # A libSQL server, what Turso runs: src/database/driver.test.ts runs the libSQL driver against
+    # the one HEKIREKI_LIBSQL_URL names (and skips it without). Pinned like the images of
+    # seed-db.yml; move the tag with @libsql/client in the root package.json.
+    services:
+      libsql:
+        image: ghcr.io/tursodatabase/libsql-server:v0.24.33
+        ports:
+          - 8080:8080
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,6 +41,8 @@ jobs:
       # packages/hekireki only: the `test` package needs the Go / Rust / Python /
       # Elixir / Ruby / PHP toolchains and is owned by the Lang Check matrix.
       - run: vp run --filter ./packages/hekireki test
+        env:
+          HEKIREKI_LIBSQL_URL: http://127.0.0.1:8080
 
       # examples/migrate end to end on SQLite: the check, the migration Prisma wrote rewritten by
       # `hekireki migrate plan --migration`, `prisma migrate deploy`, and no difference left

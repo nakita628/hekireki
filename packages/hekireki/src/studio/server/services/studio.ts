@@ -1,7 +1,7 @@
 import * as z from 'zod'
 
+import type { disconnectedDatabase } from '../../../database/driver.js'
 import type * as ClientService from './client.js'
-import type * as DatabaseService from './database.js'
 import type * as MigrateService from './migrate.js'
 import type * as StateService from './state.js'
 import type * as TypescriptService from './typescript.js'
@@ -12,7 +12,7 @@ const StudioInstances = z
       .custom<ReturnType<typeof StateService.createStudioState>>()
       .meta({ description: 'The snapshot store.' }),
     db: z
-      .custom<ReturnType<typeof DatabaseService.disconnectedDatabase>>()
+      .custom<ReturnType<typeof disconnectedDatabase>>()
       .meta({ description: 'The database connection state.' }),
     client: z
       .custom<ReturnType<typeof ClientService.createProjectClient>>()

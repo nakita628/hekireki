@@ -6,8 +6,8 @@ import { NodeFileSystem } from '@effect/platform-node'
 import { ConfigProvider, Effect, Layer } from 'effect'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 
-import { DatabaseError } from '../errors/index.js'
-import { connectDatabase, disconnectedDatabase } from './database.js'
+import { connectDatabase, disconnectedDatabase } from './driver.js'
+import { DatabaseError } from './errors.js'
 
 const dirs: string[] = []
 const opened: { readonly close: Effect.Effect<void> }[] = []
@@ -351,5 +351,66 @@ describe('the drivers of the project', () => {
     expect(mysql.status.error).toBe('connect ECONNREFUSED 127.0.0.1:1')
     const failure = await Effect.runPromise(Effect.flip(mysql.driver))
     expect(failure.reason).toBe('connect ECONNREFUSED 127.0.0.1:1')
+  })
+
+  it('says why a libSQL server cannot be reached, with the token kept out of the status', async () => {
+    const libsql = await connect({
+      explicitUrl: 'http://127.0.0.1:1?authToken=secret',
+      schemaProvider: 'sqlite',
+      cwd: PROJECT,
+    })
+    expect(libsql.status).toMatchObject({ connected: false, dialect: null })
+    expect(libsql.status.error).not.toBeNull()
+    expect(JSON.stringify(libsql.status)).not.toContain('secret')
+  })
+})
+
+// A libSQL server to run against: Turso, or `sqld` started with
+// `docker run -p 8080:8080 ghcr.io/tursodatabase/libsql-server` (HEKIREKI_LIBSQL_URL=http://127.0.0.1:8080).
+const LIBSQL_URL = process.env.HEKIREKI_LIBSQL_URL
+
+describe.skipIf(LIBSQL_URL === undefined)('the libSQL driver', () => {
+  it('reads, writes and runs a script on the server, and refuses the copies a file allows', async () => {
+    const db = await connect({ explicitUrl: LIBSQL_URL, schemaProvider: 'sqlite', cwd: PROJECT })
+    expect(db.status).toMatchObject({ connected: true, dialect: 'sqlite' })
+    const driver = await Effect.runPromise(db.driver)
+    expect(driver.remote).toBe(true)
+    const table = `hekireki_probe_${Date.now()}`
+    await Effect.runPromise(
+      driver.executeScript(`CREATE TABLE ${table} (id INTEGER PRIMARY KEY, label TEXT NOT NULL)`),
+    )
+    try {
+      const written = await Effect.runPromise(
+        driver.executeRaw({
+          sql: `INSERT INTO ${table} (label) VALUES (?), (?)`,
+          params: ['a', 'b'],
+        }),
+      )
+      expect(written).toBe(2)
+      const read = await Effect.runPromise(
+        driver.query({ sql: `SELECT id, label FROM ${table} ORDER BY id`, params: [] }),
+      )
+      expect(read).toStrictEqual({
+        columns: ['id', 'label'],
+        rows: [
+          { id: 1, label: 'a' },
+          { id: 2, label: 'b' },
+        ],
+        rowCount: 2,
+      })
+      const raw = await Effect.runPromise(
+        driver.queryRaw({ sql: `SELECT label, length(label) AS n FROM ${table}`, params: [] }),
+      )
+      expect(raw.columns).toStrictEqual([
+        { name: 'label', nativeType: 'TEXT' },
+        { name: 'n', nativeType: null },
+      ])
+      const failed = await Effect.runPromise(
+        Effect.flip(driver.query({ sql: 'SELECT * FROM nope', params: [] })),
+      )
+      expect(failed).toBeInstanceOf(DatabaseError)
+    } finally {
+      await Effect.runPromise(driver.executeScript(`DROP TABLE ${table}`))
+    }
   })
 })
