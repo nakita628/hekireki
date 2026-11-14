@@ -5,6 +5,7 @@ import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.dao.CompositeEntity
 import org.jetbrains.exposed.v1.dao.CompositeEntityClass
 
+/** A DateTime in a composite key: the DAO finds a row by it. */
 class ReadingEntity(
     id: EntityID<CompositeID>,
 ) : CompositeEntity(id) {

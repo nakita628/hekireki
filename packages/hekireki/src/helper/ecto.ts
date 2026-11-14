@@ -1072,6 +1072,10 @@ export function ectoSchemas(
         }
       }
 
+      // The prose of a relation field, above the association it becomes.
+      const relationComments = (name: string) =>
+        ectoLineComments(stripAnnotations(fields.find((f) => f.name === name)?.documentation))
+
       const belongsToLines = associations.belongsTo.flatMap((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
@@ -1090,10 +1094,14 @@ export function ectoSchemas(
           opts.push(`type: ${formatEctoType(a.fkType ?? 'id')}`)
         }
         if (a.references !== 'id') opts.push(`references: :${a.references}`)
-        return [
-          ...(definesField ? ectoLineComments(stripAnnotations(fkFieldObj?.documentation)) : []),
+        const lines = definesField
+          ? ectoLineComments(stripAnnotations(fkFieldObj?.documentation))
+          : []
+        lines.push(
+          ...relationComments(a.name),
           `    belongs_to(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, ${opts.join(', ')})`,
-        ]
+        )
+        return lines
       })
 
       // A has_one or has_many reads the key it references from @primary_key unless it is named,
@@ -1102,26 +1110,38 @@ export function ectoSchemas(
       const namesReferences = (references: string) =>
         references !== 'id' || pk.line === '@primary_key false'
 
-      const hasOneLines = associations.hasOne.map((a) => {
+      const hasOneLines = associations.hasOne.flatMap((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
         const referencesOpt = namesReferences(a.references) ? `, references: :${a.references}` : ''
-        return `    has_one(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`
+        const lines = relationComments(a.name)
+        lines.push(
+          `    has_one(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`,
+        )
+        return lines
       })
 
-      const hasManyLines = associations.hasMany.map((a) => {
+      const hasManyLines = associations.hasMany.flatMap((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
         const referencesOpt = namesReferences(a.references) ? `, references: :${a.references}` : ''
-        return `    has_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`
+        const lines = relationComments(a.name)
+        lines.push(
+          `    has_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`,
+        )
+        return lines
       })
 
-      const manyToManyLines = associations.manyToMany.map((a) => {
+      const manyToManyLines = associations.manyToMany.flatMap((a) => {
         const snakeAssocName = makeSnakeCase(a.name)
         // Prisma implicit m2m join tables use columns "A"/"B" (models in
         // alphabetical order), not Ecto's inflected <schema>_id defaults.
         const joinKeys = `join_keys: [${a.ownJoinColumn}: :${a.ownKey}, ${a.relatedJoinColumn}: :${a.relatedKey}]`
-        return `    many_to_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, join_through: "${a.joinThrough}", ${joinKeys})`
+        const lines = relationComments(a.name)
+        lines.push(
+          `    many_to_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, join_through: "${a.joinThrough}", ${joinKeys})`,
+        )
+        return lines
       })
 
       const changeset = changesetLines(model, contextModels, options)

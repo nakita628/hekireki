@@ -1,3 +1,8 @@
+# A person who signs in. has_secure_password reads and writes password_digest and reports a
+# blank password on `password`, so the column gets no `presence` of its own.
+#
+# display_name:: NOT NULL, but filled from the address before validation when left empty: the presence the
+#   schema implies is taken away.
 class User < ApplicationRecord
   attribute :admin, default: false
   attribute :created_at, PrismaDateTime.new, default: -> { Time.current }

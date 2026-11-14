@@ -17,7 +17,10 @@ class UserEntity(
 ) : Entity<String>(id) {
     companion object : EntityClass<String, UserEntity>(UserTable)
 
+    /** Unique login email */
     var email by UserTable.email
+
+    /** Display name */
     var name by UserTable.name
     var role by UserTable.role
     var interests by UserTable.interests

@@ -8,6 +8,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * A uuid() key Prisma's client makes, so Eloquent has to, and timestamps under Prisma's camel-case
+ * names. A column named `attributes`, the property Eloquent keeps a model's columns in.
+ *
+ * @property string $price Money is Decimal, never Float.
+ * @property int|null $barcode Beyond 2^53: BigInt.
+ * @property mixed $attributes Json. No default: `prisma db push` writes a Json default on SQLite unquoted, and SQLite
+ * refuses the table.
+ * @property string $label A string default with the quotes PHP and SQL both have to escape.
+ * @property int $category_id Category 1 is "Uncategorised": a product whose category is removed goes back to it.
+ */
 class Product extends Model
 {
     use HasVersion4Uuids;

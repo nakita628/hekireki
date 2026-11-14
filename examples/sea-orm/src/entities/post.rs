@@ -4,6 +4,8 @@ use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
+/// An optional DateTime that is filtered and sorted on, a literal default, and the timestamps
+/// under the names Prisma gives them.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "posts")]
 pub struct Model {

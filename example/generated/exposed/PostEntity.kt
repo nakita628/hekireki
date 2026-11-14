@@ -13,6 +13,7 @@ class PostEntity(
 ) : Entity<String>(id) {
     companion object : EntityClass<String, PostEntity>(PostTable)
 
+    /** Article title */
     var title by PostTable.title
     var content by PostTable.content
     var visibility by PostTable.visibility

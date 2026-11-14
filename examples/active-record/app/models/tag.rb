@@ -1,3 +1,4 @@
+# A random primary key: `first` and `last` order by the created timestamp instead.
 class Tag < ApplicationRecord
   self.implicit_order_column = "created_at"
 

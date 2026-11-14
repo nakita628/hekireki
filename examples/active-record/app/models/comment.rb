@@ -1,3 +1,7 @@
+# A self relation for replies, and a unique pair: one comment per user per post carries a
+# `slot`, unique within the post.
+#
+# user:: The author, who cannot be deleted while a comment of theirs stands.
 class Comment < ApplicationRecord
   validates :body, presence: true
   validates :slot, presence: true, uniqueness: { scope: :post_id }

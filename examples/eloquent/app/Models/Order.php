@@ -7,6 +7,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
+/**
+ * The primary key is not called `id` and has a column of its own. An order cannot be removed
+ * while it has line items (Restrict), and its account cannot be removed while it has orders
+ * (NoAction). The only timestamp is `@updatedAt`, under a name of its own.
+ *
+ * @property \Carbon\CarbonInterface $placed_at now(): SQLite's CURRENT_TIMESTAMP is `Y-m-d H:i:s`, and Prisma Client writes ISO 8601.
+ * @property string $public_id The reference a customer sees: a ulid() that is not the key, which HasUlids does not make.
+ * @property string|null $gift_for A gift names its account by handle, not by key: `references:` another unique.
+ */
 class Order extends Model
 {
     use PrismaDates;

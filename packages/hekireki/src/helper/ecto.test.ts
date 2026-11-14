@@ -3248,3 +3248,96 @@ describe('ectoDateTypes', () => {
     }
   })
 })
+
+describe('relation doc comments', () => {
+  it('writes the prose of a relation field above the association it becomes', () => {
+    const dmmf = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+/// A person.
+///
+/// Second paragraph */ with \\\\ backslash.
+model User {
+  /// The key.
+  id        Int      @id
+  /// @z.string()
+  name      String
+  /// When they joined.
+  /// Two lines.
+  createdAt DateTime @default(now())
+  /// Their posts.
+  posts     Post[]
+  tone      Tone
+}
+model Post {
+  id       Int  @id
+  /// Who wrote it.
+  authorId Int
+  /// The author.
+  author   User @relation(fields: [authorId], references: [id])
+}
+/// How loud.
+enum Tone {
+  CALM
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in dmmf) throw new Error(dmmf.error.message)
+    const { models: documented, enums: documentedEnums } = dmmf.datamodel
+    expect(ectoSchemas(documented, 'App', documented, documentedEnums)).toBe(`defmodule App.User do
+  @moduledoc """
+  A person.
+
+  Second paragraph */ with \\\\\\\\ backslash.
+  """
+
+  use Ecto.Schema
+
+  @primary_key false
+  @timestamps_opts [type: App.PrismaDateTime, autogenerate: {App.PrismaDateTime, :autogenerate, []}]
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          name: String.t(),
+          tone: atom(),
+          inserted_at: DateTime.t(),
+          posts: [App.Post.t()]
+        }
+
+  schema "User" do
+    # The key.
+    field(:id, :integer, primary_key: true)
+    field(:name, :string)
+    field(:tone, Ecto.Enum, values: [:CALM])
+    # Their posts.
+    has_many(:posts, App.Post, foreign_key: :author_id, references: :id)
+    timestamps(inserted_at_source: :createdAt, updated_at: false)
+  end
+end
+
+defmodule App.Post do
+  use Ecto.Schema
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          author: App.User.t() | nil
+        }
+
+  schema "Post" do
+    field(:id, :integer, primary_key: true)
+    # Who wrote it.
+    field(:author_id, :id, source: :authorId)
+    # The author.
+    belongs_to(:author, App.User, foreign_key: :author_id, define_field: false)
+  end
+end`)
+  })
+})

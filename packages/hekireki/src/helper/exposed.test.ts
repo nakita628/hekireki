@@ -4182,8 +4182,10 @@ import org.jetbrains.exposed.v1.core.dao.id.IdTable
  */
 object UserTable : IdTable<Int>("\\"User\\"") {
     override val id = integer("id").autoIncrement().entityId()
+
     /** Shown as is: /\\* not a comment *\\/ and a lone *\\/ too. */
     val name = text("name")
+
     /** What they may do. */
     val role = pgEnum("role", "\\"Role\\"", Role.entries, Role::dbName)
     override val primaryKey = PrimaryKey(id, name = "\\"User_pkey\\"")
@@ -4208,7 +4210,10 @@ class UserEntity(
 ) : Entity<Int>(id) {
     companion object : EntityClass<Int, UserEntity>(UserTable)
 
+    /** Shown as is: /\\* not a comment *\\/ and a lone *\\/ too. */
     var name by UserTable.name
+
+    /** What they may do. */
     var role by UserTable.role
 }
 `,

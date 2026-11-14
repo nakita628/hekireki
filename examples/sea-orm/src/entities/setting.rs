@@ -4,6 +4,8 @@ use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
+/// Three `@updatedAt` and no `now()`: Prisma Client sets each on create and on every update, the
+/// optional one too.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "settings")]
 pub struct Model {

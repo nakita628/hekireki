@@ -1,4 +1,10 @@
 defmodule Shop.AuditEvent do
+  @moduledoc """
+  An append-only log, and an account that may go before its events do. The key would be a
+  BigInt on a server; on SQLite, `prisma db push` makes a BigInt autoincrement key a plain
+  BIGINT column that nothing counts up, so it is an Int here.
+  """
+
   use Ecto.Schema
 
   @primary_key {:id, :id, autogenerate: true}

@@ -13,6 +13,7 @@ import java.util.UUID
 object PostTable : IdTable<String>("posts") {
     /** Primary key */
     override val id = text("id").clientDefault { UUID.randomUUID().toString() }.entityId()
+
     /** Article title */
     val title = text("title")
     val content = text("content").nullable()

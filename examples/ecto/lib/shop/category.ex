@@ -1,4 +1,10 @@
 defmodule Shop.Category do
+  @moduledoc """
+  A tree: a name is unique among the children of one parent, and a child keeps its place when
+  its parent goes (SetNull on itself). The list side of the relation comes first, so the
+  generator meets the relation from the side without the key.
+  """
+
   use Ecto.Schema
 
   @primary_key {:id, :id, autogenerate: true}

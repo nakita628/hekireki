@@ -4,6 +4,8 @@ use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
+/// Every native type SeaORM can hold a DateTime in. On SQLite each is the plain DateTime.
+/// (`@db.Timetz` is refused: sqlx has no Rust type to read a TIMETZ into.)
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "clocks")]
 pub struct Model {

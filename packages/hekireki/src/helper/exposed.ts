@@ -1988,9 +1988,12 @@ function headerLines(indent: string, head: string, args: readonly string[], tail
 }
 
 // Kotlin block comments nest, so a `/*` in the prose would open one that swallows the code after
-// it; a NUL would read as a placeholder.
-function kotlinDocLines(prose: string | undefined, indent: string) {
-  return textLines(docBlockLines(prose?.replaceAll('\0', '').replaceAll('/*', '/\\*'), indent))
+// it; a NUL would read as a placeholder. ktlint wants a blank line between a declaration and a
+// commented one after it (spacing-between-declarations-with-comments): `afterDeclaration` says
+// another declaration comes before this one.
+function kotlinDocLines(prose: string | undefined, indent: string, afterDeclaration = false) {
+  const lines = docBlockLines(prose?.replaceAll('\0', '').replaceAll('/*', '/\\*'), indent)
+  return textLines(afterDeclaration && lines.length > 0 ? ['', ...lines] : lines)
 }
 
 function joinLines(...parts: readonly Lines[]): Lines {
@@ -2355,13 +2358,13 @@ function tableBlocks(plan: ExposedPlan, model: DMMF.Model) {
         ? typeRef(KT.CompositeIdTable)
         : typeRef(KT.Table)
   const fields = columnOrder(plan, model)
-  const columns = fields.map((field) => {
+  const columns = fields.map((field, index) => {
     const isKey = key.kind === 'single' && key.field === field
     const head = isKey
       ? 'override val id'
       : `val ${kotlinName(columnProperty(plan, model, field.name))}`
     return joinLines(
-      kotlinDocLines(stripAnnotations(field.documentation), '    '),
+      kotlinDocLines(stripAnnotations(field.documentation), '    ', index > 0),
       property('    ', head, keyPartCalls(plan, model, field)),
     )
   })
@@ -2555,9 +2558,9 @@ function entityBlocks(plan: ExposedPlan, model: DMMF.Model) {
     '',
   )
   const relations = relationFields(plan, model)
-  const members = model.fields.flatMap((field): Lines[] => {
+  const entries = model.fields.flatMap((field): { field: DMMF.Field; lines: Lines }[] => {
     if (field.kind === 'object') {
-      return relations.has(field.name) ? [relationLines(plan, model, field)] : []
+      return relations.has(field.name) ? [{ field, lines: relationLines(plan, model, field) }] : []
     }
     if (field.kind !== 'scalar' && field.kind !== 'enum') return []
     if (key.kind === 'single' && key.field === field) return []
@@ -2565,14 +2568,20 @@ function entityBlocks(plan: ExposedPlan, model: DMMF.Model) {
     const member = kotlinName(entityProperty(plan, model, field.name))
     const column = columnRef(plan, model, field.name)
     return [
-      (resolve: (line: string) => string) => {
-        const single = `    ${keyword} ${member} by ${resolve(column)}`
-        return fits(single)
-          ? [single]
-          : [`    ${keyword} ${member} by`, `        ${resolve(column)}`]
+      {
+        field,
+        lines: (resolve: (line: string) => string) => {
+          const single = `    ${keyword} ${member} by ${resolve(column)}`
+          return fits(single)
+            ? [single]
+            : [`    ${keyword} ${member} by`, `        ${resolve(column)}`]
+        },
       },
     ]
   })
+  const members = entries.map(({ field, lines }, index) =>
+    joinLines(kotlinDocLines(stripAnnotations(field.documentation), '    ', index > 0), lines),
+  )
   const scope: Scope = {
     members: new Set([
       ...ENTITY_MEMBERS,

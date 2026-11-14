@@ -5,6 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * One per account, deleted with it (1-1, the foreign key unique on this side). No timestamps.
+ *
+ * @property string|null $avatar Bytes: an avatar kept in the row, a BLOB in SQLite.
+ */
 class Profile extends Model
 {
     protected $table = 'profiles';

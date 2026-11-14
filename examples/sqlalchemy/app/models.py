@@ -65,18 +65,26 @@ category_to_product = Table(
 
 
 class Account(Base):
+    """A person with an account. The fields named `metadata` and `registry` are what every
+    DeclarativeBase already has, and `class` is a Python keyword: each becomes an attribute with
+    a trailing underscore over a column of the field's own name.
+    """
+
     __tablename__ = "accounts"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str]
     role: Mapped[str] = mapped_column(default="MEMBER", server_default=text("'MEMBER'"))
     metadata_: Mapped[Optional[dict[str, Any]]] = mapped_column("metadata", Jsonb(none_as_null=True))
+    """Free-form settings, left out when there are none."""
     registry_: Mapped[Optional[str]] = mapped_column("registry")
     class_: Mapped[Optional[str]] = mapped_column("class")
     locale: Mapped[str] = mapped_column(default="en", server_default=text("'en'"))
+    """The literal default is written into the model, so a new row has it before the INSERT."""
     created_at: Mapped[datetime] = mapped_column(default=utc_now, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now)
     manager_id: Mapped[Optional[int]] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL", onupdate="CASCADE", name="accounts_manager_id_fkey"))
+    """A self relation: an account may report to another, and outlives its manager."""
 
     __table_args__ = (
         Index("accounts_email_key", "email", unique=True),
@@ -91,9 +99,14 @@ class Account(Base):
     received: Mapped[list["Transfer"]] = relationship(foreign_keys="Transfer.to_id", passive_deletes="all", back_populates="to")
     profile: Mapped[Optional["Profile"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="account")
     following: Mapped[list["Account"]] = relationship(secondary=follows, primaryjoin=lambda: Account.id == follows.c.B, secondaryjoin=lambda: Account.id == follows.c.A, back_populates="followers")
+    """A self many-to-many: Prisma's join table _Follows holds both ends in columns A and B."""
     followers: Mapped[list["Account"]] = relationship(secondary=follows, primaryjoin=lambda: Account.id == follows.c.A, secondaryjoin=lambda: Account.id == follows.c.B, back_populates="following")
 
 class Profile(Base):
+    """One per account, the 1-1 whose foreign key is unique. A `cuid()` key has no database default:
+    the model has to make one.
+    """
+
     __tablename__ = "profiles"
 
     id: Mapped[str] = mapped_column(primary_key=True)
@@ -108,6 +121,8 @@ class Profile(Base):
     account: Mapped["Account"] = relationship(back_populates="profile")
 
 class Product(Base):
+    """Every scalar type SQLite has, and a `uuid()` key made by the model."""
+
     __tablename__ = "products"
 
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid_mod.uuid4()))
@@ -117,11 +132,16 @@ class Product(Base):
     weight: Mapped[Optional[float]]
     stock: Mapped[int] = mapped_column(default=0, server_default=text("0"))
     views: Mapped[int] = mapped_column(BigInteger, default=0, server_default=text("0"))
+    """Counted past 2^31, so the column is BIGINT and the value a Python int all the same."""
     active: Mapped[bool] = mapped_column(default=True, server_default=text("true"))
     attributes: Mapped[dict[str, Any]] = mapped_column(Jsonb)
+    """No `@default("{}")`: Prisma 8.1 writes it into SQLite's DDL unquoted, and the CREATE TABLE
+    fails before any model is read.
+    """
     thumbnail: Mapped[Optional[bytes]]
     released_at: Mapped[Optional[datetime]]
     type: Mapped[str] = mapped_column(default="physical", server_default=text("'physical'"))
+    """`type` is a builtin in Python, not a keyword: it stays `type`."""
 
     __table_args__ = (
         Index("products_sku_key", "sku", unique=True),
@@ -132,6 +152,10 @@ class Product(Base):
     categories: Mapped[list["Category"]] = relationship(secondary=category_to_product, back_populates="products")
 
 class Category(Base):
+    """A tree of categories and an implicit many-to-many with products, through Prisma's
+    _CategoryToProduct. A name is unique among the children of one parent.
+    """
+
     __tablename__ = "categories"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -148,6 +172,10 @@ class Category(Base):
     products: Mapped[list["Product"]] = relationship(secondary=category_to_product, back_populates="categories")
 
 class Order(Base):
+    """`Order` is an SQL keyword and the table keeps it as its name: every statement has to quote it.
+    An account with orders cannot be deleted.
+    """
+
     __tablename__ = "Order"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -165,6 +193,10 @@ class Order(Base):
     lines: Mapped[list["OrderLine"]] = relationship(cascade="all, delete", passive_deletes=True, back_populates="order")
 
 class OrderLine(Base):
+    """The explicit many-to-many between orders and products, keyed by the pair. The lines go with
+    their order; a product that was ordered stays.
+    """
+
     __tablename__ = "order_lines"
 
     order_id: Mapped[int] = mapped_column(ForeignKey("Order.id", ondelete="CASCADE", onupdate="CASCADE", name="order_lines_order_id_fkey"), primary_key=True)
@@ -176,6 +208,10 @@ class OrderLine(Base):
     product: Mapped["Product"] = relationship(back_populates="lines")
 
 class Search(Base):
+    """A saved search. `query` is what the legacy `Model.query` property was called; in SQLAlchemy
+    2.0 it is a column like any other.
+    """
+
     __tablename__ = "searches"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -190,6 +226,11 @@ class Search(Base):
     account: Mapped["Account"] = relationship(back_populates="searches")
 
 class Transfer(Base):
+    """Two relations to the same model, named `from` and `to`: `from` is a Python keyword, and two
+    foreign keys to one table make each relationship say which column it goes through. A transfer
+    keeps its sender (NoAction), and one to a closed account falls back to the house account 1.
+    """
+
     __tablename__ = "transfers"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

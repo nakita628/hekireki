@@ -2,6 +2,7 @@ package models
 
 import org.jetbrains.exposed.v1.core.dao.id.CompositeIdTable
 
+/** A DateTime in a composite key: the DAO finds a row by it. */
 object ReadingTable : CompositeIdTable("\"Reading\"") {
     val sensor = text("sensor").entityId()
     val at = pgTimestamp("at", 3).entityId()

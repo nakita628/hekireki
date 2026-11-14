@@ -13,8 +13,10 @@ import java.time.temporal.ChronoUnit
 object UserTable : IdTable<String>("users") {
     /** Primary key (UUIDv7) */
     override val id = text("id").clientDefault { uuidV7().toString() }.entityId()
+
     /** Unique login email */
     val email = text("email").uniqueIndex("users_email_key")
+
     /** Display name */
     val name = text("name")
     val role = pgEnum("role", "\"Role\"", Role.entries, Role::dbName).default(Role.VIEWER)

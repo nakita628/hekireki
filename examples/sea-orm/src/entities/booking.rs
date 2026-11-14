@@ -2,6 +2,7 @@ use super::prisma_date_time::PrismaDateTime;
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// A `@unique` DateTime, found by a whole second as well as by milliseconds.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "bookings")]
 pub struct Model {

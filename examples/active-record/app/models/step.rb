@@ -1,3 +1,6 @@
+# A workflow step whose enum Rails cannot name the usual ways: `type_condition` is Active
+# Record's own (single-table inheritance), so the keys carry the suffix (`condition_type?`), and
+# `values` is ActiveRecord::Relation's, so `value` is no enum but its stored values, validated.
 class Step < ApplicationRecord
   self.inheritance_column = nil
 
