@@ -1,4 +1,8 @@
 defmodule Example.Follow do
+  @moduledoc """
+  Composite primary key + two named relations to the same model.
+  """
+
   use Ecto.Schema
 
   @primary_key false

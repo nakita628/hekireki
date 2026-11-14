@@ -1,4 +1,10 @@
 defmodule Example.User do
+  @moduledoc """
+  Application user. Fully annotated for every validator generator,
+  with a UUIDv7 primary key, enum default, scalar list, @map columns,
+  @updatedAt, and relations of every cardinality.
+  """
+
   use Ecto.Schema
 
   @primary_key {:id, Ecto.UUID, autogenerate: [version: 7]}
@@ -22,7 +28,9 @@ defmodule Example.User do
         }
 
   schema "users" do
+    # Unique login email
     field(:email, :string)
+    # Display name
     field(:name, :string)
     field(:role, Ecto.Enum, values: [:ADMIN, :EDITOR, :VIEWER], default: :VIEWER)
     field(:interests, {:array, :string})

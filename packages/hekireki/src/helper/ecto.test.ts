@@ -373,7 +373,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
+        'defmodule App.User do\n  @moduledoc """\n  A person.\n  """\n\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
       )
     })
 
@@ -1620,27 +1620,59 @@ end`)
     })
   })
 
-  describe('no @moduledoc', () => {
-    it("writes no @moduledoc, of the schema's documentation or of its own", () => {
+  describe('doc comments', () => {
+    it("writes a model's prose as @moduledoc and a field's as # lines", () => {
       const model = makeModel({
         name: 'User',
-        documentation: 'A person.',
+        documentation: 'A person.\n\nSays """ and #{x} and \\ here.\n@ecto',
         fields: [
           makeField({
             name: 'id',
-            type: 'String',
+            type: 'Int',
             isId: true,
-            hasDefaultValue: true,
-            default: { name: 'uuid', args: [4] },
+            documentation: 'The key.\n\nIts value.',
+          }),
+          makeField({
+            name: 'name',
+            type: 'String',
+            documentation: '@ecto.validate_length(max: 9)',
           }),
         ],
       })
 
-      const result = ectoSchemas([model], 'App')
+      expect(ectoSchemas([model], 'App')).toBe(`defmodule App.User do
+  @moduledoc """
+  A person.
 
-      expect(result).toBe(
-        'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key {:id, :binary_id, autogenerate: true}\n  @foreign_key_type :binary_id\n\n  @type t :: %__MODULE__{\n          id: Ecto.UUID.t()\n        }\n\n  schema "User" do\n  end\nend',
-      )
+  Says \\""" and \\#{x} and \\\\ here.
+  """
+
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          name: String.t()
+        }
+
+  schema "User" do
+    # The key.
+    #
+    # Its value.
+    field(:id, :integer, primary_key: true)
+    field(:name, :string)
+  end
+
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
+  def changeset(user, attrs) do
+    user
+    |> cast(attrs, [:id, :name])
+    |> validate_required([:id, :name])
+    |> validate_length(:name, max: 9)
+  end
+end`)
     })
   })
 
@@ -2557,6 +2589,10 @@ end`)
     const result = ectoSchemas([model], 'App', undefined, undefined, { provider: 'sqlite' })
 
     expect(result).toContain(`defmodule App.Account do
+  @moduledoc """
+  Someone who signs in.
+  """
+
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -3210,5 +3246,98 @@ describe('ectoDateTypes', () => {
       expect(code).not.toContain('@doc')
       expect(code.split('\n').filter((line) => line.trimStart().startsWith('#'))).toStrictEqual([])
     }
+  })
+})
+
+describe('relation doc comments', () => {
+  it('writes the prose of a relation field above the association it becomes', () => {
+    const dmmf = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+/// A person.
+///
+/// Second paragraph */ with \\\\ backslash.
+model User {
+  /// The key.
+  id        Int      @id
+  /// @z.string()
+  name      String
+  /// When they joined.
+  /// Two lines.
+  createdAt DateTime @default(now())
+  /// Their posts.
+  posts     Post[]
+  tone      Tone
+}
+model Post {
+  id       Int  @id
+  /// Who wrote it.
+  authorId Int
+  /// The author.
+  author   User @relation(fields: [authorId], references: [id])
+}
+/// How loud.
+enum Tone {
+  CALM
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in dmmf) throw new Error(dmmf.error.message)
+    const { models: documented, enums: documentedEnums } = dmmf.datamodel
+    expect(ectoSchemas(documented, 'App', documented, documentedEnums)).toBe(`defmodule App.User do
+  @moduledoc """
+  A person.
+
+  Second paragraph */ with \\\\\\\\ backslash.
+  """
+
+  use Ecto.Schema
+
+  @primary_key false
+  @timestamps_opts [type: App.PrismaDateTime, autogenerate: {App.PrismaDateTime, :autogenerate, []}]
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          name: String.t(),
+          tone: atom(),
+          inserted_at: DateTime.t(),
+          posts: [App.Post.t()]
+        }
+
+  schema "User" do
+    # The key.
+    field(:id, :integer, primary_key: true)
+    field(:name, :string)
+    field(:tone, Ecto.Enum, values: [:CALM])
+    # Their posts.
+    has_many(:posts, App.Post, foreign_key: :author_id, references: :id)
+    timestamps(inserted_at_source: :createdAt, updated_at: false)
+  end
+end
+
+defmodule App.Post do
+  use Ecto.Schema
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          author: App.User.t() | nil
+        }
+
+  schema "Post" do
+    field(:id, :integer, primary_key: true)
+    # Who wrote it.
+    field(:author_id, :id, source: :authorId)
+    # The author.
+    belongs_to(:author, App.User, foreign_key: :author_id, define_field: false)
+  end
+end`)
   })
 })

@@ -1,3 +1,6 @@
+# An implicit many-to-many: Prisma's own join table, _CategoryToPost with columns A and B. A
+# tree as well: a name is unique among the children of one parent, and the index counts the
+# roots apart (NULL is distinct), so two roots may share a name.
 class Category < ApplicationRecord
   validates :name, presence: true, uniqueness: { scope: :parent_id, conditions: -> { where.not(parent_id: nil) } }
 

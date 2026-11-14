@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { constraintName, makePascalCase, makeSnakeCase } from '../utils/index.js'
+import { constraintName, makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
 import { allocate } from '../utils/naming.js'
 import {
   backRelation,
@@ -15,7 +15,12 @@ import {
   uuidDefaultVersion,
 } from '../utils/prisma-model.js'
 import { sqlString } from '../utils/prisma-postgres.js'
-import { jsonToPythonLiteral, PYTHON_KEYWORDS, toPythonString } from '../utils/python.js'
+import {
+  jsonToPythonLiteral,
+  PYTHON_KEYWORDS,
+  pythonDocstringLines,
+  toPythonString,
+} from '../utils/python.js'
 
 const PRISMA_TO_PYTHON: { [k: string]: string } = {
   String: 'str',
@@ -1215,21 +1220,25 @@ export function generateModelBody(
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
 
   const isKeyless = !idField && !model.primaryKey
-  const columnLines = scalarFields.map((field) => {
+  const columnLines = scalarFields.flatMap((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const isFk = belongsToFkFields.has(field.name)
     const isMapperKey = isKeyless && identity.includes(field.name)
-    return generateColumn(
-      field,
-      isPk,
-      isFk,
-      associations,
-      allModels,
-      enumMap,
-      provider,
-      model,
-      isMapperKey,
+    const lines = pythonDocstringLines(stripAnnotations(field.documentation), '    ')
+    lines.unshift(
+      generateColumn(
+        field,
+        isPk,
+        isFk,
+        associations,
+        allModels,
+        enumMap,
+        provider,
+        model,
+        isMapperKey,
+      ),
     )
+    return lines
   })
 
   const tableArgsLines = generateTableArgs(model, allModels, indexes, provider)
@@ -1241,17 +1250,34 @@ export function generateModelBody(
       ]
     : []
 
+  // Each generator writes one line per association, in the order the associations are listed.
+  const relationNames = [
+    ...associations.belongsTo,
+    ...associations.hasMany,
+    ...associations.hasOne,
+    ...associations.manyToMany,
+  ].map((assoc) => assoc.name)
   const relationLines = [
     ...generateBelongsToRelationships(associations, model, allModels),
     ...generateHasManyRelationships(associations, model, allModels),
     ...generateHasOneRelationships(associations, model, allModels),
     ...generateManyToManyRelationships(associations, model, allModels, m2mTables),
-  ]
+  ].flatMap((line, index) => {
+    const lines = pythonDocstringLines(
+      stripAnnotations(model.fields.find((f) => f.name === relationNames[index])?.documentation),
+      '    ',
+    )
+    lines.unshift(line)
+    return lines
+  })
 
   const hasRelations = relationLines.length > 0
+  const docstring = pythonDocstringLines(stripAnnotations(model.documentation), '    ')
 
   return [
     `class ${className(model.name)}(Base):`,
+    ...docstring,
+    ...(docstring.length > 0 ? [''] : []),
     `    __tablename__ = "${tableName}"`,
     '',
     ...columnLines,

@@ -8,6 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Str;
 
+/**
+ * A saved list, one per account, holding products through a named implicit relation: the join
+ * table is `_Wished`, not `_ProductToWishlist`.
+ *
+ * @property string $share_token A link to share the list by: a second uuid(), beside the key's.
+ */
 class Wishlist extends Model
 {
     use HasVersion4Uuids;

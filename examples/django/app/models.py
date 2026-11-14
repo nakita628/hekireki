@@ -41,11 +41,17 @@ class AutoNowQuerySet(models.QuerySet[_M]):
 
 
 class Status(models.TextChoices):
+    """Stored under names of its own."""
+
     DRAFT = "draft"
     PUBLISHED = "published"
 
 
 class Author(models.Model):
+    """`now()` and `@updatedAt` under `@map`: Prisma Client fills both itself, in UTC with
+    milliseconds, whatever default the table has.
+    """
+
     id = models.AutoField(primary_key=True)
     email = models.TextField(unique=True)
     created_at = UtcDateTimeField(default=timezone.now)
@@ -57,6 +63,10 @@ class Author(models.Model):
 
 
 class Post(models.Model):
+    """An optional DateTime that is filtered and sorted on, a literal DateTime default, and two
+    `@updatedAt`: Prisma sets both on every write.
+    """
+
     id = models.AutoField(primary_key=True)
     title = models.TextField()
     status = models.TextField(choices=Status.choices, default=Status.DRAFT)
@@ -77,6 +87,8 @@ class Post(models.Model):
 
 
 class Tag(models.Model):
+    """The other side of an implicit many-to-many, through Prisma's `_PostToTag`."""
+
     id = models.AutoField(primary_key=True)
     name = models.TextField(unique=True)
 
@@ -85,6 +97,8 @@ class Tag(models.Model):
 
 
 class Visit(models.Model):
+    """A DateTime in a composite key: a row is found by the exact instant."""
+
     pk = models.CompositePrimaryKey("path", "at")
     path = models.TextField()
     at = UtcDateTimeField()
@@ -95,6 +109,8 @@ class Visit(models.Model):
 
 
 class Clock(models.Model):
+    """Every native type a DateTime can have. On SQLite each is the plain DateTime."""
+
     id = models.AutoField(primary_key=True)
     label = models.TextField(unique=True)
     at = UtcDateTimeField(null=True)

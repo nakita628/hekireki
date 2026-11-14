@@ -38,6 +38,7 @@ const utcNow = (() => {
   }
 })()
 
+/** A DateTime in every column MySQL has for one. */
 export const moments = mysqlTable(
   'moments',
   {

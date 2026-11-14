@@ -1,4 +1,8 @@
 defmodule Example.OrderItem do
+  @moduledoc """
+  Child of Order with a composite unique constraint.
+  """
+
   use Ecto.Schema
 
   @primary_key {:id, :id, autogenerate: true}

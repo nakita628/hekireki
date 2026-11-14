@@ -187,7 +187,7 @@ describe('generateSeedRows', () => {
   it('uses each parent once for a one-to-one relation and caps the default count to the parents', () => {
     const result = generate({ count: 5, models: { User: { count: 3 } } })
     const profiles = rowsOf(result, 'Profile')
-    expect(profiles.length).toBe(3)
+    expect(profiles).toHaveLength(3)
     expect(new Set(profiles.map((row) => row.userId)).size).toBe(3)
   })
 
@@ -276,12 +276,12 @@ describe('generateSeedRows', () => {
       'user-8-',
       'user-9-',
     ])
-    expect(rowsOf(result, '_PostToTag').length).toBe(6)
+    expect(rowsOf(result, '_PostToTag')).toHaveLength(6)
     const fromTags = generate({
       count: 4,
       models: { Tag: { count: 5, relations: { posts: { min: 1, max: 1 } } } },
     })
-    expect(rowsOf(fromTags, '_PostToTag').length).toBe(5)
+    expect(rowsOf(fromTags, '_PostToTag')).toHaveLength(5)
     expect(rowsOf(fromTags, '_PostToTag').every((pair) => 'A' in pair && 'B' in pair)).toBe(true)
   })
 
@@ -391,7 +391,7 @@ describe('generateSeedRows', () => {
       },
     })
     const users = rowsOf(result, 'User')
-    expect(users.length).toBe(2)
+    expect(users).toHaveLength(2)
     expect(users[0]).toMatchObject({
       id: '0195a4c8-3d2e-7f10-8a5b-1c2d3e4f5a01',
       email: 'ann@example.com',
@@ -529,7 +529,7 @@ describe('generateSeedRows', () => {
       },
     })
     const userIds = rowsOf(result, 'Profile').map((row) => row.userId)
-    expect(userIds.length).toBe(2)
+    expect(userIds).toHaveLength(2)
     expect(new Set(userIds).size).toBe(2)
     expect(
       userIds.every((id) =>
@@ -727,7 +727,7 @@ describe('generateSeedRows', () => {
         },
       },
     })
-    expect(rowsOf(ok, 'Post').length).toBe(3)
+    expect(rowsOf(ok, 'Post')).toHaveLength(3)
     expect(
       failure({
         models: {
@@ -783,7 +783,7 @@ describe('generateSeedRows', () => {
     })
     expect(short.startsWith('Relations out of bounds, nothing was inserted.\n   User[')).toBe(true)
     expect(short).toContain('.posts: 1 row, at least 2 expected (models.User.relations.posts.min)')
-    expect(short.split('\n').length).toBe(2)
+    expect(short.split('\n')).toHaveLength(2)
   })
 })
 

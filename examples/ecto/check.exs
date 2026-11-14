@@ -227,10 +227,17 @@ check("Elixir's words are plain columns: type, end, do, fn, when, schema, change
   ])
 end)
 
-check("a doc comment of the schema is not written: the module has no @moduledoc", fn ->
-  {:docs_v1, _, _, _, doc, _, _} = Code.fetch_docs(Shop.Keyword)
+check("a doc comment is the schema's @moduledoc, word for word", fn ->
+  {:docs_v1, _, _, _, %{"en" => doc}, _, _} = Code.fetch_docs(Shop.Keyword)
 
-  reasons([expect(doc, :none, "moduledoc #{inspect(doc)}")])
+  reasons([
+    expect(
+      String.contains?(doc, ~S(`#{interpolation}`, a `"""` and a backslash \ as a docstring)),
+      true,
+      "moduledoc #{inspect(doc)}"
+    ),
+    expect(String.contains?(doc, "@ecto"), false, "the @ecto line is not prose")
+  ])
 end)
 
 # --- Enums ------------------------------------------------------------------------------------

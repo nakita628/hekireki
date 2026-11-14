@@ -5,6 +5,7 @@ import org.jetbrains.exposed.v1.core.dao.id.IdTable
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+/** BigInt autoincrement primary key (bigserial) and money as Decimal. */
 object OrderTable : IdTable<Long>("orders") {
     override val id = long("id").autoIncrement().entityId()
     val userId =

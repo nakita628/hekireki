@@ -55,6 +55,53 @@ describe('atlasSchema', () => {
     expect(hcl).not.toContain('comment')
   })
 
+  it('writes the prose of doc comments as # lines', () => {
+    const datamodel = makeDatamodel(
+      [
+        makeModel({
+          name: 'Note',
+          documentation: 'A note.',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true, documentation: 'Its key.' }),
+            makeField({ name: 'tone', type: 'Tone', kind: 'enum' }),
+          ],
+        }),
+      ],
+      [
+        {
+          name: 'Tone',
+          dbName: null,
+          documentation: 'How it reads.',
+          values: [{ name: 'DRY', dbName: null }],
+        },
+      ],
+    )
+    expect(atlasSchema(datamodel, 'postgresql', {})).toBe(
+      `# How it reads.
+enum "Tone" {
+  schema = schema.public
+  values = ["DRY"]
+}
+
+# A note.
+table "Note" {
+  schema = schema.public
+  # Its key.
+  column "id" {
+    null = false
+    type = integer
+  }
+  column "tone" {
+    null = false
+    type = enum.Tone
+  }
+}
+
+schema "public" {}
+`,
+    )
+  })
+
   it('should generate a postgresql schema with tables, FK, and schema block', () => {
     const datamodel = makeDatamodel(
       [
@@ -462,12 +509,14 @@ schema "public" {}
       [{ model: 'User', type: 'id', isDefinedOnField: true, fields: [{ name: 'id' }] }],
     )
     expect(atlasSchema(datamodel, 'postgresql', { schemaName: 'app' })).toBe(
-      `table "User" {
+      `# Users table
+table "User" {
   schema = schema.auth
   column "id" {
     null = false
     type = text
   }
+  # email address
   column "email" {
     null = false
     type = text

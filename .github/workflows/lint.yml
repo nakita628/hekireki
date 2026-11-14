@@ -1,9 +1,9 @@
 name: Lint
 
 # The gates that need no build, as `pnpm lint` runs them locally: the prose of the repository
-# (markdownlint, textlint, cspell) and the workflows themselves (actionlint for the syntax,
-# zizmor for the security posture). zizmor is installed first so that `pnpm lint` runs it here
-# rather than skipping it as it does on a machine without it.
+# (markdownlint, textlint, cspell, and its links to the repository's files) and the workflows
+# themselves (actionlint for the syntax, zizmor for the security posture). zizmor is installed
+# first so that `pnpm lint` runs it here rather than skipping it as it does on a machine without it.
 #
 # Action versions are tracked by Renovate, which pins each one to its digest
 # (helpers:pinGitHubActionDigests) and keeps the @vX.Y.Z tag as a comment.

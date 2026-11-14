@@ -5,6 +5,7 @@ import org.jetbrains.exposed.v1.core.dao.id.CompositeIdTable
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+/** Composite primary key + two named relations to the same model. */
 object FollowTable : CompositeIdTable("follows") {
     val followerId =
         reference(

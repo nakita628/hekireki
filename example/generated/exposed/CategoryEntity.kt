@@ -4,6 +4,7 @@ import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.dao.Entity
 import org.jetbrains.exposed.v1.dao.EntityClass
 
+/** Self-relation (adjacency-list tree) with a composite unique. */
 class CategoryEntity(
     id: EntityID<Int>,
 ) : Entity<Int>(id) {

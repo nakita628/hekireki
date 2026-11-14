@@ -108,10 +108,8 @@ describe('startStudioServer', () => {
         }),
       ).pipe(Effect.provide(NodeFileSystem.layer)),
     )
-    expect(Exit.isFailure(exit)).toBe(true)
-    if (Exit.isFailure(exit)) {
-      expect(String(exit.cause)).toContain('EADDRINUSE')
-    }
+    if (!Exit.isFailure(exit)) throw new Error('expected the second server to fail')
+    expect(String(exit.cause)).toContain('EADDRINUSE')
   })
 
   it('fails with SchemaLoadError for a missing schema', async () => {

@@ -48,85 +48,85 @@ const UTC_BASE = `class Base(DeclarativeBase):
 
 describe('prismaTypeToSQLAlchemyType', () => {
   it('maps String to String', () => {
-    expect(prismaTypeToSQLAlchemyType('String')).toStrictEqual('String')
+    expect(prismaTypeToSQLAlchemyType('String')).toBe('String')
   })
 
   it('maps Int to Integer', () => {
-    expect(prismaTypeToSQLAlchemyType('Int')).toStrictEqual('Integer')
+    expect(prismaTypeToSQLAlchemyType('Int')).toBe('Integer')
   })
 
   it('maps BigInt to BigInteger', () => {
-    expect(prismaTypeToSQLAlchemyType('BigInt')).toStrictEqual('BigInteger')
+    expect(prismaTypeToSQLAlchemyType('BigInt')).toBe('BigInteger')
   })
 
   it('maps Float to Float', () => {
-    expect(prismaTypeToSQLAlchemyType('Float')).toStrictEqual('Float')
+    expect(prismaTypeToSQLAlchemyType('Float')).toBe('Float')
   })
 
   it('maps Decimal to Numeric', () => {
-    expect(prismaTypeToSQLAlchemyType('Decimal')).toStrictEqual('Numeric')
+    expect(prismaTypeToSQLAlchemyType('Decimal')).toBe('Numeric')
   })
 
   it('maps Boolean to Boolean', () => {
-    expect(prismaTypeToSQLAlchemyType('Boolean')).toStrictEqual('Boolean')
+    expect(prismaTypeToSQLAlchemyType('Boolean')).toBe('Boolean')
   })
 
   it('maps DateTime to DateTime', () => {
-    expect(prismaTypeToSQLAlchemyType('DateTime')).toStrictEqual('DateTime')
+    expect(prismaTypeToSQLAlchemyType('DateTime')).toBe('DateTime')
   })
 
   it('maps Json to JSON', () => {
-    expect(prismaTypeToSQLAlchemyType('Json')).toStrictEqual('JSON')
+    expect(prismaTypeToSQLAlchemyType('Json')).toBe('JSON')
   })
 
   it('maps Bytes to LargeBinary', () => {
-    expect(prismaTypeToSQLAlchemyType('Bytes')).toStrictEqual('LargeBinary')
+    expect(prismaTypeToSQLAlchemyType('Bytes')).toBe('LargeBinary')
   })
 
   it('maps unknown type to String', () => {
-    expect(prismaTypeToSQLAlchemyType('Unknown')).toStrictEqual('String')
+    expect(prismaTypeToSQLAlchemyType('Unknown')).toBe('String')
   })
 })
 
 describe('prismaTypeToPythonType', () => {
   it('maps String to str', () => {
-    expect(prismaTypeToPythonType('String')).toStrictEqual('str')
+    expect(prismaTypeToPythonType('String')).toBe('str')
   })
 
   it('maps Int to int', () => {
-    expect(prismaTypeToPythonType('Int')).toStrictEqual('int')
+    expect(prismaTypeToPythonType('Int')).toBe('int')
   })
 
   it('maps BigInt to int', () => {
-    expect(prismaTypeToPythonType('BigInt')).toStrictEqual('int')
+    expect(prismaTypeToPythonType('BigInt')).toBe('int')
   })
 
   it('maps Float to float', () => {
-    expect(prismaTypeToPythonType('Float')).toStrictEqual('float')
+    expect(prismaTypeToPythonType('Float')).toBe('float')
   })
 
   it('maps Decimal to Decimal', () => {
-    expect(prismaTypeToPythonType('Decimal')).toStrictEqual('Decimal')
+    expect(prismaTypeToPythonType('Decimal')).toBe('Decimal')
   })
 
   it('maps Boolean to bool', () => {
-    expect(prismaTypeToPythonType('Boolean')).toStrictEqual('bool')
+    expect(prismaTypeToPythonType('Boolean')).toBe('bool')
   })
 
   it('maps DateTime to datetime', () => {
-    expect(prismaTypeToPythonType('DateTime')).toStrictEqual('datetime')
+    expect(prismaTypeToPythonType('DateTime')).toBe('datetime')
   })
 
   it('maps Json to dict[str, Any]', () => {
-    expect(prismaTypeToPythonType('Json')).toStrictEqual('dict[str, Any]')
+    expect(prismaTypeToPythonType('Json')).toBe('dict[str, Any]')
   })
 
   it('maps Bytes to bytes', () => {
-    expect(prismaTypeToPythonType('Bytes')).toStrictEqual('bytes')
+    expect(prismaTypeToPythonType('Bytes')).toBe('bytes')
   })
 
   it('maps unknown type to str', () => {
-    expect(prismaTypeToPythonType('Unknown')).toStrictEqual('str')
+    expect(prismaTypeToPythonType('Unknown')).toBe('str')
   })
 })
 
@@ -2885,5 +2885,80 @@ model DatabaseConfig {
       '    project: Mapped[Optional["Project"]] = relationship(overlaps="database_configs,environment_ref", back_populates="database_configs")',
       '    environment_ref: Mapped[Optional["ProjectEnvironment"]] = relationship(overlaps="database_configs,project", back_populates="database_configs")',
     ])
+  })
+})
+
+describe('doc comments', () => {
+  it('writes the prose of /// comments as class and attribute docstrings', () => {
+    const dmmf = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+/// A person.
+///
+/// Says """ and \\ and ends with a quote"
+model User {
+  /// The key.
+  id    Int    @id
+  /// @z.string()
+  name  String
+  /// Their posts.
+  posts Post[]
+  tone  Tone
+}
+model Post {
+  id       Int  @id
+  /// Who wrote it.
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+}
+/// How loud.
+enum Tone {
+  CALM
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in dmmf) throw new Error(dmmf.error.message)
+    const { models, enums, indexes } = dmmf.datamodel
+    expect(generateSingleFile(models, enums, indexes))
+      .toBe(`from sqlalchemy import Enum, ForeignKey, MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
+
+
+class User(Base):
+    """A person.
+
+    Says \\"\\"" and \\\\ and ends with a quote\\"
+    """
+
+    __tablename__ = "User"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    """The key."""
+    name: Mapped[str]
+    tone: Mapped[str] = mapped_column(Enum("CALM", name="Tone"))
+
+    posts: Mapped[list["Post"]] = relationship(passive_deletes="all", back_populates="author")
+    """Their posts."""
+
+class Post(Base):
+    __tablename__ = "Post"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    author_id: Mapped[int] = mapped_column("authorId", ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE", name="Post_authorId_fkey"))
+    """Who wrote it."""
+
+    author: Mapped["User"] = relationship(back_populates="posts")
+`)
   })
 })

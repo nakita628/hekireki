@@ -5,12 +5,26 @@ using System.Collections.Generic;
 
 namespace Example.Models;
 
+/// <summary>
+/// Application user. Fully annotated for every validator generator,
+/// with a UUIDv7 primary key, enum default, scalar list, @map columns,
+/// @updatedAt, and relations of every cardinality.
+/// </summary>
 public partial class User
 {
+    /// <summary>
+    /// Primary key (UUIDv7)
+    /// </summary>
     public string Id { get; set; } = null!;
 
+    /// <summary>
+    /// Unique login email
+    /// </summary>
     public string Email { get; set; } = null!;
 
+    /// <summary>
+    /// Display name
+    /// </summary>
     public string Name { get; set; } = null!;
 
     public Role Role { get; set; } = Role.Viewer;

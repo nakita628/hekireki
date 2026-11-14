@@ -1,4 +1,4 @@
-import { makeValidationExtractor, schemaFromFields } from '../utils/index.js'
+import { docBlockLines, makeValidationExtractor, schemaFromFields } from '../utils/index.js'
 import { validationSchemas } from '../utils/validation-schema.js'
 
 export function makeTypeBoxInfer(modelName: string) {
@@ -23,13 +23,14 @@ export function makeTypeBoxProperties(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
+    readonly comment?: string
   }[],
 ) {
   return fields
     .map((field) => {
       const expr = field.validation ?? 'Type.Unknown()'
       const wrapped = field.isRequired ? expr : `Type.Optional(${expr})`
-      return `  ${field.fieldName}: ${wrapped},`
+      return [...docBlockLines(field.comment, '  '), `  ${field.fieldName}: ${wrapped},`].join('\n')
     })
     .join('\n')
 }
@@ -57,6 +58,7 @@ export function makeTypeBoxSchemas(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
+    readonly comment?: string
   }[],
   objectType?: 'strict' | 'loose',
 ) {

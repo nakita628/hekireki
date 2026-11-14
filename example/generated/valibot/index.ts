@@ -1,8 +1,16 @@
 import * as v from 'valibot'
 
+/**
+ * Application user. Fully annotated for every validator generator,
+ * with a UUIDv7 primary key, enum default, scalar list, @map columns,
+ * @updatedAt, and relations of every cardinality.
+ */
 export const UserSchema = v.object({
+  /** Primary key (UUIDv7) */
   id: v.pipe(v.string(), v.uuid()),
+  /** Unique login email */
   email: v.pipe(v.string(), v.email()),
+  /** Display name */
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
   role: v.picklist(['ADMIN', 'EDITOR', 'VIEWER']),
   interests: v.string(),
@@ -12,6 +20,11 @@ export const UserSchema = v.object({
 
 export type User = v.InferOutput<typeof UserSchema>
 
+/**
+ * One-to-one relation with native @db.* types, literal defaults,
+ * and optional scalars of every flavour. ConfigDict passthrough: the
+ * Pydantic model rejects unknown keys (extra='forbid').
+ */
 export const ProfileSchema = v.object({
   id: v.string(),
   userId: v.string(),
@@ -27,8 +40,14 @@ export const ProfileSchema = v.object({
 
 export type Profile = v.InferOutput<typeof ProfileSchema>
 
+/**
+ * @@map + @map column names, FK with a referential action,
+ * mapped-enum default, and an implicit many-to-many to Tag.
+ */
 export const PostSchema = v.object({
+  /** Primary key */
   id: v.pipe(v.string(), v.uuid()),
+  /** Article title */
   title: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
   content: v.exactOptional(v.string()),
   visibility: v.picklist(['PUBLIC', 'PRIVATE', 'LINK_ONLY']),
@@ -40,6 +59,7 @@ export const PostSchema = v.object({
 
 export type Post = v.InferOutput<typeof PostSchema>
 
+/** Implicit many-to-many partner of Post (join table `_PostToTag`). */
 export const TagSchema = v.object({
   id: v.number(),
   label: v.string(),
@@ -47,6 +67,10 @@ export const TagSchema = v.object({
 
 export type Tag = v.InferOutput<typeof TagSchema>
 
+/**
+ * Two foreign keys with different referential actions
+ * (Cascade vs SetNull) and a composite index.
+ */
 export const CommentSchema = v.object({
   id: v.number(),
   body: v.string(),
@@ -57,6 +81,7 @@ export const CommentSchema = v.object({
 
 export type Comment = v.InferOutput<typeof CommentSchema>
 
+/** Composite primary key + two named relations to the same model. */
 export const FollowSchema = v.object({
   followerId: v.string(),
   followingId: v.string(),
@@ -65,6 +90,7 @@ export const FollowSchema = v.object({
 
 export type Follow = v.InferOutput<typeof FollowSchema>
 
+/** Self-relation (adjacency-list tree) with a composite unique. */
 export const CategorySchema = v.object({
   id: v.number(),
   name: v.string(),
@@ -73,6 +99,7 @@ export const CategorySchema = v.object({
 
 export type Category = v.InferOutput<typeof CategorySchema>
 
+/** BigInt autoincrement primary key (bigserial) and money as Decimal. */
 export const OrderSchema = v.object({
   id: v.bigint(),
   userId: v.string(),
@@ -82,6 +109,7 @@ export const OrderSchema = v.object({
 
 export type Order = v.InferOutput<typeof OrderSchema>
 
+/** Child of Order with a composite unique constraint. */
 export const OrderItemSchema = v.object({
   id: v.bigint(),
   orderId: v.bigint(),
@@ -92,6 +120,7 @@ export const OrderItemSchema = v.object({
 
 export type OrderItem = v.InferOutput<typeof OrderItemSchema>
 
+/** DB-side generated defaults (dbgenerated) plus Json / Bytes payloads. */
 export const AuditLogSchema = v.object({
   id: v.string(),
   action: v.string(),
@@ -102,6 +131,10 @@ export const AuditLogSchema = v.object({
 
 export type AuditLog = v.InferOutput<typeof AuditLogSchema>
 
+/**
+ * Named implicit many-to-many: the join table is `_cast`,
+ * not `_ActorToFilm`.
+ */
 export const ActorSchema = v.object({
   id: v.number(),
   name: v.string(),

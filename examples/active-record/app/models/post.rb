@@ -1,3 +1,8 @@
+# The model's own lines come after the generated associations, so a has_many :through finds
+# the has_many it goes through, and a scope may use the enum's.
+#
+# author_id:: A post keeps its author's id when the author is optional, and loses it when the author goes.
+# type:: Rails' single-table inheritance column, which this model does not use.
 class Post < ApplicationRecord
   self.inheritance_column = nil
 

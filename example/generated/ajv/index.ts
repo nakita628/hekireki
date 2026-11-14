@@ -1,10 +1,18 @@
 import type { FromSchema } from 'json-schema-to-ts'
 
+/**
+ * Application user. Fully annotated for every validator generator,
+ * with a UUIDv7 primary key, enum default, scalar list, @map columns,
+ * @updatedAt, and relations of every cardinality.
+ */
 export const UserSchema = {
   type: 'object' as const,
   properties: {
+    /** Primary key (UUIDv7) */
     id: { type: 'string' as const, format: 'uuid' as const },
+    /** Unique login email */
     email: { type: 'string' as const, format: 'email' as const },
+    /** Display name */
     name: { type: 'string' as const, minLength: 1, maxLength: 50 },
     role: { enum: ['ADMIN', 'EDITOR', 'VIEWER'] as const },
     interests: { type: 'string' as const },
@@ -17,6 +25,11 @@ export const UserSchema = {
 
 export type User = FromSchema<typeof UserSchema>
 
+/**
+ * One-to-one relation with native @db.* types, literal defaults,
+ * and optional scalars of every flavour. ConfigDict passthrough: the
+ * Pydantic model rejects unknown keys (extra='forbid').
+ */
 export const ProfileSchema = {
   type: 'object' as const,
   properties: {
@@ -37,10 +50,16 @@ export const ProfileSchema = {
 
 export type Profile = FromSchema<typeof ProfileSchema>
 
+/**
+ * @@map + @map column names, FK with a referential action,
+ * mapped-enum default, and an implicit many-to-many to Tag.
+ */
 export const PostSchema = {
   type: 'object' as const,
   properties: {
+    /** Primary key */
     id: { type: 'string' as const, format: 'uuid' as const },
+    /** Article title */
     title: { type: 'string' as const, minLength: 1, maxLength: 100 },
     content: { type: 'string' as const },
     visibility: { enum: ['PUBLIC', 'PRIVATE', 'LINK_ONLY'] as const },
@@ -63,6 +82,7 @@ export const PostSchema = {
 
 export type Post = FromSchema<typeof PostSchema>
 
+/** Implicit many-to-many partner of Post (join table `_PostToTag`). */
 export const TagSchema = {
   type: 'object' as const,
   properties: {
@@ -75,6 +95,10 @@ export const TagSchema = {
 
 export type Tag = FromSchema<typeof TagSchema>
 
+/**
+ * Two foreign keys with different referential actions
+ * (Cascade vs SetNull) and a composite index.
+ */
 export const CommentSchema = {
   type: 'object' as const,
   properties: {
@@ -90,6 +114,7 @@ export const CommentSchema = {
 
 export type Comment = FromSchema<typeof CommentSchema>
 
+/** Composite primary key + two named relations to the same model. */
 export const FollowSchema = {
   type: 'object' as const,
   properties: {
@@ -103,6 +128,7 @@ export const FollowSchema = {
 
 export type Follow = FromSchema<typeof FollowSchema>
 
+/** Self-relation (adjacency-list tree) with a composite unique. */
 export const CategorySchema = {
   type: 'object' as const,
   properties: {
@@ -116,6 +142,7 @@ export const CategorySchema = {
 
 export type Category = FromSchema<typeof CategorySchema>
 
+/** BigInt autoincrement primary key (bigserial) and money as Decimal. */
 export const OrderSchema = {
   type: 'object' as const,
   properties: {
@@ -130,6 +157,7 @@ export const OrderSchema = {
 
 export type Order = FromSchema<typeof OrderSchema>
 
+/** Child of Order with a composite unique constraint. */
 export const OrderItemSchema = {
   type: 'object' as const,
   properties: {
@@ -145,6 +173,7 @@ export const OrderItemSchema = {
 
 export type OrderItem = FromSchema<typeof OrderItemSchema>
 
+/** DB-side generated defaults (dbgenerated) plus Json / Bytes payloads. */
 export const AuditLogSchema = {
   type: 'object' as const,
   properties: {
@@ -160,6 +189,10 @@ export const AuditLogSchema = {
 
 export type AuditLog = FromSchema<typeof AuditLogSchema>
 
+/**
+ * Named implicit many-to-many: the join table is `_cast`,
+ * not `_ActorToFilm`.
+ */
 export const ActorSchema = {
   type: 'object' as const,
   properties: {

@@ -1,4 +1,11 @@
 defmodule Shop.Account do
+  @moduledoc """
+  Someone who signs in. The key counts up in the database, the address is unique, and the
+  timestamps have Prisma's own names on Rails' columns, so Ecto's `timestamps()` needs a source
+  for each. Its changeset takes what the @ecto. lines ask on top of what the schema requires, and
+  a line of the model's own.
+  """
+
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -26,6 +33,7 @@ defmodule Shop.Account do
 
   schema "accounts" do
     field(:email_address, :string)
+    # A second unique column Prisma names in camel case: a relation references it below.
     field(:handle, :string)
     field(:display_name, :string)
     field(:role, Ecto.Enum, values: [CUSTOMER: "customer", STAFF: "staff", ADMIN: "ADMIN"], default: :CUSTOMER)
@@ -33,9 +41,11 @@ defmodule Shop.Account do
     has_one(:profile, Shop.Profile, foreign_key: :account_id)
     has_one(:wishlist, Shop.Wishlist, foreign_key: :account_id)
     has_many(:orders, Shop.Order, foreign_key: :account_id)
+    # Orders sent to this account as a gift: a second relation to the same model, told apart by name.
     has_many(:gifts, Shop.Order, foreign_key: :gift_for, references: :handle)
     has_many(:reviews, Shop.Review, foreign_key: :account_id)
     has_many(:audit_events, Shop.AuditEvent, foreign_key: :account_id)
+    # Who follows whom: an implicit many-to-many from a model to itself, in Prisma's `_Follows`.
     many_to_many(:followers, Shop.Account, join_through: "_Follows", join_keys: [A: :id, B: :id])
     many_to_many(:following, Shop.Account, join_through: "_Follows", join_keys: [B: :id, A: :id])
     timestamps(inserted_at_source: :created_at)

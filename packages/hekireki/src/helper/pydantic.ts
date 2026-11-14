@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, makeValidationExtractor } from '../utils/index.js'
-import { PYTHON_KEYWORDS } from '../utils/python.js'
+import { makePascalCase, makeValidationExtractor, stripAnnotations } from '../utils/index.js'
+import { PYTHON_KEYWORDS, pythonDocstringLines } from '../utils/python.js'
 
 const PRISMA_TO_PYDANTIC: { [k: string]: string } = {
   String: 'str',
@@ -132,9 +132,14 @@ export function makePydanticModel(
   if (built.length === 0) return null
 
   const configLine = makeConfigLine(model)
-  const fieldLines = built.map(({ result }) => result.line)
+  const fieldLines = built.flatMap(({ field, result }) => {
+    const lines = pythonDocstringLines(stripAnnotations(field.documentation), '    ')
+    lines.unshift(result.line)
+    return lines
+  })
+  const docstring = pythonDocstringLines(stripAnnotations(model.documentation), '    ')
 
-  const sections = [configLine === null ? [] : [configLine], fieldLines].filter(
+  const sections = [docstring, configLine === null ? [] : [configLine], fieldLines].filter(
     (section) => section.length > 0,
   )
   return [

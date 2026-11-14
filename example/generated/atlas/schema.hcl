@@ -1,23 +1,33 @@
+# User role. No @map: the value names are stored verbatim.
 enum "Role" {
   schema = schema.public
   values = ["ADMIN", "EDITOR", "VIEWER"]
 }
 
+# Enum with @map on every value and @@map on the enum itself:
+# the database stores the mapped values ("link_only"), while
+# generators receive the Prisma-level names ("LINK_ONLY").
 enum "visibility_level" {
   schema = schema.public
   values = ["public", "private", "link_only"]
 }
 
+# Application user. Fully annotated for every validator generator,
+# with a UUIDv7 primary key, enum default, scalar list, @map columns,
+# @updatedAt, and relations of every cardinality.
 table "users" {
   schema = schema.public
+  # Primary key (UUIDv7)
   column "id" {
     null = false
     type = text
   }
+  # Unique login email
   column "email" {
     null = false
     type = text
   }
+  # Display name
   column "name" {
     null = false
     type = text
@@ -50,6 +60,9 @@ table "users" {
   }
 }
 
+# One-to-one relation with native @db.* types, literal defaults,
+# and optional scalars of every flavour. ConfigDict passthrough: the
+# Pydantic model rejects unknown keys (extra='forbid').
 table "Profile" {
   schema = schema.public
   column "id" {
@@ -110,12 +123,16 @@ table "Profile" {
   }
 }
 
+# @@map + @map column names, FK with a referential action,
+# mapped-enum default, and an implicit many-to-many to Tag.
 table "posts" {
   schema = schema.public
+  # Primary key
   column "id" {
     null = false
     type = text
   }
+  # Article title
   column "title" {
     null = false
     type = text
@@ -162,6 +179,7 @@ table "posts" {
   }
 }
 
+# Implicit many-to-many partner of Post (join table `_PostToTag`).
 table "Tag" {
   schema = schema.public
   column "id" {
@@ -181,6 +199,8 @@ table "Tag" {
   }
 }
 
+# Two foreign keys with different referential actions
+# (Cascade vs SetNull) and a composite index.
 table "comments" {
   schema = schema.public
   column "id" {
@@ -224,6 +244,7 @@ table "comments" {
   }
 }
 
+# Composite primary key + two named relations to the same model.
 table "follows" {
   schema = schema.public
   column "follower_id" {
@@ -256,6 +277,7 @@ table "follows" {
   }
 }
 
+# Self-relation (adjacency-list tree) with a composite unique.
 table "Category" {
   schema = schema.public
   column "id" {
@@ -285,6 +307,7 @@ table "Category" {
   }
 }
 
+# BigInt autoincrement primary key (bigserial) and money as Decimal.
 table "orders" {
   schema = schema.public
   column "id" {
@@ -315,6 +338,7 @@ table "orders" {
   }
 }
 
+# Child of Order with a composite unique constraint.
 table "order_items" {
   schema = schema.public
   column "id" {
@@ -353,6 +377,7 @@ table "order_items" {
   }
 }
 
+# DB-side generated defaults (dbgenerated) plus Json / Bytes payloads.
 table "audit_logs" {
   schema = schema.public
   column "id" {
@@ -383,6 +408,8 @@ table "audit_logs" {
   }
 }
 
+# Named implicit many-to-many: the join table is `_cast`,
+# not `_ActorToFilm`.
 table "Actor" {
   schema = schema.public
   column "id" {

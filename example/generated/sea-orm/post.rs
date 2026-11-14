@@ -4,12 +4,16 @@ use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
+/// @@map + @map column names, FK with a referential action,
+/// mapped-enum default, and an implicit many-to-many to Tag.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[sea_orm(table_name = "posts")]
 pub struct Model {
+    /// Primary key
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
+    /// Article title
     pub title: String,
     pub content: Option<String>,
     #[sea_orm(default_value = "link_only")]

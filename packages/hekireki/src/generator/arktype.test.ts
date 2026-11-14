@@ -90,7 +90,9 @@ describe('arktypeCode', () => {
   it('emits every model schema, without the relation schemas', () => {
     expect(arktypeCode(dmmf, true, false)).toBe(`import { type } from 'arktype'
 
+/** A person. */
 export const UserSchema = type({
+  /** Primary key. */
   id: "number",
   name: "string",
   role: "'USER' | 'ADMIN'",
@@ -110,7 +112,9 @@ export type BlogPost = typeof BlogPostSchema.infer`)
   it('appends the relation schemas after a blank line', () => {
     expect(arktypeCode(dmmf, true, true)).toBe(`import { type } from 'arktype'
 
+/** A person. */
 export const UserSchema = type({
+  /** Primary key. */
   id: "number",
   name: "string",
   role: "'USER' | 'ADMIN'",

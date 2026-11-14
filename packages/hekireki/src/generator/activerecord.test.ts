@@ -91,7 +91,10 @@ describe('activeRecordModelFiles', () => {
     expect(activeRecordModelFiles(models, enums)).toStrictEqual([
       {
         fileName: 'user.rb',
-        code: `class User < ApplicationRecord
+        code: `# A person.
+#
+# id:: Primary key.
+class User < ApplicationRecord
   self.table_name = "User"
 
   enum :role, { user: "USER", admin: "ADMIN" }, validate: true

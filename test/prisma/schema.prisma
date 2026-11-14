@@ -500,6 +500,29 @@ model Locked {
   name String
 }
 
+// Every target writes the prose of these `///` comments. Each line holds what would end or break
+// a comment in one of the languages: a block comment's close (and, in Kotlin, a nested open), a
+// docstring's quotes and backslash, Elixir's interpolation, XML in C#.
+/// A model documented in prose.
+///
+/// Ends a block */ or opens one /* and a docstring """ with a \ backslash,
+/// interpolates #{nothing} and is <b>XML</b> & more"
+model Commented {
+  id   Int    @id @default(autoincrement())
+  /// The body; ends */ /* """ \ #{x} <&> with a quote"
+  /// @p.str
+  body String
+  tone Tone
+  /// @p.str
+  bare String
+}
+
+/// A documented enum */ /* """ \ #{x} <&>"
+enum Tone {
+  CALM
+  LOUD
+}
+
 /// @p.ConfigDict(extra='allow')
 /// @ar.validates :name, :contact, presence: true, on: :create
 /// @ar.normalizes :name, with: ->(name) { name.strip }

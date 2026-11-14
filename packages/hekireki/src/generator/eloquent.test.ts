@@ -1,4 +1,5 @@
 import type { DMMF } from '@prisma/generator-helper'
+import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { eloquentModelFiles } from './eloquent.js'
@@ -94,6 +95,11 @@ namespace App\\Models;
 use Illuminate\\Database\\Eloquent\\Model;
 use Illuminate\\Database\\Eloquent\\Relations\\HasMany;
 
+/**
+ * A person.
+ *
+ * @property int $id Primary key.
+ */
 class User extends Model
 {
     protected $table = 'User';
@@ -211,5 +217,133 @@ class Bare extends Model
 
   it('emits nothing for a schema without models or enums', () => {
     expect(eloquentModelFiles([], 'App')).toStrictEqual([])
+  })
+})
+
+describe('doc comments', () => {
+  it('writes the prose of a model and its columns as PHPDoc, and of a relation and an enum above them', () => {
+    const dmmf = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+/// A person.
+///
+/// Second paragraph */ with \\\\ backslash.
+model User {
+  /// The key.
+  id        Int      @id
+  /// @z.string()
+  name      String
+  /// When they joined.
+  /// Two lines.
+  createdAt DateTime @default(now())
+  /// Their posts.
+  posts     Post[]
+  tone      Tone
+}
+model Post {
+  id       Int  @id
+  /// Who wrote it.
+  authorId Int
+  /// The author.
+  author   User @relation(fields: [authorId], references: [id])
+}
+/// How loud.
+enum Tone {
+  CALM
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in dmmf) throw new Error(dmmf.error.message)
+    const { models: documented, enums: documentedEnums } = dmmf.datamodel
+    const files = eloquentModelFiles(documented, 'App\\Models', documentedEnums)
+    expect(files.find((file) => file.fileName === 'User.php')?.code).toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\\Database\\Eloquent\\Relations\\HasMany;
+
+/**
+ * A person.
+ *
+ * Second paragraph *\\/ with \\\\ backslash.
+ *
+ * @property int $id The key.
+ * @property \\Carbon\\CarbonInterface $createdAt When they joined.
+ * Two lines.
+ */
+class User extends Model
+{
+    use PrismaDates;
+
+    const CREATED_AT = 'createdAt';
+    const UPDATED_AT = null;
+
+    protected $table = 'User';
+
+    public $incrementing = false;
+
+    protected $fillable = [
+        'id',
+        'name',
+        'tone',
+    ];
+
+    protected $casts = [
+        'tone' => Tone::class,
+    ];
+
+    /** Their posts. */
+    public function posts(): HasMany
+    {
+        return $this->hasMany(Post::class, 'authorId');
+    }
+}`)
+    expect(files.find((file) => file.fileName === 'Post.php')?.code).toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;
+
+/** @property int $authorId Who wrote it. */
+class Post extends Model
+{
+    protected $table = 'Post';
+
+    public $incrementing = false;
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'id',
+        'authorId',
+    ];
+
+    protected $casts = [
+        'authorId' => 'integer',
+    ];
+
+    /** The author. */
+    public function author(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'authorId');
+    }
+}`)
+    expect(files.find((file) => file.fileName === 'Tone.php')?.code).toBe(`<?php
+
+namespace App\\Models;
+
+/** How loud. */
+enum Tone: string
+{
+    case CALM = 'CALM';
+}`)
   })
 })

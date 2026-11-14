@@ -715,3 +715,51 @@ describe('kyselySchema', () => {
     )
   })
 })
+
+describe('kyselySchema doc comments', () => {
+  const datamodel = makeDatamodel(
+    [
+      makeModel({
+        name: 'User',
+        documentation: 'A person who signs in.\n\nKept after they leave.\n@z.strict()',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true, documentation: 'The key.' }),
+          makeField({ name: 'email', type: 'String', documentation: '@z.email()' }),
+          makeField({ name: 'note', type: 'String', documentation: 'Ends a block: */ here.' }),
+          makeField({ name: 'role', kind: 'enum', type: 'Role' }),
+        ],
+      }),
+    ],
+    [
+      {
+        name: 'Role',
+        values: [{ name: 'ADMIN', dbName: null }],
+        dbName: null,
+        documentation: 'What a user may do.',
+      },
+    ],
+  )
+
+  it('should write the prose of model, field and enum docs as JSDoc', () => {
+    expect(kyselySchema(datamodel)).toBe(`/** What a user may do. */
+export type Role = 'ADMIN'
+
+/**
+ * A person who signs in.
+ *
+ * Kept after they leave.
+ */
+export interface User {
+  /** The key. */
+  id: number
+  email: string
+  /** Ends a block: *\\/ here. */
+  note: string
+  role: Role
+}
+
+export interface DB {
+  User: User
+}`)
+  })
+})

@@ -63,6 +63,7 @@ describe('schemaSql', () => {
     expect(statements[1]).toContain('CONSTRAINT "Post_authorId_fkey" FOREIGN KEY ("authorId")')
   })
 
+  // oxlint-disable-next-line jest/no-done-callback -- vitest's test context, for skip(): the engine is looked up asynchronously
   it('writes MySQL through the native engine, where it is installed', async (context) => {
     const binary = await Effect.runPromise(
       findSchemaEngineBinary(process.cwd()).pipe(Effect.provide(NodeServices.layer)),

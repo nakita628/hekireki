@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { indexPrefix } from '../utils/index.js'
+import { indexPrefix, stripAnnotations } from '../utils/index.js'
 import { implicitJoinTables, isFunctionDefault, referentialActions } from '../utils/prisma-model.js'
 import { sqlString } from '../utils/prisma-postgres.js'
 
@@ -82,6 +82,11 @@ function alignAttrs(
 ) {
   const width = Math.max(...attrs.map((a) => a.key.length))
   return attrs.map((a) => `${indent}${a.key.padEnd(width)} = ${a.value}`)
+}
+
+function hclCommentLines(text: string | undefined, indent: string) {
+  if (text === undefined) return []
+  return text.split('\n').map((line) => (line === '' ? `${indent}#` : `${indent}# ${line}`))
 }
 
 function tableNameOf(model: DMMF.Model) {
@@ -520,9 +525,15 @@ export function makeAtlasTable(
   ]
   const columns = model.fields
     .filter((f) => f.kind === 'scalar' || f.kind === 'enum')
-    .map((f) => makeAtlasColumn(f, dialect, enums))
+    .map((f) =>
+      [
+        ...hclCommentLines(stripAnnotations(f.documentation), '  '),
+        makeAtlasColumn(f, dialect, enums),
+      ].join('\n'),
+    )
   const pk = makeAtlasPrimaryKey(model, indexes)
   return [
+    ...hclCommentLines(stripAnnotations(model.documentation), ''),
     `${label} {`,
     ...alignAttrs(headAttrs, '  '),
     ...columns,
@@ -643,7 +654,12 @@ export function makeAtlasEnums(
       attr('schema', `schema${refPart(defaultSchema)}`),
       attr('values', `[${e.values.map((v) => hclString(v.dbName ?? v.name)).join(', ')}]`),
     ]
-    return [`enum ${hclString(e.dbName ?? e.name)} {`, ...alignAttrs(attrs, '  '), '}'].join('\n')
+    return [
+      ...hclCommentLines(stripAnnotations(e.documentation), ''),
+      `enum ${hclString(e.dbName ?? e.name)} {`,
+      ...alignAttrs(attrs, '  '),
+      '}',
+    ].join('\n')
   })
 }
 

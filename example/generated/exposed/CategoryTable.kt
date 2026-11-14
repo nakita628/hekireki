@@ -3,6 +3,7 @@ package com.example.models
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.IdTable
 
+/** Self-relation (adjacency-list tree) with a composite unique. */
 object CategoryTable : IdTable<Int>("\"Category\"") {
     override val id = integer("id").autoIncrement().entityId()
     val name = text("name")

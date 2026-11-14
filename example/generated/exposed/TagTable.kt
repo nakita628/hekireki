@@ -2,6 +2,7 @@ package com.example.models
 
 import org.jetbrains.exposed.v1.core.dao.id.IdTable
 
+/** Implicit many-to-many partner of Post (join table `_PostToTag`). */
 object TagTable : IdTable<Int>("\"Tag\"") {
     override val id = integer("id").autoIncrement().entityId()
     val label = text("label").uniqueIndex("\"Tag_label_key\"")

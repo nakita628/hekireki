@@ -273,3 +273,31 @@ describe('helper/effect', () => {
     })
   })
 })
+
+describe('effectSchemaCode doc comments', () => {
+  it('writes the prose of /// comments as JSDoc above the schema and its properties', () => {
+    const model = {
+      name: 'User',
+      documentation: 'Application user.',
+      fields: [
+        {
+          name: 'id',
+          type: 'String',
+          kind: 'scalar',
+          isRequired: true,
+          isList: false,
+          documentation: 'Primary key',
+        },
+        { name: 'name', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+      ],
+    }
+    expect(effectSchemaCode([model], false)).toBe(`import { Schema } from 'effect'
+
+/** Application user. */
+export const UserSchema = Schema.Struct({
+  /** Primary key */
+  id: Schema.String,
+  name: Schema.String,
+})`)
+  })
+})

@@ -66,8 +66,11 @@ export default defineConfig({
       // a file with no import or export for import/unambiguous to reject.
       'src/studio/client/routes/migrate.tsx',
     ],
-    // Setting `plugins` replaces oxlint's default list — restate the defaults, then add import.
-    plugins: ['typescript', 'unicorn', 'oxc', 'import', 'promise', 'node', 'jsdoc'],
+    // Setting `plugins` replaces oxlint's default list — restate the defaults, then add import,
+    // and jest for the tests: its rules read `describe` / `it` / `expect` by name, which is how
+    // the tests call them through `vite-plus/test` (the vitest plugin only knows them imported
+    // from `vitest`).
+    plugins: ['typescript', 'unicorn', 'oxc', 'import', 'promise', 'node', 'jsdoc', 'jest'],
     // The repository conventions that a glob cannot express (Effect.gen shape, schema
     // documentation, naming); see lint/custom.js for the rule list.
     jsPlugins: ['./lint/custom.js'],
@@ -160,6 +163,39 @@ export default defineConfig({
       'no-console': 'error',
       'no-plusplus': 'error',
       'no-undef': 'error',
+      // The tests (jest plugin). Codegen tests own a byte-for-byte contract: equality is strict,
+      // a primitive is compared with toBe, and nothing is a snapshot — the expected text is in the
+      // test, where a reviewer reads it. A test runs, is named once, and asserts unconditionally.
+      'jest/valid-expect': ['error', { maxArgs: 2 }],
+      'jest/no-identical-title': 'error',
+      'jest/no-disabled-tests': 'error',
+      'jest/no-focused-tests': 'error',
+      'jest/no-duplicate-hooks': 'error',
+      'jest/no-test-return-statement': 'error',
+      // A hook that sets up a toolchain or a database asserts that it did.
+      'jest/no-standalone-expect': [
+        'error',
+        { additionalTestBlockFunctions: ['beforeAll', 'beforeEach', 'afterAll', 'afterEach'] },
+      ],
+      'jest/no-done-callback': 'error',
+      'jest/no-export': 'error',
+      'jest/no-alias-methods': 'error',
+      'jest/prefer-to-be': 'error',
+      'jest/prefer-strict-equal': 'error',
+      'jest/prefer-to-have-length': 'error',
+      'jest/prefer-equality-matcher': 'error',
+      'jest/prefer-comparison-matcher': 'error',
+      'jest/prefer-todo': 'error',
+      'jest/no-restricted-matchers': [
+        'error',
+        {
+          toMatchSnapshot: 'Write the expected value out with toBe / toStrictEqual.',
+          toMatchInlineSnapshot: 'Write the expected value out with toBe / toStrictEqual.',
+          toThrowErrorMatchingSnapshot: 'Name the error the call throws.',
+          toThrowErrorMatchingInlineSnapshot: 'Name the error the call throws.',
+          toEqual: 'Use toStrictEqual: toEqual passes on undefined properties and other classes.',
+        },
+      ],
       'typescript/no-explicit-any': 'error',
       'typescript/no-non-null-assertion': 'error',
       'typescript/consistent-type-imports': 'error',
@@ -659,6 +695,34 @@ export default defineConfig({
             },
           ],
         },
+      },
+      {
+        // What the generators read from a `///` comment and how they write it (lint/codegen.js).
+        files: ['src/helper/**', 'src/generator/**'],
+        rules: {
+          'custom/documentation-read': 'error',
+          'custom/doc-block-helper': 'error',
+        },
+      },
+      {
+        // The generators return the same text for the same schema (lint/codegen.js).
+        files: ['src/helper/**', 'src/generator/**', 'src/utils/**', 'src/diagram/**'],
+        rules: { 'custom/generator-pure': 'error' },
+      },
+      {
+        files: ['src/helper/**'],
+        rules: { 'custom/helper-no-generator-import': 'error' },
+      },
+      {
+        // A generator's options and its row of the README's table (lint/codegen.js).
+        files: ['src/core/**'],
+        rules: { 'custom/generator-option-documented': 'error' },
+      },
+      {
+        // hekireki-docs reads the schema as Studio does, where `documentation` is already the prose
+        // (studio/server/domain/schema.ts parts it from the annotations), so it is written as is.
+        files: ['src/generator/docs.ts'],
+        rules: { 'custom/documentation-read': 'off' },
       },
       {
         // The Studio server's layers (lint/layers.js, lint/failures.js, lint/docs.js).

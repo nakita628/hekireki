@@ -26,7 +26,8 @@ const TIMESTAMP_ALIAS = 'export type Timestamp = ColumnType<Date, Date | string,
  * each column: on SQLite, as better-sqlite3 does (`SQLITE_SCALAR_TYPE_MAP`), where a DateTime is
  * text, and a DateTime default is left to the insert (Prisma Client
  * writes it, and SQLite's own is other text); a time column (`@db.Time`, `@db.Timetz`) as the text pg and
- * mysql2 read it as.
+ * mysql2 read it as. The prose of a model's, field's or enum's `///` comment
+ * is its declaration's JSDoc.
  */
 export function kyselySchema(datamodel: DMMF.Datamodel, provider = 'postgresql') {
   const models = datamodel.models

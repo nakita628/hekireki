@@ -1,8 +1,16 @@
 import { type } from 'arktype'
 
+/**
+ * Application user. Fully annotated for every validator generator,
+ * with a UUIDv7 primary key, enum default, scalar list, @map columns,
+ * @updatedAt, and relations of every cardinality.
+ */
 export const UserSchema = type({
+  /** Primary key (UUIDv7) */
   id: 'string.uuid',
+  /** Unique login email */
   email: 'string.email',
+  /** Display name */
   name: '1 <= string <= 50',
   role: "'ADMIN' | 'EDITOR' | 'VIEWER'",
   interests: 'string',
@@ -12,6 +20,11 @@ export const UserSchema = type({
 
 export type User = typeof UserSchema.infer
 
+/**
+ * One-to-one relation with native @db.* types, literal defaults,
+ * and optional scalars of every flavour. ConfigDict passthrough: the
+ * Pydantic model rejects unknown keys (extra='forbid').
+ */
 export const ProfileSchema = type({
   id: 'string',
   userId: 'string',
@@ -27,8 +40,14 @@ export const ProfileSchema = type({
 
 export type Profile = typeof ProfileSchema.infer
 
+/**
+ * @@map + @map column names, FK with a referential action,
+ * mapped-enum default, and an implicit many-to-many to Tag.
+ */
 export const PostSchema = type({
+  /** Primary key */
   id: 'string.uuid',
+  /** Article title */
   title: '1 <= string <= 100',
   content: 'string',
   visibility: "'PUBLIC' | 'PRIVATE' | 'LINK_ONLY'",
@@ -40,6 +59,7 @@ export const PostSchema = type({
 
 export type Post = typeof PostSchema.infer
 
+/** Implicit many-to-many partner of Post (join table `_PostToTag`). */
 export const TagSchema = type({
   id: 'number',
   label: 'string',
@@ -47,6 +67,10 @@ export const TagSchema = type({
 
 export type Tag = typeof TagSchema.infer
 
+/**
+ * Two foreign keys with different referential actions
+ * (Cascade vs SetNull) and a composite index.
+ */
 export const CommentSchema = type({
   id: 'number',
   body: 'string',
@@ -57,6 +81,7 @@ export const CommentSchema = type({
 
 export type Comment = typeof CommentSchema.infer
 
+/** Composite primary key + two named relations to the same model. */
 export const FollowSchema = type({
   followerId: 'string',
   followingId: 'string',
@@ -65,6 +90,7 @@ export const FollowSchema = type({
 
 export type Follow = typeof FollowSchema.infer
 
+/** Self-relation (adjacency-list tree) with a composite unique. */
 export const CategorySchema = type({
   id: 'number',
   name: 'string',
@@ -73,6 +99,7 @@ export const CategorySchema = type({
 
 export type Category = typeof CategorySchema.infer
 
+/** BigInt autoincrement primary key (bigserial) and money as Decimal. */
 export const OrderSchema = type({
   id: 'bigint',
   userId: 'string',
@@ -82,6 +109,7 @@ export const OrderSchema = type({
 
 export type Order = typeof OrderSchema.infer
 
+/** Child of Order with a composite unique constraint. */
 export const OrderItemSchema = type({
   id: 'bigint',
   orderId: 'bigint',
@@ -92,6 +120,7 @@ export const OrderItemSchema = type({
 
 export type OrderItem = typeof OrderItemSchema.infer
 
+/** DB-side generated defaults (dbgenerated) plus Json / Bytes payloads. */
 export const AuditLogSchema = type({
   id: 'string',
   action: 'string',
@@ -102,6 +131,10 @@ export const AuditLogSchema = type({
 
 export type AuditLog = typeof AuditLogSchema.infer
 
+/**
+ * Named implicit many-to-many: the join table is `_cast`,
+ * not `_ActorToFilm`.
+ */
 export const ActorSchema = type({
   id: 'number',
   name: 'string',

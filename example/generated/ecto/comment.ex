@@ -1,4 +1,9 @@
 defmodule Example.Comment do
+  @moduledoc """
+  Two foreign keys with different referential actions
+  (Cascade vs SetNull) and a composite index.
+  """
+
   use Ecto.Schema
 
   @primary_key {:id, :id, autogenerate: true}

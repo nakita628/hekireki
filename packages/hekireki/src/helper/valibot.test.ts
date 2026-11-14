@@ -284,3 +284,31 @@ describe('helper/valibot', () => {
     })
   })
 })
+
+describe('valibotSchemaCode doc comments', () => {
+  it('writes the prose of /// comments as JSDoc above the schema and its properties', () => {
+    const model = {
+      name: 'User',
+      documentation: 'Application user.',
+      fields: [
+        {
+          name: 'id',
+          type: 'String',
+          kind: 'scalar',
+          isRequired: true,
+          isList: false,
+          documentation: 'Primary key',
+        },
+        { name: 'name', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+      ],
+    }
+    expect(valibotSchemaCode([model], false)).toBe(`import * as v from 'valibot'
+
+/** Application user. */
+export const UserSchema = v.object({
+  /** Primary key */
+  id: v.string(),
+  name: v.string()
+})`)
+  })
+})

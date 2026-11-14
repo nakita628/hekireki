@@ -7,6 +7,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * Someone who signs in. The key counts up in the database, the address is unique, and the
+ * timestamps are Laravel's own columns under Prisma's field names.
+ *
+ * @property string $handle A second unique column: an order's gift references it below.
+ */
 class Account extends Model
 {
     use PrismaDates;
@@ -46,6 +52,7 @@ class Account extends Model
         return $this->hasMany(Order::class, 'account_id');
     }
 
+    /** Orders sent to this account as a gift: a second relation to the same model. */
     public function gifts(): HasMany
     {
         return $this->hasMany(Order::class, 'gift_for', 'handle');
@@ -56,6 +63,7 @@ class Account extends Model
         return $this->hasMany(Review::class, 'account_id');
     }
 
+    /** Who follows whom: an implicit many-to-many from a model to itself, in Prisma's `_Follows`. */
     public function followers(): BelongsToMany
     {
         return $this->belongsToMany(Account::class, '_Follows', 'A', 'B');

@@ -344,7 +344,7 @@ describe('defineData and Row', () => {
       { email: 'ann@example.com', joined: '2025-01-01', posts, groups: [{ id: 1 }] },
       cy,
     ])
-    expect(users.length).toBe(2)
+    expect(users).toHaveLength(2)
     expect(defineConfig(schema, { models: { User: { data: users } } }).models?.User?.data).toBe(
       users,
     )

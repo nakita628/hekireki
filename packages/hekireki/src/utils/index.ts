@@ -63,6 +63,23 @@ export function stripAnnotations(doc: string | undefined) {
   return result.length > 0 ? result : undefined
 }
 
+/**
+ * The prose of a `///` comment as a JSDoc comment (also KDoc and PHPDoc) at `indent`: no lines
+ * when there is none, one line `/** … *\/` for one line of prose, and a block for more. A `*\/` in
+ * the text cannot close the comment early.
+ *
+ * @param text - the prose, as {@link stripAnnotations} returns it
+ * @param indent - the indentation of the commented line
+ * @returns the lines of the block
+ */
+export function docBlockLines(text: string | undefined, indent: string) {
+  if (text === undefined) return []
+  const lines = text.replaceAll('*/', '*\\/').split('\n')
+  if (lines.length === 1) return [`${indent}/** ${lines[0]} */`]
+  const body = lines.map((line) => (line === '' ? `${indent} *` : `${indent} * ${line}`))
+  return [`${indent}/**`, ...body, `${indent} */`]
+}
+
 /** The lines of a doc comment that are prose: annotation lines are dropped. */
 export function documentationLines(doc: string | undefined) {
   return (doc ?? '')
@@ -143,6 +160,7 @@ export function schemaFromFields(
     readonly fieldName: string
     readonly validation: string | null
     readonly isRequired: boolean
+    readonly comment?: string
   }[],
   schemaBuilder: (modelName: string, fields: string, objectType?: 'strict' | 'loose') => string,
   propertiesGenerator: (
@@ -152,6 +170,7 @@ export function schemaFromFields(
       readonly fieldName: string
       readonly validation: string | null
       readonly isRequired: boolean
+      readonly comment?: string
     }[],
   ) => string,
   objectType?: 'strict' | 'loose',

@@ -1,3 +1,5 @@
+# Two foreign keys with different referential actions
+# (Cascade vs SetNull) and a composite index.
 class Comment < ApplicationRecord
   validates :body, presence: true
 

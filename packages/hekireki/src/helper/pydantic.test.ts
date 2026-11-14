@@ -55,7 +55,7 @@ describe('makePydanticField', () => {
   it('should return null for relation fields', () => {
     expect(
       makePydanticField(makeField({ name: 'posts', kind: 'object', type: 'Post' }), undefined),
-    ).toBe(null)
+    ).toBeNull()
   })
 
   it('should build a required scalar field', () => {
@@ -126,7 +126,7 @@ describe('makePydanticModel', () => {
         }),
         undefined,
       ),
-    ).toBe(null)
+    ).toBeNull()
   })
 })
 

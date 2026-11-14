@@ -4,6 +4,10 @@ using System.Collections.Generic;
 
 namespace Example.Models;
 
+/// <summary>
+/// Named implicit many-to-many: the join table is `_cast`,
+/// not `_ActorToFilm`.
+/// </summary>
 public partial class Actor
 {
     public int Id { get; set; }

@@ -41,6 +41,7 @@ const utcNow = (() => {
   }
 })()
 
+/** A DateTime in every column PostgreSQL has for one. */
 export const moments = pgTable(
   'moments',
   {

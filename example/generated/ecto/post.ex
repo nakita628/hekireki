@@ -1,4 +1,9 @@
 defmodule Example.Post do
+  @moduledoc """
+  @@map + @map column names, FK with a referential action,
+  mapped-enum default, and an implicit many-to-many to Tag.
+  """
+
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}
@@ -19,6 +24,7 @@ defmodule Example.Post do
         }
 
   schema "posts" do
+    # Article title
     field(:title, :string)
     field(:content, :string)
     field(:visibility, Ecto.Enum, values: [PUBLIC: "public", PRIVATE: "private", LINK_ONLY: "link_only"], default: :LINK_ONLY)

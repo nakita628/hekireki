@@ -1,3 +1,4 @@
+# Self-relation (adjacency-list tree) with a composite unique.
 class Category < ApplicationRecord
   self.table_name = "Category"
 

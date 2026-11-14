@@ -90,9 +90,11 @@ describe('ajvCode', () => {
   it('emits every model schema, without the relation schemas', () => {
     expect(ajvCode(dmmf, true, false)).toBe(`import type { FromSchema } from 'json-schema-to-ts'
 
+/** A person. */
 export const UserSchema = {
   type: 'object' as const,
   properties: {
+    /** Primary key. */
     id: { type: 'integer' as const },
     name: { type: 'string' as const },
     role: { enum: ['USER', 'ADMIN'] as const },
@@ -120,9 +122,11 @@ export type BlogPost = FromSchema<typeof BlogPostSchema>`)
   it('appends the relation schemas after a blank line', () => {
     expect(ajvCode(dmmf, true, true)).toBe(`import type { FromSchema } from 'json-schema-to-ts'
 
+/** A person. */
 export const UserSchema = {
   type: 'object' as const,
   properties: {
+    /** Primary key. */
     id: { type: 'integer' as const },
     name: { type: 'string' as const },
     role: { enum: ['USER', 'ADMIN'] as const },

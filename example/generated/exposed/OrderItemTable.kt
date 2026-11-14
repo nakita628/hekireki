@@ -3,6 +3,7 @@ package com.example.models
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.IdTable
 
+/** Child of Order with a composite unique constraint. */
 object OrderItemTable : IdTable<Long>("order_items") {
     override val id = long("id").autoIncrement().entityId()
     val orderId =

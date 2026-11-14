@@ -133,6 +133,27 @@ describe('bin entries', () => {
     }
   })
 
+  function byName(a: string, b: string) {
+    return a.localeCompare(b)
+  }
+
+  it('gives every shim a row of the README tables, and no other generator one', () => {
+    const readme = readFileSync(path.join(packageRoot, 'README.md'), 'utf8')
+    const rows = [...readme.matchAll(/^\| `hekireki-([a-z-]+)`/gmu)].map((match) => match[1] ?? '')
+    expect(rows.toSorted(byName)).toStrictEqual(SHIMS.toSorted(byName))
+  })
+
+  it('runs every shim on the example schema, so the committed golden files cover each one', () => {
+    const schema = readFileSync(
+      path.join(packageRoot, '..', '..', 'example', 'schema.prisma'),
+      'utf8',
+    )
+    const providers = [...schema.matchAll(/^\s*provider\s*=\s*"hekireki-([a-z-]+)"/gmu)].map(
+      (match) => match[1] ?? '',
+    )
+    expect(providers.toSorted(byName)).toStrictEqual(SHIMS.toSorted(byName))
+  })
+
   it('builds every shim into dist', () => {
     const config = readFileSync(path.join(packageRoot, 'vite.config.ts'), 'utf8')
     for (const name of SHIMS) {

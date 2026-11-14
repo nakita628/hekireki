@@ -1,9 +1,13 @@
 import { RuleTester } from 'oxlint/plugins-dev'
 import { describe, expect, it, test } from 'vite-plus/test'
 
+import { documentedOptions } from './codegen.js'
 import plugin, { handlerDocNames, layerModuleOf, layerNamespaceOf } from './custom.js'
 import { isLayerModule, layerOf, leadingTsdoc, resolveRelative } from './helpers.js'
 
+// RuleTester's own describe / it, run as vitest's: the titles and callbacks are the ones RuleTester
+// builds, and `itOnly` is what a case marked `only: true` asks for.
+/* oxlint-disable jest/valid-title, jest/valid-describe-callback, jest/expect-expect, jest/no-focused-tests */
 RuleTester.describe = (name, fn) => {
   describe(name, fn)
 }
@@ -13,6 +17,7 @@ RuleTester.it = (name, fn) => {
 RuleTester.itOnly = (name, fn) => {
   test.only(name, fn)
 }
+/* oxlint-enable jest/valid-title, jest/valid-describe-callback, jest/expect-expect, jest/no-focused-tests */
 
 const tester = new RuleTester({ languageOptions: { sourceType: 'module' } })
 
@@ -861,5 +866,120 @@ tester.run('hoist-constant', rule('hoist-constant'), {
       errors: 1,
     },
     { ...tsCase(`function f(w: string) { return new Set(['select', 'with']).has(w) }`), errors: 1 },
+  ],
+})
+
+function generatorCase(code: string) {
+  return { code, filename: 'src/helper/x.ts' }
+}
+
+tester.run('documentation-read', rule('documentation-read'), {
+  valid: [
+    generatorCase(`const prose = stripAnnotations(model.documentation)`),
+    generatorCase(
+      `const doc = stripAnnotations(model.fields.find((f) => f.name === name)?.documentation)`,
+    ),
+    generatorCase(`const calls = arCalls(field.documentation, 'field')`),
+    generatorCase(`const config = extractConfigDict(model.documentation)`),
+    { code: `const doc = field.documentation`, filename: 'src/helper/x.test.ts' },
+  ],
+  invalid: [
+    {
+      ...generatorCase(`const lines = goCommentLines(field.documentation)`),
+      errors: [{ message: /stripAnnotations/u }],
+    },
+    {
+      ...generatorCase(`const doc = field.documentation ?? ''`),
+      errors: [{ message: /stripAnnotations/u }],
+    },
+    {
+      ...generatorCase(
+        `const prose = stripAnnotations(field.documentation ?? owner.documentation)`,
+      ),
+      errors: [{ message: /stripAnnotations/u }, { message: /stripAnnotations/u }],
+    },
+    {
+      ...generatorCase(`const lines = rustDocLines(model.fields[0]?.documentation, '')`),
+      errors: [{ message: /stripAnnotations/u }],
+    },
+  ],
+})
+
+tester.run('doc-block-helper', rule('doc-block-helper'), {
+  valid: [
+    generatorCase(`const lines = docBlockLines(stripAnnotations(model.documentation), '')`),
+    generatorCase(`const line = '    /** @var list<string> */'`),
+    generatorCase(
+      'const code = `class X\\n{\\n    /** @var list<string> */\\n    public array $a = [];\\n}`',
+    ),
+    { code: 'const line = `/** ${prose} */`', filename: 'src/helper/x.test.ts' },
+  ],
+  invalid: [
+    {
+      ...generatorCase('const line = `/** ${prose} */`'),
+      errors: [{ message: /docBlockLines/u }],
+    },
+    {
+      ...generatorCase(`const lines = ['/**', ...body.map((line) => \` * \${line}\`), ' */']`),
+      errors: [{ message: /docBlockLines/u }],
+    },
+    {
+      ...generatorCase('const line = `${indent}/**\\n${indent} * ${prose}\\n${indent} */`'),
+      errors: [{ message: /docBlockLines/u }],
+    },
+  ],
+})
+
+describe('documentedOptions', () => {
+  const readme = [
+    '| Provider | Writes | Options |',
+    '| --- | --- | --- |',
+    '| `hekireki-zod` | Zod | `type`, `relation`, `zod` (`"v4"`, `"mini"`) |',
+    '| `hekireki-er` | ER diagram | `outputs`: files, one per extension (`.md`, `.png`); `theme` (`light`, `dark`) |',
+    '| `hekireki-seed` | Schema module | |',
+  ].join('\n')
+
+  it('reads the option each item of the cell starts with, leaving the values out', () => {
+    expect(documentedOptions(readme, 'hekireki-zod')).toStrictEqual(['type', 'relation', 'zod'])
+    expect(documentedOptions(readme, 'hekireki-er')).toStrictEqual(['outputs', 'theme'])
+    expect(documentedOptions(readme, 'hekireki-seed')).toStrictEqual([])
+  })
+
+  it('is null for a provider no row names', () => {
+    expect(documentedOptions(readme, 'hekireki-gorm')).toBeNull()
+  })
+})
+
+tester.run('generator-pure', rule('generator-pure'), {
+  valid: [
+    generatorCase(`const line = '.$defaultFn(() => crypto.randomUUID())'`),
+    generatorCase(`const at = new Date(value)`),
+    generatorCase(`function code(document) { return document.datamodel }`),
+    { code: `const now = Date.now()`, filename: 'src/helper/x.test.ts' },
+  ],
+  invalid: [
+    { ...generatorCase(`const at = new Date()`), errors: [{ message: /reads the clock/u }] },
+    { ...generatorCase(`const id = crypto.randomUUID()`), errors: [{ message: /run to run/u }] },
+    { ...generatorCase(`const n = Math.random()`), errors: [{ message: /run to run/u }] },
+    { ...generatorCase(`const zone = process.env.TZ`), errors: [{ message: /`process`/u }] },
+    { ...generatorCase(`console.log('x')`), errors: [{ message: /`console`/u }] },
+    { ...generatorCase(`async function emit() {}`), errors: [{ message: /async/u }] },
+  ],
+})
+
+tester.run('helper-no-generator-import', rule('helper-no-generator-import'), {
+  valid: [
+    generatorCase(`import { stripAnnotations } from '../utils/index.js'`),
+    generatorCase(`import { makeZodSchema } from './zod.js'`),
+    {
+      code: `import { djangoCode } from '../generator/django.js'`,
+      filename: 'src/helper/x.test.ts',
+    },
+  ],
+  invalid: [
+    {
+      ...generatorCase(`import { djangoCode } from '../generator/django.js'`),
+      errors: [{ message: /utils -> helper -> generator/u }],
+    },
   ],
 })

@@ -5,6 +5,7 @@ import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.json.jsonb
 import java.util.UUID
 
+/** DB-side generated defaults (dbgenerated) plus Json / Bytes payloads. */
 object AuditLogTable : IdTable<UUID>("audit_logs") {
     override val id = javaUUID("id").databaseDefault("gen_random_uuid()").entityId()
     val action = text("action")

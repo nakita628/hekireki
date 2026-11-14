@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import {
   chunks,
+  docBlockLines,
   isSameList,
   extractObjectType,
   getBool,
@@ -110,7 +111,7 @@ describe('utils', () => {
       const result = isValibot(`Unique identifier for the user
 @z.uuid()
 @v.pipe(v.string(), v.uuid())`)
-      expect(result).toStrictEqual('pipe(v.string(), v.uuid())')
+      expect(result).toBe('pipe(v.string(), v.uuid())')
     })
     it.concurrent('extracts TypeBox validation', () => {
       const isTypeBox = makeValidationExtractor('@t.')
@@ -129,6 +130,27 @@ describe('utils', () => {
     it.concurrent('returns null when no matching prefix', () => {
       const isZod = makeValidationExtractor('@z.')
       expect(isZod('Just a comment')).toBeNull()
+    })
+  })
+
+  describe('docBlockLines', () => {
+    it('is no lines without prose', () => {
+      expect(docBlockLines(undefined, '  ')).toStrictEqual([])
+    })
+    it('indents every line and leaves a blank line bare', () => {
+      expect(docBlockLines('First.\n\nSecond.', '  ')).toStrictEqual([
+        '  /**',
+        '   * First.',
+        '   *',
+        '   * Second.',
+        '   */',
+      ])
+    })
+    it('keeps one line of prose on one line', () => {
+      expect(docBlockLines('The key.', '  ')).toStrictEqual(['  /** The key. */'])
+    })
+    it('cannot be closed early by the prose', () => {
+      expect(docBlockLines('a */ b', '')).toStrictEqual(['/** a *\\/ b */'])
     })
   })
 
@@ -359,11 +381,11 @@ describe('extractObjectType', () => {
   })
 
   it('returns undefined for no annotation', () => {
-    expect(extractObjectType('Some description', '@z.')).toBe(undefined)
+    expect(extractObjectType('Some description', '@z.')).toBeUndefined()
   })
 
   it('returns undefined for undefined documentation', () => {
-    expect(extractObjectType(undefined, '@z.')).toBe(undefined)
+    expect(extractObjectType(undefined, '@z.')).toBeUndefined()
   })
 
   it('returns strict for @v.strictObject', () => {
@@ -387,7 +409,7 @@ describe('extractObjectType', () => {
   })
 
   it('ignores other prefixes', () => {
-    expect(extractObjectType('@v.strictObject', '@z.')).toBe(undefined)
+    expect(extractObjectType('@v.strictObject', '@z.')).toBeUndefined()
   })
 })
 

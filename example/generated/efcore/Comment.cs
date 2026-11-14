@@ -4,6 +4,10 @@ using System;
 
 namespace Example.Models;
 
+/// <summary>
+/// Two foreign keys with different referential actions
+/// (Cascade vs SetNull) and a composite index.
+/// </summary>
 public partial class Comment
 {
     public int Id { get; set; }

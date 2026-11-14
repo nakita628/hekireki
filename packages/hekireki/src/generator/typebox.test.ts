@@ -91,7 +91,9 @@ describe('typeboxCode', () => {
     expect(typeboxCode(dmmf, true, false))
       .toBe(`import { type Static, Type } from '@sinclair/typebox'
 
+/** A person. */
 export const UserSchema = Type.Object({
+  /** Primary key. */
   id: Type.Integer(),
   name: Type.String(),
   role: Type.Union([Type.Literal('USER'), Type.Literal('ADMIN')]),
@@ -112,7 +114,9 @@ export type BlogPost = Static<typeof BlogPostSchema>`)
     expect(typeboxCode(dmmf, true, true))
       .toBe(`import { type Static, Type } from '@sinclair/typebox'
 
+/** A person. */
 export const UserSchema = Type.Object({
+  /** Primary key. */
   id: Type.Integer(),
   name: Type.String(),
   role: Type.Union([Type.Literal('USER'), Type.Literal('ADMIN')]),

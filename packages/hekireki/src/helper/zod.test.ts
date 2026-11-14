@@ -110,6 +110,35 @@ describe('helper/zod', () => {
       )
     })
 
+    it('writes the prose of /// comments as JSDoc', () => {
+      const model = {
+        name: 'User',
+        documentation: 'Application user.\n\nSecond paragraph.\n@z.strictObject',
+        fields: [
+          {
+            name: 'id',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: true,
+            isList: false,
+            documentation: 'Primary key */ id\n@z.uuid()',
+          },
+          {
+            name: 'name',
+            type: 'String',
+            kind: 'scalar',
+            isRequired: false,
+            isList: false,
+            documentation: '@z.string()',
+          },
+        ],
+      }
+
+      expect(zodSchemaCode([model], false)).toBe(
+        "import * as z from 'zod'\n\n/**\n * Application user.\n *\n * Second paragraph.\n */\nexport const UserSchema = z.strictObject({\n  /** Primary key *\\/ id */\n  id: z.uuid(),\n  name: z.string().exactOptional()\n})",
+      )
+    })
+
     it('uses zod/mini import when zodVersion is mini', () => {
       const model = {
         name: 'Item',

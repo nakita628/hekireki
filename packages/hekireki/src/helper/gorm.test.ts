@@ -7,109 +7,109 @@ import { buildGormTags, goFieldName, prismaTypeToGoType } from './gorm.js'
 
 describe('prismaTypeToGoType', () => {
   it('maps String to string', () => {
-    expect(prismaTypeToGoType('String', true)).toStrictEqual('string')
+    expect(prismaTypeToGoType('String', true)).toBe('string')
   })
 
   it('maps optional String to *string', () => {
-    expect(prismaTypeToGoType('String', false)).toStrictEqual('*string')
+    expect(prismaTypeToGoType('String', false)).toBe('*string')
   })
 
   it('maps Int to int', () => {
-    expect(prismaTypeToGoType('Int', true)).toStrictEqual('int')
+    expect(prismaTypeToGoType('Int', true)).toBe('int')
   })
 
   it('maps optional Int to *int', () => {
-    expect(prismaTypeToGoType('Int', false)).toStrictEqual('*int')
+    expect(prismaTypeToGoType('Int', false)).toBe('*int')
   })
 
   it('maps BigInt to int64', () => {
-    expect(prismaTypeToGoType('BigInt', true)).toStrictEqual('int64')
+    expect(prismaTypeToGoType('BigInt', true)).toBe('int64')
   })
 
   it('maps Float to float64', () => {
-    expect(prismaTypeToGoType('Float', true)).toStrictEqual('float64')
+    expect(prismaTypeToGoType('Float', true)).toBe('float64')
   })
 
   it('maps Decimal to float64', () => {
-    expect(prismaTypeToGoType('Decimal', true)).toStrictEqual('float64')
+    expect(prismaTypeToGoType('Decimal', true)).toBe('float64')
   })
 
   it('maps Boolean to bool', () => {
-    expect(prismaTypeToGoType('Boolean', true)).toStrictEqual('bool')
+    expect(prismaTypeToGoType('Boolean', true)).toBe('bool')
   })
 
   it('maps optional Boolean to *bool', () => {
-    expect(prismaTypeToGoType('Boolean', false)).toStrictEqual('*bool')
+    expect(prismaTypeToGoType('Boolean', false)).toBe('*bool')
   })
 
   it('maps DateTime to time.Time', () => {
-    expect(prismaTypeToGoType('DateTime', true)).toStrictEqual('time.Time')
+    expect(prismaTypeToGoType('DateTime', true)).toBe('time.Time')
   })
 
   it('maps optional DateTime to *time.Time', () => {
-    expect(prismaTypeToGoType('DateTime', false)).toStrictEqual('*time.Time')
+    expect(prismaTypeToGoType('DateTime', false)).toBe('*time.Time')
   })
 
   it('maps Json to datatypes.JSON', () => {
-    expect(prismaTypeToGoType('Json', true)).toStrictEqual('datatypes.JSON')
+    expect(prismaTypeToGoType('Json', true)).toBe('datatypes.JSON')
   })
 
   it('maps optional Json to datatypes.JSON (no pointer for JSON)', () => {
-    expect(prismaTypeToGoType('Json', false)).toStrictEqual('datatypes.JSON')
+    expect(prismaTypeToGoType('Json', false)).toBe('datatypes.JSON')
   })
 
   it('maps Bytes to []byte', () => {
-    expect(prismaTypeToGoType('Bytes', true)).toStrictEqual('[]byte')
+    expect(prismaTypeToGoType('Bytes', true)).toBe('[]byte')
   })
 
   it('maps optional Bytes to []byte (no pointer for slice)', () => {
-    expect(prismaTypeToGoType('Bytes', false)).toStrictEqual('[]byte')
+    expect(prismaTypeToGoType('Bytes', false)).toBe('[]byte')
   })
 
   it('maps unknown type to string', () => {
-    expect(prismaTypeToGoType('Unknown', true)).toStrictEqual('string')
+    expect(prismaTypeToGoType('Unknown', true)).toBe('string')
   })
 })
 
 describe('goFieldName — Go initialism conventions', () => {
   it('converts id to ID', () => {
-    expect(goFieldName('id')).toStrictEqual('ID')
+    expect(goFieldName('id')).toBe('ID')
   })
 
   it('converts userId to UserID', () => {
-    expect(goFieldName('userId')).toStrictEqual('UserID')
+    expect(goFieldName('userId')).toBe('UserID')
   })
 
   it('converts postId to PostID', () => {
-    expect(goFieldName('postId')).toStrictEqual('PostID')
+    expect(goFieldName('postId')).toBe('PostID')
   })
 
   it('converts avatarUrl to AvatarURL', () => {
-    expect(goFieldName('avatarUrl')).toStrictEqual('AvatarURL')
+    expect(goFieldName('avatarUrl')).toBe('AvatarURL')
   })
 
   it('converts ipAddress to IPAddress', () => {
-    expect(goFieldName('ipAddress')).toStrictEqual('IPAddress')
+    expect(goFieldName('ipAddress')).toBe('IPAddress')
   })
 
   it('converts providerAccountId to ProviderAccountID', () => {
-    expect(goFieldName('providerAccountId')).toStrictEqual('ProviderAccountID')
+    expect(goFieldName('providerAccountId')).toBe('ProviderAccountID')
   })
 
   it('converts createdAt to CreatedAt (no initialism)', () => {
-    expect(goFieldName('createdAt')).toStrictEqual('CreatedAt')
+    expect(goFieldName('createdAt')).toBe('CreatedAt')
   })
 
   it('converts name to Name (simple case)', () => {
-    expect(goFieldName('name')).toStrictEqual('Name')
+    expect(goFieldName('name')).toBe('Name')
   })
 
   it('converts email to Email (no initialism)', () => {
-    expect(goFieldName('email')).toStrictEqual('Email')
+    expect(goFieldName('email')).toBe('Email')
   })
 
   it('converts hashedPassword to HashedPassword', () => {
-    expect(goFieldName('hashedPassword')).toStrictEqual('HashedPassword')
+    expect(goFieldName('hashedPassword')).toBe('HashedPassword')
   })
 })
 
@@ -127,7 +127,7 @@ describe('buildGormTags', () => {
       hasDefaultValue: true,
       default: { name: 'uuid', args: [] },
     } as any
-    expect(buildGormTags(field, true, false, [])).toStrictEqual(
+    expect(buildGormTags(field, true, false, [])).toBe(
       '`gorm:"column:id;primaryKey;type:char(36)" json:"id"`',
     )
   })
@@ -145,7 +145,7 @@ describe('buildGormTags', () => {
       hasDefaultValue: true,
       default: { name: 'autoincrement', args: [] },
     } as any
-    expect(buildGormTags(field, true, false, [])).toStrictEqual(
+    expect(buildGormTags(field, true, false, [])).toBe(
       '`gorm:"column:id;primaryKey;autoIncrement" json:"id"`',
     )
   })
@@ -162,7 +162,7 @@ describe('buildGormTags', () => {
       isUpdatedAt: false,
       hasDefaultValue: false,
     } as any
-    expect(buildGormTags(field, false, false, [])).toStrictEqual(
+    expect(buildGormTags(field, false, false, [])).toBe(
       '`gorm:"column:email;uniqueIndex;not null" json:"email"`',
     )
   })
@@ -179,7 +179,7 @@ describe('buildGormTags', () => {
       isUpdatedAt: true,
       hasDefaultValue: false,
     } as any
-    expect(buildGormTags(field, false, false, [])).toStrictEqual(
+    expect(buildGormTags(field, false, false, [])).toBe(
       '`gorm:"column:updatedAt;autoUpdateTime:false;not null" json:"updatedAt"`',
     )
   })
@@ -197,7 +197,7 @@ describe('buildGormTags', () => {
       hasDefaultValue: true,
       default: true,
     } as any
-    expect(buildGormTags(field, false, false, [])).toStrictEqual(
+    expect(buildGormTags(field, false, false, [])).toBe(
       '`gorm:"column:active;default:true;not null" json:"active"`',
     )
   })
@@ -214,7 +214,7 @@ describe('buildGormTags', () => {
       isUpdatedAt: false,
       hasDefaultValue: false,
     } as any
-    expect(buildGormTags(field, false, false, [])).toStrictEqual('`gorm:"column:name" json:"name"`')
+    expect(buildGormTags(field, false, false, [])).toBe('`gorm:"column:name" json:"name"`')
   })
 
   it('includes composite uniqueIndex tag from @@unique', () => {
@@ -231,7 +231,7 @@ describe('buildGormTags', () => {
     } as any
     expect(
       buildGormTags(field, false, false, ['uniqueIndex:idx_provider_provider_account_id_unique']),
-    ).toStrictEqual(
+    ).toBe(
       '`gorm:"column:provider;uniqueIndex:idx_provider_provider_account_id_unique;not null" json:"provider"`',
     )
   })
@@ -248,7 +248,7 @@ describe('buildGormTags', () => {
       isUpdatedAt: false,
       hasDefaultValue: false,
     } as any
-    expect(buildGormTags(field, false, false, ['index:idx_user_id'])).toStrictEqual(
+    expect(buildGormTags(field, false, false, ['index:idx_user_id'])).toBe(
       '`gorm:"column:userId;index:idx_user_id;not null" json:"userId"`',
     )
   })
@@ -1111,5 +1111,148 @@ model Post {
 `)
     expect(code).toContain('\tPosts   []Post `gorm:"foreignKey:UserID1;references:UserID"`')
     expect(code).toContain('\tUser    *User  `gorm:"foreignKey:UserID1;references:UserID"`')
+  })
+})
+
+describe('doc comments', () => {
+  it('writes the prose of /// comments as Go comments, keeping the struct gofmt-clean', () => {
+    const dmmf = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+/// A person.
+///
+/// Second paragraph */ with \\\\ backslash.
+model User {
+  /// The key.
+  id        Int      @id
+  /// @z.string()
+  name      String
+  /// When they joined.
+  /// Two lines.
+  createdAt DateTime @default(now())
+  /// Their posts.
+  posts     Post[]
+  tone      Tone
+}
+model Post {
+  id       Int  @id
+  /// Who wrote it.
+  authorId Int
+  /// The author.
+  author   User @relation(fields: [authorId], references: [id])
+}
+/// How loud.
+enum Tone {
+  CALM
+}
+`,
+        ],
+      ],
+    })
+    if ('type' in dmmf) throw new Error(dmmf.error.message)
+    const { models, enums, indexes } = dmmf.datamodel
+    expect(generateGormModels(models, enums, indexes)).toBe(`package model
+
+import (
+	"database/sql/driver"
+	"fmt"
+	"strconv"
+	"time"
+
+	"gorm.io/gorm"
+)
+
+// A person.
+//
+// Second paragraph */ with \\\\ backslash.
+type User struct {
+	// The key.
+	ID   int    \`gorm:"column:id;primaryKey" json:"id"\`
+	Name string \`gorm:"column:name;not null" json:"name"\`
+	// When they joined.
+	// Two lines.
+	CreatedAt DateTime \`gorm:"column:createdAt;autoCreateTime:false;not null" json:"createdAt"\`
+	Tone      string   \`gorm:"column:tone;not null" json:"tone"\`
+	// Their posts.
+	Posts []Post \`gorm:"foreignKey:AuthorID"\`
+}
+
+func (User) TableName() string {
+	return "User"
+}
+
+func (m *User) BeforeCreate(tx *gorm.DB) error {
+	now := tx.NowFunc().UTC().Truncate(time.Millisecond)
+	if m.CreatedAt.IsZero() {
+		m.CreatedAt = DateTime{Time: now}
+	}
+	return nil
+}
+
+type Post struct {
+	ID int \`gorm:"column:id;primaryKey" json:"id"\`
+	// Who wrote it.
+	AuthorID int \`gorm:"column:authorId;not null" json:"authorId"\`
+	// The author.
+	Author *User \`gorm:"foreignKey:AuthorID"\`
+}
+
+func (Post) TableName() string {
+	return "Post"
+}
+
+type DateTime struct{ time.Time }
+
+func (DateTime) GormDataType() string {
+	return "time"
+}
+
+func (dateTime DateTime) Value() (driver.Value, error) {
+	return dateTime.UTC().Truncate(time.Millisecond), nil
+}
+
+func (dateTime *DateTime) Scan(src any) error {
+	read, err := readPrismaTime(src)
+	dateTime.Time = read
+	return err
+}
+
+var prismaTimeLayouts = []string{
+	"2006-01-02T15:04:05.999999999Z07:00",
+	"2006-01-02 15:04:05.999999999Z07:00",
+	"2006-01-02 15:04:05.999999999Z07",
+	"2006-01-02T15:04:05.999999999",
+	"2006-01-02 15:04:05.999999999",
+	"2006-01-02",
+}
+
+func readPrismaTime(src any) (time.Time, error) {
+	switch value := src.(type) {
+	case nil:
+		return time.Time{}, nil
+	case time.Time:
+		return value.UTC().Truncate(time.Millisecond), nil
+	case int64:
+		return time.UnixMilli(value).UTC(), nil
+	case []byte:
+		return readPrismaTime(string(value))
+	case string:
+		if millis, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return time.UnixMilli(millis).UTC(), nil
+		}
+		for _, layout := range prismaTimeLayouts {
+			if read, err := time.Parse(layout, value); err == nil {
+				return read.UTC().Truncate(time.Millisecond), nil
+			}
+		}
+		return time.Time{}, fmt.Errorf("a DateTime column held %q", value)
+	}
+	return time.Time{}, fmt.Errorf("a DateTime column held %T", src)
+}
+`)
   })
 })

@@ -520,12 +520,12 @@ describe('generator config', () => {
     )
   })
 
-  it('leaves /// comments out of the C# it writes', async () => {
+  it('writes /// comments into the C# as XML doc comments, and no other comment', async () => {
     const dir = tmp()
     expect(Exit.isSuccess(await run(efcore, dir))).toBe(true)
-    for (const file of readdirSync(dir)) {
-      expect(readFileSync(path.join(dir, file), 'utf8')).not.toMatch(/^\s*\/\//mu)
-    }
+    const files = readdirSync(dir).map((file) => readFileSync(path.join(dir, file), 'utf8'))
+    expect(files.some((code) => code.includes('/// <summary>'))).toBe(true)
+    for (const code of files) expect(code).not.toMatch(/^\s*\/\/(?!\/)/mu)
   })
 
   it.each([['My-App'], ['class.Models'], ['1Models'], ['Models.'], ['']])(

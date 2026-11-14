@@ -487,3 +487,34 @@ export type Session = FromSchema<typeof SessionSchema>`)
     })
   })
 })
+
+describe('ajvSchemaCode doc comments', () => {
+  it('writes the prose of /// comments as JSDoc above the schema and its properties', () => {
+    const model = {
+      name: 'User',
+      documentation: 'Application user.',
+      fields: [
+        {
+          name: 'id',
+          type: 'String',
+          kind: 'scalar',
+          isRequired: true,
+          isList: false,
+          documentation: 'Primary key',
+        },
+        { name: 'name', type: 'String', kind: 'scalar', isRequired: true, isList: false },
+      ],
+    }
+    expect(ajvSchemaCode([model], false)).toBe(`/** Application user. */
+export const UserSchema = {
+  type: 'object' as const,
+  properties: {
+    /** Primary key */
+    id: { type: 'string' as const },
+    name: { type: 'string' as const },
+  },
+  required: ['id', 'name'] as const,
+  additionalProperties: false,
+} as const`)
+  })
+})

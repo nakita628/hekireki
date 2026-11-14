@@ -1,5 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
+import { stripAnnotations } from '../utils/index.js'
 import { allocate } from '../utils/naming.js'
 import {
   implicitJoinTables,
@@ -605,6 +606,18 @@ function buildRelationTag(parts: string[]) {
   return `\`gorm:"${parts.join(';')}"\``
 }
 
+/**
+ * The prose of a `///` comment as Go `//` lines, a blank line as a bare `//`.
+ *
+ * @param text - the prose, as `stripAnnotations` returns it
+ * @returns the comment lines, none when there is no prose
+ */
+function goCommentLines(text: string | undefined) {
+  return text === undefined
+    ? []
+    : text.split('\n').map((line) => `//${line.trimEnd() === '' ? '' : ` ${line.trimEnd()}`}`)
+}
+
 function generateRelationFields(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
@@ -613,7 +626,13 @@ function generateRelationFields(
   // A relation and the keys it names are written as the struct that holds each field names it.
   const of = (modelName: string) => (name: string) => goFieldNameIn(allModels, modelName, name)
   const own = of(model.name)
-  const belongsToLines = associations.belongsTo.map((assoc) => {
+  const withDoc = (name: string, row: readonly string[]) => [
+    ...goCommentLines(
+      stripAnnotations(model.fields.find((f) => f.name === name)?.documentation),
+    ).map((line) => [line]),
+    row,
+  ]
+  const belongsToLines = associations.belongsTo.flatMap((assoc) => {
     const fieldName = own(assoc.name)
     const fkFieldName = assoc.foreignKeys.map(own).join(',')
     const refsFieldName = assoc.referencesList.map(of(assoc.targetModel)).join(',')
@@ -633,12 +652,15 @@ function generateRelationFields(
     // recursive type in Go, and a relation that is not loaded or not set would read as a row of
     // zero values.
     const targetType = `*${goModelName(assoc.targetModel)}`
-    return tagParts.length > 0
-      ? [fieldName, targetType, buildRelationTag(tagParts)]
-      : [fieldName, targetType]
+    return withDoc(
+      assoc.name,
+      tagParts.length > 0
+        ? [fieldName, targetType, buildRelationTag(tagParts)]
+        : [fieldName, targetType],
+    )
   })
 
-  const hasManyLines = associations.hasMany.map((assoc) => {
+  const hasManyLines = associations.hasMany.flatMap((assoc) => {
     const tagParts = [
       `foreignKey:${assoc.foreignKeys.map(of(assoc.targetModel)).join(',')}`,
       ...(assoc.foreignKeys.length > 1 || needsReferencesTag(assoc.references)
@@ -646,10 +668,14 @@ function generateRelationFields(
         : []),
       ...[constraintTag(assoc.onDelete, assoc.onUpdate)].filter((c) => c !== null),
     ]
-    return [own(assoc.name), `[]${goModelName(assoc.targetModel)}`, buildRelationTag(tagParts)]
+    return withDoc(assoc.name, [
+      own(assoc.name),
+      `[]${goModelName(assoc.targetModel)}`,
+      buildRelationTag(tagParts),
+    ])
   })
 
-  const hasOneLines = associations.hasOne.map((assoc) => {
+  const hasOneLines = associations.hasOne.flatMap((assoc) => {
     const tagParts = [
       `foreignKey:${assoc.foreignKeys.map(of(assoc.targetModel)).join(',')}`,
       ...(assoc.foreignKeys.length > 1 || needsReferencesTag(assoc.references)
@@ -659,20 +685,24 @@ function generateRelationFields(
     ]
     // A has-one is a pointer for the same reason, and Prisma requires the 1:1 back side to be
     // optional anyway.
-    return [own(assoc.name), `*${goModelName(assoc.targetModel)}`, buildRelationTag(tagParts)]
+    return withDoc(assoc.name, [
+      own(assoc.name),
+      `*${goModelName(assoc.targetModel)}`,
+      buildRelationTag(tagParts),
+    ])
   })
 
   // Prisma's join table has two columns, A for the model whose name sorts
   // first and B for the other, where GORM would look for `post_id`/`tag_id`.
   // In a self-relation the field whose name sorts first holds its own key in A.
-  const manyToManyLines = associations.manyToMany.map((assoc) => {
+  const manyToManyLines = associations.manyToMany.flatMap((assoc) => {
     const joinTable = `_${assoc.relationName}`
     const [ownColumn, related] = assoc.isSideA ? ['A', 'B'] : ['B', 'A']
-    return [
+    return withDoc(assoc.name, [
       own(assoc.name),
       `[]${goModelName(assoc.targetModel)}`,
       `\`gorm:"many2many:${joinTable};joinForeignKey:${ownColumn};joinReferences:${related}"\``,
-    ]
+    ])
   })
 
   return [...belongsToLines, ...hasManyLines, ...hasOneLines, ...manyToManyLines]
@@ -681,7 +711,8 @@ function generateRelationFields(
 /**
  * Lays struct fields out as gofmt does: each column is as wide as its widest
  * cell plus one space, over a run of lines that all have a cell after it. A
- * field without a tag ends the run of the type column, not of the names.
+ * field without a tag ends the run of the type column, not of the names, and a
+ * comment line (a row of one cell) ends every run.
  *
  * @example
  * ```go
@@ -737,18 +768,22 @@ export function generateModelStruct(
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
 
   const names = goFieldNames(model)
-  const fieldLines = scalarFields.map((field) => {
+  const fieldLines = scalarFields.flatMap((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const fieldIndexTags = compositeTagMap.get(field.name) ?? []
-    return generateStructField(
-      field,
-      names.get(field.name) ?? goFieldName(field.name),
-      isPk,
-      isCompositePk,
-      fieldIndexTags,
-      enums,
-      provider,
+    const rows = goCommentLines(stripAnnotations(field.documentation)).map((line) => [line])
+    rows.push(
+      generateStructField(
+        field,
+        names.get(field.name) ?? goFieldName(field.name),
+        isPk,
+        isCompositePk,
+        fieldIndexTags,
+        enums,
+        provider,
+      ),
     )
+    return rows
   })
 
   const relationLines = generateRelationFields(model, allModels, associations)
@@ -763,6 +798,7 @@ export function generateModelStruct(
   ]
 
   return [
+    ...goCommentLines(stripAnnotations(model.documentation)),
     `type ${goModelName(model.name)} struct {`,
     ...alignFields([...fieldLines, ...relationLines]),
     '}',

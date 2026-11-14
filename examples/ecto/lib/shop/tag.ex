@@ -1,4 +1,10 @@
 defmodule Shop.Tag do
+  @moduledoc """
+  The implicit many-to-many with Product: `_ProductToTag`, columns A (Product) and B (Tag). The
+  key is a cuid, which Ecto has no generator for: the check gives it one. Its changeset keeps ""
+  and blanks as they were sent, as the column does, and a name is missing only when it is nil.
+  """
+
   use Ecto.Schema
   import Ecto.Changeset
 

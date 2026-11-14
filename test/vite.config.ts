@@ -23,8 +23,9 @@ export default defineConfig({
     // TypeScript resolves only through its own tsconfig or not at all
     // (kysely/zod live in packages/hekireki).
     ignorePatterns: ['**/node_modules/**', 'harness/**'],
-    // Setting `plugins` replaces oxlint's default list — restate the defaults, then add import.
-    plugins: ['typescript', 'unicorn', 'oxc', 'import', 'promise', 'node'],
+    // Setting `plugins` replaces oxlint's default list — restate the defaults, then add import,
+    // and jest, whose rules read `describe` / `it` / `expect` by name as packages/hekireki does.
+    plugins: ['typescript', 'unicorn', 'oxc', 'import', 'promise', 'node', 'jest'],
     options: {
       typeAware: true,
       typeCheck: true,
@@ -50,6 +51,39 @@ export default defineConfig({
       'no-param-reassign': ['error', { props: true }],
       'no-console': 'error',
       'no-plusplus': 'error',
+      // The tests (jest plugin). Codegen tests own a byte-for-byte contract: equality is strict,
+      // a primitive is compared with toBe, and nothing is a snapshot — the expected text is in the
+      // test, where a reviewer reads it. A test runs, is named once, and asserts unconditionally.
+      'jest/valid-expect': ['error', { maxArgs: 2 }],
+      'jest/no-identical-title': 'error',
+      'jest/no-disabled-tests': 'error',
+      'jest/no-focused-tests': 'error',
+      'jest/no-duplicate-hooks': 'error',
+      'jest/no-test-return-statement': 'error',
+      // A hook that sets up a toolchain or a database asserts that it did.
+      'jest/no-standalone-expect': [
+        'error',
+        { additionalTestBlockFunctions: ['beforeAll', 'beforeEach', 'afterAll', 'afterEach'] },
+      ],
+      'jest/no-done-callback': 'error',
+      'jest/no-export': 'error',
+      'jest/no-alias-methods': 'error',
+      'jest/prefer-to-be': 'error',
+      'jest/prefer-strict-equal': 'error',
+      'jest/prefer-to-have-length': 'error',
+      'jest/prefer-equality-matcher': 'error',
+      'jest/prefer-comparison-matcher': 'error',
+      'jest/prefer-todo': 'error',
+      'jest/no-restricted-matchers': [
+        'error',
+        {
+          toMatchSnapshot: 'Write the expected value out with toBe / toStrictEqual.',
+          toMatchInlineSnapshot: 'Write the expected value out with toBe / toStrictEqual.',
+          toThrowErrorMatchingSnapshot: 'Name the error the call throws.',
+          toThrowErrorMatchingInlineSnapshot: 'Name the error the call throws.',
+          toEqual: 'Use toStrictEqual: toEqual passes on undefined properties and other classes.',
+        },
+      ],
       'typescript/no-explicit-any': 'error',
       'typescript/no-non-null-assertion': 'error',
       'typescript/consistent-type-imports': 'error',
@@ -104,6 +138,12 @@ export default defineConfig({
       'node/callback-return': 'error',
     },
     overrides: [
+      {
+        // One scenario runs on PostgreSQL, MySQL, MariaDB and CockroachDB, and what each server
+        // does with it differs: the expectation branches on the server it runs on.
+        files: ['db/**'],
+        rules: { 'jest/no-conditional-expect': 'off' },
+      },
       {
         // Tests build DMMF fixtures by hand; asserting them into the real
         // ReadonlyDeep<DMMF.*> shapes is the sanctioned `as` exception

@@ -24,10 +24,11 @@ Lint, tests, and coverage always run **from the repo root**:
 
 ```bash
 pnpm check            # format, lint, type checks, then `pnpm lint`
-pnpm lint             # the five linters below in one go — what the Lint workflow runs
+pnpm lint             # the six linters below in one go — what the Lint workflow runs
 pnpm lint:md          # markdownlint over the repository's Markdown
 pnpm lint:text        # textlint: the spelling of product names (Prisma, PostgreSQL, Node.js, ...)
 pnpm lint:spell       # cspell, British English plus .cspell/words.txt; add a real word there, fix a typo
+pnpm lint:links       # every link from the Markdown to a file of the repository finds the file
 pnpm lint:actions     # actionlint (syntax) and, when installed, zizmor (security) over .github/workflows
 pnpm lint:typespec    # the @typespec/* packages resolve to one shared version in pnpm-lock.yaml
 pnpm test             # unit tests (the `unit` project — vitest via vite-plus)
@@ -141,6 +142,10 @@ Most of these are enforced by `pnpm exec vp lint` (the oxlint plugin in `package
 - **What `safeParse` returns is `result`** (`result.success`, `result.data`), and the value handed in is named for where it came from (`json`). The package validates with zod only: valibot is a generator target, not a dependency.
 - **A helper earns its place by holding logic** used in several places. Don't lift a value into a function to save repeating it (a handler's problem response, an options object), and don't name a few lines used once; write them where they are used.
 - **A function that builds SQL shows the SQL**: its TSDoc carries an `@example` with a fenced `sql` block for a small named case, per dialect where they differ, taken from running the function or from a test's expectation.
+- **A generator reads a `///` comment through `stripAnnotations` or an annotation reader.** The prose goes into the generated code as that language's comment, the annotation lines never do; a comment writer takes the prose (`goCommentLines(stripAnnotations(field.documentation))`), and a JSDoc / KDoc / PHPDoc comment around text is built by `docBlockLines`. `lint/codegen.js` holds both (`custom/documentation-read`, `custom/doc-block-helper`).
+- **A generator returns the same text for the same schema.** Nothing in `src/helper`, `src/generator`, `src/utils` or `src/diagram` reads the clock, draws a random value, reads `process`, logs, waits or is `async` (`custom/generator-pure`); and a helper imports nothing of `src/generator` (`custom/helper-no-generator-import`). The values a generator needs are read in `src/core` and passed in.
+- **A test asserts what it means, unconditionally.** The jest plugin's rules hold the tests (oxlint reads `describe` / `it` / `expect` by name): no `.only` or `.skip` left behind, no title twice, an `expect` outside a branch (only `test/db`, where a scenario runs on four servers, branches on the server), `toStrictEqual` and never `toEqual`, `toBe` for a primitive, and no snapshot — the expected text is written in the test.
+- **A generator's options are its README row.** An option `src/core/<target>.ts` reads from `options.generator.config` is listed in the row of `hekireki-<target>` in the README's tables, and the row lists none it does not read (`custom/generator-option-documented`). `src/bin/index.test.ts` holds every provider to a shim, a `bin` entry, a row of the README's tables and a block of `example/schema.prisma`, so the golden files cover it.
 - **Generated SQL carries no comment of ours.** `hekireki migrate plan` writes statements and one marker line, `-- hekireki migrate plan`; what a person needs to know goes to the CLI's notes.
 - **In `src/migrate`, what crosses a boundary is read through a zod schema** and the function says so in its type (`z.infer<typeof WriteDecisionsInput>`); what has been read is branded, and a brand stays out of what other packages are returned (a declaration cannot name zod's `$brand`).
 - **The Studio server is layered**: handlers → usecases → services, and usecases → domain. `lint/layers.js`, `lint/failures.js`, `lint/docs.js` and `lint/performance.js` say each rule's why, and `pnpm exec vp lint` holds the code to them.

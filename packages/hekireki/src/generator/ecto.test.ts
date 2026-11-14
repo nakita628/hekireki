@@ -88,6 +88,10 @@ describe('ectoSchemaFiles', () => {
       {
         fileName: 'user.ex',
         code: `defmodule MyApp.User do
+  @moduledoc """
+  A person.
+  """
+
   use Ecto.Schema
 
   @primary_key false
@@ -100,6 +104,7 @@ describe('ectoSchemaFiles', () => {
         }
 
   schema "User" do
+    # Primary key.
     field(:id, :integer, primary_key: true)
     field(:name, :string)
     field(:role, Ecto.Enum, values: [:USER, :ADMIN])
@@ -136,6 +141,10 @@ end`,
       {
         fileName: 'user.ex',
         code: `defmodule My.App.User do
+  @moduledoc """
+  A person.
+  """
+
   use Ecto.Schema
 
   @primary_key false
@@ -148,6 +157,7 @@ end`,
         }
 
   schema "User" do
+    # Primary key.
     field(:id, :integer, primary_key: true)
     field(:name, :string)
     field(:role, Ecto.Enum, values: [:USER, :ADMIN])

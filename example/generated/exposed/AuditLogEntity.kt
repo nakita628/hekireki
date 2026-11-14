@@ -5,6 +5,7 @@ import org.jetbrains.exposed.v1.dao.Entity
 import org.jetbrains.exposed.v1.dao.EntityClass
 import java.util.UUID
 
+/** DB-side generated defaults (dbgenerated) plus Json / Bytes payloads. */
 class AuditLogEntity(
     id: EntityID<UUID>,
 ) : Entity<UUID>(id) {

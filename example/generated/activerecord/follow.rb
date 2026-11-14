@@ -1,3 +1,4 @@
+# Composite primary key + two named relations to the same model.
 class Follow < ApplicationRecord
   self.primary_key = %w[follower_id following_id]
 

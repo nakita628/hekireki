@@ -4,6 +4,8 @@ use sea_orm::entity::prelude::*;
 use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
+/// `now()` and `@updatedAt` under `@map`: the entity fills both as Prisma Client does, in UTC
+/// with milliseconds.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "authors")]
 pub struct Model {

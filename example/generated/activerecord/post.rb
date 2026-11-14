@@ -1,3 +1,8 @@
+# @@map + @map column names, FK with a referential action,
+# mapped-enum default, and an implicit many-to-many to Tag.
+#
+# id:: Primary key
+# title:: Article title
 class Post < ApplicationRecord
   self.implicit_order_column = "created_at"
 

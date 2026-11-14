@@ -1,8 +1,16 @@
 import { Schema } from 'effect'
 
+/**
+ * Application user. Fully annotated for every validator generator,
+ * with a UUIDv7 primary key, enum default, scalar list, @map columns,
+ * @updatedAt, and relations of every cardinality.
+ */
 export const UserSchema = Schema.Struct({
+  /** Primary key (UUIDv7) */
   id: Schema.UUID,
+  /** Unique login email */
   email: Schema.String.pipe(Schema.pattern(/^[^@]+@[^@]+\.[^@]+$/)),
+  /** Display name */
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50)),
   role: Schema.Literal('ADMIN', 'EDITOR', 'VIEWER'),
   interests: Schema.String,
@@ -12,6 +20,11 @@ export const UserSchema = Schema.Struct({
 
 export type User = typeof UserSchema.Type
 
+/**
+ * One-to-one relation with native @db.* types, literal defaults,
+ * and optional scalars of every flavour. ConfigDict passthrough: the
+ * Pydantic model rejects unknown keys (extra='forbid').
+ */
 export const ProfileSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
@@ -27,8 +40,14 @@ export const ProfileSchema = Schema.Struct({
 
 export type Profile = typeof ProfileSchema.Type
 
+/**
+ * @@map + @map column names, FK with a referential action,
+ * mapped-enum default, and an implicit many-to-many to Tag.
+ */
 export const PostSchema = Schema.Struct({
+  /** Primary key */
   id: Schema.UUID,
+  /** Article title */
   title: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
   content: Schema.String,
   visibility: Schema.Literal('PUBLIC', 'PRIVATE', 'LINK_ONLY'),
@@ -40,6 +59,7 @@ export const PostSchema = Schema.Struct({
 
 export type Post = typeof PostSchema.Type
 
+/** Implicit many-to-many partner of Post (join table `_PostToTag`). */
 export const TagSchema = Schema.Struct({
   id: Schema.Number,
   label: Schema.String,
@@ -47,6 +67,10 @@ export const TagSchema = Schema.Struct({
 
 export type Tag = typeof TagSchema.Type
 
+/**
+ * Two foreign keys with different referential actions
+ * (Cascade vs SetNull) and a composite index.
+ */
 export const CommentSchema = Schema.Struct({
   id: Schema.Number,
   body: Schema.String,
@@ -57,6 +81,7 @@ export const CommentSchema = Schema.Struct({
 
 export type Comment = typeof CommentSchema.Type
 
+/** Composite primary key + two named relations to the same model. */
 export const FollowSchema = Schema.Struct({
   followerId: Schema.String,
   followingId: Schema.String,
@@ -65,6 +90,7 @@ export const FollowSchema = Schema.Struct({
 
 export type Follow = typeof FollowSchema.Type
 
+/** Self-relation (adjacency-list tree) with a composite unique. */
 export const CategorySchema = Schema.Struct({
   id: Schema.Number,
   name: Schema.String,
@@ -73,6 +99,7 @@ export const CategorySchema = Schema.Struct({
 
 export type Category = typeof CategorySchema.Type
 
+/** BigInt autoincrement primary key (bigserial) and money as Decimal. */
 export const OrderSchema = Schema.Struct({
   id: Schema.BigIntFromSelf,
   userId: Schema.String,
@@ -82,6 +109,7 @@ export const OrderSchema = Schema.Struct({
 
 export type Order = typeof OrderSchema.Type
 
+/** Child of Order with a composite unique constraint. */
 export const OrderItemSchema = Schema.Struct({
   id: Schema.BigIntFromSelf,
   orderId: Schema.BigIntFromSelf,
@@ -92,6 +120,7 @@ export const OrderItemSchema = Schema.Struct({
 
 export type OrderItem = typeof OrderItemSchema.Type
 
+/** DB-side generated defaults (dbgenerated) plus Json / Bytes payloads. */
 export const AuditLogSchema = Schema.Struct({
   id: Schema.String,
   action: Schema.String,
@@ -102,6 +131,10 @@ export const AuditLogSchema = Schema.Struct({
 
 export type AuditLog = typeof AuditLogSchema.Type
 
+/**
+ * Named implicit many-to-many: the join table is `_cast`,
+ * not `_ActorToFilm`.
+ */
 export const ActorSchema = Schema.Struct({
   id: Schema.Number,
   name: Schema.String,

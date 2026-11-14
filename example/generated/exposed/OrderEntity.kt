@@ -4,6 +4,7 @@ import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.dao.Entity
 import org.jetbrains.exposed.v1.dao.EntityClass
 
+/** BigInt autoincrement primary key (bigserial) and money as Decimal. */
 class OrderEntity(
     id: EntityID<Long>,
 ) : Entity<Long>(id) {

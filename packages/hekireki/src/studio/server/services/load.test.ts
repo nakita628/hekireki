@@ -131,11 +131,9 @@ describe('parseSchemaFiles', () => {
         diagnostics: [],
       }),
     )
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.value.dmmf.datamodel.models.map((m) => m.name)).toStrictEqual(['Post', 'User'])
-      expect(result.value.provider).toBe('mysql')
-    }
+    if (!result.ok) throw new Error(`expected the schema to load: ${JSON.stringify(result)}`)
+    expect(result.value.dmmf.datamodel.models.map((m) => m.name)).toStrictEqual(['Post', 'User'])
+    expect(result.value.provider).toBe('mysql')
   })
 
   it('fails with the Prisma validation message without ANSI colors', async () => {

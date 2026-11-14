@@ -54,11 +54,14 @@
 //                                   is imported directly (`./load.js`), the barrel would be a
 //                                   cycle; the client imports lib through lib/index.js; every
 //                                   other namespace import stays banned (zod/valibot aside)
-// layers.js (the Studio server's layers), failures.js, docs.js and performance.js hold the rest.
+// layers.js (the Studio server's layers), failures.js, docs.js and performance.js hold the rest;
+// codegen.js holds the generators' rules: `///` comments, purity, the helper -> generator
+// direction, and options against the README.
 //
 // Tests are exempt from the structural rules (effect-gen-return, function-declaration, no-let,
 // no-mutation, no-pass-through): a test arranges and asserts imperatively when that is the clearest way to spell
 // the fixture out.
+import { codegenRules } from './codegen.js'
 import { docRules } from './docs.js'
 import { failureRules } from './failures.js'
 import {
@@ -605,6 +608,7 @@ const plugin = {
     ...failureRules,
     ...docRules,
     ...performanceRules,
+    ...codegenRules,
     'effect-gen-return': {
       meta: {
         docs: {

@@ -1,4 +1,10 @@
-import { extractObjectType, groupByModel, isFields } from './index.js'
+import {
+  docBlockLines,
+  extractObjectType,
+  groupByModel,
+  isFields,
+  stripAnnotations,
+} from './index.js'
 
 export function makePropertiesGenerator(
   libraryPrefix: string,
@@ -11,6 +17,7 @@ export function makePropertiesGenerator(
       readonly fieldName: string
       readonly validation: string | null
       readonly isRequired: boolean
+      readonly comment?: string
     }[],
   ) {
     return modelFields
@@ -18,7 +25,9 @@ export function makePropertiesGenerator(
       .map((field) => {
         const base = `${libraryPrefix}.${field.validation}`
         const wrapped = wrapCardinality ? wrapCardinality(base, field.isRequired) : base
-        return `  ${field.fieldName}: ${wrapped}`
+        return [...docBlockLines(field.comment, '  '), `  ${field.fieldName}: ${wrapped}`].join(
+          '\n',
+        )
       })
       .join(',\n')
   }
@@ -50,6 +59,7 @@ export function validationSchemas(
         readonly fieldName: string
         readonly validation: string | null
         readonly isRequired: boolean
+        readonly comment?: string
       }[],
       objectType?: 'strict' | 'loose',
     ) => string
@@ -93,6 +103,7 @@ export function validationSchemas(
       fieldName: field.name,
       validation: resolveValidation(field),
       isRequired: field.isRequired,
+      comment: stripAnnotations(field.documentation),
     })),
   )
 
@@ -119,8 +130,9 @@ export function validationSchemas(
 
   const schemaResults = Object.values(groupByModel(isFields(modelFields))).map((fields) => {
     const objectType = extractObjectType(fields[0]?.documentation, config.annotationPrefix)
+    const modelComment = stripAnnotations(fields[0]?.documentation)
     return {
-      schema: config.schemas(fields, objectType),
+      schema: [...docBlockLines(modelComment, ''), config.schemas(fields, objectType)].join('\n'),
       inferType: type ? config.inferType(fields[0]?.modelName ?? '') : '',
     }
   })

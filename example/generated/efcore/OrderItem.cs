@@ -2,6 +2,9 @@
 
 namespace Example.Models;
 
+/// <summary>
+/// Child of Order with a composite unique constraint.
+/// </summary>
 public partial class OrderItem
 {
     public long Id { get; set; }

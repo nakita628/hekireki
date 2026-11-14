@@ -1,6 +1,11 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { isAnnotationLine, makePascalCase, makeSnakeCase } from '../utils/index.js'
+import {
+  isAnnotationLine,
+  makePascalCase,
+  makeSnakeCase,
+  stripAnnotations,
+} from '../utils/index.js'
 import {
   backRelation,
   fieldColumn,
@@ -885,6 +890,27 @@ function changesetLines(
   ]
 }
 
+/** The prose of a `///` comment as `#` lines above a line of the schema block. */
+function ectoLineComments(text: string | undefined) {
+  if (text === undefined) return []
+  return text.split('\n').map((line) => (line === '' ? '    #' : `    # ${line}`))
+}
+
+/**
+ * The prose of a model's `///` comment as its `@moduledoc` heredoc. A heredoc interpolates and
+ * reads escapes, so a backslash, a `#{` and a `"""` in the text are escaped.
+ */
+function ectoModuledoc(text: string | undefined) {
+  if (text === undefined) return []
+  const body = text
+    .replaceAll('\\', '\\\\')
+    .replaceAll('#{', '\\#{')
+    .replaceAll('"""', '\\"""')
+    .split('\n')
+    .map((line) => (line === '' ? '' : `  ${line}`))
+  return ['  @moduledoc """', ...body, '  """', '']
+}
+
 export function ectoSchemas(
   models: readonly DMMF.Model[],
   app: string | string[],
@@ -987,7 +1013,7 @@ export function ectoSchemas(
         '        }',
       ]
 
-      const schemaFields = schemaFieldsRaw.map((f) => {
+      const schemaFields = schemaFieldsRaw.flatMap((f) => {
         const snakeName = makeSnakeCase(f.name)
         const primary =
           (f.isId && !pk.omitIdFieldInSchema) || compositePkFieldNames.has(f.name)
@@ -1006,7 +1032,11 @@ export function ectoSchemas(
             : values.map((v) => `:${v.name}`).join(', ')
           const enumType = f.isList ? '{:array, Ecto.Enum}' : 'Ecto.Enum'
           const enumDefault = typeof f.default === 'string' ? `, default: :${f.default}` : ''
-          return `    field(:${snakeName}, ${enumType}, values: [${valuesStr}]${enumDefault}${sourceOpt})`
+          const lines = ectoLineComments(stripAnnotations(f.documentation))
+          lines.push(
+            `    field(:${snakeName}, ${enumType}, values: [${valuesStr}]${enumDefault}${sourceOpt})`,
+          )
+          return lines
         }
 
         const type =
@@ -1016,7 +1046,9 @@ export function ectoSchemas(
         const ectoType = f.isList ? `{:array, ${type}}` : type
         const defaultOpt = ectoDefaultOption(f)
         const defaultClause = defaultOpt ? `, ${defaultOpt}` : ''
-        return `    field(:${snakeName}, ${ectoType}${primary}${defaultClause}${sourceOpt})`
+        const lines = ectoLineComments(stripAnnotations(f.documentation))
+        lines.push(`    field(:${snakeName}, ${ectoType}${primary}${defaultClause}${sourceOpt})`)
+        return lines
       })
 
       const fkFieldLines: string[] = []
@@ -1034,12 +1066,17 @@ export function ectoSchemas(
           const defaultClause = defaultOpt ? `, ${defaultOpt}` : ''
           const sourceOpt = needsSource ? `, source: :${fkDbName}` : ''
           fkFieldLines.push(
+            ...ectoLineComments(stripAnnotations(fkFieldObj?.documentation)),
             `    field(:${snakeFk}, ${formatEctoType(fkType)}${pkOpt}${defaultClause}${sourceOpt})`,
           )
         }
       }
 
-      const belongsToLines = associations.belongsTo.map((a) => {
+      // The prose of a relation field, above the association it becomes.
+      const relationComments = (name: string) =>
+        ectoLineComments(stripAnnotations(fields.find((f) => f.name === name)?.documentation))
+
+      const belongsToLines = associations.belongsTo.flatMap((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
         const fkFieldObj = fields.find((f) => f.name === a.foreignKey)
@@ -1047,15 +1084,24 @@ export function ectoSchemas(
         const needsSource = snakeFk !== fkDbName
         const isPkField = compositePkFieldNames.has(a.foreignKey)
         const hasDefault = fkFieldObj ? ectoDefaultOption(fkFieldObj) !== null : false
+        // Where belongs_to defines the key's field, the key's comment is written above it.
+        const definesField = !(needsSource || isPkField || hasDefault)
         const opts: string[] = [`foreign_key: :${snakeFk}`]
-        if (needsSource || isPkField || hasDefault) opts.push('define_field: false')
+        if (!definesField) opts.push('define_field: false')
         // A module's @foreign_key_type reaches every belongs_to in it: one whose key is of
         // Ecto's default :id type says so where the module's default is another.
         if ((a.fkType ?? 'id') !== (pk.foreignKeyType ?? 'id')) {
           opts.push(`type: ${formatEctoType(a.fkType ?? 'id')}`)
         }
         if (a.references !== 'id') opts.push(`references: :${a.references}`)
-        return `    belongs_to(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, ${opts.join(', ')})`
+        const lines = definesField
+          ? ectoLineComments(stripAnnotations(fkFieldObj?.documentation))
+          : []
+        lines.push(
+          ...relationComments(a.name),
+          `    belongs_to(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, ${opts.join(', ')})`,
+        )
+        return lines
       })
 
       // A has_one or has_many reads the key it references from @primary_key unless it is named,
@@ -1064,31 +1110,44 @@ export function ectoSchemas(
       const namesReferences = (references: string) =>
         references !== 'id' || pk.line === '@primary_key false'
 
-      const hasOneLines = associations.hasOne.map((a) => {
+      const hasOneLines = associations.hasOne.flatMap((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
         const referencesOpt = namesReferences(a.references) ? `, references: :${a.references}` : ''
-        return `    has_one(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`
+        const lines = relationComments(a.name)
+        lines.push(
+          `    has_one(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`,
+        )
+        return lines
       })
 
-      const hasManyLines = associations.hasMany.map((a) => {
+      const hasManyLines = associations.hasMany.flatMap((a) => {
         const snakeFk = makeSnakeCase(a.foreignKey)
         const snakeAssocName = makeSnakeCase(a.name)
         const referencesOpt = namesReferences(a.references) ? `, references: :${a.references}` : ''
-        return `    has_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`
+        const lines = relationComments(a.name)
+        lines.push(
+          `    has_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`,
+        )
+        return lines
       })
 
-      const manyToManyLines = associations.manyToMany.map((a) => {
+      const manyToManyLines = associations.manyToMany.flatMap((a) => {
         const snakeAssocName = makeSnakeCase(a.name)
         // Prisma implicit m2m join tables use columns "A"/"B" (models in
         // alphabetical order), not Ecto's inflected <schema>_id defaults.
         const joinKeys = `join_keys: [${a.ownJoinColumn}: :${a.ownKey}, ${a.relatedJoinColumn}: :${a.relatedKey}]`
-        return `    many_to_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, join_through: "${a.joinThrough}", ${joinKeys})`
+        const lines = relationComments(a.name)
+        lines.push(
+          `    many_to_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, join_through: "${a.joinThrough}", ${joinKeys})`,
+        )
+        return lines
       })
 
       const changeset = changesetLines(model, contextModels, options)
       const lines = [
         `defmodule ${appName}.${makePascalCase(model.name)} do`,
+        ...ectoModuledoc(stripAnnotations(model.documentation)),
         '  use Ecto.Schema',
         ...(changeset.length > 0 ? ['  import Ecto.Changeset'] : []),
         '',
