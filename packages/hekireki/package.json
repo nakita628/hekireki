@@ -162,7 +162,7 @@
     "arktype": "^2.2.9",
     "drizzle-kit": "1.0.0-rc.5",
     "drizzle-orm": "1.0.0-rc.5",
-    "hono-takibi": "link:../../../hono-takibi/packages/hono-takibi",
+    "hono-takibi": "^0.31.0",
     "json-schema-to-ts": "^3.1.1",
     "kysely": "^0.29.8",
     "monaco-editor": "^0.57.0",
