@@ -669,6 +669,11 @@ export default defineConfig({
         },
       },
       {
+        // A generator's options and its row of the README's table (lint/codegen.js).
+        files: ['src/core/**'],
+        rules: { 'custom/generator-option-documented': 'error' },
+      },
+      {
         // hekireki-docs reads the schema as Studio does, where `documentation` is already the prose
         // (studio/server/domain/schema.ts parts it from the annotations), so it is written as is.
         files: ['src/generator/docs.ts'],

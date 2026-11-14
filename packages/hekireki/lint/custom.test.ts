@@ -1,6 +1,7 @@
 import { RuleTester } from 'oxlint/plugins-dev'
 import { describe, expect, it, test } from 'vite-plus/test'
 
+import { documentedOptions } from './codegen.js'
 import plugin, { handlerDocNames, layerModuleOf, layerNamespaceOf } from './custom.js'
 import { isLayerModule, layerOf, leadingTsdoc, resolveRelative } from './helpers.js'
 
@@ -923,4 +924,24 @@ tester.run('doc-block-helper', rule('doc-block-helper'), {
       errors: [{ message: /docBlockLines/u }],
     },
   ],
+})
+
+describe('documentedOptions', () => {
+  const readme = [
+    '| Provider | Writes | Options |',
+    '| --- | --- | --- |',
+    '| `hekireki-zod` | Zod | `type`, `relation`, `zod` (`"v4"`, `"mini"`) |',
+    '| `hekireki-er` | ER diagram | `outputs`: files, one per extension (`.md`, `.png`); `theme` (`light`, `dark`) |',
+    '| `hekireki-seed` | Schema module | |',
+  ].join('\n')
+
+  it('reads the option each item of the cell starts with, leaving the values out', () => {
+    expect(documentedOptions(readme, 'hekireki-zod')).toStrictEqual(['type', 'relation', 'zod'])
+    expect(documentedOptions(readme, 'hekireki-er')).toStrictEqual(['outputs', 'theme'])
+    expect(documentedOptions(readme, 'hekireki-seed')).toStrictEqual([])
+  })
+
+  it('is null for a provider no row names', () => {
+    expect(documentedOptions(readme, 'hekireki-gorm')).toBeNull()
+  })
 })

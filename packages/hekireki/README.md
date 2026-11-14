@@ -108,10 +108,8 @@ are shown as code. Nothing connects to a database for either.
 is such a directory.
 
 Every generator keeps Prisma's names: a model or field without `@map` keeps the name it has in the
-schema, and each ORM is told so where its own convention would say otherwise. What each generator
-does beyond that, and what it leaves to the caller, is in
-[docs/generators.md](https://github.com/nakita628/hekireki/blob/main/packages/hekireki/docs/generators.md).
-Active Record and Ecto take `///` lines of their own, so they are here.
+schema, and each ORM is told so where its own convention would say otherwise. Active Record and Ecto
+take `///` lines of their own, described below.
 
 ### Active Record
 
