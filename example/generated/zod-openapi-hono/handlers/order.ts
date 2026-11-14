@@ -23,24 +23,23 @@ export const postOrdersRouteHandler: RouteHandler<typeof postOrdersRoute> = asyn
 }
 
 export const getOrdersIdRouteHandler: RouteHandler<typeof getOrdersIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const row = await prisma.order.findFirst({ where: { id } })
+  const data = c.req.valid('param')
+  const row = await prisma.order.findFirst({ where: { id: data.id } })
   if (row === null) return c.body(null, 404)
   return c.json({ ...row, id: Number(row.id) }, 200)
 }
 
 export const patchOrdersIdRouteHandler: RouteHandler<typeof patchOrdersIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const data = c.req.valid('json')
-  const { count } = await prisma.order.updateMany({ where: { id }, data })
+  const data = { ...c.req.valid('param'), ...c.req.valid('json') }
+  const { count } = await prisma.order.updateMany({ where: { id: data.id }, data })
   if (count === 0) return c.body(null, 404)
-  const row = await prisma.order.findFirstOrThrow({ where: { id } })
+  const row = await prisma.order.findFirstOrThrow({ where: { id: data.id } })
   return c.json({ ...row, id: Number(row.id) }, 200)
 }
 
 export const deleteOrdersIdRouteHandler: RouteHandler<typeof deleteOrdersIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const { count } = await prisma.order.deleteMany({ where: { id } })
+  const data = c.req.valid('param')
+  const { count } = await prisma.order.deleteMany({ where: { id: data.id } })
   if (count === 0) return c.body(null, 404)
   return c.body(null, 204)
 }

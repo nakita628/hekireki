@@ -680,8 +680,8 @@ describe('ZodOpenAPIHono', () => {
     const user = readFileSync(path.join(dir, 'handlers', 'user.ts'), 'utf8')
     expect(user).toContain("import { prisma } from '../prisma'")
     expect(user).toContain('const rows = await prisma.user.findMany()')
-    expect(user).toContain("const { id } = c.req.valid('param')")
-    expect(user).toContain('const row = await prisma.user.findFirst({ where: { id } })')
+    expect(user).toContain("const data = c.req.valid('param')")
+    expect(user).toContain('const row = await prisma.user.findFirst({ where: { id: data.id } })')
     expect(user).not.toContain('async (c) => {}')
   })
 

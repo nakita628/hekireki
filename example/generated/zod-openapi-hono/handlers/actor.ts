@@ -20,24 +20,23 @@ export const postActorsRouteHandler: RouteHandler<typeof postActorsRoute> = asyn
 }
 
 export const getActorsIdRouteHandler: RouteHandler<typeof getActorsIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const row = await prisma.actor.findFirst({ where: { id } })
+  const data = c.req.valid('param')
+  const row = await prisma.actor.findFirst({ where: { id: data.id } })
   if (row === null) return c.body(null, 404)
   return c.json(row, 200)
 }
 
 export const patchActorsIdRouteHandler: RouteHandler<typeof patchActorsIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const data = c.req.valid('json')
-  const { count } = await prisma.actor.updateMany({ where: { id }, data })
+  const data = { ...c.req.valid('param'), ...c.req.valid('json') }
+  const { count } = await prisma.actor.updateMany({ where: { id: data.id }, data })
   if (count === 0) return c.body(null, 404)
-  const row = await prisma.actor.findFirstOrThrow({ where: { id } })
+  const row = await prisma.actor.findFirstOrThrow({ where: { id: data.id } })
   return c.json(row, 200)
 }
 
 export const deleteActorsIdRouteHandler: RouteHandler<typeof deleteActorsIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const { count } = await prisma.actor.deleteMany({ where: { id } })
+  const data = c.req.valid('param')
+  const { count } = await prisma.actor.deleteMany({ where: { id: data.id } })
   if (count === 0) return c.body(null, 404)
   return c.body(null, 204)
 }

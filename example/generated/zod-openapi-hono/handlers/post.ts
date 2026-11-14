@@ -20,24 +20,23 @@ export const postPostsRouteHandler: RouteHandler<typeof postPostsRoute> = async 
 }
 
 export const getPostsIdRouteHandler: RouteHandler<typeof getPostsIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const row = await prisma.post.findFirst({ where: { id } })
+  const data = c.req.valid('param')
+  const row = await prisma.post.findFirst({ where: { id: data.id } })
   if (row === null) return c.body(null, 404)
   return c.json(row, 200)
 }
 
 export const patchPostsIdRouteHandler: RouteHandler<typeof patchPostsIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const data = c.req.valid('json')
-  const { count } = await prisma.post.updateMany({ where: { id }, data })
+  const data = { ...c.req.valid('param'), ...c.req.valid('json') }
+  const { count } = await prisma.post.updateMany({ where: { id: data.id }, data })
   if (count === 0) return c.body(null, 404)
-  const row = await prisma.post.findFirstOrThrow({ where: { id } })
+  const row = await prisma.post.findFirstOrThrow({ where: { id: data.id } })
   return c.json(row, 200)
 }
 
 export const deletePostsIdRouteHandler: RouteHandler<typeof deletePostsIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const { count } = await prisma.post.deleteMany({ where: { id } })
+  const data = c.req.valid('param')
+  const { count } = await prisma.post.deleteMany({ where: { id: data.id } })
   if (count === 0) return c.body(null, 404)
   return c.body(null, 204)
 }

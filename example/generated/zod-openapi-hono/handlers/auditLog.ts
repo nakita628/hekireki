@@ -42,8 +42,8 @@ export const postAuditLogsRouteHandler: RouteHandler<typeof postAuditLogsRoute> 
 }
 
 export const getAuditLogsIdRouteHandler: RouteHandler<typeof getAuditLogsIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const row = await prisma.auditLog.findFirst({ where: { id } })
+  const data = c.req.valid('param')
+  const row = await prisma.auditLog.findFirst({ where: { id: data.id } })
   if (row === null) return c.body(null, 404)
   return c.json(
     {
@@ -57,10 +57,9 @@ export const getAuditLogsIdRouteHandler: RouteHandler<typeof getAuditLogsIdRoute
 export const patchAuditLogsIdRouteHandler: RouteHandler<typeof patchAuditLogsIdRoute> = async (
   c,
 ) => {
-  const { id } = c.req.valid('param')
-  const data = c.req.valid('json')
+  const data = { ...c.req.valid('param'), ...c.req.valid('json') }
   const { count } = await prisma.auditLog.updateMany({
-    where: { id },
+    where: { id: data.id },
     data: {
       ...data,
       signature:
@@ -72,7 +71,7 @@ export const patchAuditLogsIdRouteHandler: RouteHandler<typeof patchAuditLogsIdR
     },
   })
   if (count === 0) return c.body(null, 404)
-  const row = await prisma.auditLog.findFirstOrThrow({ where: { id } })
+  const row = await prisma.auditLog.findFirstOrThrow({ where: { id: data.id } })
   return c.json(
     {
       ...row,
@@ -85,8 +84,8 @@ export const patchAuditLogsIdRouteHandler: RouteHandler<typeof patchAuditLogsIdR
 export const deleteAuditLogsIdRouteHandler: RouteHandler<typeof deleteAuditLogsIdRoute> = async (
   c,
 ) => {
-  const { id } = c.req.valid('param')
-  const { count } = await prisma.auditLog.deleteMany({ where: { id } })
+  const data = c.req.valid('param')
+  const { count } = await prisma.auditLog.deleteMany({ where: { id: data.id } })
   if (count === 0) return c.body(null, 404)
   return c.body(null, 204)
 }

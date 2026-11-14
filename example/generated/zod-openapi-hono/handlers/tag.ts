@@ -20,24 +20,23 @@ export const postTagsRouteHandler: RouteHandler<typeof postTagsRoute> = async (c
 }
 
 export const getTagsIdRouteHandler: RouteHandler<typeof getTagsIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const row = await prisma.tag.findFirst({ where: { id } })
+  const data = c.req.valid('param')
+  const row = await prisma.tag.findFirst({ where: { id: data.id } })
   if (row === null) return c.body(null, 404)
   return c.json(row, 200)
 }
 
 export const patchTagsIdRouteHandler: RouteHandler<typeof patchTagsIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const data = c.req.valid('json')
-  const { count } = await prisma.tag.updateMany({ where: { id }, data })
+  const data = { ...c.req.valid('param'), ...c.req.valid('json') }
+  const { count } = await prisma.tag.updateMany({ where: { id: data.id }, data })
   if (count === 0) return c.body(null, 404)
-  const row = await prisma.tag.findFirstOrThrow({ where: { id } })
+  const row = await prisma.tag.findFirstOrThrow({ where: { id: data.id } })
   return c.json(row, 200)
 }
 
 export const deleteTagsIdRouteHandler: RouteHandler<typeof deleteTagsIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const { count } = await prisma.tag.deleteMany({ where: { id } })
+  const data = c.req.valid('param')
+  const { count } = await prisma.tag.deleteMany({ where: { id: data.id } })
   if (count === 0) return c.body(null, 404)
   return c.body(null, 204)
 }

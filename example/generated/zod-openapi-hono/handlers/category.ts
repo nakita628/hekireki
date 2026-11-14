@@ -20,8 +20,8 @@ export const postCategoriesRouteHandler: RouteHandler<typeof postCategoriesRoute
 }
 
 export const getCategoriesIdRouteHandler: RouteHandler<typeof getCategoriesIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const row = await prisma.category.findFirst({ where: { id } })
+  const data = c.req.valid('param')
+  const row = await prisma.category.findFirst({ where: { id: data.id } })
   if (row === null) return c.body(null, 404)
   return c.json(row, 200)
 }
@@ -29,19 +29,18 @@ export const getCategoriesIdRouteHandler: RouteHandler<typeof getCategoriesIdRou
 export const patchCategoriesIdRouteHandler: RouteHandler<typeof patchCategoriesIdRoute> = async (
   c,
 ) => {
-  const { id } = c.req.valid('param')
-  const data = c.req.valid('json')
-  const { count } = await prisma.category.updateMany({ where: { id }, data })
+  const data = { ...c.req.valid('param'), ...c.req.valid('json') }
+  const { count } = await prisma.category.updateMany({ where: { id: data.id }, data })
   if (count === 0) return c.body(null, 404)
-  const row = await prisma.category.findFirstOrThrow({ where: { id } })
+  const row = await prisma.category.findFirstOrThrow({ where: { id: data.id } })
   return c.json(row, 200)
 }
 
 export const deleteCategoriesIdRouteHandler: RouteHandler<typeof deleteCategoriesIdRoute> = async (
   c,
 ) => {
-  const { id } = c.req.valid('param')
-  const { count } = await prisma.category.deleteMany({ where: { id } })
+  const data = c.req.valid('param')
+  const { count } = await prisma.category.deleteMany({ where: { id: data.id } })
   if (count === 0) return c.body(null, 404)
   return c.body(null, 204)
 }

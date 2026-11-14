@@ -39,8 +39,8 @@ export const postProfilesRouteHandler: RouteHandler<typeof postProfilesRoute> = 
 }
 
 export const getProfilesIdRouteHandler: RouteHandler<typeof getProfilesIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const row = await prisma.profile.findFirst({ where: { id } })
+  const data = c.req.valid('param')
+  const row = await prisma.profile.findFirst({ where: { id: data.id } })
   if (row === null) return c.body(null, 404)
   return c.json(
     { ...row, avatar: row.avatar === null ? null : Buffer.from(row.avatar).toString('base64') },
@@ -49,10 +49,9 @@ export const getProfilesIdRouteHandler: RouteHandler<typeof getProfilesIdRoute> 
 }
 
 export const patchProfilesIdRouteHandler: RouteHandler<typeof patchProfilesIdRoute> = async (c) => {
-  const { id } = c.req.valid('param')
-  const data = c.req.valid('json')
+  const data = { ...c.req.valid('param'), ...c.req.valid('json') }
   const { count } = await prisma.profile.updateMany({
-    where: { id },
+    where: { id: data.id },
     data: {
       ...data,
       avatar:
@@ -64,7 +63,7 @@ export const patchProfilesIdRouteHandler: RouteHandler<typeof patchProfilesIdRou
     },
   })
   if (count === 0) return c.body(null, 404)
-  const row = await prisma.profile.findFirstOrThrow({ where: { id } })
+  const row = await prisma.profile.findFirstOrThrow({ where: { id: data.id } })
   return c.json(
     { ...row, avatar: row.avatar === null ? null : Buffer.from(row.avatar).toString('base64') },
     200,
@@ -74,8 +73,8 @@ export const patchProfilesIdRouteHandler: RouteHandler<typeof patchProfilesIdRou
 export const deleteProfilesIdRouteHandler: RouteHandler<typeof deleteProfilesIdRoute> = async (
   c,
 ) => {
-  const { id } = c.req.valid('param')
-  const { count } = await prisma.profile.deleteMany({ where: { id } })
+  const data = c.req.valid('param')
+  const { count } = await prisma.profile.deleteMany({ where: { id: data.id } })
   if (count === 0) return c.body(null, 404)
   return c.body(null, 204)
 }

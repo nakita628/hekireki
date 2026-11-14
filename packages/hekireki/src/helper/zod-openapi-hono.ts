@@ -239,22 +239,19 @@ function bytes(value: string) {
 }
 
 /**
- * How the handler reads the body, always as `const data = c.req.valid('json')`, and the `data`
- * option it hands Prisma: `data` itself, or, where the model has Bytes, `data` with each Bytes
- * field decoded from base64 back into bytes.
+ * The `data` option the handler hands Prisma: `data` itself, or, where the model has Bytes,
+ * `data` with each Bytes field decoded from base64 back into bytes.
  *
  * @example
  * ```ts
- * const data = c.req.valid('json')
  * await prisma.profile.create({
  *   data: { ...data, avatar: data.avatar === undefined ? undefined : data.avatar === null ? null : ... },
  * })
  * ```
  */
-function readBody(model: DMMF.Model, kind: 'create' | 'update') {
-  const read = `const data = c.req.valid('json')`
+function prismaData(model: DMMF.Model, kind: 'create' | 'update') {
   const fields = valueFields(model).filter((field) => field.type === 'Bytes')
-  if (fields.length === 0) return { read, data: 'data' }
+  if (fields.length === 0) return 'data'
   const entries = fields.map((field) => {
     const value = `data.${field.name}`
     const decoded = field.isList
@@ -265,24 +262,23 @@ function readBody(model: DMMF.Model, kind: 'create' | 'update') {
     const isPresent = kind === 'create' && field.isRequired && !field.hasDefaultValue
     return `${field.name}: ${isPresent ? decoded : `${value} === undefined ? undefined : ${decoded}`}`
   })
-  return { read, data: `data: { ...data, ${entries.join(', ')} }` }
+  return `data: { ...data, ${entries.join(', ')} }`
 }
 
 /**
- * How the handler reads the key from the path, each field under its own name,
- * `const { orderId, sku } = c.req.valid('param')`, and the `where` that finds the row by it. A key
- * field named as a variable of the handler is taken under another, `{ data: dataKey }`.
+ * The request as one `data`: what the handler validated, the path and the body spread into one
+ * object where it takes both, `const data = { ...c.req.valid('param'), ...c.req.valid('json') }`.
+ * The body of an update holds no key field (and Zod drops one sent anyway), so the key in `data`
+ * is always the one of the path.
  */
-function readKey(keys: readonly DMMF.Field[]) {
-  const taken = new Set(['c', 'prisma', 'data', 'row', 'rows', 'count'])
-  const names = keys.map((key) => {
-    const name = taken.has(key.name) ? `${key.name}Key` : key.name
-    return name === key.name ? name : `${key.name}: ${name}`
-  })
-  return {
-    read: `const { ${names.join(', ')} } = c.req.valid('param')`,
-    where: `{ ${names.join(', ')} }`,
-  }
+function readData(targets: readonly ('param' | 'json')[]) {
+  const reads = targets.map((target) => `c.req.valid('${target}')`)
+  return `const data = ${reads.length === 1 ? reads.join('') : `{ ${reads.map((read) => `...${read}`).join(', ')} }`}`
+}
+
+/** The `where` that finds the row by the key fields `data` holds: `{ orderId: data.orderId, sku: data.sku }`. */
+function keyWhere(keys: readonly DMMF.Field[]) {
+  return `{ ${keys.map((key) => `${key.name}: data.${key.name}`).join(', ')} }`
 }
 
 /** The model's delegate on the client: `prisma.orderItem`. */
@@ -298,8 +294,8 @@ function delegate(model: DMMF.Model) {
 export function makeHandlerBodies(model: DMMF.Model): readonly (readonly [string, string])[] {
   const ids = operationIds(model)
   const db = delegate(model)
-  const create = readBody(model, 'create')
-  const update = readBody(model, 'update')
+  const create = prismaData(model, 'create')
+  const update = prismaData(model, 'update')
   const collection = [
     [
       ids.list,
@@ -308,21 +304,20 @@ export function makeHandlerBodies(model: DMMF.Model): readonly (readonly [string
     [
       ids.create,
       [
-        create.read,
-        `const row = await ${db}.create({ ${create.data} })`,
+        readData(['json']),
+        `const row = await ${db}.create({ ${create} })`,
         `return c.json(${encodeRow(model, 'row')}, 201)`,
       ],
     ],
   ] as const
   const keys = keyFields(model)
   if (keys.length === 0) return collection.map(([id, lines]) => [id, lines.join('\n')] as const)
-  const key = readKey(keys)
-  const where = key.where
+  const where = keyWhere(keys)
   const item = [
     [
       ids.get,
       [
-        key.read,
+        readData(['param']),
         `const row = await ${db}.findFirst({ where: ${where} })`,
         'if (row === null) return c.body(null, 404)',
         `return c.json(${encodeRow(model, 'row')}, 200)`,
@@ -331,9 +326,8 @@ export function makeHandlerBodies(model: DMMF.Model): readonly (readonly [string
     [
       ids.update,
       [
-        key.read,
-        update.read,
-        `const { count } = await ${db}.updateMany({ where: ${where}, ${update.data} })`,
+        readData(['param', 'json']),
+        `const { count } = await ${db}.updateMany({ where: ${where}, ${update} })`,
         'if (count === 0) return c.body(null, 404)',
         `const row = await ${db}.findFirstOrThrow({ where: ${where} })`,
         `return c.json(${encodeRow(model, 'row')}, 200)`,
@@ -342,7 +336,7 @@ export function makeHandlerBodies(model: DMMF.Model): readonly (readonly [string
     [
       ids.delete,
       [
-        key.read,
+        readData(['param']),
         `const { count } = await ${db}.deleteMany({ where: ${where} })`,
         'if (count === 0) return c.body(null, 404)',
         'return c.body(null, 204)',

@@ -167,15 +167,15 @@ describe('handlerBodies', () => {
   it('finds a row by its key, answering 404 where none has it', () => {
     expect(bodies.get('getUser')).toBe(
       [
-        "const { id } = c.req.valid('param')",
-        'const row = await prisma.user.findFirst({ where: { id } })',
+        "const data = c.req.valid('param')",
+        'const row = await prisma.user.findFirst({ where: { id: data.id } })',
         'if (row === null) return c.body(null, 404)',
         'return c.json(row, 200)',
       ].join('\n'),
     )
-    expect(bodies.get('deleteOrderItem')).toContain("const { orderId, sku } = c.req.valid('param')")
+    expect(bodies.get('deleteOrderItem')).toContain("const data = c.req.valid('param')")
     expect(bodies.get('deleteOrderItem')).toContain(
-      'await prisma.orderItem.deleteMany({ where: { orderId, sku } })',
+      'await prisma.orderItem.deleteMany({ where: { orderId: data.orderId, sku: data.sku } })',
     )
   })
 
@@ -200,11 +200,11 @@ describe('handlerBodies', () => {
       ].join('\n'),
     )
     expect(bodies.get('updateUser')).toContain(
-      "const { id } = c.req.valid('param')\nconst data = c.req.valid('json')\nconst { count } = await prisma.user.updateMany({ where: { id }, data })",
+      "const data = { ...c.req.valid('param'), ...c.req.valid('json') }\nconst { count } = await prisma.user.updateMany({ where: { id: data.id }, data })",
     )
   })
 
-  it('takes a key field named as a variable of the handler under another name', () => {
+  it('reads a key field named as a variable of the handler from data like any other', () => {
     const blob = makeModel({
       name: 'Blob',
       fields: [
@@ -213,8 +213,8 @@ describe('handlerBodies', () => {
       ],
     })
     const update = new Map(handlerBodies({ ...DATAMODEL, models: [blob] })).get('updateBlob')
-    expect(update).toContain("const { data: dataKey } = c.req.valid('param')")
-    expect(update).toContain('updateMany({ where: { data: dataKey }, data })')
+    expect(update).toContain("const data = { ...c.req.valid('param'), ...c.req.valid('json') }")
+    expect(update).toContain('updateMany({ where: { data: data.data }, data })')
   })
 
   it('has only the list and the create for a model without a key', () => {

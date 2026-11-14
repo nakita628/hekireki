@@ -22,8 +22,10 @@ export const postFollowsRouteHandler: RouteHandler<typeof postFollowsRoute> = as
 export const getFollowsFollowerIdFollowingIdRouteHandler: RouteHandler<
   typeof getFollowsFollowerIdFollowingIdRoute
 > = async (c) => {
-  const { followerId, followingId } = c.req.valid('param')
-  const row = await prisma.follow.findFirst({ where: { followerId, followingId } })
+  const data = c.req.valid('param')
+  const row = await prisma.follow.findFirst({
+    where: { followerId: data.followerId, followingId: data.followingId },
+  })
   if (row === null) return c.body(null, 404)
   return c.json(row, 200)
 }
@@ -31,19 +33,25 @@ export const getFollowsFollowerIdFollowingIdRouteHandler: RouteHandler<
 export const patchFollowsFollowerIdFollowingIdRouteHandler: RouteHandler<
   typeof patchFollowsFollowerIdFollowingIdRoute
 > = async (c) => {
-  const { followerId, followingId } = c.req.valid('param')
-  const data = c.req.valid('json')
-  const { count } = await prisma.follow.updateMany({ where: { followerId, followingId }, data })
+  const data = { ...c.req.valid('param'), ...c.req.valid('json') }
+  const { count } = await prisma.follow.updateMany({
+    where: { followerId: data.followerId, followingId: data.followingId },
+    data,
+  })
   if (count === 0) return c.body(null, 404)
-  const row = await prisma.follow.findFirstOrThrow({ where: { followerId, followingId } })
+  const row = await prisma.follow.findFirstOrThrow({
+    where: { followerId: data.followerId, followingId: data.followingId },
+  })
   return c.json(row, 200)
 }
 
 export const deleteFollowsFollowerIdFollowingIdRouteHandler: RouteHandler<
   typeof deleteFollowsFollowerIdFollowingIdRoute
 > = async (c) => {
-  const { followerId, followingId } = c.req.valid('param')
-  const { count } = await prisma.follow.deleteMany({ where: { followerId, followingId } })
+  const data = c.req.valid('param')
+  const { count } = await prisma.follow.deleteMany({
+    where: { followerId: data.followerId, followingId: data.followingId },
+  })
   if (count === 0) return c.body(null, 404)
   return c.body(null, 204)
 }
