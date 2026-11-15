@@ -6,9 +6,7 @@ export {
   diagramConstraints,
   diagramFields,
   fieldDetail,
-  firstLine,
   fieldRowHeight,
-  enumHeight,
   nodeHeight,
   uniqueColumns,
 } from '../../../../diagram/layout.js'

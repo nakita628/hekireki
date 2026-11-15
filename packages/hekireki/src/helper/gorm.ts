@@ -407,7 +407,7 @@ export function goFieldName(name: string) {
  * other is numbered (`CreatedAt1`), its `column:` tag still naming its own column. Scalars are
  * named before relations, so a relation never moves a column's field.
  */
-export function goFieldNames(model: DMMF.Model) {
+function goFieldNames(model: DMMF.Model) {
   return allocate(
     [
       ...model.fields.filter((f) => f.kind !== 'object'),

@@ -24,13 +24,14 @@ Lint, tests, and coverage always run **from the repo root**:
 
 ```bash
 pnpm check            # format, lint, type checks, then `pnpm lint`
-pnpm lint             # the six linters below in one go — what the Lint workflow runs
+pnpm lint             # the seven linters below in one go — what the Lint workflow runs
 pnpm lint:md          # markdownlint over the repository's Markdown
 pnpm lint:text        # textlint: the spelling of product names (Prisma, PostgreSQL, Node.js, ...)
 pnpm lint:spell       # cspell, British English plus .cspell/words.txt; add a real word there, fix a typo
 pnpm lint:links       # every link from the Markdown to a file of the repository finds the file
 pnpm lint:actions     # actionlint (syntax) and, when installed, zizmor (security) over .github/workflows
 pnpm lint:typespec    # the @typespec/* packages resolve to one shared version in pnpm-lock.yaml
+pnpm lint:knip        # Knip: no file, export or dependency that nothing uses (knip.ts names the exceptions)
 pnpm test             # unit tests (the `unit` project — vitest via vite-plus)
 pnpm coverage         # unit tests with coverage
 pnpm lang             # build + language checks (the `lang` project)

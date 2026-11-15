@@ -12,7 +12,7 @@ import { Client } from 'pg'
 // (or MariaDB) and CockroachDB need HEKIREKI_SEED_PG, HEKIREKI_SEED_MYSQL and
 // HEKIREKI_SEED_COCKROACH, and are skipped without them.
 
-export const root = resolve(import.meta.dirname, '..', '..')
+const root = resolve(import.meta.dirname, '..', '..')
 const pkg = join(root, 'packages', 'hekireki')
 export const cli = join(pkg, 'dist', 'bin', 'hekireki.js')
 export const prisma = join(pkg, 'node_modules', '.bin', 'prisma')
@@ -30,7 +30,7 @@ export function workspace(prefix: string) {
 
 export type Row = Readonly<Record<string, unknown>>
 
-export function isRow(value: unknown): value is Row {
+function isRow(value: unknown): value is Row {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -63,7 +63,7 @@ export type Target = {
   readonly drop: (url: string, name: string) => Promise<void>
 }
 
-export function databaseUrl(url: string, name: string) {
+function databaseUrl(url: string, name: string) {
   const isolated = new URL(url)
   isolated.pathname = `/${name}`
   return isolated.toString()
@@ -78,14 +78,14 @@ export function statementsOf(sql: string) {
 }
 
 /** The session settings Prisma's schema engine sends when it connects to CockroachDB. */
-export const PRISMA_COCKROACH_SESSION = [
+const PRISMA_COCKROACH_SESSION = [
   'SET enable_implicit_transaction_for_batch_statements = false',
   'SET use_declarative_schema_changer = off',
   'SET enable_experimental_alter_column_type_general = true',
 ]
 
 /** CockroachDB: a database of that name, made if it is not there, on a session like Prisma's. */
-export async function cockroach(url: string, name: string) {
+async function cockroach(url: string, name: string) {
   const admin = new Client({ connectionString: url })
   await admin.connect()
   try {

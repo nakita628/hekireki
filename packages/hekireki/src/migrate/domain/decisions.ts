@@ -172,7 +172,7 @@ type FieldFixes = NonNullable<ModelFixes['fields']>[string]
  * @param decision - one decision
  * @returns the model and field the fix is made on; an empty field when the decision names none
  */
-export function fixTarget(decision: z.infer<typeof Decision>) {
+function fixTarget(decision: z.infer<typeof Decision>) {
   const value = decision.value ?? ''
   if (decision.kind === 'column-dropped' && decision.choice === 'move') {
     const [model = '', field = ''] = value.split('.').map((part) => part.trim())

@@ -28,7 +28,7 @@ const SCALAR: { readonly [type: string]: OpenApiSchema & { readonly type?: strin
 }
 
 /** The fields Prisma Client reads and writes as values: scalars and enums, not relations. */
-export function valueFields(model: DMMF.Model) {
+function valueFields(model: DMMF.Model) {
   return model.fields.filter((f) => f.kind === 'scalar' || f.kind === 'enum')
 }
 
@@ -57,7 +57,7 @@ function isGenerated(field: DMMF.Field) {
 }
 
 /** The value fields an answer carries: all but `@api.hidden`. */
-export function answeredFields(model: DMMF.Model) {
+function answeredFields(model: DMMF.Model) {
   return valueFields(model).filter((f) => apiAccess(f.documentation) !== 'hidden')
 }
 
@@ -66,7 +66,7 @@ export function answeredFields(model: DMMF.Model) {
  * the server fills (`@updatedAt`, `@default(autoincrement())`, `now()`, `uuid()`, …). Zod drops a
  * field the schema does not have, so a request cannot set one of them.
  */
-export function writableFields(model: DMMF.Model) {
+function writableFields(model: DMMF.Model) {
   return valueFields(model).filter(
     (f) => apiAccess(f.documentation) === undefined && !isGenerated(f),
   )
@@ -85,10 +85,7 @@ function itemSchema(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]): Op
  * A field as Prisma Client has it: a list as an array (never null, an empty list is `[]`), an
  * optional field with `null` beside its type, and the prose of its `///` comment as `description`.
  */
-export function makeFieldSchema(
-  field: DMMF.Field,
-  enums: readonly DMMF.DatamodelEnum[],
-): OpenApiSchema {
+function makeFieldSchema(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]): OpenApiSchema {
   const item = itemSchema(field, enums)
   const shape: OpenApiSchema = field.isList ? { type: 'array', items: item } : item
   const description = stripAnnotations(field.documentation)
@@ -101,7 +98,7 @@ export function makeFieldSchema(
 }
 
 /** The fields a row is addressed by: `@id`, or `@@id`, or the first `@@unique`; none for a model without. */
-export function keyFields(model: DMMF.Model): readonly DMMF.Field[] {
+function keyFields(model: DMMF.Model): readonly DMMF.Field[] {
   const id = model.fields.filter((f) => f.isId)
   if (id.length > 0) return id
   const names = model.primaryKey?.fields ?? model.uniqueFields[0] ?? []
@@ -153,7 +150,7 @@ export function makeInputSchema(
 }
 
 /** The operations of a model, named for it: `listOrderItems`, `createOrderItem`, … */
-export function operationIds(model: DMMF.Model) {
+function operationIds(model: DMMF.Model) {
   return {
     list: `list${pluralize(model.name)}`,
     create: `create${model.name}`,
