@@ -9,13 +9,18 @@ import type {
 import { prisma } from '../prisma'
 
 export const getAuditLogsRouteHandler: RouteHandler<typeof getAuditLogsRoute> = async (c) => {
-  const rows = await prisma.auditLog.findMany()
+  const { limit, offset } = c.req.valid('query')
+  const [rows, total] = await Promise.all([
+    prisma.auditLog.findMany({ take: limit, skip: offset, orderBy: [{ id: 'asc' }] }),
+    prisma.auditLog.count(),
+  ])
   return c.json(
     rows.map((row) => ({
       ...row,
       signature: row.signature === null ? null : Buffer.from(row.signature).toString('base64'),
     })),
     200,
+    { 'X-Total-Count': String(total) },
   )
 }
 

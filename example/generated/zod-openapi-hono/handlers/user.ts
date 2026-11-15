@@ -9,8 +9,12 @@ import type {
 import { prisma } from '../prisma'
 
 export const getUsersRouteHandler: RouteHandler<typeof getUsersRoute> = async (c) => {
-  const rows = await prisma.user.findMany()
-  return c.json(rows, 200)
+  const { limit, offset } = c.req.valid('query')
+  const [rows, total] = await Promise.all([
+    prisma.user.findMany({ take: limit, skip: offset, orderBy: [{ id: 'asc' }] }),
+    prisma.user.count(),
+  ])
+  return c.json(rows, 200, { 'X-Total-Count': String(total) })
 }
 
 export const postUsersRouteHandler: RouteHandler<typeof postUsersRoute> = async (c) => {

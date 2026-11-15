@@ -113,9 +113,9 @@ take `///` lines of their own, described below.
 
 ### API
 
-| Provider                    | Writes                                     | Options                                                   |
-| --------------------------- | ------------------------------------------ | --------------------------------------------------------- |
-| `hekireki-zod-openapi-hono` | Hono app of the CRUD (`@hono/zod-openapi`) | `prisma` (`./prisma`), `auth` (`jwt`), `title`, `version` |
+| Provider                    | Writes                                     | Options                                                                                |
+| --------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `hekireki-zod-openapi-hono` | Hono app of the CRUD (`@hono/zod-openapi`) | `prisma` (`./prisma`), `auth` (`jwt`, `jwks`, `cloudflare-access`), `title`, `version` |
 
 `hekireki-zod-openapi-hono` writes, in the directory `output` names, `openapi.yaml`: the CRUD of
 each model, `GET` and `POST /users` and `GET`, `PATCH` and `DELETE /users/{id}`, with the rows as
@@ -138,12 +138,75 @@ export const prisma = new PrismaClient({
 })
 ```
 
-With `auth = "jwt"`, every operation asks for a bearer JWT (`bearerAuth` in the document, and a
-401 among its answers), and the app entry runs `auth` on every model's paths,
-`app.use('/users/*', auth)`. `auth.ts`, written when it is not there and left as it is after, lets
-a request through with a JWT signed with HS256 by the secret `JWT_SECRET`, read from the runtime's
-environment; a handler reads the token's payload with `c.get('jwtPayload')`. A guard of a model's
-paths that is not in the app entry is added again when the generator runs.
+`GET /users` answers a page: `limit` rows (20 by default, at most 100) after `offset`, in the
+order of the key, and the number of rows in all in the `X-Total-Count` header. No request reads a
+whole table.
+
+A `POST` or a `PATCH` takes only the fields a client may write. A field the server fills is left
+out: `@updatedAt`, and a `@default` the database or Prisma makes (`autoincrement()`, `now()`,
+`uuid()`, `cuid()`, `ulid()`, `nanoid()`, `dbgenerated()`); a plain `@default("user")` is not. A
+`///` line keeps any other field from the API: `@api.readonly` answers it and never takes it,
+`@api.hidden` neither answers nor takes it, and every query omits it. Zod drops a field its schema
+does not have, so a request that sends one changes nothing.
+
+```prisma
+model User {
+  id           Int      @id @default(autoincrement()) // answered, never taken
+  email        String   @unique
+  /// @api.readonly
+  role         String   @default("user")              // answered, never taken
+  /// @api.hidden
+  passwordHash String                                  // neither answered nor taken
+  createdAt    DateTime @default(now())                // answered, never taken
+}
+```
+
+A required field the API never takes and that has no `@default` (`passwordHash` above) leaves
+`POST /users` unable to make a row: such a model is created by a handler of your own.
+
+With `auth`, every operation asks for a token (`bearerAuth` in the document, `cloudflareAccess`
+for `cloudflare-access`, and a 401 and a 403 among its answers), and the app entry runs `auth` on every model's paths, `app.use('/users/*', auth)`.
+`auth.ts`, written when it is not there and left as it is after, checks the token; a handler reads
+its payload with `c.get('jwtPayload')`. A guard of a model's paths that is not in the app entry is
+added again when the generator runs.
+
+| `auth`              | The token                                                                                            | Environment                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `jwks`              | Signed by an issuer with a key it publishes (RS256, PS256, ES256, EdDSA)                             | `JWKS_URI`, `JWT_ISSUER`, `JWT_AUDIENCE`   |
+| `jwt`               | Signed with HS256 by a secret the app shares with the issuer                                         | `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE` |
+| `cloudflare-access` | Put in `Cf-Access-Jwt-Assertion` by Cloudflare Access, signed with RS256 by a key the team publishes | `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`   |
+
+Whatever the kind, a token passes only with the `iss` and `aud` named, and with an `exp`: Hono checks `exp`
+only when a token has it, so `auth.ts` refuses one without it, which would never expire. A missing
+variable fails every request with 500 rather than let one through.
+
+With `jwt` and `jwks`, the API writes every model, so a valid token also has to hold the `admin`
+role, in its `role` claim (a string or an array of strings), or it is answered 403. `REQUIRED_ROLES` and `ROLE_CLAIM` in
+`auth.ts` say which roles and which claim (an identity provider may put roles under a claim of its
+own, such as `https://example.com/roles`); an empty `REQUIRED_ROLES` lets any valid token through.
+
+`jwks` is safer than `jwt`: the app holds no key that signs a token, and the issuer (an identity
+provider such as Auth0, Clerk or Okta) rotates and revokes them. `JWKS_URI` is https
+(http only on `localhost`); the keys are cached for ten minutes and fetched again for a `kid` the
+cache lacks, at most once a minute.
+
+`cloudflare-access` is for an app behind
+[Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/), on Workers
+or behind a Cloudflare Tunnel. `CF_ACCESS_TEAM_DOMAIN` is the team domain
+(`https://<team>.cloudflareaccess.com`), the token's `iss`, and `CF_ACCESS_AUD` the application's
+Application Audience (AUD) tag. The keys come from `<team domain>/cdn-cgi/access/certs`, cached as
+with `jwks`. Access's token carries no role, since its policy decides who passes, so
+`REQUIRED_ROLES` starts empty there. The signature is checked all the same, so a request that
+reaches the app around Access (its `workers.dev` URL, the origin's own address) is refused. The
+document names the header (`cloudflareAccess`) rather than a bearer token.
+
+With `jwt`, `JWT_SECRET` is at least 32 bytes (`openssl rand -base64 48`), shared with nothing but
+the issuer, and a token lives at most an hour from its `iat` (`MAX_TOKEN_LIFETIME_SECONDS` in
+`auth.ts`). A token cannot be taken back before its `exp`; only a new secret ends every token.
+
+An `auth.ts` written by a release before 0.52.0 lets through a token without `exp`, and does not
+check `iss`, `aud` or a role. Delete it and run the generator to have the current one, then set the
+variables above.
 
 A handler that has a body is kept when the generator runs again, as Hono Takibi keeps it, so a
 handler changed by hand stays as it is; only an empty one is filled. A `BigInt` is answered as a

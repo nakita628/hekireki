@@ -9,9 +9,33 @@ paths:
         - User
       summary: List users
       operationId: listUsers
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "How many users to answer, at most 100."
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: "How many users to skip, in the order of the key."
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
-          description: The users.
+          description: "The users, at most `limit` of them after `offset`."
+          headers:
+            X-Total-Count:
+              description: How many users there are in all.
+              schema:
+                type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -20,6 +44,8 @@ paths:
                   $ref: "#/components/schemas/User"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -42,6 +68,8 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/users/{id}":
@@ -65,6 +93,8 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No user has this key.
       security:
@@ -89,6 +119,8 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No user has this key.
       security:
@@ -103,6 +135,8 @@ paths:
           description: The user is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No user has this key.
       security:
@@ -113,9 +147,33 @@ paths:
         - Profile
       summary: List profiles
       operationId: listProfiles
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "How many profiles to answer, at most 100."
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: "How many profiles to skip, in the order of the key."
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
-          description: The profiles.
+          description: "The profiles, at most `limit` of them after `offset`."
+          headers:
+            X-Total-Count:
+              description: How many profiles there are in all.
+              schema:
+                type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -124,6 +182,8 @@ paths:
                   $ref: "#/components/schemas/Profile"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -146,6 +206,8 @@ paths:
                 $ref: "#/components/schemas/Profile"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/profiles/{id}":
@@ -169,6 +231,8 @@ paths:
                 $ref: "#/components/schemas/Profile"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No profile has this key.
       security:
@@ -193,6 +257,8 @@ paths:
                 $ref: "#/components/schemas/Profile"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No profile has this key.
       security:
@@ -207,6 +273,8 @@ paths:
           description: The profile is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No profile has this key.
       security:
@@ -217,9 +285,33 @@ paths:
         - Post
       summary: List posts
       operationId: listPosts
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "How many posts to answer, at most 100."
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: "How many posts to skip, in the order of the key."
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
-          description: The posts.
+          description: "The posts, at most `limit` of them after `offset`."
+          headers:
+            X-Total-Count:
+              description: How many posts there are in all.
+              schema:
+                type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -228,6 +320,8 @@ paths:
                   $ref: "#/components/schemas/Post"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -250,6 +344,8 @@ paths:
                 $ref: "#/components/schemas/Post"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/posts/{id}":
@@ -273,6 +369,8 @@ paths:
                 $ref: "#/components/schemas/Post"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No post has this key.
       security:
@@ -297,6 +395,8 @@ paths:
                 $ref: "#/components/schemas/Post"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No post has this key.
       security:
@@ -311,6 +411,8 @@ paths:
           description: The post is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No post has this key.
       security:
@@ -321,9 +423,33 @@ paths:
         - Tag
       summary: List tags
       operationId: listTags
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "How many tags to answer, at most 100."
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: "How many tags to skip, in the order of the key."
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
-          description: The tags.
+          description: "The tags, at most `limit` of them after `offset`."
+          headers:
+            X-Total-Count:
+              description: How many tags there are in all.
+              schema:
+                type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -332,6 +458,8 @@ paths:
                   $ref: "#/components/schemas/Tag"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -354,6 +482,8 @@ paths:
                 $ref: "#/components/schemas/Tag"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/tags/{id}":
@@ -377,6 +507,8 @@ paths:
                 $ref: "#/components/schemas/Tag"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No tag has this key.
       security:
@@ -401,6 +533,8 @@ paths:
                 $ref: "#/components/schemas/Tag"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No tag has this key.
       security:
@@ -415,6 +549,8 @@ paths:
           description: The tag is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No tag has this key.
       security:
@@ -425,9 +561,33 @@ paths:
         - Comment
       summary: List comments
       operationId: listComments
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "How many comments to answer, at most 100."
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: "How many comments to skip, in the order of the key."
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
-          description: The comments.
+          description: "The comments, at most `limit` of them after `offset`."
+          headers:
+            X-Total-Count:
+              description: How many comments there are in all.
+              schema:
+                type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -436,6 +596,8 @@ paths:
                   $ref: "#/components/schemas/Comment"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -458,6 +620,8 @@ paths:
                 $ref: "#/components/schemas/Comment"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/comments/{id}":
@@ -481,6 +645,8 @@ paths:
                 $ref: "#/components/schemas/Comment"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No comment has this key.
       security:
@@ -505,6 +671,8 @@ paths:
                 $ref: "#/components/schemas/Comment"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No comment has this key.
       security:
@@ -519,6 +687,8 @@ paths:
           description: The comment is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No comment has this key.
       security:
@@ -529,9 +699,33 @@ paths:
         - Follow
       summary: List follows
       operationId: listFollows
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "How many follows to answer, at most 100."
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: "How many follows to skip, in the order of the key."
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
-          description: The follows.
+          description: "The follows, at most `limit` of them after `offset`."
+          headers:
+            X-Total-Count:
+              description: How many follows there are in all.
+              schema:
+                type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -540,6 +734,8 @@ paths:
                   $ref: "#/components/schemas/Follow"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -562,6 +758,8 @@ paths:
                 $ref: "#/components/schemas/Follow"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/follows/{followerId}/{followingId}":
@@ -590,6 +788,8 @@ paths:
                 $ref: "#/components/schemas/Follow"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No follow has this key.
       security:
@@ -614,6 +814,8 @@ paths:
                 $ref: "#/components/schemas/Follow"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No follow has this key.
       security:
@@ -628,6 +830,8 @@ paths:
           description: The follow is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No follow has this key.
       security:
@@ -638,9 +842,33 @@ paths:
         - Category
       summary: List categories
       operationId: listCategories
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "How many categories to answer, at most 100."
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: "How many categories to skip, in the order of the key."
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
-          description: The categories.
+          description: "The categories, at most `limit` of them after `offset`."
+          headers:
+            X-Total-Count:
+              description: How many categories there are in all.
+              schema:
+                type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -649,6 +877,8 @@ paths:
                   $ref: "#/components/schemas/Category"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -671,6 +901,8 @@ paths:
                 $ref: "#/components/schemas/Category"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/categories/{id}":
@@ -694,6 +926,8 @@ paths:
                 $ref: "#/components/schemas/Category"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No category has this key.
       security:
@@ -718,6 +952,8 @@ paths:
                 $ref: "#/components/schemas/Category"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No category has this key.
       security:
@@ -732,6 +968,8 @@ paths:
           description: The category is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No category has this key.
       security:
@@ -742,9 +980,33 @@ paths:
         - Order
       summary: List orders
       operationId: listOrders
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "How many orders to answer, at most 100."
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: "How many orders to skip, in the order of the key."
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
-          description: The orders.
+          description: "The orders, at most `limit` of them after `offset`."
+          headers:
+            X-Total-Count:
+              description: How many orders there are in all.
+              schema:
+                type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -753,6 +1015,8 @@ paths:
                   $ref: "#/components/schemas/Order"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -775,6 +1039,8 @@ paths:
                 $ref: "#/components/schemas/Order"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/orders/{id}":
@@ -798,6 +1064,8 @@ paths:
                 $ref: "#/components/schemas/Order"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No order has this key.
       security:
@@ -822,6 +1090,8 @@ paths:
                 $ref: "#/components/schemas/Order"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No order has this key.
       security:
@@ -836,6 +1106,8 @@ paths:
           description: The order is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No order has this key.
       security:
@@ -846,9 +1118,33 @@ paths:
         - OrderItem
       summary: List order items
       operationId: listOrderItems
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "How many order items to answer, at most 100."
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: "How many order items to skip, in the order of the key."
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
-          description: The order items.
+          description: "The order items, at most `limit` of them after `offset`."
+          headers:
+            X-Total-Count:
+              description: How many order items there are in all.
+              schema:
+                type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -857,6 +1153,8 @@ paths:
                   $ref: "#/components/schemas/OrderItem"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -879,6 +1177,8 @@ paths:
                 $ref: "#/components/schemas/OrderItem"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/order-items/{id}":
@@ -902,6 +1202,8 @@ paths:
                 $ref: "#/components/schemas/OrderItem"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No order item has this key.
       security:
@@ -926,6 +1228,8 @@ paths:
                 $ref: "#/components/schemas/OrderItem"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No order item has this key.
       security:
@@ -940,6 +1244,8 @@ paths:
           description: The order item is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No order item has this key.
       security:
@@ -950,9 +1256,33 @@ paths:
         - AuditLog
       summary: List audit logs
       operationId: listAuditLogs
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "How many audit logs to answer, at most 100."
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: "How many audit logs to skip, in the order of the key."
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
-          description: The audit logs.
+          description: "The audit logs, at most `limit` of them after `offset`."
+          headers:
+            X-Total-Count:
+              description: How many audit logs there are in all.
+              schema:
+                type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -961,6 +1291,8 @@ paths:
                   $ref: "#/components/schemas/AuditLog"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -983,6 +1315,8 @@ paths:
                 $ref: "#/components/schemas/AuditLog"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/audit-logs/{id}":
@@ -1006,6 +1340,8 @@ paths:
                 $ref: "#/components/schemas/AuditLog"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No audit log has this key.
       security:
@@ -1030,6 +1366,8 @@ paths:
                 $ref: "#/components/schemas/AuditLog"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No audit log has this key.
       security:
@@ -1044,6 +1382,8 @@ paths:
           description: The audit log is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No audit log has this key.
       security:
@@ -1054,9 +1394,33 @@ paths:
         - Actor
       summary: List actors
       operationId: listActors
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "How many actors to answer, at most 100."
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: "How many actors to skip, in the order of the key."
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
-          description: The actors.
+          description: "The actors, at most `limit` of them after `offset`."
+          headers:
+            X-Total-Count:
+              description: How many actors there are in all.
+              schema:
+                type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -1065,6 +1429,8 @@ paths:
                   $ref: "#/components/schemas/Actor"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -1087,6 +1453,8 @@ paths:
                 $ref: "#/components/schemas/Actor"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/actors/{id}":
@@ -1110,6 +1478,8 @@ paths:
                 $ref: "#/components/schemas/Actor"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No actor has this key.
       security:
@@ -1134,6 +1504,8 @@ paths:
                 $ref: "#/components/schemas/Actor"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No actor has this key.
       security:
@@ -1148,6 +1520,8 @@ paths:
           description: The actor is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No actor has this key.
       security:
@@ -1158,9 +1532,33 @@ paths:
         - Film
       summary: List films
       operationId: listFilms
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "How many films to answer, at most 100."
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: "How many films to skip, in the order of the key."
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
-          description: The films.
+          description: "The films, at most `limit` of them after `offset`."
+          headers:
+            X-Total-Count:
+              description: How many films there are in all.
+              schema:
+                type: integer
+                minimum: 0
           content:
             application/json:
               schema:
@@ -1169,6 +1567,8 @@ paths:
                   $ref: "#/components/schemas/Film"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
     post:
@@ -1191,6 +1591,8 @@ paths:
                 $ref: "#/components/schemas/Film"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
       security:
         - bearerAuth: []
   "/films/{id}":
@@ -1214,6 +1616,8 @@ paths:
                 $ref: "#/components/schemas/Film"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No film has this key.
       security:
@@ -1238,6 +1642,8 @@ paths:
                 $ref: "#/components/schemas/Film"
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No film has this key.
       security:
@@ -1252,6 +1658,8 @@ paths:
           description: The film is deleted.
         "401":
           description: No valid bearer token.
+        "403":
+          description: The token holds none of the roles the API asks for.
         "404":
           description: No film has this key.
       security:
@@ -1301,9 +1709,6 @@ components:
     UserCreate:
       type: object
       properties:
-        id:
-          type: string
-          description: Primary key (UUIDv7)
         email:
           type: string
           description: Unique login email
@@ -1320,12 +1725,6 @@ components:
           type: array
           items:
             type: string
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
       required:
         - email
         - name
@@ -1348,12 +1747,6 @@ components:
           type: array
           items:
             type: string
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
     Profile:
       type: object
       properties:
@@ -1396,8 +1789,6 @@ components:
     ProfileCreate:
       type: object
       properties:
-        id:
-          type: string
         userId:
           type: string
         bio:
@@ -1482,9 +1873,6 @@ components:
     PostCreate:
       type: object
       properties:
-        id:
-          type: string
-          description: Primary key
         title:
           type: string
           description: Article title
@@ -1502,9 +1890,6 @@ components:
           type: integer
         authorId:
           type: string
-        createdAt:
-          type: string
-          format: date-time
       required:
         - title
         - authorId
@@ -1528,9 +1913,6 @@ components:
           type: integer
         authorId:
           type: string
-        createdAt:
-          type: string
-          format: date-time
     Tag:
       type: object
       properties:
@@ -1545,8 +1927,6 @@ components:
     TagCreate:
       type: object
       properties:
-        id:
-          type: integer
         label:
           type: string
       required:
@@ -1582,17 +1962,12 @@ components:
     CommentCreate:
       type: object
       properties:
-        id:
-          type: integer
         body:
           type: string
         postId:
           type: string
         authorId:
           type: [string, "null"]
-        createdAt:
-          type: string
-          format: date-time
       required:
         - body
         - postId
@@ -1605,9 +1980,6 @@ components:
           type: string
         authorId:
           type: [string, "null"]
-        createdAt:
-          type: string
-          format: date-time
     Follow:
       type: object
       properties:
@@ -1630,18 +2002,12 @@ components:
           type: string
         followingId:
           type: string
-        since:
-          type: string
-          format: date-time
       required:
         - followerId
         - followingId
     FollowUpdate:
       type: object
-      properties:
-        since:
-          type: string
-          format: date-time
+      properties: {}
     Category:
       type: object
       properties:
@@ -1659,8 +2025,6 @@ components:
     CategoryCreate:
       type: object
       properties:
-        id:
-          type: integer
         name:
           type: string
         parentId:
@@ -1695,15 +2059,10 @@ components:
     OrderCreate:
       type: object
       properties:
-        id:
-          type: integer
         userId:
           type: string
         total:
           type: string
-        placedAt:
-          type: string
-          format: date-time
       required:
         - userId
         - total
@@ -1714,9 +2073,6 @@ components:
           type: string
         total:
           type: string
-        placedAt:
-          type: string
-          format: date-time
     OrderItem:
       type: object
       properties:
@@ -1740,8 +2096,6 @@ components:
     OrderItemCreate:
       type: object
       properties:
-        id:
-          type: integer
         orderId:
           type: integer
         sku:
@@ -1789,17 +2143,12 @@ components:
     AuditLogCreate:
       type: object
       properties:
-        id:
-          type: string
         action:
           type: string
         payload: {}
         signature:
           type: [string, "null"]
           format: byte
-        loggedAt:
-          type: string
-          format: date-time
       required:
         - action
     AuditLogUpdate:
@@ -1811,9 +2160,6 @@ components:
         signature:
           type: [string, "null"]
           format: byte
-        loggedAt:
-          type: string
-          format: date-time
     Actor:
       type: object
       properties:
@@ -1830,8 +2176,6 @@ components:
     ActorCreate:
       type: object
       properties:
-        id:
-          type: integer
         name:
           type: string
       required:
@@ -1854,8 +2198,6 @@ components:
     FilmCreate:
       type: object
       properties:
-        id:
-          type: integer
         title:
           type: string
       required:

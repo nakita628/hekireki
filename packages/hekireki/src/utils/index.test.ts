@@ -155,6 +155,10 @@ describe('utils', () => {
   })
 
   describe('stripAnnotations', () => {
+    it('drops an @api. line as any other annotation', () => {
+      expect(stripAnnotations('The bcrypt hash.\n@api.hidden')).toBe('The bcrypt hash.')
+    })
+
     it('drops an @ar. line as any other annotation', () => {
       expect(
         stripAnnotations('The title.\n@ar.length(maximum: 140, message: { ja: "x" })\nMore.'),

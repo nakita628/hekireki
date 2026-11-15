@@ -9,13 +9,18 @@ import type {
 import { prisma } from '../prisma'
 
 export const getProfilesRouteHandler: RouteHandler<typeof getProfilesRoute> = async (c) => {
-  const rows = await prisma.profile.findMany()
+  const { limit, offset } = c.req.valid('query')
+  const [rows, total] = await Promise.all([
+    prisma.profile.findMany({ take: limit, skip: offset, orderBy: [{ id: 'asc' }] }),
+    prisma.profile.count(),
+  ])
   return c.json(
     rows.map((row) => ({
       ...row,
       avatar: row.avatar === null ? null : Buffer.from(row.avatar).toString('base64'),
     })),
     200,
+    { 'X-Total-Count': String(total) },
   )
 }
 

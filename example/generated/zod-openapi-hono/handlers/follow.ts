@@ -9,8 +9,16 @@ import type {
 import { prisma } from '../prisma'
 
 export const getFollowsRouteHandler: RouteHandler<typeof getFollowsRoute> = async (c) => {
-  const rows = await prisma.follow.findMany()
-  return c.json(rows, 200)
+  const { limit, offset } = c.req.valid('query')
+  const [rows, total] = await Promise.all([
+    prisma.follow.findMany({
+      take: limit,
+      skip: offset,
+      orderBy: [{ followerId: 'asc' }, { followingId: 'asc' }],
+    }),
+    prisma.follow.count(),
+  ])
+  return c.json(rows, 200, { 'X-Total-Count': String(total) })
 }
 
 export const postFollowsRouteHandler: RouteHandler<typeof postFollowsRoute> = async (c) => {

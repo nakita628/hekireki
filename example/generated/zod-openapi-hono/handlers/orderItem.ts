@@ -9,10 +9,15 @@ import type {
 import { prisma } from '../prisma'
 
 export const getOrderItemsRouteHandler: RouteHandler<typeof getOrderItemsRoute> = async (c) => {
-  const rows = await prisma.orderItem.findMany()
+  const { limit, offset } = c.req.valid('query')
+  const [rows, total] = await Promise.all([
+    prisma.orderItem.findMany({ take: limit, skip: offset, orderBy: [{ id: 'asc' }] }),
+    prisma.orderItem.count(),
+  ])
   return c.json(
     rows.map((row) => ({ ...row, id: Number(row.id), orderId: Number(row.orderId) })),
     200,
+    { 'X-Total-Count': String(total) },
   )
 }
 

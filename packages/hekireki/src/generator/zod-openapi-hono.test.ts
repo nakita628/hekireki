@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
+import { apiAccess } from '../helper/zod-openapi-hono.js'
 import {
   fillHandlers,
   guardedPaths,
@@ -87,7 +88,7 @@ const DATAMODEL: DMMF.Datamodel = {
   indexes: [],
 }
 
-const document = zodOpenapiHonoDocument(DATAMODEL, { title: 'API', version: '1.0.0', auth: false })
+const document = zodOpenapiHonoDocument(DATAMODEL, { title: 'API', version: '1.0.0' })
 
 describe('zodOpenapiHonoDocument', () => {
   it('writes a row as Prisma Client reads it: Prisma names, enum names, every field present', () => {
@@ -113,9 +114,49 @@ describe('zodOpenapiHonoDocument', () => {
       'role',
       'tags',
       'meta',
-      'createdAt',
     ])
     expect(document.components.schemas.UserUpdate).not.toHaveProperty('required')
+  })
+
+  it('takes no field the server fills: a generated @default or @updatedAt', () => {
+    // id is @default(uuid()), createdAt is @updatedAt; role's @default("USER") is a plain value.
+    expect(Object.keys(document.components.schemas.UserCreate?.properties ?? {})).toStrictEqual([
+      'email',
+      'role',
+      'tags',
+      'meta',
+    ])
+  })
+
+  it('pages a list by limit and offset, at most 100, and says the total in a header', () => {
+    expect(document.paths['/users']?.get).toMatchObject({
+      parameters: [
+        {
+          name: 'limit',
+          in: 'query',
+          required: false,
+          description: 'How many users to answer, at most 100.',
+          schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+        },
+        {
+          name: 'offset',
+          in: 'query',
+          required: false,
+          description: 'How many users to skip, in the order of the key.',
+          schema: { type: 'integer', minimum: 0, default: 0 },
+        },
+      ],
+      responses: {
+        '200': {
+          headers: {
+            'X-Total-Count': {
+              description: 'How many users there are in all.',
+              schema: { type: 'integer', minimum: 0 },
+            },
+          },
+        },
+      },
+    })
   })
 
   it('types a bigint as an integer, a decimal as a string, bytes as base64', () => {
@@ -139,7 +180,7 @@ describe('zodOpenapiHonoDocument', () => {
 })
 
 describe('zodOpenapiHonoDocument with auth', () => {
-  const guarded = zodOpenapiHonoDocument(DATAMODEL, { title: 'API', version: '1.0.0', auth: true })
+  const guarded = zodOpenapiHonoDocument(DATAMODEL, { title: 'API', version: '1.0.0', auth: 'jwt' })
 
   it('asks every operation for a bearer JWT and says it answers 401 without one', () => {
     expect(guarded.components.securitySchemes).toStrictEqual({
@@ -151,9 +192,27 @@ describe('zodOpenapiHonoDocument with auth', () => {
       const operation = item?.[method]
       expect(operation).toMatchObject({
         security: [{ bearerAuth: [] }],
-        responses: { '401': { description: 'No valid bearer token.' } },
+        responses: {
+          '401': { description: 'No valid bearer token.' },
+          '403': { description: 'The token holds none of the roles the API asks for.' },
+        },
       })
     }
+  })
+
+  it('names the header Cloudflare Access puts its token in, for auth = "cloudflare-access"', () => {
+    const access = zodOpenapiHonoDocument(DATAMODEL, {
+      title: 'API',
+      version: '1.0.0',
+      auth: 'cloudflare-access',
+    })
+    expect(access.components.securitySchemes).toStrictEqual({
+      cloudflareAccess: { type: 'apiKey', in: 'header', name: 'Cf-Access-Jwt-Assertion' },
+    })
+    expect(access.paths['/users/{id}']?.get).toMatchObject({
+      security: [{ cloudflareAccess: [] }],
+      responses: { '401': { description: 'No valid Cloudflare Access token.' } },
+    })
   })
 
   it('guards every model under its resource', () => {
@@ -163,6 +222,21 @@ describe('zodOpenapiHonoDocument with auth', () => {
 
 describe('handlerBodies', () => {
   const bodies = handlerBodies(DATAMODEL)
+
+  it('lists a page in the order of the key, with the total beside it', () => {
+    expect(bodies.get('listUsers')).toBe(
+      [
+        "const { limit, offset } = c.req.valid('query')",
+        'const [rows, total] = await Promise.all([',
+        "prisma.user.findMany({ take: limit, skip: offset, orderBy: [{ id: 'asc' }] }),",
+        'prisma.user.count(),',
+        '])',
+        "return c.json(rows, 200, { 'X-Total-Count': String(total) })",
+      ].join('\n'),
+    )
+    expect(bodies.get('listOrderItems')).toContain("orderBy: [{ orderId: 'asc' }, { sku: 'asc' }]")
+    expect(bodies.get('listLogs')).toContain('findMany({ take: limit, skip: offset })')
+  })
 
   it('finds a row by its key, answering 404 where none has it', () => {
     expect(bodies.get('getUser')).toBe(
@@ -349,5 +423,68 @@ describe('guardPaths', () => {
   it('leaves a file without an OpenAPIHono app as it is', () => {
     const code = 'export const x = 1\n'
     expect(guardPaths(code, ['/users/*'])).toBe(code)
+  })
+})
+
+describe('@api.hidden and @api.readonly', () => {
+  const ACCOUNT = makeModel({
+    name: 'Account',
+    fields: [
+      makeField({
+        name: 'id',
+        type: 'Int',
+        isId: true,
+        hasDefaultValue: true,
+        default: { name: 'autoincrement', args: [] },
+      }),
+      makeField({ name: 'email', type: 'String' }),
+      makeField({
+        name: 'role',
+        type: 'String',
+        hasDefaultValue: true,
+        default: 'user',
+        documentation: '@api.readonly',
+      }),
+      makeField({
+        name: 'passwordHash',
+        type: 'String',
+        documentation: 'The bcrypt hash.\n@api.hidden',
+      }),
+      makeField({ name: 'secret', type: 'Bytes', isRequired: false, documentation: '@api.hidden' }),
+    ],
+  })
+  const datamodel = { ...DATAMODEL, models: [ACCOUNT] }
+  const doc = zodOpenapiHonoDocument(datamodel, { title: 'API', version: '1.0.0' })
+  const bodies = handlerBodies(datamodel)
+
+  it('reads what a field comment keeps from the API', () => {
+    expect(apiAccess('The bcrypt hash.\n@api.hidden')).toBe('hidden')
+    expect(apiAccess('  @api.readonly  ')).toBe('readonly')
+    expect(apiAccess('Mentions @api.hidden in prose')).toBeUndefined()
+    expect(apiAccess(undefined)).toBeUndefined()
+  })
+
+  it('answers neither hidden field, and the readonly one', () => {
+    expect(Object.keys(doc.components.schemas.Account?.properties ?? {})).toStrictEqual([
+      'id',
+      'email',
+      'role',
+    ])
+  })
+
+  it('takes neither the hidden nor the readonly fields, on a create or an update', () => {
+    expect(Object.keys(doc.components.schemas.AccountCreate?.properties ?? {})).toStrictEqual([
+      'email',
+    ])
+    expect(Object.keys(doc.components.schemas.AccountUpdate?.properties ?? {})).toStrictEqual([
+      'email',
+    ])
+  })
+
+  it('omits the hidden fields from every row Prisma answers, and never encodes one', () => {
+    for (const id of ['listAccounts', 'createAccount', 'getAccount', 'updateAccount']) {
+      expect(bodies.get(id)).toContain('omit: { passwordHash: true, secret: true }')
+      expect(bodies.get(id)).not.toContain('Buffer')
+    }
   })
 })

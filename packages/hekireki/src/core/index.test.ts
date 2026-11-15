@@ -679,7 +679,8 @@ describe('ZodOpenAPIHono', () => {
     ])
     const user = readFileSync(path.join(dir, 'handlers', 'user.ts'), 'utf8')
     expect(user).toContain("import { prisma } from '../prisma'")
-    expect(user).toContain('const rows = await prisma.user.findMany()')
+    expect(user).toContain("const { limit, offset } = c.req.valid('query')")
+    expect(user).toContain("'X-Total-Count': String(total)")
     expect(user).toContain("const data = c.req.valid('param')")
     expect(user).toContain('const row = await prisma.user.findFirst({ where: { id: data.id } })')
     expect(user).not.toContain('async (c) => {}')
@@ -690,12 +691,13 @@ describe('ZodOpenAPIHono', () => {
     expect(Exit.isSuccess(await run(zodOpenapiHono, dir))).toBe(true)
     const file = path.join(dir, 'handlers', 'user.ts')
     const edited = readFileSync(file, 'utf8').replace(
-      'await prisma.user.findMany()',
-      "await prisma.user.findMany({ orderBy: { name: 'asc' } })",
+      'prisma.user.count()',
+      "prisma.user.count({ where: { name: 'kept' } })",
     )
+    expect(edited).not.toBe(readFileSync(file, 'utf8'))
     writeFileSync(file, edited)
     expect(Exit.isSuccess(await run(zodOpenapiHono, dir))).toBe(true)
-    expect(readFileSync(file, 'utf8')).toContain("findMany({ orderBy: { name: 'asc' } })")
+    expect(readFileSync(file, 'utf8')).toContain("count({ where: { name: 'kept' } })")
   })
 
   it('imports prisma from the module prisma names, as the handlers see it', async () => {
@@ -714,9 +716,7 @@ describe('ZodOpenAPIHono', () => {
   it('guards every model with the JWT auth.ts, keeping an auth.ts that is there', async () => {
     const dir = tmp()
     expect(failure(await run(zodOpenapiHono, dir, { auth: 'jwt' }))).toBe('')
-    expect(readFileSync(path.join(dir, 'auth.ts'), 'utf8')).toContain(
-      "jwt({ secret: JWT_SECRET, alg: 'HS256' })",
-    )
+    expect(readFileSync(path.join(dir, 'auth.ts'), 'utf8')).toContain("alg: 'HS256'")
     const entry = readFileSync(path.join(dir, 'index.ts'), 'utf8')
     expect(entry).toContain("import { auth } from './auth'")
     expect(entry).toContain("app.use('/users/*', auth)")
@@ -731,9 +731,25 @@ describe('ZodOpenAPIHono', () => {
     expect(again.match(/import \{ auth \} from '\.\/auth'/gu)).toHaveLength(1)
   })
 
+  it('guards every model with the JWKS auth.ts', async () => {
+    const dir = tmp()
+    expect(failure(await run(zodOpenapiHono, dir, { auth: 'jwks' }))).toBe('')
+    expect(readFileSync(path.join(dir, 'auth.ts'), 'utf8')).toContain("from 'hono/jwk'")
+    expect(readFileSync(path.join(dir, 'index.ts'), 'utf8')).toContain("app.use('/users/*', auth)")
+    expect(readFileSync(path.join(dir, 'openapi.yaml'), 'utf8')).toContain('bearerAuth:')
+  })
+
+  it('guards every model with the Cloudflare Access auth.ts, naming its header in the document', async () => {
+    const dir = tmp()
+    expect(failure(await run(zodOpenapiHono, dir, { auth: 'cloudflare-access' }))).toBe('')
+    expect(readFileSync(path.join(dir, 'auth.ts'), 'utf8')).toContain("'Cf-Access-Jwt-Assertion'")
+    expect(readFileSync(path.join(dir, 'index.ts'), 'utf8')).toContain("app.use('/users/*', auth)")
+    expect(readFileSync(path.join(dir, 'openapi.yaml'), 'utf8')).toContain('cloudflareAccess:')
+  })
+
   it('refuses an auth it does not know', async () => {
     expect(failure(await run(zodOpenapiHono, tmp(), { auth: 'session' }))).toContain(
-      'auth for Hekireki-ZodOpenAPIHono must be "jwt": session',
+      'auth for Hekireki-ZodOpenAPIHono must be one of "jwt", "jwks", "cloudflare-access": session',
     )
   })
 
