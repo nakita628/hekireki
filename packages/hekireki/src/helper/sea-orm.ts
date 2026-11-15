@@ -151,7 +151,7 @@ export function rustModule(name: string) {
  * way keeps it, and the other is numbered (`created_at1`, variant `CreatedAt1`), which
  * `column_name` maps back to its own column.
  */
-export function seaOrmFieldNames(model: DMMF.Model) {
+function seaOrmFieldNames(model: DMMF.Model) {
   const candidates = model.fields
     .filter((f) => f.kind !== 'object')
     .map((f) => ({ key: f.name, candidate: makeSnakeCase(f.name) }))

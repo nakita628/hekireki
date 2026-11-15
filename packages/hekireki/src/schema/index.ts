@@ -156,7 +156,7 @@ const PrismaErrorBody = z
   })
 
 /** Prisma's message for a schema it rejects, as plain text. */
-export function prismaErrorMessage(raw: string) {
+function prismaErrorMessage(raw: string) {
   return Effect.try((): unknown => JSON.parse(raw)).pipe(
     Effect.orElseSucceed(() => null),
     Effect.map((json) => {

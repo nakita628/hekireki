@@ -82,7 +82,7 @@ export function docBlockLines(text: string | undefined, indent: string) {
 }
 
 /** The lines of a doc comment that are prose: annotation lines are dropped. */
-export function documentationLines(doc: string | undefined) {
+function documentationLines(doc: string | undefined) {
   return (doc ?? '')
     .split('\n')
     .map((line) => line.trim())

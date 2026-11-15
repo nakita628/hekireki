@@ -5,7 +5,7 @@ import { makeDatabaseUrlChoice, makeDatasourceUrl, makeSchemaDatasourceUrl } fro
 // The database URL as the environment gives it: the one place that reads a variable. What the
 // URL text says, and which place wins, is domain/url.ts.
 
-export type { Dialect, UrlSource } from './domain/url.js'
+export type { Dialect } from './domain/url.js'
 
 /** No place named a database URL; `reason` says where one would be looked for. */
 export class DatabaseUrlNotFoundError extends Data.TaggedError('DatabaseUrlNotFoundError')<{

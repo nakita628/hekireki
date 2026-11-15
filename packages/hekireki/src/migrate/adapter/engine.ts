@@ -98,7 +98,7 @@ function instantiate() {
 }
 
 /** The bindings of the engine, loaded the first time they are asked for. */
-export function schemaEngineBindings() {
+function schemaEngineBindings() {
   return Effect.gen(function* () {
     Reflect.set(globalThis, 'PRISMA_WASM_PANIC_REGISTRY', {
       set_message: (message: string) => {
