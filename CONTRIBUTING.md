@@ -34,7 +34,7 @@ pnpm lint:actions     # actionlint (syntax) and, when installed, zizmor (securit
 pnpm lint:typespec    # the @typespec/* packages resolve to one shared version in pnpm-lock.yaml
 pnpm lint:knip        # Knip: no file, export or dependency that nothing uses (knip.ts names the exceptions)
 pnpm test             # unit tests (the `unit` project — vitest via vite-plus)
-pnpm coverage         # unit tests with coverage
+pnpm coverage         # unit tests with coverage; fails under the thresholds in packages/hekireki/vite.config.ts
 pnpm lang             # build + language checks (the `lang` project)
 ```
 
