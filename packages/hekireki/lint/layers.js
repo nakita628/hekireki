@@ -2,6 +2,8 @@
 // maps HTTP to one usecase; a usecase composes services (I/O) and domain (pure decisions); a
 // service touches one piece of I/O; domain takes values and returns values.
 
+import { existsSync } from 'node:fs'
+
 import {
   INDEX_FILE,
   TEST_FILE,
@@ -300,6 +302,30 @@ export const layerRules = {
               })
             }
           }
+        },
+      }
+    },
+  },
+
+  // Why: domain is the pure half, the part a test can hold without a database or a file. Each
+  //      module has its own test beside it, so a decision added there is tested where it is.
+  //   NG: domain/plan.ts with no domain/plan.test.ts
+  //   OK: domain/plan.ts and domain/plan.test.ts; a barrel (index.ts) needs none
+  'domain-require-test': {
+    meta: { docs: { description: 'every domain module has a .test.ts of the same name beside it' } },
+    create(context) {
+      const filename = filenameOf(context)
+      if (TEST_FILE.test(filename) || INDEX_FILE.test(filename) || filename.endsWith('.d.ts')) {
+        return {}
+      }
+      const testFile = filename.replace(/\.tsx?$/u, '.test.ts')
+      if (existsSync(testFile)) return {}
+      return {
+        Program(node) {
+          context.report({
+            node,
+            message: `Write ${testFile.split(/[\\/]/u).at(-1)} beside this domain module: domain is pure, and each module is tested where it is.`,
+          })
         },
       }
     },

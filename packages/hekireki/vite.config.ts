@@ -792,6 +792,17 @@ export default defineConfig({
         rules: { 'custom/require-diagram': 'error' },
       },
       {
+        // Every pure half (studio/server, migrate, database) tests each module beside it.
+        files: ['src/**/domain/**'],
+        rules: { 'custom/domain-require-test': 'error' },
+      },
+      {
+        // The fixes are one module split in parts: fixes/index.test.ts holds them through
+        // fixes/index.ts, the one way the rest of migrate reaches them.
+        files: ['src/migrate/domain/fixes/**'],
+        rules: { 'custom/domain-require-test': 'off' },
+      },
+      {
         files: ['src/studio/server/domain/**'],
         rules: {
           // Why off: domain is plain TypeScript, never Effect, so `Effect.try` is not there to

@@ -36,7 +36,9 @@ jobs:
 
       - run: vp link ./packages/hekireki
 
-      - run: vp run check
+      # The format, oxlint and type checks of every workspace. `pnpm lint` (Markdown, spelling,
+      # links, workflows, Knip) is the Lint workflow's, and is not run twice.
+      - run: vp run check:code
 
       # packages/hekireki only: the `test` package needs the Go / Rust / Python /
       # Elixir / Ruby / PHP toolchains and is owned by the Lang Check matrix.

@@ -580,6 +580,25 @@ tester.run('domain-only-from-usecases', rule('domain-only-from-usecases'), {
   ],
 })
 
+tester.run('domain-require-test', rule('domain-require-test'), {
+  valid: [
+    tsCase('export const x = 1', 'src/migrate/domain/plan.ts'),
+    tsCase('export const x = 1', 'src/migrate/domain/plan.test.ts'),
+    tsCase("export * from './plan.js'", 'src/studio/server/domain/index.ts'),
+  ],
+  invalid: [
+    {
+      ...tsCase('export const x = 1', 'src/migrate/domain/untested.ts'),
+      errors: [
+        {
+          message:
+            'Write untested.test.ts beside this domain module: domain is pure, and each module is tested where it is.',
+        },
+      ],
+    },
+  ],
+})
+
 tester.run('domain-import-allowlist', rule('domain-import-allowlist'), {
   valid: [
     tsCase(`import * as z from 'zod'`, DOMAIN_FILE),

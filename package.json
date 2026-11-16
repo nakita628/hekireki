@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "deps": "rm -rf node_modules pnpm-lock.yaml && pnpm install",
-    "check": "vp fmt --check && vp run -r check && pnpm lint",
+    "check": "pnpm check:code && pnpm lint",
+    "check:code": "vp fmt --check && vp run -r check",
     "fix": "vp fmt && vp run -r check --fix",
     "lint": "pnpm lint:md && pnpm lint:text && pnpm lint:spell && pnpm lint:links && pnpm lint:actions && pnpm lint:typespec && pnpm lint:knip",
     "lint:md": "markdownlint-cli2",
