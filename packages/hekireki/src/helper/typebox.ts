@@ -39,7 +39,7 @@ export function makeTypeBoxEnumExpression(values: readonly string[]) {
   return `Type.Union([${values.map((v) => `Type.Literal('${v}')`).join(', ')}])`
 }
 
-export function makeTypeBoxListExpression(element: string) {
+function makeTypeBoxListExpression(element: string) {
   return `Type.Array(${element})`
 }
 

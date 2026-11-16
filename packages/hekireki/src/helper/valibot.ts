@@ -19,7 +19,7 @@ export function makeValibotEnumExpression(values: readonly string[]) {
   return `picklist([${values.map((v) => `'${v}'`).join(', ')}])`
 }
 
-export function makeValibotListExpression(element: string) {
+function makeValibotListExpression(element: string) {
   return `array(v.${element})`
 }
 

@@ -44,7 +44,7 @@ export function makeArktypeEnumExpression(values: readonly string[]) {
 }
 
 /** `"string"` → `"string[]"`, `"'A' | 'B'"` → `"('A' | 'B')[]"`. */
-export function makeArktypeListExpression(element: string) {
+function makeArktypeListExpression(element: string) {
   const inner = element.slice(1, -1)
   return inner.includes('|') ? `"(${inner})[]"` : `"${inner}[]"`
 }

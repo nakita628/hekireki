@@ -9,7 +9,7 @@ export function makeAjvEnumExpression(values: readonly string[]) {
   return `{ enum: [${values.map((v) => `'${v}'`).join(', ')}] as const }`
 }
 
-export function makeAjvListExpression(element: string) {
+function makeAjvListExpression(element: string) {
   return `{ type: 'array' as const, items: ${element} }`
 }
 

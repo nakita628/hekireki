@@ -33,7 +33,7 @@ export function makeEffectEnumExpression(values: readonly string[]) {
   return `Schema.Literal(${values.map((v) => `'${v}'`).join(', ')})`
 }
 
-export function makeEffectListExpression(element: string) {
+function makeEffectListExpression(element: string) {
   return `Schema.Array(${element})`
 }
 
