@@ -1,6 +1,21 @@
 import { useMessages } from './language.js'
 import { REHEARSAL } from './messages.js'
 
+type Counted = { readonly before: number | null; readonly after: number | null }
+
+/** What happened to a table's rows: it came to be, it went away, or by how many they changed. */
+function changeOf(row: Counted, t: { readonly added: string; readonly gone: string }) {
+  if (row.before === null) return t.added
+  if (row.after === null) return t.gone
+  if (row.after === row.before) return '±0'
+  return `${row.after > row.before ? '+' : ''}${row.after - row.before}`
+}
+
+function changeTone(lost: boolean, change: string) {
+  if (lost) return 'font-semibold text-danger'
+  return change === '±0' ? 'text-muted' : 'text-ok'
+}
+
 /**
  * The rows of each table before a run and after it, with what changed marked: a table that lost
  * rows in red, one that went away or came to be said in words. A table whose rows did not change
@@ -28,25 +43,14 @@ export function RowCounts({
       </thead>
       <tbody>
         {tables.map((row) => {
-          const change =
-            row.before === null
-              ? t.added
-              : row.after === null
-                ? t.gone
-                : row.after === row.before
-                  ? '±0'
-                  : `${row.after > row.before ? '+' : ''}${row.after - row.before}`
+          const change = changeOf(row, t)
           const lost = row.after === null || (row.before !== null && row.after < row.before)
           return (
             <tr key={row.table} className="border-t border-line">
               <td className="py-1 pr-3 font-mono">{row.table}</td>
               <td className="py-1 pr-3 text-right font-mono">{row.before ?? '—'}</td>
               <td className="py-1 pr-3 text-right font-mono">{row.after ?? '—'}</td>
-              <td
-                className={`py-1 text-right font-mono ${lost ? 'font-semibold text-danger' : change === '±0' ? 'text-muted' : 'text-ok'}`}
-              >
-                {change}
-              </td>
+              <td className={`py-1 text-right font-mono ${changeTone(lost, change)}`}>{change}</td>
             </tr>
           )
         })}

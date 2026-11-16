@@ -85,7 +85,7 @@ export function DetailsPanel({
                 {a}
               </div>
             ))}
-            {field.documentation ? (
+            {(field.documentation ?? '') !== '' ? (
               <div className="pl-5 whitespace-pre-wrap text-muted">{field.documentation}</div>
             ) : null}
           </div>
@@ -119,7 +119,7 @@ export function DetailsPanel({
                 {' → '}
                 {CARDINALITY_LABELS[other.cardinality]}
               </span>
-              {relation.onDelete ? (
+              {(relation.onDelete ?? '') !== '' ? (
                 <span className="text-muted"> · onDelete: {relation.onDelete}</span>
               ) : null}
               {relation.origin === 'implicit-many-to-many' ? (

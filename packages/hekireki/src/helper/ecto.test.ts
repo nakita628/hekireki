@@ -2,7 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { prismaBlocks, relationMaps } from '../utils/prisma-schema-text.js'
+import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import {
   ectoDateTypes,
   ectoProblems,
@@ -10,6 +10,17 @@ import {
   ectoTypeToTypespec,
   prismaTypeToEctoType,
 } from './ecto.js'
+
+/** The datamodel `getDMMF` parsed, or its parse error thrown. */
+function datamodelOf(result: ReturnType<typeof getDMMF>) {
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel
+}
+
+/** The `name:` every constraint in the generated code carries, in order. */
+function constraintNames(code: string) {
+  return [...code.matchAll(/name: "([^"]+)"/gu)].map((m) => m[1])
+}
 
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
@@ -1709,8 +1720,7 @@ model VerificationToken {
           ],
         ],
       })
-      if ('type' in result) throw new Error(result.error.message)
-      const { models, enums, indexes } = result.datamodel
+      const { models, enums, indexes } = datamodelOf(result)
 
       expect(ectoSchemas(models, 'App', models, enums, { provider: 'postgresql', indexes })).toBe(
         'defmodule App.User do\n  use Ecto.Schema\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          id: String.t(),\n          sessions: [App.Session.t()]\n        }\n\n  schema "User" do\n    field(:id, :string, primary_key: true)\n    has_many(:sessions, App.Session, foreign_key: :user_id, references: :id)\n  end\nend\n\ndefmodule App.Session do\n  use Ecto.Schema\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          session_token: String.t(),\n          user: App.User.t() | nil\n        }\n\n  schema "Session" do\n    field(:session_token, :string, primary_key: true, source: :sessionToken)\n    field(:user_id, :string, source: :userId)\n    belongs_to(:user, App.User, foreign_key: :user_id, define_field: false, type: :string)\n  end\nend\n\ndefmodule App.VerificationToken do\n  use Ecto.Schema\n\n  @primary_key false\n\n  @type t :: %__MODULE__{\n          identifier: String.t(),\n          token: String.t()\n        }\n\n  schema "VerificationToken" do\n    field(:identifier, :string, primary_key: true)\n    field(:token, :string, primary_key: true)\n  end\nend',
@@ -2805,7 +2815,7 @@ end`)
   editor Account? @relation("Edits", fields: [editorId], references: [id], map: "post_editor_fk")
 }`),
     )
-    const changeset = (model: DMMF.Model, provider: string, relationMode?: string) =>
+    const changeset = (model: DMMF.Model, provider: string, relationMode = 'foreignKeys') =>
       ectoSchemas([model], 'App', [account, post], undefined, {
         provider,
         foreignKeyNames,
@@ -2894,11 +2904,7 @@ end`)
         ],
       })
       const names = (provider: string) =>
-        [
-          ...ectoSchemas([model], 'App', [owner, model], undefined, { provider }).matchAll(
-            /name: "([^"]+)"/gu,
-          ),
-        ].map((m) => m[1])
+        constraintNames(ectoSchemas([model], 'App', [owner, model], undefined, { provider }))
 
       // What `prisma migrate diff --script` writes for this model on each database.
       expect(names('postgresql')).toStrictEqual([
@@ -2918,12 +2924,16 @@ end`)
     it('refuses the delete of a row whose has_many the database keeps, and no other', () => {
       const relation = (name: string, type: string, relationName: string) =>
         makeField({ name, type, kind: 'object', isList: true, relationName })
-      const holder = (name: string, relationName: string, overrides: Partial<DMMF.Field> = {}) =>
+      const holder = (
+        name: string,
+        relationName: string,
+        { isRequired = true, ...overrides }: Partial<DMMF.Field> = {},
+      ) =>
         makeModel({
           name,
           fields: [
             autoincrementId,
-            makeField({ name: 'userId', type: 'Int', isRequired: overrides.isRequired ?? true }),
+            makeField({ name: 'userId', type: 'Int', isRequired }),
             makeField({
               name: 'user',
               type: 'User',
@@ -2931,6 +2941,7 @@ end`)
               relationName,
               relationFromFields: ['userId'],
               relationToFields: ['id'],
+              isRequired,
               ...overrides,
             }),
           ],
@@ -2955,7 +2966,7 @@ end`)
         // Optional and naming no onDelete: Prisma sets it null.
         holder('Visit', 'UserToVisit', { isRequired: false }),
       ]
-      const userChangeset = (provider: string, relationMode?: string) =>
+      const userChangeset = (provider: string, relationMode = 'foreignKeys') =>
         ectoSchemas([user], 'App', models, undefined, { provider, relationMode })
 
       expect(userChangeset('postgresql')).toContain(`    user
@@ -3288,8 +3299,7 @@ enum Tone {
         ],
       ],
     })
-    if ('type' in dmmf) throw new Error(dmmf.error.message)
-    const { models: documented, enums: documentedEnums } = dmmf.datamodel
+    const { models: documented, enums: documentedEnums } = datamodelOf(dmmf)
     expect(ectoSchemas(documented, 'App', documented, documentedEnums)).toBe(`defmodule App.User do
   @moduledoc """
   A person.

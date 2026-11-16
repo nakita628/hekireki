@@ -21,7 +21,7 @@ import { MigrateConfigError, MigrateDatabaseError } from './errors.js'
 
 /** The number a `COUNT(*)` came back as: a string from pg (it is a bigint), a number elsewhere. */
 function countOf(rows: readonly Readonly<Record<string, unknown>>[]) {
-  const value = Number(rows[0]?.count)
+  const value = Number(rows[0]?.['count'])
   return Number.isFinite(value) ? value : null
 }
 
@@ -155,7 +155,9 @@ export function checkOpened(input: {
       ))
     const dialect = driver.dialect
     const run = (statements: readonly string[]) =>
-      Effect.forEach(statements, (sql) => driver.query({ sql, params: [] })).pipe(
+      Effect.forEach(statements, (sql) => driver.query({ sql, params: [] }), {
+        concurrency: 1,
+      }).pipe(
         Effect.mapError(
           (error) =>
             new MigrateDatabaseError({ message: `Cannot prepare the connection: ${error.cause}` }),
@@ -192,21 +194,27 @@ export function checkOpened(input: {
       })
     const tried = checksWith(decisions)
     // Each error names what it is about before its first colon: `User.hekireki: ...`, or the model.
+    const errorsAbout = Map.groupBy(
+      tried.errors.map((error, index) => ({ error, index })),
+      ({ error }) => error.slice(0, error.indexOf(': ')),
+    )
+    // The errors about a decision's subject or its model, in the order the check gave them.
+    const reasonsFor = (decision: z.infer<typeof Decisions>[number]) =>
+      [...new Set([decisionSubject(decision), decision.modelName])]
+        .flatMap((about) => errorsAbout.get(about) ?? [])
+        .toSorted((a, b) => a.index - b.index)
+        .map(({ error }) => error)
     const setAside = input.setAside
       ? decisions.flatMap((decision) => {
-          const reasons = tried.errors.filter((error) => {
-            const about = error.slice(0, error.indexOf(': '))
-            return about === decisionSubject(decision) || about === decision.modelName
-          })
+          const reasons = reasonsFor(decision)
           return reasons.length === 0 ? [] : [{ decision, reasons }]
         })
       : []
+    const setAsideDecisions = new Set(setAside.map((one) => one.decision))
     const planned =
       setAside.length === 0
         ? tried
-        : checksWith(
-            decisions.filter((decision) => !setAside.some((one) => one.decision === decision)),
-          )
+        : checksWith(decisions.filter((decision) => !setAsideDecisions.has(decision)))
     if (planned.errors.length > 0) {
       return yield* new MigrateConfigError({
         message: `The decisions in ${input.decisionsPath} do not fit the schema and the database:\n   ${planned.errors.join('\n   ')}\n   Decide them again on the Migrate page of hekireki studio.`,
@@ -225,11 +233,12 @@ export function checkOpened(input: {
             Effect.match({
               onFailure: () => [],
               onSuccess: (read) => [
-                [check.subject, read.rows.map((row) => String(row.value))] as const,
+                [check.subject, read.rows.map((row) => String(row['value']))] as const,
               ],
             }),
           )
         },
+        { concurrency: 1 },
       ).pipe(Effect.map((entries) => entries.flat())),
     )
     const advice = adviseChecks({
@@ -240,61 +249,68 @@ export function checkOpened(input: {
       checks: planned.checks,
       stored,
     })
-    const fixes = yield* Effect.forEach(planned.fixes, (fix) =>
-      driver.query(fix.count).pipe(
-        Effect.match({
-          onFailure: (error) => ({ ...fix, rows: null, error: error.cause }),
-          onSuccess: (counted) => ({ ...fix, rows: countOf(counted.rows), error: null }),
-        }),
-      ),
+    const fixes = yield* Effect.forEach(
+      planned.fixes,
+      (fix) =>
+        driver.query(fix.count).pipe(
+          Effect.match({
+            onFailure: (error) => ({ ...fix, rows: null, error: error.cause }),
+            onSuccess: (counted) => ({ ...fix, rows: countOf(counted.rows), error: null }),
+          }),
+        ),
+      { concurrency: 1 },
     )
     // One query at a time: the check reads, and a production database should feel it as little as it can.
-    const results = yield* Effect.forEach(planned.checks, (check, index) => {
-      const { facts, suggestion, candidates, destinations } = advice[index] ?? {
-        facts: {},
-        suggestion: null,
-        candidates: [],
-        destinations: [],
-      }
-      return check.guaranteed
-        ? Effect.succeed({
-            ...check,
-            status: statusOf(check, 0),
-            count: 0,
-            error: null,
-            facts,
-            suggestion,
-            candidates,
-            destinations,
-          })
-        : driver.query(check.statement).pipe(
-            Effect.match({
-              onFailure: (error) => ({
-                ...check,
-                status: statusOf(check, null),
-                count: null,
-                error: error.cause,
-                facts,
-                suggestion,
-                candidates,
-                destinations,
-              }),
-              onSuccess: (counted) => {
-                const count = countOf(counted.rows)
-                return {
+    const results = yield* Effect.forEach(
+      planned.checks,
+      (check, index) => {
+        const { facts, suggestion, candidates, destinations } = advice[index] ?? {
+          facts: {},
+          suggestion: null,
+          candidates: [],
+          destinations: [],
+        }
+        return check.guaranteed
+          ? Effect.succeed({
+              ...check,
+              status: statusOf(check, 0),
+              count: 0,
+              error: null,
+              facts,
+              suggestion,
+              candidates,
+              destinations,
+            })
+          : driver.query(check.statement).pipe(
+              Effect.match({
+                onFailure: (error) => ({
                   ...check,
-                  status: statusOf(check, count),
-                  count,
-                  error: count === null ? 'The count query returned no number.' : null,
+                  status: statusOf(check, null),
+                  count: null,
+                  error: error.cause,
                   facts,
                   suggestion,
                   candidates,
                   destinations,
-                }
-              },
-            }),
-          )
-    })
+                }),
+                onSuccess: (counted) => {
+                  const count = countOf(counted.rows)
+                  return {
+                    ...check,
+                    status: statusOf(check, count),
+                    count,
+                    error: count === null ? 'The count query returned no number.' : null,
+                    facts,
+                    suggestion,
+                    candidates,
+                    destinations,
+                  }
+                },
+              }),
+            )
+      },
+      { concurrency: 1 },
+    )
     return {
       schemaPath: path.resolve(input.schemaPath),
       decisionsPath: input.decisionsPath,

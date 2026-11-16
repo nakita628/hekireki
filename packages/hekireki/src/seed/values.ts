@@ -6,7 +6,7 @@ import { customRandom, urlAlphabet } from 'nanoid'
 import { ulid } from 'ulidx'
 import { v4 as uuidV4, v7 as uuidV7 } from 'uuid'
 
-import type { LooseFieldRule, SeedRow } from './config.js'
+import type { LooseFieldRule, SeedRow, SeedValue } from './config.js'
 import type { EnumMember } from './plan.js'
 import { fieldDefault } from './plan.js'
 
@@ -153,16 +153,18 @@ function makeText(faker: Faker, name: string) {
   return match === undefined ? faker.lorem.words({ min: 1, max: 3 }) : match[1](faker)
 }
 
+function declaredLength(
+  native: ReturnType<typeof nativeTypeOf>,
+  stringLength: number | null,
+): number | undefined {
+  if (native.name === null) return stringLength ?? undefined
+  return /^(Var|N|NVar)?Char$/u.test(native.name) ? native.args[0] : undefined
+}
+
 // The column's own length (`@db.VarChar(64)`), or with no `@db.*` type the one the database gives
 // a plain `String` (MySQL's VARCHAR(191)); a rule's `length` narrows either.
 function maxLength(field: DMMF.Field, rule: ObjectRule, stringLength: number | null) {
-  const native = nativeTypeOf(field)
-  const declared =
-    native.name === null
-      ? (stringLength ?? undefined)
-      : /^(Var|N|NVar)?Char$/u.test(native.name)
-        ? native.args[0]
-        : undefined
+  const declared = declaredLength(nativeTypeOf(field), stringLength)
   const ruled = typeof rule.length === 'number' ? rule.length : rule.length?.max
   const bounds = [declared, ruled].filter((n): n is number => n !== undefined && n > 0)
   return bounds.length === 0 ? null : Math.min(...bounds)
@@ -176,36 +178,42 @@ function makeString(faker: Faker, field: DMMF.Field, rule: ObjectRule, bounds: B
   return limit === null ? text : text.slice(0, limit)
 }
 
+type Range = { readonly min: number; readonly max: number }
+
+// The range a field's name suggests, the first pattern that matches winning.
+const INT_RANGES: readonly (readonly [RegExp, Range])[] = [
+  [/^age$/u, { min: 18, max: 90 }],
+  [/^year$/u, { min: 1970, max: 2030 }],
+  [/^(qty|quantity)$/u, { min: 1, max: 20 }],
+  [/^(rating|stars)$/u, { min: 1, max: 5 }],
+  [/^(price|amount|total|balance|salary|cost|fee)$/u, { min: 0, max: 100_000 }],
+]
+
+// With no name to go by, a small native integer type keeps the values inside it.
+const NATIVE_INT_RANGES: ReadonlyMap<string, Range> = new Map([
+  ['TinyInt', { min: 0, max: 127 }],
+  ['SmallInt', { min: 0, max: 32_767 }],
+])
+
+const FLOAT_RANGES: readonly (readonly [RegExp, Range])[] = [
+  [/^(lat|latitude)$/u, { min: -90, max: 90 }],
+  [/^(lng|lon|long|longitude)$/u, { min: -180, max: 180 }],
+  [/^(price|amount|total|balance|salary|cost|fee)$/u, { min: 0, max: 10_000 }],
+]
+
+function rangeByName(ranges: readonly (readonly [RegExp, Range])[], name: string) {
+  return ranges.find(([pattern]) => pattern.test(name))?.[1]
+}
+
 function intRange(field: DMMF.Field, rule: ObjectRule) {
-  const name = normalizedName(field.name)
   const native = nativeTypeOf(field)
-  const natural = /^age$/u.test(name)
-    ? { min: 18, max: 90 }
-    : /^year$/u.test(name)
-      ? { min: 1970, max: 2030 }
-      : /^(qty|quantity)$/u.test(name)
-        ? { min: 1, max: 20 }
-        : /^(rating|stars)$/u.test(name)
-          ? { min: 1, max: 5 }
-          : /^(price|amount|total|balance|salary|cost|fee)$/u.test(name)
-            ? { min: 0, max: 100_000 }
-            : native.name === 'TinyInt'
-              ? { min: 0, max: 127 }
-              : native.name === 'SmallInt'
-                ? { min: 0, max: 32_767 }
-                : { min: 0, max: 1000 }
+  const natural = rangeByName(INT_RANGES, normalizedName(field.name)) ??
+    (native.name === null ? undefined : NATIVE_INT_RANGES.get(native.name)) ?? { min: 0, max: 1000 }
   return { min: rule.min ?? natural.min, max: rule.max ?? natural.max }
 }
 
 function floatRange(field: DMMF.Field, rule: ObjectRule) {
-  const name = normalizedName(field.name)
-  const natural = /^(lat|latitude)$/u.test(name)
-    ? { min: -90, max: 90 }
-    : /^(lng|lon|long|longitude)$/u.test(name)
-      ? { min: -180, max: 180 }
-      : /^(price|amount|total|balance|salary|cost|fee)$/u.test(name)
-        ? { min: 0, max: 10_000 }
-        : { min: 0, max: 1000 }
+  const natural = rangeByName(FLOAT_RANGES, normalizedName(field.name)) ?? { min: 0, max: 1000 }
   return { min: rule.min ?? natural.min, max: rule.max ?? natural.max }
 }
 
@@ -248,6 +256,23 @@ function makeJson(faker: Faker) {
   }
 }
 
+function makeEnum(faker: Faker, enumValues: readonly EnumMember[] | null) {
+  return enumValues === null || enumValues.length === 0
+    ? null
+    : faker.helpers.arrayElement(enumValues).name
+}
+
+/** An id with no bounds set counts up from 1 with the row. */
+function isCountedId(field: DMMF.Field, rule: ObjectRule) {
+  return field.isId && rule.min === undefined && rule.max === undefined
+}
+
+function makeBytes(faker: Faker) {
+  return Uint8Array.from(
+    Buffer.from(faker.string.hexadecimal({ length: 32, prefix: '', casing: 'lower' }), 'hex'),
+  )
+}
+
 /** One scalar of the field's type, honouring its native type, name and the rule's bounds. */
 function makeScalar(
   faker: Faker,
@@ -257,21 +282,15 @@ function makeScalar(
   bounds: Bounds,
   index: number,
 ) {
-  if (field.kind === 'enum') {
-    return enumValues === null || enumValues.length === 0
-      ? null
-      : faker.helpers.arrayElement(enumValues).name
-  }
+  if (field.kind === 'enum') return makeEnum(faker, enumValues)
   switch (field.type) {
     case 'String':
       return makeString(faker, field, rule, bounds)
     case 'Int':
-      return field.isId && rule.min === undefined && rule.max === undefined
-        ? index + 1
-        : faker.number.int(intRange(field, rule))
+      return isCountedId(field, rule) ? index + 1 : faker.number.int(intRange(field, rule))
     case 'BigInt': {
       const range = intRange(field, rule)
-      return field.isId && rule.min === undefined && rule.max === undefined
+      return isCountedId(field, rule)
         ? BigInt(index + 1)
         : faker.number.bigInt({ min: range.min, max: range.max })
     }
@@ -286,9 +305,7 @@ function makeScalar(
     case 'Json':
       return makeJson(faker)
     case 'Bytes':
-      return Uint8Array.from(
-        Buffer.from(faker.string.hexadecimal({ length: 32, prefix: '', casing: 'lower' }), 'hex'),
-      )
+      return makeBytes(faker)
     default:
       return makeString(faker, field, rule, bounds)
   }
@@ -319,31 +336,43 @@ export function makeFieldValue(input: {
   if (typeof input.rule === 'function') return input.rule(faker, { index, row })
   const rule = input.rule === undefined || typeof input.rule === 'function' ? {} : input.rule
   if (rule.value !== undefined) return rule.value
-  if (!field.isRequired && !field.isList) {
-    const nullRate = rule.nullRate ?? bounds.nullRate ?? 0
-    if (nullRate > 0 && faker.datatype.boolean({ probability: nullRate })) return null
-  }
+  if (!field.isRequired && !field.isList && drawsNull(faker, rule, bounds)) return null
   const choices = rule.values !== undefined && rule.values.length > 0 ? rule.values : null
-  if (choices !== null && !field.isList) return faker.helpers.arrayElement(choices)
-  if (field.isList) {
-    const length = listLength(faker, rule)
-    if (choices !== null) return faker.helpers.arrayElements(choices, length)
-    return Array.from({ length }, () =>
-      makeScalar(
-        faker,
-        field,
-        enumValues,
-        { ...rule, min: undefined, max: undefined },
-        bounds,
-        index,
-      ),
-    )
-  }
+  if (field.isList) return makeList(input, rule, choices)
+  if (choices !== null) return faker.helpers.arrayElement(choices)
   const generated =
     fieldDefault(field)?.name === 'autoincrement'
-      ? field.type === 'BigInt'
-        ? BigInt(index + 1)
-        : index + 1
+      ? autoincrementValue(field, index)
       : generatedDefault(faker, field, rule, bounds)
   return generated ?? makeScalar(faker, field, enumValues, rule, bounds, index)
+}
+
+/** Whether an optional field is left null, as often as the rule's or the config's rate says. */
+function drawsNull(faker: Faker, rule: ObjectRule, bounds: Bounds) {
+  const nullRate = rule.nullRate ?? bounds.nullRate ?? 0
+  return nullRate > 0 && faker.datatype.boolean({ probability: nullRate })
+}
+
+function autoincrementValue(field: DMMF.Field, index: number) {
+  return field.type === 'BigInt' ? BigInt(index + 1) : index + 1
+}
+
+/** A list field: picked from the rule's values, or scalars made one by one. */
+function makeList(
+  input: {
+    readonly faker: Faker
+    readonly field: DMMF.Field
+    readonly enumValues: readonly EnumMember[] | null
+    readonly bounds: Bounds
+    readonly index: number
+  },
+  rule: ObjectRule,
+  choices: readonly SeedValue[] | null,
+) {
+  const { faker, field, enumValues, bounds, index } = input
+  const length = listLength(faker, rule)
+  if (choices !== null) return faker.helpers.arrayElements(choices, length)
+  // `min` and `max` bound the list's length here, not its elements.
+  const { min: _min, max: _max, ...element } = rule
+  return Array.from({ length }, () => makeScalar(faker, field, enumValues, element, bounds, index))
 }

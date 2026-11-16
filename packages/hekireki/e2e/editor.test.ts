@@ -71,6 +71,22 @@ test('marks an unknown type, offers the quick fixes and clears once fixed', asyn
   await expect.poll(() => fileOnDisk(request, 'base.prisma')).toContain('role  Role')
 })
 
+/** Whether the header names an error, sampled in the browser every 40 ms for 60 samples. */
+async function sampleErrorChip() {
+  const header = document.querySelector('header')
+  const seen: boolean[] = []
+  await new Promise<void>((_resolve) => {
+    const timer = setInterval(() => {
+      seen.push((header?.textContent ?? '').includes('error'))
+      if (seen.length >= 60) {
+        clearInterval(timer)
+        _resolve()
+      }
+    }, 40)
+  })
+  return seen
+}
+
 test('an error that has not gone away stays put while the file keeps saving', async ({ page }) => {
   const editor = editorOf(page)
   // `role  Role   @default(VIEWER)`: the type is replaced by one that does not exist.
@@ -82,20 +98,7 @@ test('an error that has not gone away stays put while the file keeps saving', as
   // Every autosave gives the page a new snapshot object, and a reload follows it over the event
   // stream. The error is the same error each time, and the chip has to stay where it is: it used
   // to go away with each one and come back a moment later, which is a blink for every keystroke.
-  const sampling = page.evaluate(async () => {
-    const header = document.querySelector('header')
-    const seen: boolean[] = []
-    await new Promise<void>((_resolve) => {
-      const timer = setInterval(() => {
-        seen.push((header?.textContent ?? '').includes('error'))
-        if (seen.length >= 60) {
-          clearInterval(timer)
-          _resolve()
-        }
-      }, 40)
-    })
-    return seen
-  })
+  const sampling = page.evaluate(sampleErrorChip)
   await page.keyboard.press('End')
   await editor.type('   ')
   const samples = await sampling

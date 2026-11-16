@@ -98,8 +98,8 @@ export function parseMapping(written: string) {
         /^\s*(?:"(?<quoted>(?:[^"]|"")*)"|(?<bare>[^="]*?))\s*=\s*(?<member>.*?)\s*$/u.exec(
           pair,
         )?.groups
-      const stored = groups?.quoted?.replaceAll('""', '"') ?? groups?.bare ?? ''
-      const member = groups?.member ?? ''
+      const stored = groups?.['quoted']?.replaceAll('""', '"') ?? groups?.['bare'] ?? ''
+      const member = groups?.['member'] ?? ''
       return stored === '' || member === '' ? [] : [[stored, member] as const]
     }),
   )
@@ -193,14 +193,7 @@ function fieldFix(decision: z.infer<typeof Decision>): FieldFixes | null {
   const value = decision.value ?? ''
   // A rename is the only decision about a field other than the one the check names: the check
   // reports the column going away, and the fix belongs to the field it becomes.
-  if (decision.kind === 'column-dropped') {
-    if (decision.choice === 'move') {
-      return fixTarget(decision).field === ''
-        ? null
-        : { movedFrom: { model: decision.modelName, column: decision.field } }
-    }
-    return decision.choice === 'rename' && value !== '' ? { renamedFrom: decision.field } : null
-  }
+  if (decision.kind === 'column-dropped') return droppedColumnFix(decision, value)
   if (decision.kind === 'enum') {
     const values = parseMapping(value)
     return Object.keys(values).length === 0 ? null : { values }
@@ -212,20 +205,37 @@ function fieldFix(decision: z.infer<typeof Decision>): FieldFixes | null {
     return decision.choice === 'sql' ? { convert: { sql: value } } : null
   }
   if (decision.kind === 'table-dropped') return null
-  if (decision.kind === 'unique') {
-    const [, keep = 'first', others = 'delete'] = decision.choice.split('-')
-    // The value, when there is one, is the field the rows are ordered by to say which is first.
-    return keep === 'first' || keep === 'last'
-      ? {
-          duplicates: {
-            keep,
-            ...(value.trim() === '' ? {} : { orderBy: value.trim() }),
-            others: others === 'null' ? ('null' as const) : ('delete' as const),
-          },
-        }
-      : null
+  if (decision.kind === 'unique') return duplicatesFix(decision.choice, value)
+  return invalidFix(decision)
+}
+
+/** A dropped column's values moved to a related model, or the column renamed. */
+function droppedColumnFix(decision: z.infer<typeof Decision>, value: string): FieldFixes | null {
+  if (decision.choice === 'move') {
+    return fixTarget(decision).field === ''
+      ? null
+      : { movedFrom: { model: decision.modelName, column: decision.field } }
   }
-  // The rest say what becomes of a value the column can no longer hold.
+  return decision.choice === 'rename' && value !== '' ? { renamedFrom: decision.field } : null
+}
+
+/** Which of a group of duplicates is kept, and what becomes of the others. */
+function duplicatesFix(choice: string, value: string): FieldFixes | null {
+  const [, keep = 'first', others = 'delete'] = choice.split('-')
+  // The value, when there is one, is the field the rows are ordered by to say which is first.
+  return keep === 'first' || keep === 'last'
+    ? {
+        duplicates: {
+          keep,
+          ...(value.trim() === '' ? {} : { orderBy: value.trim() }),
+          others: others === 'null' ? ('null' as const) : ('delete' as const),
+        },
+      }
+    : null
+}
+
+/** What becomes of a value the column can no longer hold. */
+function invalidFix(decision: z.infer<typeof Decision>): FieldFixes | null {
   if (decision.choice === 'value' || decision.choice === 'sql') {
     return { invalid: { set: fixValue(decision) } }
   }
@@ -277,11 +287,9 @@ function modelFix(decisions: z.infer<typeof Decisions>): ModelFixes {
           // One field can take several decisions (its NULLs filled and its bad values cleared),
           // so they are gathered onto it rather than the last one standing for all.
           fields: Object.fromEntries(
-            [...new Set(named.map((one) => one.name))].map((name) => [
+            [...Map.groupBy(named, (one) => one.name)].map(([name, ones]) => [
               name,
-              named
-                .filter((one) => one.name === name)
-                .reduce<FieldFixes>((merged, one) => Object.assign(merged, one.fix), {}),
+              ones.reduce<FieldFixes>((merged, one) => Object.assign(merged, one.fix), {}),
             ]),
           ),
         }),
@@ -324,10 +332,9 @@ export function makeDecisionModels(decisions: z.infer<typeof Decisions>) {
   const fixing = decisions.filter((decision) => decision.kind !== 'table-dropped')
   // A move is a fix of the model the column moves to.
   const models: Readonly<Record<string, ModelFixes>> = Object.fromEntries(
-    [...new Set(fixing.map((decision) => fixTarget(decision).model))].map((modelName) => [
-      modelName,
-      modelFix(fixing.filter((decision) => fixTarget(decision).model === modelName)),
-    ]),
+    [...Map.groupBy(fixing, (decision) => fixTarget(decision).model)].map(
+      ([modelName, ofModel]) => [modelName, modelFix(ofModel)],
+    ),
   )
   return models
 }

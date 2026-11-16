@@ -273,7 +273,10 @@ describe.each(TARGETS)('the Migrate page through the native schema engine on $na
         const applied = await call('/api/migrate/apply', { statements: step.statements })
         expect(applied.json).toMatchObject({ ok: true })
       }
-      const sql = steps.flatMap((step) => step.statements.map((one) => `${one};`)).join('\n')
+      const sql = steps
+        .flatMap((step) => step.statements)
+        .map((one) => `${one};`)
+        .join('\n')
       const created = await call('/api/migrate/migrations', { name: 'required_name', sql })
       expect(created.status).toBe(200)
       const recorded = await call('/api/migrate/migrations/applied', { name: created.json.name })

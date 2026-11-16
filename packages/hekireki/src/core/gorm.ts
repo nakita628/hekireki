@@ -4,7 +4,7 @@ import { Effect } from 'effect'
 import { emitRaw } from '../emit/index.js'
 import { generateGormModels } from '../generator/gorm.js'
 import { gormProblems } from '../helper/gorm.js'
-import { getString } from '../utils/index.js'
+import { getString } from '../prisma/config.js'
 import { GeneratorConfigError } from './errors.js'
 import { outputFile, requireOutput } from './output.js'
 
@@ -18,7 +18,7 @@ export function gorm(options: GeneratorOptions) {
       })
     }
     const resolved = outputFile(output, 'models.go')
-    const packageName = getString(options.generator.config.package) ?? 'model'
+    const packageName = getString(options.generator.config['package']) ?? 'model'
     const enums = options.dmmf.datamodel.enums
     const indexes = options.dmmf.datamodel.indexes
     const code = generateGormModels(

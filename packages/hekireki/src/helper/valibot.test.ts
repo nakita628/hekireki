@@ -13,8 +13,8 @@ import {
 describe('helper/valibot', () => {
   describe('PRISMA_TO_VALIBOT', () => {
     it('PRISMA_TO_VALIBOT maps String to string()', () => {
-      expect(PRISMA_TO_VALIBOT.String).toBe('string()')
-      expect(PRISMA_TO_VALIBOT.Int).toBe('number()')
+      expect(PRISMA_TO_VALIBOT['String']).toBe('string()')
+      expect(PRISMA_TO_VALIBOT['Int']).toBe('number()')
     })
   })
 

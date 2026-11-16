@@ -5,6 +5,8 @@ import { BASE_URL } from './e2e/workspace.js'
 // The tests drive the built Studio (`pnpm build` first) through e2e/serve.ts: the CLI serves
 // dist/web and edits a throwaway workspace, so a run never touches the fixtures or a real project.
 
+const CI = (process.env.CI ?? '') !== ''
+
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.test.ts',
@@ -15,8 +17,8 @@ export default defineConfig({
   // server and one workspace, so they run one at a time.
   fullyParallel: false,
   workers: 1,
-  retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? 'github' : 'list',
+  retries: CI ? 1 : 0,
+  reporter: CI ? 'github' : 'list',
   outputDir: './e2e/.results',
   snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',
   use: {

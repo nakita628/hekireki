@@ -32,7 +32,9 @@ export function EnumView({ schema, value }: { readonly schema: Schema; readonly 
     <section className="flex min-h-0 flex-1 flex-col overflow-auto">
       <header className="sticky top-0 z-[2] flex flex-wrap items-center gap-3.5 border-b border-line bg-surface px-6 py-3.5">
         <h1 className="page-title">{value.name}</h1>
-        {value.dbName ? <span className="font-mono text-ui text-muted">{value.dbName}</span> : null}
+        {(value.dbName ?? '') !== '' ? (
+          <span className="font-mono text-ui text-muted">{value.dbName}</span>
+        ) : null}
         <span className="text-lead text-muted">
           enum · {value.values.length} {value.values.length === 1 ? 'value' : 'values'}
         </span>
@@ -45,7 +47,7 @@ export function EnumView({ schema, value }: { readonly schema: Schema; readonly 
           Prisma schema
         </Link>
       </header>
-      {value.documentation ? (
+      {(value.documentation ?? '') !== '' ? (
         <p className="m-0 px-6 pt-3 whitespace-pre-wrap text-muted">{value.documentation}</p>
       ) : null}
       <Table variant="secondary" className="studio-table">

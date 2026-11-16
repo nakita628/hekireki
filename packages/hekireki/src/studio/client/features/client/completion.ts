@@ -19,27 +19,39 @@ type Suggestion = {
   readonly kind: 'model' | 'operation' | 'argument' | 'field'
 }
 
+/** The shapes that are only a model: what each takes follows from the model alone. */
+type ModelKind =
+  | 'where'
+  | 'someEveryNone'
+  | 'isIsNot'
+  | 'select'
+  | 'include'
+  | 'omit'
+  | 'orderBy'
+  | 'data'
+  | 'nested'
+  | 'fields'
+  | 'count'
+  | 'countFields'
+
 type Shape =
   | { readonly kind: 'args'; readonly model: CompletionModel; readonly operation: string }
-  | {
-      readonly kind:
-        | 'where'
-        | 'someEveryNone'
-        | 'isIsNot'
-        | 'select'
-        | 'include'
-        | 'omit'
-        | 'orderBy'
-        | 'data'
-        | 'nested'
-        | 'fields'
-        | 'count'
-        | 'countFields'
-      readonly model: CompletionModel
-    }
-  | { readonly kind: 'relation' | 'write'; readonly model: CompletionModel; readonly list: boolean }
+  | { readonly kind: ModelKind; readonly model: CompletionModel }
+  | { readonly kind: 'relation'; readonly model: CompletionModel; readonly list: boolean }
+  | { readonly kind: 'write'; readonly model: CompletionModel; readonly list: boolean }
   | { readonly kind: 'filter'; readonly field: CompletionField }
   | { readonly kind: 'none' }
+
+/** A relation field and the model it leads to. */
+type Relation = { readonly field: CompletionField; readonly model: CompletionModel }
+
+/** Where a key is written: the model it is a key of, and the field it names there, if any. */
+type KeyAt = {
+  readonly model: CompletionModel
+  readonly key: string
+  readonly field: CompletionField | undefined
+  readonly relation: Relation | null
+}
 
 const NONE: Shape = { kind: 'none' }
 
@@ -57,80 +69,100 @@ const RELATION_ARGS = [
 
 const NUMERIC = new Set(['Int', 'BigInt', 'Float', 'Decimal', 'DateTime'])
 
+/** The keys of an operation's arguments (or a relation's) and the shape each leads to. */
+const ARGS_STEPS = new Map<string, ModelKind>([
+  ['where', 'where'],
+  ['having', 'where'],
+  ['cursor', 'where'],
+  ['select', 'select'],
+  ['include', 'include'],
+  ['omit', 'omit'],
+  ['orderBy', 'orderBy'],
+  ['data', 'data'],
+  ['create', 'data'],
+  ['update', 'data'],
+  ['_avg', 'fields'],
+  ['_sum', 'fields'],
+  ['_min', 'fields'],
+  ['_max', 'fields'],
+])
+
+const LOGICAL_KEYS = new Set(['AND', 'OR', 'NOT'])
+const LIST_FILTER_KEYS = new Set(['some', 'every', 'none'])
+const NESTED_WRITE_KEYS = new Set(['createMany', 'connectOrCreate', 'upsert', 'updateMany'])
+const WHERE_WRITE_KEYS = new Set(['connect', 'disconnect', 'set', 'delete', 'deleteMany'])
+
+/** One key down from the arguments; `_count` counts fields only where the operation is not one. */
+function stepFromArgs(model: CompletionModel, key: string, countsFields: boolean): Shape {
+  if (key === '_count') return countsFields ? { kind: 'fields', model } : NONE
+  const kind = ARGS_STEPS.get(key)
+  return kind === undefined ? NONE : { kind, model }
+}
+
+function stepFromWhere({ model, key, field, relation }: KeyAt, takesIs: boolean): Shape {
+  if (LOGICAL_KEYS.has(key)) return { kind: 'where', model }
+  if (takesIs && (key === 'is' || key === 'isNot')) return { kind: 'where', model }
+  if (relation !== null) {
+    return { kind: relation.field.isList ? 'someEveryNone' : 'isIsNot', model: relation.model }
+  }
+  return field === undefined ? NONE : { kind: 'filter', field }
+}
+
+function stepFromSelect({ model, key, relation }: KeyAt): Shape {
+  if (key === '_count') return { kind: 'count', model }
+  return relation === null
+    ? NONE
+    : { kind: 'relation', model: relation.model, list: relation.field.isList }
+}
+
+function stepFromOrderBy({ relation }: KeyAt): Shape {
+  if (relation === null) return NONE
+  return relation.field.isList
+    ? { kind: 'fields', model: relation.model }
+    : { kind: 'orderBy', model: relation.model }
+}
+
+function stepFromData({ relation }: KeyAt): Shape {
+  return relation === null
+    ? NONE
+    : { kind: 'write', model: relation.model, list: relation.field.isList }
+}
+
+function stepFromWrite(model: CompletionModel, key: string, list: boolean): Shape {
+  if (key === 'create') return { kind: 'data', model }
+  if (NESTED_WRITE_KEYS.has(key)) return { kind: 'nested', model }
+  if (key === 'update') return list ? { kind: 'nested', model } : { kind: 'data', model }
+  return WHERE_WRITE_KEYS.has(key) ? { kind: 'where', model } : NONE
+}
+
+const MODEL_STEPS: { readonly [K in ModelKind]: (at: KeyAt) => Shape } = {
+  where: (at) => stepFromWhere(at, false),
+  isIsNot: (at) => stepFromWhere(at, true),
+  someEveryNone: ({ model, key }) => (LIST_FILTER_KEYS.has(key) ? { kind: 'where', model } : NONE),
+  select: stepFromSelect,
+  include: stepFromSelect,
+  count: ({ model, key }) => (key === 'select' ? { kind: 'countFields', model } : NONE),
+  orderBy: stepFromOrderBy,
+  data: stepFromData,
+  nested: ({ model, key }) => stepFromArgs(model, key, false),
+  omit: () => NONE,
+  fields: () => NONE,
+  countFields: () => NONE,
+}
+
 /** The shape one key down from `shape`, as Prisma Client's input types nest. */
 function step(shape: Shape, key: string, models: readonly CompletionModel[]): Shape {
   if (shape.kind === 'none' || shape.kind === 'filter') {
     return shape.kind === 'filter' && key === 'not' ? shape : NONE
   }
   const { model } = shape
+  if (shape.kind === 'args') return stepFromArgs(model, key, shape.operation !== 'count')
+  if (shape.kind === 'relation') return stepFromArgs(model, key, false)
+  if (shape.kind === 'write') return stepFromWrite(model, key, shape.list)
   const field = model.fields.find((candidate) => candidate.name === key)
   const related = field?.kind === 'object' ? models.find((m) => m.name === field.type) : undefined
-  const at = (kind: 'where' | 'select' | 'include' | 'omit' | 'orderBy' | 'data' | 'fields') => ({
-    kind,
-    model,
-  })
-  switch (shape.kind) {
-    case 'args':
-    case 'relation':
-    case 'nested': {
-      if (key === 'where' || key === 'having' || key === 'cursor') return at('where')
-      if (key === 'select' || key === 'include' || key === 'omit' || key === 'orderBy') {
-        return at(key)
-      }
-      if (key === 'data' || key === 'create' || key === 'update') return at('data')
-      if (key === '_count') {
-        return shape.kind === 'args' && shape.operation !== 'count' ? at('fields') : NONE
-      }
-      return key === '_avg' || key === '_sum' || key === '_min' || key === '_max'
-        ? at('fields')
-        : NONE
-    }
-    case 'where':
-    case 'isIsNot': {
-      if (key === 'AND' || key === 'OR' || key === 'NOT') return at('where')
-      if (shape.kind === 'isIsNot' && (key === 'is' || key === 'isNot')) return at('where')
-      if (related !== undefined && field !== undefined) {
-        return { kind: field.isList ? 'someEveryNone' : 'isIsNot', model: related }
-      }
-      return field === undefined ? NONE : { kind: 'filter', field }
-    }
-    case 'someEveryNone':
-      return key === 'some' || key === 'every' || key === 'none' ? at('where') : NONE
-    case 'select':
-    case 'include': {
-      if (key === '_count') return { kind: 'count', model }
-      return related !== undefined && field !== undefined
-        ? { kind: 'relation', model: related, list: field.isList }
-        : NONE
-    }
-    case 'count':
-      return key === 'select' ? { kind: 'countFields', model } : NONE
-    case 'orderBy': {
-      if (related === undefined || field === undefined) return NONE
-      return field.isList ? { kind: 'fields', model: related } : { kind: 'orderBy', model: related }
-    }
-    case 'data':
-      return related !== undefined && field !== undefined
-        ? { kind: 'write', model: related, list: field.isList }
-        : NONE
-    case 'write': {
-      if (key === 'create') return { kind: 'data', model }
-      if (key === 'createMany') return { kind: 'nested', model }
-      if (key === 'connectOrCreate' || key === 'upsert' || key === 'updateMany') {
-        return { kind: 'nested', model }
-      }
-      if (key === 'update') return shape.list ? { kind: 'nested', model } : { kind: 'data', model }
-      return ['connect', 'disconnect', 'set', 'delete', 'deleteMany'].includes(key)
-        ? { kind: 'where', model }
-        : NONE
-    }
-    case 'omit':
-    case 'fields':
-    case 'countFields':
-      return NONE
-    default:
-      return shape satisfies never
-  }
+  const relation = field === undefined || related === undefined ? null : { field, model: related }
+  return MODEL_STEPS[shape.kind]({ model, key, field, relation })
 }
 
 function argument(label: string, detail: string): Suggestion {
@@ -139,6 +171,113 @@ function argument(label: string, detail: string): Suggestion {
 
 function fieldSuggestion(field: CompletionField): Suggestion {
   return { label: field.name, detail: `${field.type}${field.isList ? '[]' : ''}`, kind: 'field' }
+}
+
+/** The filters a scalar field takes, by its type. */
+function filtersOf(field: CompletionField): readonly string[] {
+  if (field.isList) return ['has', 'hasEvery', 'hasSome', 'isEmpty', 'equals']
+  if (field.kind === 'enum') return ['equals', 'not', 'in', 'notIn']
+  if (field.type === 'String') {
+    return [
+      'equals',
+      'not',
+      'in',
+      'notIn',
+      'contains',
+      'startsWith',
+      'endsWith',
+      'mode',
+      'lt',
+      'lte',
+      'gt',
+      'gte',
+    ]
+  }
+  if (NUMERIC.has(field.type)) return ['equals', 'not', 'in', 'notIn', 'lt', 'lte', 'gt', 'gte']
+  if (field.type === 'Json') return ['equals', 'not', 'path', 'string_contains', 'array_contains']
+  return ['equals', 'not']
+}
+
+const NESTED_WRITES_TO_MANY = [
+  'create',
+  'createMany',
+  'connect',
+  'connectOrCreate',
+  'disconnect',
+  'set',
+  'delete',
+  'deleteMany',
+  'update',
+  'updateMany',
+  'upsert',
+]
+
+const NESTED_WRITES_TO_ONE = [
+  'create',
+  'connect',
+  'connectOrCreate',
+  'disconnect',
+  'delete',
+  'update',
+  'upsert',
+]
+
+const MODEL_KEYS: {
+  readonly [K in ModelKind]: (model: CompletionModel) => readonly Suggestion[]
+} = {
+  where: (model) => [
+    ...model.fields.map(fieldSuggestion),
+    ...['AND', 'OR', 'NOT'].map((label) => argument(label, `${model.name}WhereInput`)),
+  ],
+  isIsNot: (model) => [
+    ...['is', 'isNot'].map((label) => argument(label, `${model.name}WhereInput`)),
+    ...model.fields.map(fieldSuggestion),
+  ],
+  someEveryNone: (model) =>
+    ['some', 'every', 'none'].map((label) => argument(label, `${model.name}WhereInput`)),
+  select: (model) => [...model.fields.map(fieldSuggestion), argument('_count', 'relation counts')],
+  include: (model) => [
+    ...model.fields.filter((field) => field.kind === 'object').map(fieldSuggestion),
+    argument('_count', 'relation counts'),
+  ],
+  count: () => [argument('select', 'the relations to count')],
+  countFields: (model) =>
+    model.fields.filter((field) => field.kind === 'object' && field.isList).map(fieldSuggestion),
+  omit: (model) => model.fields.filter((field) => field.kind !== 'object').map(fieldSuggestion),
+  fields: (model) => model.fields.filter((field) => field.kind !== 'object').map(fieldSuggestion),
+  orderBy: (model) => model.fields.map(fieldSuggestion),
+  data: (model) => model.fields.map(fieldSuggestion),
+  nested: (model) =>
+    ['where', 'create', 'update', 'data', 'skipDuplicates'].map((label) =>
+      argument(label, model.name),
+    ),
+}
+
+/** The keys the Prisma input type of a shape takes. */
+function keysOf(shape: Shape): readonly Suggestion[] {
+  if (shape.kind === 'none') return []
+  if (shape.kind === 'filter') {
+    const { field } = shape
+    return filtersOf(field).map((label) => argument(label, `${field.type} filter`))
+  }
+  const { model } = shape
+  if (shape.kind === 'args') {
+    const { operation } = shape
+    return (OPERATIONS[operation]?.args ?? []).map((label) =>
+      argument(label, `${model.name}.${operation}`),
+    )
+  }
+  if (shape.kind === 'relation') {
+    return (shape.list ? RELATION_ARGS : ['select', 'include', 'omit']).map((label) =>
+      argument(label, model.name),
+    )
+  }
+  if (shape.kind === 'write') {
+    return (shape.list ? NESTED_WRITES_TO_MANY : NESTED_WRITES_TO_ONE).map((label) =>
+      argument(label, `nested write to ${model.name}`),
+    )
+  }
+  return MODEL_KEYS[shape.kind](model)
 }
 
 /**
@@ -174,96 +313,5 @@ export function suggestionsAt(
     model: delegate,
     operation: context.operation,
   })
-  if (shape.kind === 'none') return []
-  if (shape.kind === 'filter') {
-    const { field } = shape
-    const filters = field.isList
-      ? ['has', 'hasEvery', 'hasSome', 'isEmpty', 'equals']
-      : field.kind === 'enum'
-        ? ['equals', 'not', 'in', 'notIn']
-        : field.type === 'String'
-          ? [
-              'equals',
-              'not',
-              'in',
-              'notIn',
-              'contains',
-              'startsWith',
-              'endsWith',
-              'mode',
-              'lt',
-              'lte',
-              'gt',
-              'gte',
-            ]
-          : NUMERIC.has(field.type)
-            ? ['equals', 'not', 'in', 'notIn', 'lt', 'lte', 'gt', 'gte']
-            : field.type === 'Json'
-              ? ['equals', 'not', 'path', 'string_contains', 'array_contains']
-              : ['equals', 'not']
-    return filters.map((label) => argument(label, `${field.type} filter`))
-  }
-  const { model } = shape
-  const scalars = model.fields.filter((field) => field.kind !== 'object')
-  const relations = model.fields.filter((field) => field.kind === 'object')
-  switch (shape.kind) {
-    case 'args':
-      return (OPERATIONS[shape.operation]?.args ?? []).map((label) =>
-        argument(label, `${model.name}.${shape.operation}`),
-      )
-    case 'where':
-      return [
-        ...model.fields.map(fieldSuggestion),
-        ...['AND', 'OR', 'NOT'].map((label) => argument(label, `${model.name}WhereInput`)),
-      ]
-    case 'isIsNot':
-      return [
-        ...['is', 'isNot'].map((label) => argument(label, `${model.name}WhereInput`)),
-        ...model.fields.map(fieldSuggestion),
-      ]
-    case 'someEveryNone':
-      return ['some', 'every', 'none'].map((label) => argument(label, `${model.name}WhereInput`))
-    case 'select':
-      return [...model.fields.map(fieldSuggestion), argument('_count', 'relation counts')]
-    case 'include':
-      return [...relations.map(fieldSuggestion), argument('_count', 'relation counts')]
-    case 'relation':
-      return (shape.list ? RELATION_ARGS : ['select', 'include', 'omit']).map((label) =>
-        argument(label, model.name),
-      )
-    case 'count':
-      return [argument('select', 'the relations to count')]
-    case 'countFields':
-      return relations.filter((field) => field.isList).map(fieldSuggestion)
-    case 'omit':
-    case 'fields':
-      return scalars.map(fieldSuggestion)
-    case 'orderBy':
-    case 'data':
-      return model.fields.map(fieldSuggestion)
-    case 'write':
-      return (
-        shape.list
-          ? [
-              'create',
-              'createMany',
-              'connect',
-              'connectOrCreate',
-              'disconnect',
-              'set',
-              'delete',
-              'deleteMany',
-              'update',
-              'updateMany',
-              'upsert',
-            ]
-          : ['create', 'connect', 'connectOrCreate', 'disconnect', 'delete', 'update', 'upsert']
-      ).map((label) => argument(label, `nested write to ${model.name}`))
-    case 'nested':
-      return ['where', 'create', 'update', 'data', 'skipDuplicates'].map((label) =>
-        argument(label, model.name),
-      )
-    default:
-      return shape satisfies never
-  }
+  return keysOf(shape)
 }

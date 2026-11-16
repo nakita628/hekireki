@@ -53,8 +53,10 @@ function listedPairsOf(
         message: `${own.model} data[${index}].${own.field}: expected a list of ${other.model} ids or keys.`,
       })
     }
-    const ids = yield* Effect.forEach(links, (link) =>
-      linkedPartner(own, other, index, partners, link),
+    const ids = yield* Effect.forEach(
+      links,
+      (link) => linkedPartner(own, other, index, partners, link),
+      { concurrency: 1 },
     )
     return ids.map((id) => ({ [own.column]: row?.[own.idField] ?? null, [other.column]: id }))
   })
@@ -67,8 +69,10 @@ function listedPairs(context: Context, own: JoinSide, other: JoinSide) {
   const data = context.givenByModel.get(own.model) ?? []
   const rows = context.rowsByModel.get(own.model) ?? []
   const partners = context.rowsByModel.get(other.model) ?? []
-  return Effect.forEach(data, (given, index) =>
-    listedPairsOf(own, other, index, given, rows[index], partners),
+  return Effect.forEach(
+    data,
+    (given, index) => listedPairsOf(own, other, index, given, rows[index], partners),
+    { concurrency: 1 },
   ).pipe(Effect.map((pairs) => pairs.flat()))
 }
 
@@ -116,7 +120,7 @@ export function makeJoinRows(context: Context, table: JoinTable) {
 function dedupe(pairs: readonly SeedRow[]) {
   const seen = new Set<string>()
   return pairs.filter((pair) => {
-    const key = `${keyOf(pair.A ?? null)} ${keyOf(pair.B ?? null)}`
+    const key = `${keyOf(pair['A'] ?? null)} ${keyOf(pair['B'] ?? null)}`
     if (seen.has(key)) return false
     seen.add(key)
     return true

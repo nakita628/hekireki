@@ -268,16 +268,42 @@ function inColumns<E extends CaptionedEdge>(
               return next < turn.x ? undefined : stand(next)
             }
             const box = stand(end.x - EDGE_OFFSET - CAPTION_GAP - width)
-            const clear =
-              box !== undefined &&
-              box.x >= turn.x &&
-              !cards.some((card) => overlapArea(box, card, CARD_MARGIN) > 0) &&
-              !wires.some((wire) => wire.edge !== edge && meets(box, wire.box))
+            const clear = box !== undefined && box.x >= turn.x && isClear(box, edge, cards, wires)
             return clear ? { placed: [...state.placed, { edge, caption, box }] } : state
           },
           { placed: [] },
         ).placed,
   )
+}
+
+// Whether a caption's box covers no model and no other edge's wire.
+function isClear<E extends CaptionedEdge>(
+  box: Box,
+  edge: E,
+  cards: readonly Box[],
+  wires: readonly Wire<E>[],
+) {
+  return (
+    !cards.some((card) => overlapArea(box, card, CARD_MARGIN) > 0) &&
+    !wires.some((wire) => wire.edge !== edge && meets(box, wire.box))
+  )
+}
+
+// What can be in the way within reach: the models, the other edges' wires, the captions placed.
+function obstaclesNear<E extends CaptionedEdge>(
+  reach: Box,
+  edge: E,
+  scene: {
+    readonly wires: readonly Wire<E>[]
+    readonly cards: readonly Box[]
+    readonly placed: readonly PlacedCaption<E>[]
+  },
+) {
+  return {
+    near: scene.cards.filter((card) => meets(reach, card)),
+    crossed: scene.wires.filter((wire) => wire.edge !== edge && meets(reach, wire.box)),
+    taken: scene.placed.filter((other) => meets(reach, other.box)),
+  }
 }
 
 /**
@@ -305,9 +331,7 @@ function clearestSpot<E extends CaptionedEdge>(
     const boxes = spots.map((spot) => captionBox(size, spot))
     // The spots of a segment all lie along it, so only what is near them can be in the way.
     const reach = around(boxes, WIRE_CLEARANCE)
-    const near = cards.filter((card) => meets(reach, card))
-    const crossed = wires.filter((wire) => wire.edge !== edge && meets(reach, wire.box))
-    const taken = placed.filter((other) => meets(reach, other.box))
+    const { near, crossed, taken } = obstaclesNear(reach, edge, { wires, cards, placed })
     const scored = boxes.map((box) => {
       // How far the chip sits from the wire it names. Every pixel of it counts, so the spot on the
       // wire wins whenever it is free and the chip steps off only when staying would cost it a

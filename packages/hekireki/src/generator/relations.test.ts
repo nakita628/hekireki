@@ -18,6 +18,12 @@ const REPORTS = 'reports   Employee[] @relation("Mgr")'
 const MANAGER_ID = 'managerId Int?'
 const MANAGER = 'manager   Employee?  @relation("Mgr", fields: [managerId], references: [id])'
 
+/** The datamodel `getDMMF` parsed, or its parse error thrown. */
+function parsedDatamodel(result: ReturnType<typeof getDMMF>) {
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel
+}
+
 function datamodelOf(fields: readonly string[]) {
   const result = getDMMF({
     datamodel: [
@@ -121,10 +127,8 @@ describe('a many-to-many between keys not named id', () => {
         ],
       ],
     })
-    if ('type' in result) throw new Error(result.error.message)
-    const code = seaOrmFiles(result.datamodel.models, result.datamodel.enums).find(
-      (f) => f.fileName === 'post_to_tag.rs',
-    )?.code
+    const { models, enums } = parsedDatamodel(result)
+    const code = seaOrmFiles(models, enums).find((f) => f.fileName === 'post_to_tag.rs')?.code
     expect(code).toContain('to = "super::post::Column::PostId"')
     expect(code).toContain('to = "super::tag::Column::Slug"')
   })
@@ -283,8 +287,7 @@ model Tag {
         ],
       ],
     })
-    if ('type' in result) throw new Error(result.error.message)
-    const { models, enums, indexes } = result.datamodel
+    const { models, enums, indexes } = parsedDatamodel(result)
     const code = djangoCode(models, enums, indexes, 'postgresql')
     expect(code).toContain(
       'a = models.ForeignKey("Post", on_delete=models.CASCADE, related_name="+", db_column="A", db_index=False)',

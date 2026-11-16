@@ -1,8 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 
+import { parseRelation } from '../annotation/index.js'
 import type { Cardinality, RelationOrigin } from '../types/index.js'
-import { parseRelation } from './index.js'
-import { backRelation } from './prisma-model.js'
+import { backRelation } from './model.js'
 
 type ERRelation = {
   /** The `@relation` name the relation carries, when it has one. */
@@ -32,15 +32,15 @@ export function erKey(relation: {
   return `${relation.from.model}.${relation.from.field}->${relation.to.model}.${relation.to.field}`
 }
 
+function childCardinality(inverse: DMMF.Field | undefined): Cardinality {
+  if (inverse?.isList === true) return 'zero-many'
+  return inverse?.isRequired === true ? 'one' : 'zero-one'
+}
+
 export function inferredERRelations(models: readonly DMMF.Model[]) {
   return models.flatMap((model) =>
     model.fields
-      .filter(
-        (field) =>
-          field.kind === 'object' &&
-          field.relationFromFields &&
-          field.relationFromFields.length > 0,
-      )
+      .filter((field) => field.kind === 'object' && (field.relationFromFields ?? []).length > 0)
       .map((field) => {
         const toModel = model.name
         const fromModel = field.type
@@ -55,11 +55,7 @@ export function inferredERRelations(models: readonly DMMF.Model[]) {
         // The child end answers "how many children does one parent row have?". A list back
         // relation has no lower bound in Prisma, so it is always zero or many; a one-to-one back
         // relation carries its own optionality.
-        const toCardinality: Cardinality = inverseField?.isList
-          ? 'zero-many'
-          : inverseField?.isRequired
-            ? 'one'
-            : 'zero-one'
+        const toCardinality = childCardinality(inverseField)
 
         return {
           name: field.relationName ?? null,
@@ -96,13 +92,14 @@ export function annotatedERRelations(models: readonly { readonly documentation?:
 // keeps the pairs in a join table of its own. Emitted once per pair, keyed on the two relation
 // field names so the order the models are declared in does not matter.
 export function implicitManyToManyERRelations(models: readonly DMMF.Model[]) {
+  const byName = new Map(models.map((m) => [m.name, m]))
   return models.flatMap((model) =>
     model.fields
       .filter((f) => f.kind === 'object' && f.isList && (f.relationFromFields ?? []).length === 0)
       .flatMap((field) => {
-        const other = models.find((m) => m.name === field.type)
+        const other = byName.get(field.type)
         const inverse = backRelation(field, model, models)
-        if (!(other && inverse?.isList)) return []
+        if (other === undefined || inverse?.isList !== true) return []
         if (`${model.name}.${field.name}` > `${other.name}.${inverse.name}`) return []
         return [
           {

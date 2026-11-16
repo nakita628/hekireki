@@ -103,6 +103,29 @@ function check(dir: string, url: string | null = 'file:./dev.db') {
   )
 }
 
+/** The decisions with the choice of every one of a kind changed. */
+function withChoice(
+  decisions: readonly Readonly<Record<string, string | null>>[],
+  kind: string,
+  choice: string,
+) {
+  return decisions.map((decision) =>
+    decision['kind'] === kind ? { ...decision, choice } : decision,
+  )
+}
+
+/** The SQL that previews a model's rows as the plan leaves them. */
+function previewOf(result: Awaited<ReturnType<typeof report>>, model: string) {
+  const preview = result.previews.find((one) => one.model === model)
+  if (preview === undefined) throw new Error(`no preview of ${model}`)
+  return preview.sql
+}
+
+/** What a check that failed says; empty when it did not fail. */
+function failureOf(exit: Awaited<ReturnType<typeof check>>) {
+  return Exit.isFailure(exit) ? String(exit.cause) : ''
+}
+
 async function report(dir: string) {
   const exit = await check(dir, 'file:./dev.db')
   if (Exit.isFailure(exit)) throw new Error(String(exit.cause))
@@ -115,7 +138,7 @@ describe('runMigrateCheck', () => {
     const result = await report(dir)
     expect(
       result.results
-        .filter((r) => r.status !== 'passed' && r.status !== 'guaranteed')
+        .filter((r) => !['passed', 'guaranteed'].includes(r.status))
         .map((r) => [r.status, r.subject, r.what, r.count]),
     ).toStrictEqual([
       ['blocking', 'User.name', 'column becomes NOT NULL', 2],
@@ -317,12 +340,7 @@ describe('fixes from the decisions of the Migrate page', () => {
   it('writes a plan that leaves each table as the check previewed it', async () => {
     const dir = project(FIXABLE, OLD_DATABASE)
     // Keeping the first of each email deletes users 2 and 4, which no post points at.
-    decide(
-      dir,
-      DECISIONS.map((decision) =>
-        decision.kind === 'unique' ? { ...decision, choice: 'keep-first-delete' } : decision,
-      ),
-    )
+    decide(dir, withChoice(DECISIONS, 'unique', 'keep-first-delete'))
     const result = await report(dir)
     // The statements alone: a marker for the plan to know its own output, no comment else.
     expect(planSql(result)).toStrictEqual({
@@ -388,7 +406,9 @@ END $hekireki$;
       'It deletes rows, drops what holds them or writes over values, and nothing here undoes a statement that has run: take a backup before it.',
     ])
     expect(
-      result.results.filter((r) => r.kind.startsWith('delete-') && r.status !== 'passed'),
+      result.results
+        .filter((r) => r.kind.startsWith('delete-'))
+        .filter((r) => r.status !== 'passed'),
     ).toStrictEqual([])
     const database = path.join(dir, 'dev.db')
     const predicted = result.previews.map((preview) => rows(database, preview.sql))
@@ -744,8 +764,7 @@ INSERT INTO "Post" VALUES (1, 'Hello', NULL, 1), (2, 'Again', 'Zed', 1), (3, 'On
         .all()
         .map((row) => structuredClone(row))
     // What the check says the rows will be, read before anything is written.
-    const preview = result.previews.find((one) => one.model === 'User')
-    const previewed = rows(preview?.sql ?? '').map((row) => [row.id, row.authorName])
+    const previewed = rows(previewOf(result, 'User')).map((row) => [row['id'], row['authorName']])
     expect(previewed).toStrictEqual([
       [1, 'Zed'],
       [2, 'Bob'],
@@ -754,8 +773,8 @@ INSERT INTO "Post" VALUES (1, 'Hello', NULL, 1), (2, 'Again', 'Zed', 1), (3, 'On
     db.exec(planSql(result, { path: 'migration.sql', sql: MIGRATION }).sql)
     expect(
       rows('SELECT "id", "authorName" FROM "User" ORDER BY "id"').map((row) => [
-        row.id,
-        row.authorName,
+        row['id'],
+        row['authorName'],
       ]),
     ).toStrictEqual(previewed)
     db.close()
@@ -770,7 +789,7 @@ CREATE TABLE "hk_move_Post_authorName" ("hk_key" INTEGER, "hk_value" TEXT);
     )
     decide(dir, MOVES)
     const exit = await check(dir)
-    expect(Exit.isFailure(exit) ? String(exit.cause) : '').toContain(
+    expect(failureOf(exit)).toContain(
       'User.authorName: the database has a table hk_move_Post_authorName, left by a plan that did not finish.',
     )
   })
@@ -804,7 +823,7 @@ CREATE TABLE "Note" ("id" INTEGER NOT NULL PRIMARY KEY);
       },
     ])
     const exit = await check(dir)
-    expect(Exit.isFailure(exit) ? String(exit.cause) : '').toContain(
+    expect(failureOf(exit)).toContain(
       'Note.bio: Note and User are not related by a foreign key over one column',
     )
   })
@@ -1142,7 +1161,7 @@ INSERT INTO "User" VALUES (1, 'Ann'), (2, NULL), (3, NULL);
     const result = await report(dir)
     expect(
       result.results
-        .filter((one) => one.kind === 'check-constraint' || one.kind === 'trigger-unfollowed')
+        .filter((one) => ['check-constraint', 'trigger-unfollowed'].includes(one.kind))
         .map((one) => [one.kind, one.subject, one.status, one.count]),
     ).toStrictEqual([
       ['check-constraint', 'User CHECK 1', 'passed', 0],
@@ -1189,9 +1208,7 @@ PRAGMA defer_foreign_keys=OFF;
     const dir = project(SCHEMA, DATABASE)
     const result = await report(dir)
     expect(
-      result.results.filter(
-        (one) => one.kind === 'check-constraint' || one.kind === 'trigger-unfollowed',
-      ),
+      result.results.filter((one) => ['check-constraint', 'trigger-unfollowed'].includes(one.kind)),
     ).toStrictEqual([])
   })
 })

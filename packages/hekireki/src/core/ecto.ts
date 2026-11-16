@@ -4,7 +4,7 @@ import { Effect } from 'effect'
 import { emitMany } from '../emit/index.js'
 import { ectoSchemaFiles } from '../generator/ecto.js'
 import { ectoProblems } from '../helper/ecto.js'
-import { prismaBlocks, relationMaps, relationMode } from '../utils/prisma-schema-text.js'
+import { prismaBlocks, relationMaps, relationMode } from '../prisma/schema-text.js'
 import { GeneratorConfigError } from './errors.js'
 import { requireOutput } from './output.js'
 
@@ -17,13 +17,14 @@ export function ecto(options: GeneratorOptions) {
         message: `Hekireki-Ecto cannot read this schema:\n${problems.map((p) => `  - ${p}`).join('\n')}`,
       })
     }
-    const app = options.generator.config?.app ?? 'MyApp'
+    const app = options.generator.config?.['app'] ?? 'MyApp'
     const enums = options.dmmf.datamodel.enums
     // DMMF drops the name `@relation(map: ...)` gives a foreign key, and the relation mode: both
     // are read off the schema's text, parsed into its blocks once.
     const blocks = prismaBlocks(options.datamodel)
+    const provider = options.datasources[0]?.activeProvider
     const files = ectoSchemaFiles(options.dmmf.datamodel.models, app, enums, {
-      provider: options.datasources[0]?.activeProvider,
+      ...(provider === undefined ? {} : { provider }),
       indexes: options.dmmf.datamodel.indexes,
       foreignKeyNames: relationMaps(blocks),
       relationMode: relationMode(blocks),

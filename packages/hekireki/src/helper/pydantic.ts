@@ -1,7 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, makeValidationExtractor, stripAnnotations } from '../utils/index.js'
-import { PYTHON_KEYWORDS, pythonDocstringLines } from '../utils/python.js'
+import { makeValidationExtractor, stripAnnotations } from '../annotation/index.js'
+import { PYTHON_KEYWORDS, pythonDocstringLines } from '../literal/python.js'
+import { makePascalCase } from '../naming/case.js'
 
 const PRISMA_TO_PYDANTIC: { [k: string]: string } = {
   String: 'str',
@@ -82,6 +83,14 @@ function pythonBaseType(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[] 
   return PRISMA_TO_PYDANTIC[field.type] ?? 'str'
 }
 
+/** What follows the annotation: the alias when the attribute is renamed, and `None` when optional. */
+function pydanticFieldDefault(fieldName: string, attrName: string, optional: boolean) {
+  if (attrName === fieldName) return optional ? ' = None' : ''
+  return optional
+    ? ` = Field(default=None, alias="${fieldName}")`
+    : ` = Field(alias="${fieldName}")`
+}
+
 export function makePydanticField(
   field: DMMF.Field,
   enums: readonly DMMF.DatamodelEnum[] | undefined,
@@ -93,14 +102,7 @@ export function makePydanticField(
   const optional = !(field.isRequired || field.isList)
   const typeExpr = optional ? `${withList} | None` : withList
   const attrName = pydanticFieldName(field.name)
-  const rhs =
-    attrName !== field.name
-      ? optional
-        ? ` = Field(default=None, alias="${field.name}")`
-        : ` = Field(alias="${field.name}")`
-      : optional
-        ? ' = None'
-        : ''
+  const rhs = pydanticFieldDefault(field.name, attrName, optional)
   return {
     line: `    ${attrName}: ${typeExpr}${rhs}`,
     expression: `${typeExpr}${rhs}`,
@@ -113,7 +115,7 @@ export function makePydanticField(
 // annotation leaves pydantic's default (extra="ignore").
 function extractConfigDict(documentation: string | undefined) {
   const annotation = extractPydanticAnnotation(documentation)
-  return annotation?.startsWith('ConfigDict(') ? annotation : null
+  return annotation?.startsWith('ConfigDict(') === true ? annotation : null
 }
 
 function makeConfigLine(model: DMMF.Model) {
@@ -163,10 +165,11 @@ export function makePydanticRelations(
   enums: readonly DMMF.DatamodelEnum[] | undefined,
 ) {
   if (!hasGeneratedFields(model, enums)) return null
+  const generatedClasses = new Set(
+    models.filter((m) => hasGeneratedFields(m, enums)).map((m) => m.name),
+  )
   const relFields = model.fields.filter(
-    (field) =>
-      field.kind === 'object' &&
-      models.some((m) => m.name === field.type && hasGeneratedFields(m, enums)),
+    (field) => field.kind === 'object' && generatedClasses.has(field.type),
   )
   if (relFields.length === 0) return null
   const lines = relFields.map((field) => {

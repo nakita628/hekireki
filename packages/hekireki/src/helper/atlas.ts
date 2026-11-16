@@ -1,8 +1,9 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { indexPrefix, stripAnnotations } from '../utils/index.js'
-import { implicitJoinTables, isFunctionDefault, referentialActions } from '../utils/prisma-model.js'
-import { sqlString } from '../utils/prisma-postgres.js'
+import { stripAnnotations } from '../annotation/index.js'
+import { indexPrefix } from '../naming/case.js'
+import { implicitJoinTables, isFunctionDefault, referentialActions } from '../prisma/model.js'
+import { sqlString } from '../prisma/postgres.js'
 
 type AtlasDialect = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -117,130 +118,113 @@ function tableRef(target: DMMF.Model, models: readonly DMMF.Model[], defaultSche
     : `table${refPart(name)}`
 }
 
+// A native type with an optional size argument, `varchar(255)`, takes the bare name without one.
+function sized(base: string, arg: string | undefined, fallback = base) {
+  return arg !== undefined && arg !== '' ? `${base}(${arg})` : fallback
+}
+
+const PG_NATIVE_FIXED: { [k: string]: string } = {
+  Uuid: 'uuid',
+  Text: 'text',
+  SmallInt: 'smallint',
+  Integer: 'integer',
+  BigInt: 'bigint',
+  Oid: 'oid',
+  Real: 'real',
+  DoublePrecision: 'double_precision',
+  Money: 'money',
+  ByteA: 'bytea',
+  JsonB: 'jsonb',
+  Json: 'json',
+  Date: 'date',
+  Inet: 'inet',
+  Xml: 'xml',
+  Boolean: 'boolean',
+}
+
+const PG_NATIVE_SIZED: { [k: string]: string } = {
+  Char: 'char',
+  VarChar: 'varchar',
+  Time: 'time',
+  Timestamp: 'timestamp',
+  Timestamptz: 'timestamptz',
+  Bit: 'bit',
+  VarBit: 'bit_varying',
+}
+
 function pgNativeType(name: string, args: readonly string[]) {
+  if (name === 'Decimal') return args.length > 0 ? `decimal(${args.join(', ')})` : 'decimal'
+  const sizedBase = PG_NATIVE_SIZED[name]
+  if (sizedBase !== undefined) return sized(sizedBase, args[0])
+  return PG_NATIVE_FIXED[name] ?? null
+}
+
+const MYSQL_NATIVE_FIXED: { [k: string]: string } = {
+  Text: 'text',
+  TinyText: 'tinytext',
+  MediumText: 'mediumtext',
+  LongText: 'longtext',
+  TinyInt: 'tinyint',
+  SmallInt: 'smallint',
+  MediumInt: 'mediumint',
+  Int: 'int',
+  BigInt: 'bigint',
+  Float: 'float',
+  Double: 'double',
+  Date: 'date',
+  Year: 'year',
+  Json: 'json',
+  TinyBlob: 'tinyblob',
+  MediumBlob: 'mediumblob',
+  LongBlob: 'longblob',
+  Blob: 'blob',
+}
+
+const MYSQL_NATIVE_SIZED: { [k: string]: string } = {
+  Char: 'char',
+  Bit: 'bit',
+  Time: 'time',
+  Binary: 'binary',
+  VarBinary: 'varbinary',
+}
+
+const MYSQL_NATIVE_UNSIGNED: { [k: string]: string } = {
+  UnsignedTinyInt: 'tinyint',
+  UnsignedSmallInt: 'smallint',
+  UnsignedMediumInt: 'mediumint',
+  UnsignedInt: 'int',
+  UnsignedBigInt: 'bigint',
+}
+
+function mysqlSignedNativeType(name: string, args: readonly string[]) {
   switch (name) {
-    case 'Uuid':
-      return 'uuid'
-    case 'Char':
-      return args[0] ? `char(${args[0]})` : 'char'
     case 'VarChar':
-      return args[0] ? `varchar(${args[0]})` : 'varchar'
-    case 'Text':
-      return 'text'
-    case 'SmallInt':
-      return 'smallint'
-    case 'Integer':
-      return 'integer'
-    case 'BigInt':
-      return 'bigint'
-    case 'Oid':
-      return 'oid'
-    case 'Real':
-      return 'real'
-    case 'DoublePrecision':
-      return 'double_precision'
-    case 'Money':
-      return 'money'
+      return sized('varchar', args[0], 'varchar(191)')
     case 'Decimal':
       return args.length > 0 ? `decimal(${args.join(', ')})` : 'decimal'
-    case 'ByteA':
-      return 'bytea'
-    case 'JsonB':
-      return 'jsonb'
-    case 'Json':
-      return 'json'
-    case 'Date':
-      return 'date'
-    case 'Time':
-      return args[0] ? `time(${args[0]})` : 'time'
+    case 'DateTime':
+      return `datetime(${args[0] ?? 3})`
     case 'Timestamp':
-      return args[0] ? `timestamp(${args[0]})` : 'timestamp'
-    case 'Timestamptz':
-      return args[0] ? `timestamptz(${args[0]})` : 'timestamptz'
-    case 'Inet':
-      return 'inet'
-    case 'Bit':
-      return args[0] ? `bit(${args[0]})` : 'bit'
-    case 'VarBit':
-      return args[0] ? `bit_varying(${args[0]})` : 'bit_varying'
-    case 'Xml':
-      return 'xml'
-    case 'Boolean':
-      return 'boolean'
-    default:
-      return null
+      return `timestamp(${args[0] ?? 3})`
+    default: {
+      const sizedBase = MYSQL_NATIVE_SIZED[name]
+      if (sizedBase !== undefined) return sized(sizedBase, args[0])
+      return MYSQL_NATIVE_FIXED[name] ?? null
+    }
   }
 }
 
 function mysqlNativeType(name: string, args: readonly string[]) {
-  switch (name) {
-    case 'VarChar':
-      return { type: args[0] ? `varchar(${args[0]})` : 'varchar(191)', unsigned: false }
-    case 'Char':
-      return { type: args[0] ? `char(${args[0]})` : 'char', unsigned: false }
-    case 'Text':
-      return { type: 'text', unsigned: false }
-    case 'TinyText':
-      return { type: 'tinytext', unsigned: false }
-    case 'MediumText':
-      return { type: 'mediumtext', unsigned: false }
-    case 'LongText':
-      return { type: 'longtext', unsigned: false }
-    case 'TinyInt':
-      return { type: 'tinyint', unsigned: false }
-    case 'SmallInt':
-      return { type: 'smallint', unsigned: false }
-    case 'MediumInt':
-      return { type: 'mediumint', unsigned: false }
-    case 'Int':
-      return { type: 'int', unsigned: false }
-    case 'BigInt':
-      return { type: 'bigint', unsigned: false }
-    case 'UnsignedTinyInt':
-      return { type: 'tinyint', unsigned: true }
-    case 'UnsignedSmallInt':
-      return { type: 'smallint', unsigned: true }
-    case 'UnsignedMediumInt':
-      return { type: 'mediumint', unsigned: true }
-    case 'UnsignedInt':
-      return { type: 'int', unsigned: true }
-    case 'UnsignedBigInt':
-      return { type: 'bigint', unsigned: true }
-    case 'Float':
-      return { type: 'float', unsigned: false }
-    case 'Double':
-      return { type: 'double', unsigned: false }
-    case 'Decimal':
-      return { type: args.length > 0 ? `decimal(${args.join(', ')})` : 'decimal', unsigned: false }
-    case 'Bit':
-      return { type: args[0] ? `bit(${args[0]})` : 'bit', unsigned: false }
-    case 'Date':
-      return { type: 'date', unsigned: false }
-    case 'Time':
-      return { type: args[0] ? `time(${args[0]})` : 'time', unsigned: false }
-    case 'DateTime':
-      return { type: `datetime(${args[0] ?? 3})`, unsigned: false }
-    case 'Timestamp':
-      return { type: `timestamp(${args[0] ?? 3})`, unsigned: false }
-    case 'Year':
-      return { type: 'year', unsigned: false }
-    case 'Json':
-      return { type: 'json', unsigned: false }
-    case 'Binary':
-      return { type: args[0] ? `binary(${args[0]})` : 'binary', unsigned: false }
-    case 'VarBinary':
-      return { type: args[0] ? `varbinary(${args[0]})` : 'varbinary', unsigned: false }
-    case 'TinyBlob':
-      return { type: 'tinyblob', unsigned: false }
-    case 'MediumBlob':
-      return { type: 'mediumblob', unsigned: false }
-    case 'LongBlob':
-      return { type: 'longblob', unsigned: false }
-    case 'Blob':
-      return { type: 'blob', unsigned: false }
-    default:
-      return null
-  }
+  const unsigned = MYSQL_NATIVE_UNSIGNED[name]
+  if (unsigned !== undefined) return { type: unsigned, unsigned: true }
+  const type = mysqlSignedNativeType(name, args)
+  return type === null ? null : { type, unsigned: false }
+}
+
+const SCALAR_BY_DIALECT: { readonly [d in AtlasDialect]: { readonly [k: string]: string } } = {
+  postgresql: PG_SCALAR,
+  mysql: MYSQL_SCALAR,
+  sqlite: SQLITE_SCALAR,
 }
 
 function scalarType(field: DMMF.Field, dialect: AtlasDialect) {
@@ -248,16 +232,14 @@ function scalarType(field: DMMF.Field, dialect: AtlasDialect) {
     const [nativeName, nativeArgs] = field.nativeType
     if (dialect === 'postgresql') {
       const resolved = pgNativeType(nativeName, nativeArgs)
-      if (resolved) return { type: resolved, unsigned: false }
+      if (resolved !== null) return { type: resolved, unsigned: false }
     }
     if (dialect === 'mysql') {
       const resolved = mysqlNativeType(nativeName, nativeArgs)
-      if (resolved) return resolved
+      if (resolved !== null) return resolved
     }
   }
-  const map =
-    dialect === 'postgresql' ? PG_SCALAR : dialect === 'mysql' ? MYSQL_SCALAR : SQLITE_SCALAR
-  return { type: map[field.type] ?? 'text', unsigned: false }
+  return { type: SCALAR_BY_DIALECT[dialect][field.type] ?? 'text', unsigned: false }
 }
 
 function enumDbName(enumName: string, enums: readonly DMMF.DatamodelEnum[]) {
@@ -339,17 +321,30 @@ function listDefault(
     field.kind === 'enum'
       ? `"${enumDbName(field.type, enums)}"`
       : sqlTypeName(scalarType(field, dialect).type)
+  const enumValues = new Map(
+    (enums.find((e) => e.name === field.type)?.values ?? []).map((v) => [v.name, v]),
+  )
   const rendered = items.map((item) => {
     if (typeof item !== 'string') return String(item)
     if (field.kind === 'enum') {
-      const enumDef = enums.find((e) => e.name === field.type)
-      const value = enumDef?.values.find((v) => v.name === item)
-      return sqlString(value?.dbName ?? item)
+      return sqlString(enumValues.get(item)?.dbName ?? item)
     }
     if (field.type === 'BigInt') return item
     return sqlString(item)
   })
   return sqlExpr(`ARRAY[${rendered.join(', ')}]::${elemType}[]`)
+}
+
+function functionDefault(dflt: DMMF.FieldDefault, dialect: AtlasDialect) {
+  if (dflt.name === 'now') {
+    return dialect === 'mysql' ? sqlExpr('CURRENT_TIMESTAMP(3)') : sqlExpr('CURRENT_TIMESTAMP')
+  }
+  if (dflt.name === 'dbgenerated') {
+    return typeof dflt.args[0] === 'string' ? sqlExpr(dflt.args[0]) : undefined
+  }
+  // uuid()/cuid()/ulid()/nanoid()/auto() are client-side defaults: Prisma
+  // migrate emits no DDL DEFAULT for them.
+  return undefined
 }
 
 function resolveDefault(
@@ -359,17 +354,7 @@ function resolveDefault(
 ) {
   const dflt = field.default
   if (!field.hasDefaultValue || dflt === undefined || dflt === null) return undefined
-  if (isFunctionDefault(dflt)) {
-    if (dflt.name === 'now') {
-      return dialect === 'mysql' ? sqlExpr('CURRENT_TIMESTAMP(3)') : sqlExpr('CURRENT_TIMESTAMP')
-    }
-    if (dflt.name === 'dbgenerated') {
-      return typeof dflt.args[0] === 'string' ? sqlExpr(dflt.args[0]) : undefined
-    }
-    // uuid()/cuid()/ulid()/nanoid()/auto() are client-side defaults: Prisma
-    // migrate emits no DDL DEFAULT for them.
-    return undefined
-  }
+  if (isFunctionDefault(dflt)) return functionDefault(dflt, dialect)
   if (Array.isArray(dflt)) return listDefault(dflt, field, dialect, enums)
   if (field.kind === 'enum' && typeof dflt === 'string') {
     const enumDef = enums.find((e) => e.name === field.type)
@@ -417,6 +402,7 @@ export function makeAtlasForeignKeys(
   defaultSchema: string,
 ) {
   const table = tableNameOf(model)
+  const modelByName = new Map(models.map((m) => [m.name, m]))
   return model.fields
     .filter(
       (field) =>
@@ -425,8 +411,8 @@ export function makeAtlasForeignKeys(
         field.relationFromFields.length > 0,
     )
     .flatMap((field) => {
-      const target = models.find((m) => m.name === field.type)
-      if (!target) return []
+      const target = modelByName.get(field.type)
+      if (target === undefined) return []
       const fromCols = (field.relationFromFields ?? []).map((name) => columnDbName(model, name))
       const toCols = (field.relationToFields ?? []).map((name) => columnDbName(target, name))
       const name = `${table}_${fromCols.join('_')}_fkey`
@@ -454,6 +440,7 @@ export function makeAtlasIndexes(
   dialect: AtlasDialect,
 ) {
   const table = tableNameOf(model)
+  const fieldNames = new Set(model.fields.map((field) => field.name))
   // DMMF leaves an `@ignore` field out of the model, but not out of an index that lists it: the
   // table has no column for such an index to name, so it is left out with the field.
   return indexes
@@ -461,7 +448,7 @@ export function makeAtlasIndexes(
       (idx) =>
         idx.model === model.name &&
         idx.type !== 'id' &&
-        idx.fields.every((f) => model.fields.some((field) => field.name === f.name)),
+        idx.fields.every((f) => fieldNames.has(f.name)),
     )
     .map((idx) => {
       const colsDb = idx.fields.map((f) => columnDbName(model, f.name))
@@ -537,7 +524,7 @@ export function makeAtlasTable(
     `${label} {`,
     ...alignAttrs(headAttrs, '  '),
     ...columns,
-    ...(pk ? [pk] : []),
+    ...(pk === null ? [] : [pk]),
     ...makeAtlasForeignKeys(model, models, options.schemaName),
     ...makeAtlasIndexes(model, indexes, dialect),
     '}',
@@ -591,10 +578,11 @@ export function makeAtlasM2MJoinTables(
   enums: readonly DMMF.DatamodelEnum[],
   defaultSchema: string,
 ) {
+  const modelByName = new Map(models.map((m) => [m.name, m]))
   return implicitJoinTables(models)
     .flatMap((pair) => {
-      const left = models.find((m) => m.name === pair.left)
-      const right = models.find((m) => m.name === pair.right)
+      const left = modelByName.get(pair.left)
+      const right = modelByName.get(pair.right)
       return left && right ? [{ left, right, relationName: pair.relationName }] : []
     })
     .map((pair) => {

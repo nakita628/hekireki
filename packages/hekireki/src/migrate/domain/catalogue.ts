@@ -178,11 +178,10 @@ export function sqliteCheckClauses(definition: string) {
         // without reading all of the definition above for every parenthesis in it.
         const wordEnd = (at: number): number =>
           at > 0 && /\s/u.test(definition[at - 1] ?? '') ? wordEnd(at - 1) : at
-        return state.start === null
-          ? /\bCHECK\s*$/iu.test(definition.slice(Math.max(0, wordEnd(index) - 6), index))
-            ? { ...state, start: index + 1, depth: 1 }
-            : state
-          : { ...state, depth: state.depth + 1 }
+        if (state.start !== null) return { ...state, depth: state.depth + 1 }
+        return /\bCHECK\s*$/iu.test(definition.slice(Math.max(0, wordEnd(index) - 6), index))
+          ? { ...state, start: index + 1, depth: 1 }
+          : state
       }
       if (char !== ')' || state.start === null) return state
       return state.depth === 1
@@ -308,7 +307,7 @@ export function makePostgresTables(input: {
     triggers: input.triggers ?? [],
     checks: input.checks ?? [],
     refSchema: (row) => catalogueText(row, 'refSchema'),
-    enforced: (row) => row.validated === true,
+    enforced: (row) => row['validated'] === true,
   })
   return groupsOf(input.columns, tableKey)
     .filter((rows) => !INTERNAL_TABLES.has(catalogueText(rows[0] ?? {}, 'table')))
@@ -362,8 +361,8 @@ export function makeMysqlTables(input: {
   const checks =
     input.escapedChecks === true
       ? (input.checks ?? []).map((row) => ({
-          table: row.table,
-          name: row.name,
+          table: row['table'],
+          name: row['name'],
           clause: catalogueText(row, 'clause').replaceAll(/\\(?<escaped>.)/gsu, '$<escaped>'),
         }))
       : (input.checks ?? [])
@@ -415,8 +414,8 @@ export function makeSqliteTable(input: {
   readonly definition?: string
 }) {
   const primaryKey = input.columns
-    .filter((row) => Number(row.pk) > 0)
-    .toSorted((a, b) => Number(a.pk) - Number(b.pk))
+    .filter((row) => Number(row['pk']) > 0)
+    .toSorted((a, b) => Number(a['pk']) - Number(b['pk']))
     .map((row) => catalogueText(row, 'name'))
   return {
     schema: null,
@@ -424,7 +423,7 @@ export function makeSqliteTable(input: {
     columns: input.columns.map((row) => ({
       name: catalogueText(row, 'name'),
       // A primary key column is NOT NULL to Prisma whatever the declaration says.
-      nullable: catalogueText(row, 'notnull') !== '1' && Number(row.pk) === 0,
+      nullable: catalogueText(row, 'notnull') !== '1' && Number(row['pk']) === 0,
       dataType: catalogueText(row, 'type'),
       columnType: null,
       maxLength: null,

@@ -22,6 +22,30 @@ function coversWire(box: Box, points: readonly Point[]) {
   })
 }
 
+/** Whether a point lies inside a box, its edges included. */
+function inside(point: Point, box: Box) {
+  return (
+    box.x <= point.x &&
+    point.x <= box.x + box.width &&
+    box.y <= point.y &&
+    point.y <= box.y + box.height
+  )
+}
+
+/** The box of the caption at `index`, which the case places. */
+function boxAt(placed: readonly { readonly box: Box }[], index: number): Box {
+  const caption = placed[index]
+  if (caption === undefined) throw new Error(`no caption ${index} was placed`)
+  return caption.box
+}
+
+/** The point of a route at `index`, which the route has. */
+function pointAt(points: readonly Point[], index: number): Point {
+  const point = points[index]
+  if (point === undefined) throw new Error(`the route has no point ${index}`)
+  return point
+}
+
 const source = { x: 340, y: 100 }
 
 /** The chip a caption is given on a plain edge with nothing in its way: how big it draws. */
@@ -38,45 +62,45 @@ describe('placeCaptions', () => {
 
   it('stands a caption on the stretch into its target, flush against the end symbol', () => {
     const points = routePoints(source, { x: 700, y: 300 }, [])
-    const [placed] = placeCaptions([{ caption, points }], [])
+    const box = boxAt(placeCaptions([{ caption, points }], []), 0)
     // Centred on the wire, so the relation it names runs under it; its right edge a gap of 6
     // short of the end symbol, which takes the last EDGE_OFFSET of the wire.
-    expect(placed?.box.y).toBe(300 - height / 2)
-    expect((placed?.box.x ?? 0) + (placed?.box.width ?? 0)).toBe(700 - EDGE_OFFSET - 6)
+    expect(box.y).toBe(300 - height / 2)
+    expect(box.x + box.width).toBe(700 - EDGE_OFFSET - 6)
   })
 
   it('stands the caption of the next row out, just left of the one it would cover', () => {
     // Two rows of one card, nearer each other than a chip is tall.
     const upper = routePoints(source, { x: 800, y: 300 }, [])
     const lower = routePoints({ x: 340, y: 500 }, { x: 800, y: 300 + NODE_ROW_HEIGHT }, [])
-    const [first, second] = placeCaptions(
+    const placed = placeCaptions(
       [
         { caption, points: upper },
         { caption, points: lower },
       ],
       [],
     )
-    expect(second?.box.y).toBe(300 + NODE_ROW_HEIGHT - height / 2)
-    expect((second?.box.x ?? 0) + (second?.box.width ?? 0)).toBe((first?.box.x ?? 0) - 6)
+    const second = boxAt(placed, 1)
+    expect(second.y).toBe(300 + NODE_ROW_HEIGHT - height / 2)
+    expect(second.x + second.width).toBe(boxAt(placed, 0).x - 6)
   })
 
   it('keeps a caption off the models', () => {
     const points = routePoints(source, { x: 700, y: 300 }, [])
     const card = { x: 450, y: 90, width: 200, height: 60 }
-    const [placed] = placeCaptions([{ caption, points }], [card])
-    expect(placed && overlaps(placed.box, card)).toBe(false)
+    expect(overlaps(boxAt(placeCaptions([{ caption, points }], [card]), 0), card)).toBe(false)
   })
 
   it('fans two captions on the same wire apart', () => {
     const points = routePoints(source, { x: 700, y: 300 }, [])
-    const [first, second] = placeCaptions(
+    const placed = placeCaptions(
       [
         { caption, points },
         { caption: ['one to one'], points },
       ],
       [],
     )
-    expect(first && second && overlaps(first.box, second.box)).toBe(false)
+    expect(overlaps(boxAt(placed, 0), boxAt(placed, 1))).toBe(false)
   })
 
   it('says nothing for an edge without a caption', () => {
@@ -89,15 +113,14 @@ describe('placeCaptions', () => {
     const points = routePoints(source, { x: 700, y: 300 }, [])
     // A second edge whose channel runs where the first one's caption would like to sit.
     const neighbour = routePoints({ x: 340, y: 160 }, { x: 700, y: 360 }, [])
-    const [placed] = placeCaptions(
+    const placed = placeCaptions(
       [
         { caption, points },
         { caption: [], points: neighbour },
       ],
       [],
     )
-    expect(placed).toBeDefined()
-    expect(placed && coversWire(placed.box, neighbour)).toBe(false)
+    expect(coversWire(boxAt(placed, 0), neighbour)).toBe(false)
   })
 
   // Not merely off it: a wire is a box a pixel or two wide, so a chip that only avoids overlapping
@@ -105,21 +128,21 @@ describe('placeCaptions', () => {
   it('keeps a margin from a wire that belongs to another edge', () => {
     const points = routePoints(source, { x: 700, y: 300 }, [])
     const neighbour = routePoints({ x: 340, y: 160 }, { x: 700, y: 360 }, [])
-    const [placed] = placeCaptions(
-      [
-        { caption, points },
-        { caption: [], points: neighbour },
-      ],
-      [],
+    const room = boxAt(
+      placeCaptions(
+        [
+          { caption, points },
+          { caption: [], points: neighbour },
+        ],
+        [],
+      ),
+      0,
     )
-    expect(placed).toBeDefined()
-    const room = placed === undefined ? null : { ...placed.box }
     expect(
-      room &&
-        coversWire(
-          { x: room.x - 4, y: room.y - 4, width: room.width + 8, height: room.height + 8 },
-          neighbour,
-        ),
+      coversWire(
+        { x: room.x - 4, y: room.y - 4, width: room.width + 8, height: room.height + 8 },
+        neighbour,
+      ),
     ).toBe(false)
   })
 
@@ -127,26 +150,20 @@ describe('placeCaptions', () => {
   // so a chip centred on it would swallow the whole loop. It hangs off one side instead.
   it('writes the caption of a self relation on its loop without hiding the loop', () => {
     const points = selfLoopPoints(source, { x: 340, y: 122 })
-    const [placed] = placeCaptions([{ caption: ['tree · one to many'], points }], [])
-    expect(placed).toBeDefined()
-    expect(placed && coversWire(placed.box, points)).toBe(true)
-    const inside = (point: { x: number; y: number }, box: Box) =>
-      box.x <= point.x &&
-      point.x <= box.x + box.width &&
-      box.y <= point.y &&
-      point.y <= box.y + box.height
-    expect(placed && points.every((point) => inside(point, placed.box))).toBe(false)
+    const box = boxAt(placeCaptions([{ caption: ['tree · one to many'], points }], []), 0)
+    expect(coversWire(box, points)).toBe(true)
+    expect(points.every((point) => inside(point, box))).toBe(false)
   })
 
   it('stands the caption of a self relation on its loop, out in the room the loop keeps', () => {
     const loop = selfLoopPoints({ x: 340, y: 100 }, { x: 340, y: 144 })
-    const [placed] = placeCaptions([{ caption, points: loop }], [])
+    const box = boxAt(placeCaptions([{ caption, points: loop }], []), 0)
     const room = loopRoom(loop, caption)
-    const turn = loop[1]?.x ?? 0
-    const box = placed?.box ?? { x: 0, y: 0, width: 0, height: 0 }
+    const turn = pointAt(loop, 1).x
     // Clear of the card, on the loop, and inside the room the other wires are kept out of.
     expect(box.x).toBeGreaterThan(340)
-    expect(box.x < turn && turn < box.x + box.width).toBe(true)
+    expect(box.x).toBeLessThan(turn)
+    expect(turn).toBeLessThan(box.x + box.width)
     expect(box.x + box.width).toBeLessThanOrEqual(room.x + room.width)
   })
 
@@ -158,8 +175,7 @@ describe('placeCaptions', () => {
   it('falls back to the middle of an edge with nowhere to put a caption', () => {
     // Two ends a few pixels apart: every segment is a corner, so no spot qualifies.
     const points = routePoints({ x: 0, y: 0 }, { x: 6, y: 2 }, [])
-    const [placed] = placeCaptions([{ caption, points }], [])
-    const box = placed?.box ?? { x: 0, y: 0, width: 0, height: 0 }
+    const box = boxAt(placeCaptions([{ caption, points }], []), 0)
     expect({ x: box.x + box.width / 2, y: box.y + box.height / 2 }).toStrictEqual({ x: 3, y: 1 })
   })
 

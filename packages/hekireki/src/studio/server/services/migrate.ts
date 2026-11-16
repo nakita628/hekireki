@@ -161,26 +161,29 @@ export function findMigrateEngine(input: z.infer<typeof FindMigrateEngineInput>)
                 cwd: input.schemaDir,
               }),
             ),
-      /**
-       * The engine to ask of the database a rehearsal leaves: the wasm engine on the rehearsal's own
-       * connection, or the native one on the URL of the copy it ran on. Null where neither can read
-       * it: a rehearsal inside a transaction of Studio's connection, which another process cannot see.
-       */
-      rehearsalEngine:
-        binary !== null && input.driver.dialect !== 'mysql'
-          ? null
-          : binary !== null
-            ? (target: Driver & { readonly url?: string }) =>
-                Effect.succeed(
-                  openNativeSchemaEngine({
-                    binary,
-                    files: input.files,
-                    url: target.url ?? '',
-                    cwd: input.schemaDir,
-                  }),
-                )
-            : (target: Driver & { readonly url?: string }) =>
-                openSchemaEngine({ files: input.files, adapter: makeSchemaEngineAdapter(target) }),
+      rehearsalEngine: rehearsalEngineOf(binary, input),
     }
   })
+}
+
+/**
+ * The engine to ask of the database a rehearsal leaves: the wasm engine on the rehearsal's own
+ * connection, or the native one on the URL of the copy it ran on. Null where neither can read
+ * it: a rehearsal inside a transaction of Studio's connection, which another process cannot see.
+ */
+function rehearsalEngineOf(binary: string | null, input: z.infer<typeof FindMigrateEngineInput>) {
+  if (binary === null) {
+    return (target: Driver & { readonly url?: string }) =>
+      openSchemaEngine({ files: input.files, adapter: makeSchemaEngineAdapter(target) })
+  }
+  if (input.driver.dialect !== 'mysql') return null
+  return (target: Driver & { readonly url?: string }) =>
+    Effect.succeed(
+      openNativeSchemaEngine({
+        binary,
+        files: input.files,
+        url: target.url ?? '',
+        cwd: input.schemaDir,
+      }),
+    )
 }

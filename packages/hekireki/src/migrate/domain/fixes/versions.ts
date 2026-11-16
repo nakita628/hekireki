@@ -78,7 +78,7 @@ export function makeFixContext(input: {
       .map(({ child, fk }) => ({
         child,
         fk,
-        references: fk.refColumns.every((c) => c !== '') ? fk.refColumns : parent.primaryKey,
+        references: referencedColumns(fk.refColumns, parent.primaryKey),
       }))
       .filter(({ fk, references }) => references.length === fk.columns.length)
   }
@@ -183,3 +183,8 @@ export type FixContext = ReturnType<typeof makeFixContext>
 
 /** Every version of every changed table so far, with the fixes and effects that made them. */
 export type FixState = FixContext['empty']
+
+/** The columns a foreign key references: its own, or the primary key where it names none. */
+function referencedColumns(refColumns: readonly string[], primaryKey: readonly string[]) {
+  return refColumns.every((c) => c !== '') ? refColumns : primaryKey
+}

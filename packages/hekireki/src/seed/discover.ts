@@ -140,7 +140,7 @@ export function discoverClient(input: {
         reason: `the Prisma Client at ${source} could not be loaded (${loaded.error}); run \`prisma generate\``,
       }
     }
-    const clientClass = isRecord(loaded.value) ? loaded.value.PrismaClient : undefined
+    const clientClass = isRecord(loaded.value) ? loaded.value['PrismaClient'] : undefined
     if (typeof clientClass !== 'function') {
       return { client: null, source, reason: `${source} does not export PrismaClient` }
     }

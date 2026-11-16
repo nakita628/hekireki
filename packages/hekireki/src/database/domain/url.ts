@@ -19,16 +19,16 @@ export type DatasourceUrl =
  */
 export function makeDatasourceUrl(input: { readonly configText: string }): DatasourceUrl | null {
   const block = /datasource\s*:\s*\{([^}]*)\}/u.exec(input.configText)?.[1]
-  if (!block) return null
+  if (block === undefined) return null
   const env =
     /url\s*:\s*env\(\s*["'`]([^"'`]+)["'`]\s*\)/u.exec(block)?.[1] ??
     /url\s*:\s*process\.env(?:\.([A-Za-z_$][\w$]*)|\[\s*["'`]([^"'`]+)["'`]\s*\])/u
       .exec(block)
       ?.slice(1)
       .find((name) => name !== undefined)
-  if (env) return { kind: 'env', name: env } as const
+  if (env !== undefined) return { kind: 'env', name: env } as const
   const literal = /url\s*:\s*["'`]([^"'`]+)["'`]/u.exec(block)?.[1]
-  return literal ? ({ kind: 'literal', value: literal } as const) : null
+  return literal !== undefined ? ({ kind: 'literal', value: literal } as const) : null
 }
 
 /** The `url` of the schema's `datasource` block (Prisma 6 and earlier), as `env("NAME")` or a literal. */
@@ -36,11 +36,11 @@ export function makeSchemaDatasourceUrl(input: {
   readonly schemaText: string
 }): DatasourceUrl | null {
   const block = /datasource\s+\w+\s*\{([^}]*)\}/u.exec(input.schemaText)?.[1]
-  if (!block) return null
+  if (block === undefined) return null
   const env = /^\s*url\s*=\s*env\(\s*"([^"]+)"\s*\)/mu.exec(block)?.[1]
-  if (env) return { kind: 'env', name: env } as const
+  if (env !== undefined) return { kind: 'env', name: env } as const
   const literal = /^\s*url\s*=\s*"([^"]+)"/mu.exec(block)?.[1]
-  return literal ? ({ kind: 'literal', value: literal } as const) : null
+  return literal !== undefined ? ({ kind: 'literal', value: literal } as const) : null
 }
 
 /**
@@ -67,18 +67,7 @@ export function makeDatabaseUrlChoice(input: {
   | { readonly found: { readonly url: string; readonly source: UrlSource }; readonly reason: null }
   | { readonly found: null; readonly reason: string } {
   const { datasource } = input
-  const found: { readonly url: string; readonly source: UrlSource } | null =
-    input.explicit !== null
-      ? { url: input.explicit, source: 'flag' }
-      : input.configUrl !== null && input.configUrl !== ''
-        ? { url: input.configUrl, source: 'hekireki' }
-        : datasource?.kind === 'literal'
-          ? { url: datasource.value, source: 'prisma' }
-          : input.named !== null
-            ? { url: input.named, source: 'prisma' }
-            : input.fallback !== null
-              ? { url: input.fallback, source: 'env' }
-              : null
+  const found = firstUrl(input)
   if (found !== null) return { found, reason: null }
   return {
     found: null,
@@ -89,8 +78,31 @@ export function makeDatabaseUrlChoice(input: {
   }
 }
 
+/** The first URL there is, in the order `makeDatabaseUrlChoice` names. */
+function firstUrl(input: {
+  readonly explicit: string | null
+  readonly configUrl: string | null
+  readonly datasource: DatasourceUrl | null
+  readonly named: string | null
+  readonly fallback: string | null
+}): { readonly url: string; readonly source: UrlSource } | null {
+  if (input.explicit !== null) return { url: input.explicit, source: 'flag' }
+  if (input.configUrl !== null && input.configUrl !== '') {
+    return { url: input.configUrl, source: 'hekireki' }
+  }
+  if (input.datasource?.kind === 'literal') return { url: input.datasource.value, source: 'prisma' }
+  if (input.named !== null) return { url: input.named, source: 'prisma' }
+  if (input.fallback !== null) return { url: input.fallback, source: 'env' }
+  return null
+}
+
 // In the order a scheme is looked up in, which no two dialects share.
 const DIALECTS = ['postgresql', 'mysql', 'sqlite'] as const satisfies readonly Dialect[]
+const DIALECT_OF_SCHEME: ReadonlyMap<string, Dialect> = new Map(
+  DIALECTS.flatMap((dialect) =>
+    DIALECT_SCHEMES[dialect].map((scheme) => [scheme, dialect] as const),
+  ),
+)
 
 /** The dialect from the URL scheme, falling back to the schema provider. */
 export function makeDialect(input: {
@@ -99,7 +111,7 @@ export function makeDialect(input: {
   readonly schemaProvider: string | null
 }): Dialect | null {
   const scheme = input.url.split(':')[0]?.toLowerCase() ?? ''
-  const named = DIALECTS.find((dialect) => DIALECT_SCHEMES[dialect].includes(scheme))
+  const named = DIALECT_OF_SCHEME.get(scheme)
   if (named !== undefined) return named
   const provider = input.schemaProvider
   if (provider === 'postgresql' || provider === 'cockroachdb') return 'postgresql'

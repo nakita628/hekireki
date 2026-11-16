@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { backRelation, isJoinSideA } from '../../utils/prisma-model.js'
+import { backRelation, isJoinSideA } from '../../prisma/model.js'
 
 /** The `@default(...)` functions Prisma Client fills in: the column itself has no default. */
 const CLIENT_DEFAULTS = new Set(['uuid', 'cuid', 'nanoid', 'ulid'])
@@ -87,14 +87,14 @@ function uniqueSets(model: DMMF.Model) {
     ...model.uniqueFields,
   ]
   const all: readonly (readonly string[])[] = [...singles, ...composite]
-  return all
-    .filter((set, index) => all.findIndex((other) => other.join(' ') === set.join(' ')) === index)
+  return [...Map.groupBy(all, (set) => set.join(' ')).values()]
+    .flatMap((same) => same.slice(0, 1))
     .map((fields) => ({ fields, columns: fields.map((field) => columnOf(model, field)) }))
 }
 
 function makeModelTable(
   model: DMMF.Model,
-  models: readonly DMMF.Model[],
+  modelByName: ReadonlyMap<string, DMMF.Model>,
   enums: readonly DMMF.DatamodelEnum[],
 ) {
   // A relation field that holds the foreign key: the side `@relation(fields: [...])` is on.
@@ -102,7 +102,7 @@ function makeModelTable(
     (f) => f.kind === 'object' && (f.relationFromFields ?? []).length > 0,
   )
   const foreignKeys = related.flatMap((f) => {
-    const target = models.find((m) => m.name === f.type)
+    const target = modelByName.get(f.type)
     if (target === undefined) return []
     return [
       {
@@ -168,12 +168,13 @@ function joinForeignKey(model: DMMF.Model, column: 'A' | 'B') {
 
 /** The `_AToB` table Prisma keeps each implicit many-to-many relation in, once per relation. */
 function makeJoinTables(models: readonly DMMF.Model[], enums: readonly DMMF.DatamodelEnum[]) {
+  const modelByName = byName(models)
   return models.flatMap((model) =>
     model.fields
       // A list relation with no foreign key on either side is an implicit many-to-many.
       .filter((f) => f.kind === 'object' && f.isList && (f.relationFromFields ?? []).length === 0)
       .flatMap((field) => {
-        const other = models.find((m) => m.name === field.type)
+        const other = modelByName.get(field.type)
         const inverse = backRelation(field, model, models)
         if (other === undefined || inverse === undefined || !inverse.isList) return []
         // Emitted from the side that sorts first; a self relation from its first field.
@@ -203,8 +204,14 @@ function makeJoinTables(models: readonly DMMF.Model[], enums: readonly DMMF.Data
  * columns it is stored in, and the table and columns it points at.
  */
 export function makeExpectedTables(datamodel: DMMF.Datamodel) {
+  const modelByName = byName(datamodel.models)
   return [
-    ...datamodel.models.map((model) => makeModelTable(model, datamodel.models, datamodel.enums)),
+    ...datamodel.models.map((model) => makeModelTable(model, modelByName, datamodel.enums)),
     ...makeJoinTables(datamodel.models, datamodel.enums),
   ]
+}
+
+/** The models by name, the first of a name where two share one. */
+function byName(models: readonly DMMF.Model[]) {
+  return new Map(models.toReversed().map((m) => [m.name, m]))
 }

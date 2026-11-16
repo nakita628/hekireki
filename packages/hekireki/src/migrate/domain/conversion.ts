@@ -233,6 +233,36 @@ function entry(value: {
   return { bounds: null, length: null, ...value }
 }
 
+type ConversionInput = {
+  readonly dialect: Dialect
+  /** The MySQL server is MariaDB, which takes only digits as an integer; MySQL takes any number and rounds it. */
+  readonly mariadb: boolean
+  /**
+   * The schema's provider is CockroachDB, which speaks PostgreSQL's protocol but has Prisma drop
+   * and add a column again for nearly every type change: only a BIGINT narrowed to INT4 and an
+   * INT4 turned into an unbounded STRING are converted in place.
+   */
+  readonly cockroach?: boolean
+  readonly column: {
+    readonly column: string
+    readonly type: string
+    readonly kind: string
+    readonly nativeType: readonly [string, readonly string[]] | null
+    readonly isList: boolean
+    readonly required: boolean
+    readonly databaseDefault: boolean
+  }
+  readonly existing: {
+    readonly dataType: string
+    readonly columnType: string | null
+    readonly maxLength: number | null
+    readonly precision: number | null
+    readonly scale: number | null
+    readonly datetimePrecision: number | null
+    readonly enumValues: readonly string[] | null
+  }
+}
+
 /**
  * What changing a column's type does to the values in it, as Prisma Migrate writes the change
  * and the database carries it out: one entry per consequence, none when every value survives.
@@ -266,35 +296,7 @@ function entry(value: {
  * `views` REGEXP '...' AND CAST(`views` AS DECIMAL(65, 30)) <> ROUND(CAST(`views` AS DECIMAL(65, 30)))
  * ```
  */
-export function makeConversions(input: {
-  readonly dialect: Dialect
-  /** The MySQL server is MariaDB, which takes only digits as an integer; MySQL takes any number and rounds it. */
-  readonly mariadb: boolean
-  /**
-   * The schema's provider is CockroachDB, which speaks PostgreSQL's protocol but has Prisma drop
-   * and add a column again for nearly every type change: only a BIGINT narrowed to INT4 and an
-   * INT4 turned into an unbounded STRING are converted in place.
-   */
-  readonly cockroach?: boolean
-  readonly column: {
-    readonly column: string
-    readonly type: string
-    readonly kind: string
-    readonly nativeType: readonly [string, readonly string[]] | null
-    readonly isList: boolean
-    readonly required: boolean
-    readonly databaseDefault: boolean
-  }
-  readonly existing: {
-    readonly dataType: string
-    readonly columnType: string | null
-    readonly maxLength: number | null
-    readonly precision: number | null
-    readonly scale: number | null
-    readonly datetimePrecision: number | null
-    readonly enumValues: readonly string[] | null
-  }
-}) {
+export function makeConversions(input: ConversionInput) {
   const { dialect, column, existing } = input
   if (column.isList) return []
   const expected = prismaFamily(column)
@@ -304,6 +306,38 @@ export function makeConversions(input: {
     columnType: existing.columnType,
   })
   if (expected === null || actual === null) return []
+  const kit = conversionKit(input, expected, actual)
+  if (dialect === 'sqlite') return sqliteConversions(kit)
+  if (dialect === 'postgresql') {
+    return input.cockroach === true ? cockroachConversions(kit) : postgresConversions(kit)
+  }
+  return mysqlConversions(kit)
+}
+
+/**
+ * The value as the database rounds it: a float by its shortest decimal form, as both
+ * PostgreSQL's numeric cast and MySQL's DECIMAL conversion read it.
+ *
+ * @example
+ * ```sql
+ * -- PostgreSQL
+ * CAST("price" AS NUMERIC)
+ * -- MySQL, a float
+ * CAST(CAST(`price` AS CHAR) AS DECIMAL(65, 30))
+ * ```
+ */
+function exactValue(dialect: Dialect, actual: string, name: string) {
+  if (dialect === 'postgresql') return `CAST(${name} AS NUMERIC)`
+  return actual === 'float' ? `CAST(CAST(${name} AS CHAR) AS DECIMAL(65, 30))` : name
+}
+
+/** What every dialect's reading of a type change is made from: the column, and its entries. */
+function conversionKit(
+  input: ConversionInput,
+  expected: NonNullable<ReturnType<typeof prismaFamily>>,
+  actual: NonNullable<ReturnType<typeof databaseFamily>>,
+) {
+  const { dialect, column, existing } = input
   const name = quoteIdentifier(dialect, column.column)
   const from = existing.columnType ?? existing.dataType
   const changed = entry({
@@ -373,14 +407,7 @@ export function makeConversions(input: {
       hint: 'The conversion goes through and the value changes: round them yourself first if the rule matters.',
       condition,
     })
-  // The value as the database rounds it: a float by its shortest decimal form, as both
-  // PostgreSQL's numeric cast and MySQL's DECIMAL conversion read it.
-  const exact =
-    dialect === 'postgresql'
-      ? `CAST(${name} AS NUMERIC)`
-      : actual === 'float'
-        ? `CAST(CAST(${name} AS CHAR) AS DECIMAL(65, 30))`
-        : name
+  const exact = exactValue(dialect, actual, name)
   const fractional = actual === 'float' || actual === 'decimal'
   const range = targetRange(dialect, column)
   const length = targetLength(dialect, column)
@@ -453,123 +480,225 @@ export function makeConversions(input: {
     ]
   }
 
-  if (dialect === 'sqlite') {
-    const same =
-      expected === actual ||
-      (expected === 'enum' && actual === 'string') ||
-      (expected === 'bigint' && actual === 'int')
-    return same ? [] : [changed]
+  return {
+    input,
+    dialect,
+    column,
+    existing,
+    expected,
+    actual,
+    name,
+    /** The value read as MySQL's widest DECIMAL. */
+    text: `CAST(${name} AS DECIMAL(65, 30))`,
+    changed,
+    recreated,
+    tooLong,
+    outOfRange,
+    notConvertible,
+    rounded,
+    range,
+    length,
+    decimal,
+    held,
+    toInteger,
+    toDecimal,
+    toDateTime,
   }
+}
 
-  if (dialect === 'postgresql' && input.cockroach === true) {
-    // An enum keeps its values: CockroachDB drops a member with DROP VALUE, which refuses a
-    // member in use, as the enum check counts. Anything else becomes an enum by being re-added.
-    if (column.kind === 'enum') return existing.enumValues === null ? [recreated] : []
+type ConversionKit = ReturnType<typeof conversionKit>
+
+/** SQLite copies the values into the new table as they are. */
+function sqliteConversions(kit: ConversionKit) {
+  const { expected, actual, changed } = kit
+  const same =
+    expected === actual ||
+    (expected === 'enum' && actual === 'string') ||
+    (expected === 'bigint' && actual === 'int')
+  return same ? [] : [changed]
+}
+
+/** The native type a PostgreSQL string field names that is not text (`@db.Uuid`), if any. */
+function postgresStringNative(column: ConversionKit['column']) {
+  return column.nativeType === null ? undefined : POSTGRES_STRING_NATIVES[column.nativeType[0]]
+}
+
+/**
+ * CockroachDB has Prisma drop and add a column again for nearly every type change: only a BIGINT
+ * narrowed to INT4 and an INT4 turned into an unbounded STRING are converted in place.
+ */
+function cockroachConversions(kit: ConversionKit) {
+  const { column, existing, expected, actual, recreated, range } = kit
+  // An enum keeps its values: CockroachDB drops a member with DROP VALUE, which refuses a
+  // member in use, as the enum check counts. Anything else becomes an enum by being re-added.
+  if (column.kind === 'enum') return existing.enumValues === null ? [recreated] : []
+  if (expected === 'string') return cockroachToString(kit)
+  if (range !== null && NUMERIC.has(actual)) return cockroachToInteger(kit, range)
+  if (expected === 'decimal' && actual === 'decimal') return cockroachToDecimal(kit)
+  if (expected === 'datetime' && actual === 'datetime') return cockroachToDateTime(kit)
+  return expected === actual ? [] : [recreated]
+}
+
+function cockroachToString(kit: ConversionKit) {
+  const { column, existing, actual, recreated, length } = kit
+  const special = postgresStringNative(column)
+  if (special !== undefined) return existing.dataType === special ? [] : [recreated]
+  if (actual === 'string' && POSTGRES_TEXT.has(existing.dataType)) {
     const sameLength = (length ?? null) === (existing.maxLength ?? null)
-    if (expected === 'string') {
-      const special =
-        column.nativeType === null ? undefined : POSTGRES_STRING_NATIVES[column.nativeType[0]]
-      if (special !== undefined) return existing.dataType === special ? [] : [recreated]
-      if (actual === 'string' && POSTGRES_TEXT.has(existing.dataType)) {
-        return sameLength ? [] : [recreated]
-      }
-      return existing.dataType === 'integer' && length === null ? [] : [recreated]
-    }
-    if (range !== null && NUMERIC.has(actual)) {
-      if (held !== null && held.min === range.min && held.max === range.max) return []
-      // BIGINT to INT4 is the one narrowing CockroachDB does in place, refusing what does not fit.
-      return existing.dataType === 'bigint' && range.max === 2_147_483_647n
-        ? [outOfRange(name, integerBounds(range))]
-        : [recreated]
-    }
-    if (expected === 'decimal' && actual === 'decimal') {
-      return decimal !== null &&
-        existing.precision === decimal.precision &&
-        existing.scale === decimal.scale
-        ? []
-        : [recreated]
-    }
-    if (expected === 'datetime' && actual === 'datetime') {
-      const date = column.nativeType?.[0] === 'Date'
-      const digits = targetSeconds(column)
-      return date === (existing.dataType === 'date') &&
-        (date || digits === (existing.datetimePrecision ?? 6))
-        ? []
-        : [recreated]
-    }
-    return expected === actual ? [] : [recreated]
+    return sameLength ? [] : [recreated]
   }
+  return existing.dataType === 'integer' && length === null ? [] : [recreated]
+}
 
-  if (dialect === 'postgresql') {
-    // An enum column keeps its values through Prisma's rename-and-cast; the enum check counts
-    // the ones the new type does not have. Anything else becomes an enum by being re-added.
-    if (column.kind === 'enum') return existing.enumValues === null ? [recreated] : []
-    if (expected === 'string') {
-      const special =
-        column.nativeType === null ? undefined : POSTGRES_STRING_NATIVES[column.nativeType[0]]
-      if (special !== undefined) return existing.dataType === special ? [] : [recreated]
-      if (actual === 'enum') return [recreated]
-      if (length === null) return []
-      if (!POSTGRES_TEXT.has(existing.dataType)) return [recreated]
-      return existing.maxLength !== null && existing.maxLength <= length ? [] : [tooLong(length)]
-    }
-    if (NUMERIC.has(expected) && NUMERIC.has(actual)) {
-      return expected === 'decimal' ? toDecimal() : toInteger()
-    }
-    if (expected === 'datetime' && actual === 'datetime') return toDateTime()
-    return expected === actual ? [] : [recreated]
+function cockroachToInteger(
+  kit: ConversionKit,
+  range: { readonly min: bigint; readonly max: bigint },
+) {
+  const { existing, name, recreated, outOfRange, held } = kit
+  if (held !== null && held.min === range.min && held.max === range.max) return []
+  // BIGINT to INT4 is the one narrowing CockroachDB does in place, refusing what does not fit.
+  return existing.dataType === 'bigint' && range.max === 2_147_483_647n
+    ? [outOfRange(name, integerBounds(range))]
+    : [recreated]
+}
+
+function cockroachToDecimal(kit: ConversionKit) {
+  const { existing, recreated, decimal } = kit
+  return decimal !== null &&
+    existing.precision === decimal.precision &&
+    existing.scale === decimal.scale
+    ? []
+    : [recreated]
+}
+
+function cockroachToDateTime(kit: ConversionKit) {
+  const { column, existing, recreated } = kit
+  const date = column.nativeType?.[0] === 'Date'
+  const digits = targetSeconds(column)
+  return date === (existing.dataType === 'date') &&
+    (date || digits === (existing.datetimePrecision ?? 6))
+    ? []
+    : [recreated]
+}
+
+/** PostgreSQL changes the type in place with a cast where it has one, and re-adds the column where not. */
+function postgresConversions(kit: ConversionKit) {
+  const { column, existing, expected, actual, recreated } = kit
+  // An enum column keeps its values through Prisma's rename-and-cast; the enum check counts
+  // the ones the new type does not have. Anything else becomes an enum by being re-added.
+  if (column.kind === 'enum') return existing.enumValues === null ? [recreated] : []
+  if (expected === 'string') return postgresToString(kit)
+  if (NUMERIC.has(expected) && NUMERIC.has(actual)) {
+    return expected === 'decimal' ? kit.toDecimal() : kit.toInteger()
   }
+  if (expected === 'datetime' && actual === 'datetime') return kit.toDateTime()
+  return expected === actual ? [] : [recreated]
+}
 
-  // MySQL converts the column in place with MODIFY, and strict mode refuses the value that does not fit.
+function postgresToString(kit: ConversionKit) {
+  const { column, existing, actual, recreated, length, tooLong } = kit
+  const special = postgresStringNative(column)
+  if (special !== undefined) return existing.dataType === special ? [] : [recreated]
+  if (actual === 'enum') return [recreated]
+  if (length === null) return []
+  if (!POSTGRES_TEXT.has(existing.dataType)) return [recreated]
+  return existing.maxLength !== null && existing.maxLength <= length ? [] : [tooLong(length)]
+}
+
+const MYSQL_STRING_SOURCES = new Set(['string', 'json', 'bytes'])
+
+/** MySQL converts the column in place with MODIFY, and strict mode refuses the value that does not fit. */
+function mysqlConversions(kit: ConversionKit) {
+  const { column, existing, expected, actual, range, length, tooLong } = kit
   if (column.kind === 'enum') return []
   if (expected === 'string') {
-    if (length === null || !['string', 'json', 'bytes'].includes(actual)) return []
+    if (length === null || !MYSQL_STRING_SOURCES.has(actual)) return []
     return existing.maxLength !== null && existing.maxLength <= length ? [] : [tooLong(length)]
   }
-  const text = `CAST(${name} AS DECIMAL(65, 30))`
-  if (range !== null) {
-    if (actual === 'string') {
-      // MariaDB refuses `10.5` as an integer; MySQL rounds it to 11 (and reads `1e` as 1), then checks the range.
-      const pattern = input.mariadb ? MARIADB_INTEGER : MYSQL_ROUNDED_INTEGER
-      const value = input.mariadb ? `CAST(${name} AS DECIMAL(65, 0))` : `ROUND(${text})`
-      return [
-        notConvertible(
-          `${name} NOT REGEXP '${pattern}' OR ${value} < ${String(range.min)} OR ${value} > ${String(range.max)}`,
-        ),
-        ...(input.mariadb
-          ? []
-          : [
-              rounded(
-                'values with a fraction, rounded to whole numbers',
-                `${name} REGEXP '${pattern}' AND ${text} <> ROUND(${text})`,
-              ),
-            ]),
-      ]
-    }
-    if (NUMERIC.has(actual) || actual === 'boolean') return toInteger()
-    return [changed]
+  if (range !== null) return mysqlToInteger(kit, range)
+  if (expected === 'decimal' || expected === 'float') return mysqlToNumber(kit)
+  return mysqlToOther(kit)
+}
+
+/**
+ * MySQL to an integer.
+ *
+ * @example
+ * ```sql
+ * `views` IS NOT NULL AND (`views` NOT REGEXP '^[[:space:]]*[-+]?([0-9]+[.]?[0-9]*|[.][0-9]+)([eE][-+]?[0-9]*)?[[:space:]]*$'
+ *   OR ROUND(CAST(`views` AS DECIMAL(65, 30))) < -2147483648
+ *   OR ROUND(CAST(`views` AS DECIMAL(65, 30))) > 2147483647)
+ * ```
+ */
+function mysqlToInteger(kit: ConversionKit, range: { readonly min: bigint; readonly max: bigint }) {
+  const { input, actual, name, text, notConvertible, rounded, changed } = kit
+  if (actual === 'string') {
+    // MariaDB refuses `10.5` as an integer; MySQL rounds it to 11 (and reads `1e` as 1), then checks the range.
+    const pattern = input.mariadb ? MARIADB_INTEGER : MYSQL_ROUNDED_INTEGER
+    const value = input.mariadb ? `CAST(${name} AS DECIMAL(65, 0))` : `ROUND(${text})`
+    return [
+      notConvertible(
+        `${name} NOT REGEXP '${pattern}' OR ${value} < ${String(range.min)} OR ${value} > ${String(range.max)}`,
+      ),
+      ...(input.mariadb
+        ? []
+        : [
+            rounded(
+              'values with a fraction, rounded to whole numbers',
+              `${name} REGEXP '${pattern}' AND ${text} <> ROUND(${text})`,
+            ),
+          ]),
+    ]
   }
-  if (expected === 'decimal' || expected === 'float') {
-    if (actual === 'string' && expected === 'decimal' && decimal !== null) {
-      const bounds = decimalBounds(decimal.precision, decimal.scale)
-      const value = `ROUND(${text}, ${decimal.scale})`
-      return [
-        notConvertible(
-          `${name} NOT REGEXP '${MYSQL_NUMBER}' OR ${value} < ${bounds.min} OR ${value} > ${bounds.max}`,
-        ),
-        rounded(
-          `values rounded to ${decimal.scale} decimal places`,
-          `${name} REGEXP '${MYSQL_NUMBER}' AND ${text} <> ${value}`,
-        ),
-      ]
-    }
-    if (actual === 'string') return [notConvertible(`${name} NOT REGEXP '${MYSQL_NUMBER}'`)]
-    if (expected === 'decimal' && (NUMERIC.has(actual) || actual === 'boolean')) return toDecimal()
-    return NUMERIC.has(actual) || actual === 'boolean' ? [] : [changed]
+  if (NUMERIC.has(actual) || actual === 'boolean') return kit.toInteger()
+  return [changed]
+}
+
+/**
+ * MySQL to a decimal or a float.
+ *
+ * @example
+ * ```sql
+ * `price` IS NOT NULL AND (`price` NOT REGEXP '^[[:space:]]*[-+]?([0-9]+[.]?[0-9]*|[.][0-9]+)([eE][-+]?[0-9]+)?[[:space:]]*$'
+ *   OR ROUND(CAST(`price` AS DECIMAL(65, 30)), 2) < -999.99 OR ROUND(CAST(`price` AS DECIMAL(65, 30)), 2) > 999.99)
+ * ```
+ */
+function mysqlToNumber(kit: ConversionKit) {
+  const { expected, actual, name, text, decimal, notConvertible, rounded, changed } = kit
+  if (actual === 'string' && expected === 'decimal' && decimal !== null) {
+    const bounds = decimalBounds(decimal.precision, decimal.scale)
+    const value = `ROUND(${text}, ${decimal.scale})`
+    return [
+      notConvertible(
+        `${name} NOT REGEXP '${MYSQL_NUMBER}' OR ${value} < ${bounds.min} OR ${value} > ${bounds.max}`,
+      ),
+      rounded(
+        `values rounded to ${decimal.scale} decimal places`,
+        `${name} REGEXP '${MYSQL_NUMBER}' AND ${text} <> ${value}`,
+      ),
+    ]
   }
+  if (actual === 'string') return [notConvertible(`${name} NOT REGEXP '${MYSQL_NUMBER}'`)]
+  if (expected === 'decimal' && (NUMERIC.has(actual) || actual === 'boolean')) {
+    return kit.toDecimal()
+  }
+  return NUMERIC.has(actual) || actual === 'boolean' ? [] : [changed]
+}
+
+/**
+ * MySQL to a date and time, JSON or bytes.
+ *
+ * @example
+ * ```sql
+ * `at` IS NOT NULL AND (CAST(`at` AS DATETIME(3)) IS NULL)
+ * `data` IS NOT NULL AND (JSON_VALID(`data`) = 0)
+ * ```
+ */
+function mysqlToOther(kit: ConversionKit) {
+  const { expected, actual, name, notConvertible, changed } = kit
   if (expected === 'datetime') {
     if (actual === 'string') return [notConvertible(`CAST(${name} AS DATETIME(3)) IS NULL`)]
-    return actual === 'datetime' ? toDateTime() : [changed]
+    return actual === 'datetime' ? kit.toDateTime() : [changed]
   }
   if (expected === 'json') {
     if (actual === 'string') return [notConvertible(`JSON_VALID(${name}) = 0`)]

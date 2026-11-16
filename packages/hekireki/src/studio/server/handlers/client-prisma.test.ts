@@ -18,6 +18,16 @@ import {
 } from '../services/index.js'
 import { loadSnapshot } from '../usecases/index.js'
 
+// A field of a JSON body, and a list field as an array (empty where it is not one).
+function fieldOf(json: unknown, key: string): unknown {
+  return typeof json === 'object' && json !== null ? Reflect.get(json, key) : undefined
+}
+
+function listOf(json: unknown, key: string): any[] {
+  const value = fieldOf(json, key)
+  return Array.isArray(value) ? value : []
+}
+
 // The Prisma Client page against a client `prisma generate` really wrote, on a real SQLite file:
 // what Studio shows is what Prisma Client does, so this is where a Prisma release that changes
 // its query events, its generated files or its types shows up. The project is a temporary
@@ -86,7 +96,7 @@ function generate(schemaPath: string) {
 function countOf(table: string) {
   const db = new DatabaseSync(path.join(project.dir, 'dev.db'))
   try {
-    return Number(db.prepare(`SELECT count(*) AS n FROM "${table}"`).get()?.n)
+    return Number(db.prepare(`SELECT count(*) AS n FROM "${table}"`).get()?.['n'])
   } finally {
     db.close()
   }
@@ -215,15 +225,12 @@ describe('the Prisma Client page on a generated client', () => {
       rowCount: 2,
       truncated: false,
     })
-    const queries =
-      typeof json === 'object' && json !== null && 'queries' in json && Array.isArray(json.queries)
-        ? (json.queries as {
-            sql: string
-            formatted: string
-            params: unknown[]
-            durationMs: number
-          }[])
-        : []
+    const queries: {
+      sql: string
+      formatted: string
+      params: unknown[]
+      durationMs: number
+    }[] = listOf(json, 'queries')
     // The users, then their posts: `include` is a second statement, and both are Prisma's own.
     expect(queries).toHaveLength(2)
     expect(queries[0]?.sql).toMatch(/^SELECT .+ FROM `main`\.`User` WHERE .+ LIKE .+ ORDER BY /u)
@@ -242,9 +249,10 @@ describe('the Prisma Client page on a generated client', () => {
     const query =
       'prisma.user.findMany({ where: { role: "VIEWER" }, include: { posts: { select: { title: true } } } })'
     const sqlOf = (json: unknown) =>
-      typeof json === 'object' && json !== null && 'queries' in json && Array.isArray(json.queries)
-        ? json.queries.map((entry: { sql: string; params: unknown[] }) => [entry.sql, entry.params])
-        : null
+      listOf(json, 'queries').map((entry: { sql: string; params: unknown[] }) => [
+        entry.sql,
+        entry.params,
+      ])
     const preview = await project.call('/api/client/preview', { query })
     const run = await project.call('/api/client/run', { query })
     expect(preview.status).toBe(200)
@@ -254,7 +262,7 @@ describe('the Prisma Client page on a generated client', () => {
 
     const posts = async () => {
       const { json } = await project.call('/api/client/run', { query: 'prisma.post.count()' })
-      return typeof json === 'object' && json !== null && 'result' in json ? json.result : null
+      return fieldOf(json, 'result')
     }
     const before = await posts()
     expect(before).toBeGreaterThan(0)
@@ -305,10 +313,9 @@ describe('the Prisma Client page on a generated client', () => {
       result: [{ title: 'Batch', published: false, authorId: 3 }, 1],
       rowCount: 2,
     })
-    const statements =
-      typeof json === 'object' && json !== null && 'queries' in json && Array.isArray(json.queries)
-        ? json.queries.map((query: { sql: string }) => query.sql.split(' ')[0])
-        : []
+    const statements = listOf(json, 'queries').map(
+      (query: { sql: string }) => query.sql.split(' ')[0],
+    )
     expect(statements).toContain('INSERT')
     expect(countOf('Post')).toBe(before + 1)
   })

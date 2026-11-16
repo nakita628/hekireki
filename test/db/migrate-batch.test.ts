@@ -3,7 +3,16 @@ import { join } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 
-import { cli, decide, prisma, run, statementsOf, TARGETS, workspace } from './migrate-harness.ts'
+import {
+  cli,
+  decide,
+  inSequence,
+  prisma,
+  run,
+  statementsOf,
+  TARGETS,
+  workspace,
+} from './migrate-harness.ts'
 
 // `hekireki migrate plan --batch`: a fix over more rows than the batch is written as that many
 // rows at a time, and each database names "some of the rows" its own way (a LIMIT on the
@@ -118,10 +127,7 @@ for (const target of TARGETS) {
       const [first = '', ...rest] = statements
       await target.exec(state.url, RUN, first)
       expect(await count(nameless)).toBe(12)
-      await rest.reduce(
-        (done, sql) => done.then(() => target.exec(state.url, RUN, sql)),
-        Promise.resolve(),
-      )
+      await inSequence(rest, (sql) => target.exec(state.url, RUN, sql))
       expect(await count(nameless)).toBe(0)
       expect(await count(`SELECT COUNT(*) FROM ${q('Event')}`)).toBe(25)
       // The first of the seven stays, and the one of another label.

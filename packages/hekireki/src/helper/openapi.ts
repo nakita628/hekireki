@@ -1,9 +1,10 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { pluralize } from '../utils/humanizer.js'
-import { makeSnakeCase, stripAnnotations } from '../utils/index.js'
-import { implicitJoinTables, isFunctionDefault } from '../utils/prisma-model.js'
-import type { YamlValue } from '../utils/yaml.js'
+import { stripAnnotations } from '../annotation/index.js'
+import type { YamlValue } from '../literal/yaml.js'
+import { makeSnakeCase } from '../naming/case.js'
+import { pluralize } from '../naming/humanizer.js'
+import { implicitJoinTables, isFunctionDefault } from '../prisma/model.js'
 
 /** A JSON Schema object as OpenAPI 3.1 holds it: a map of keywords to JSON values. */
 export type OpenApiSchema = { readonly [keyword: string]: YamlValue }
@@ -34,6 +35,16 @@ function itemSchema(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]): Co
   return SCALAR[field.type] ?? { type: 'string' }
 }
 
+/** An enum member default, by the value the database stores. */
+function enumDefault(
+  field: DMMF.Field,
+  dflt: string,
+  enums: readonly DMMF.DatamodelEnum[],
+): OpenApiSchema {
+  const value = enums.find((e) => e.name === field.type)?.values.find((v) => v.name === dflt)
+  return { default: value?.dbName ?? dflt }
+}
+
 /**
  * The column's `@default` as the `default` keyword, where it is a literal the schema can show: a
  * number, a boolean, a string, or an enum member by the value the database stores. One the
@@ -46,10 +57,7 @@ function defaultKeyword(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[])
     return {}
   }
   if (typeof dflt === 'object' || field.type === 'Json' || field.type === 'Bytes') return {}
-  if (field.kind === 'enum' && typeof dflt === 'string') {
-    const value = enums.find((e) => e.name === field.type)?.values.find((v) => v.name === dflt)
-    return { default: value?.dbName ?? dflt }
-  }
+  if (field.kind === 'enum' && typeof dflt === 'string') return enumDefault(field, dflt, enums)
   if (field.type === 'BigInt' && typeof dflt === 'string') {
     // DMMF carries a BigInt default as digits. Past 2^53 JSON would round it, so it is left out.
     return Number.isSafeInteger(Number(dflt)) ? { default: Number(dflt) } : {}
@@ -127,14 +135,15 @@ export function makeOpenApiTable(
   enums: readonly DMMF.DatamodelEnum[],
 ): OpenApiSchema {
   const table = model.dbName ?? model.name
-  const columnName = (fieldName: string) =>
-    model.fields.find((f) => f.name === fieldName)?.dbName ?? fieldName
+  const fieldByName = new Map(model.fields.map((f) => [f.name, f]))
+  const modelByName = new Map(models.map((m) => [m.name, m]))
+  const columnName = (fieldName: string) => fieldByName.get(fieldName)?.dbName ?? fieldName
   const columns = model.fields.filter((f) => f.kind === 'scalar' || f.kind === 'enum')
   const required = columns.filter((f) => f.isRequired && !f.isList).map((f) => f.dbName ?? f.name)
   const foreignKeys = model.fields
     .filter((f) => f.relationFromFields !== undefined && f.relationFromFields.length > 0)
     .flatMap((f) => {
-      const target = models.find((m) => m.name === f.type)
+      const target = modelByName.get(f.type)
       if (target === undefined) return []
       const from = (f.relationFromFields ?? []).map(columnName)
       return [
@@ -182,9 +191,10 @@ export function makeOpenApiJoinTables(
   models: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[],
 ) {
+  const modelByName = new Map(models.map((m) => [m.name, m]))
   return implicitJoinTables(models).flatMap((pair) => {
-    const left = models.find((m) => m.name === pair.left)
-    const right = models.find((m) => m.name === pair.right)
+    const left = modelByName.get(pair.left)
+    const right = modelByName.get(pair.right)
     if (left === undefined || right === undefined) return []
     const table = `_${pair.relationName}`
     const schema: OpenApiSchema = {
@@ -205,8 +215,9 @@ function keyColumns(model: DMMF.Model): readonly DMMF.Field[] {
   const id = model.fields.filter((f) => f.isId)
   if (id.length > 0) return id
   const names = model.primaryKey?.fields ?? model.uniqueFields[0] ?? []
+  const fieldByName = new Map(model.fields.map((f) => [f.name, f]))
   return names.flatMap((name) => {
-    const field = model.fields.find((f) => f.name === name)
+    const field = fieldByName.get(name)
     return field === undefined ? [] : [field]
   })
 }
@@ -241,7 +252,7 @@ export function makeOpenApiInput(
   const required =
     kind === 'create'
       ? columns
-          .filter((f) => f.isRequired && !f.isList && !f.hasDefaultValue && !f.isUpdatedAt)
+          .filter((f) => f.isRequired && !f.isList && !f.hasDefaultValue && f.isUpdatedAt !== true)
           .map((f) => f.dbName ?? f.name)
       : []
   return {

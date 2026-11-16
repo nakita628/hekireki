@@ -9,10 +9,13 @@ const harness = resolve(import.meta.dirname, '..', 'harness', 'sqlalchemy')
 const python = join(harness, '.venv', 'bin', 'python')
 const hasPython = spawnSync('python3', ['--version'], { stdio: 'ignore' }).status === 0
 
+// A CI leg has every toolchain; a local run may not.
+const ON_CI = (process.env.CI ?? '') !== ''
+
 describe('sqlalchemy', () => {
   // Skipping keeps `vp test` runnable without Python installed; a CI leg that
   // silently skipped would be a false green.
-  it.runIf(!!process.env.CI)('the Python toolchain is installed', () => {
+  it.runIf(ON_CI)('the Python toolchain is installed', () => {
     expect(hasPython).toBe(true)
   })
 

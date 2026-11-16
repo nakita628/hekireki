@@ -410,17 +410,19 @@ describe('makeClientQuery reads back whatever literal it is given', () => {
     return Object.fromEntries(keys.map((key) => [key, valueOf(draw, depth + 1)]))
   }
 
+  function quotedOf(draw: () => number, value: string): string {
+    const style = Math.floor(draw() * 3)
+    if (style === 0) return JSON.stringify(value)
+    if (style === 1) {
+      return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'").replaceAll('\n', '\\n')}'`
+    }
+    return `\`${value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('$', '\\$')}\``
+  }
+
   function printOf(draw: () => number, value: Value): string {
     const gap = () => [' ', '', '\n  ', ' /* c */ ', ' // c\n'][Math.floor(draw() * 5)] ?? ' '
     const comma = () => (draw() < 0.3 ? ',' : '')
-    if (typeof value === 'string') {
-      const style = Math.floor(draw() * 3)
-      if (style === 0) return JSON.stringify(value)
-      if (style === 1) {
-        return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'").replaceAll('\n', '\\n')}'`
-      }
-      return `\`${value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('$', '\\$')}\``
-    }
+    if (typeof value === 'string') return quotedOf(draw, value)
     if (typeof value === 'number') {
       const text = draw() < 0.3 ? value.toExponential() : String(value)
       return value < 0 ? `-${gap()}${text.slice(1)}` : text

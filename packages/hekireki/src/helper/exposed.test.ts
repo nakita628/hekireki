@@ -2,7 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { prismaBlocks, relationMaps } from '../utils/prisma-schema-text.js'
+import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import {
   entityFile,
   enumEntryName,
@@ -34,6 +34,12 @@ function fixture(schema: string, options = DEFAULT_OPTIONS) {
     datamodel: result.datamodel,
     plan: planExposed(result.datamodel, { ...options, source }),
   }
+}
+
+function first<T>(items: readonly T[]): T {
+  const [item] = items
+  if (item === undefined) throw new Error('fixture')
+  return item
 }
 
 function model(datamodel: DMMF.Datamodel, name: string) {
@@ -2564,8 +2570,7 @@ model Other {
   tinys Tiny[]
 }
 `)
-    const [m2m] = plan.manyToMany
-    if (m2m === undefined) throw new Error('fixture')
+    const m2m = first(plan.manyToMany)
     expect(joinTableFile(plan, m2m)).toStrictEqual({
       fileName: 'OtherToTinyTable.kt',
       code: `package models
@@ -2968,8 +2973,7 @@ class UserEntity(
 }
 `,
     })
-    const [m2m] = plan.manyToMany
-    if (m2m === undefined) throw new Error('fixture')
+    const m2m = first(plan.manyToMany)
     expect(joinTableFile(plan, m2m)).toStrictEqual({
       fileName: 'TagToUserTable.kt',
       code: `package models
@@ -3299,8 +3303,7 @@ model Tag {
   posts Post[]
 }
 `)
-    const [m2m] = plan.manyToMany
-    if (m2m === undefined) throw new Error('fixture')
+    const m2m = first(plan.manyToMany)
     expect(joinTableFile(plan, m2m)).toStrictEqual({
       fileName: 'PostToTagTable.kt',
       code: `package models
@@ -3383,8 +3386,7 @@ model Member {
   @@schema("audit")
 }
 `)
-    const [m2m] = plan.manyToMany
-    if (m2m === undefined) throw new Error('fixture')
+    const m2m = first(plan.manyToMany)
     expect(joinTableFile(plan, m2m)).toStrictEqual({
       fileName: 'FriendsOfTable.kt',
       code: `package models

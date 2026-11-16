@@ -29,6 +29,12 @@ export type PrismaBlock = {
   readonly lines: readonly string[]
 }
 
+// The line that closes the block opened at `opening`, or -1. The search starts past the opening
+// and stops at the first `}`, so it reads the block's own lines only.
+function blockEnd(lines: readonly string[], opening: number) {
+  return lines.indexOf('}', opening + 1)
+}
+
 export function prismaBlocks(source: string): readonly PrismaBlock[] {
   const lines = source
     .split(/\r?\n/u)
@@ -36,7 +42,7 @@ export function prismaBlocks(source: string): readonly PrismaBlock[] {
   return lines.flatMap((line, index) => {
     const opening = /^(\w+)\s+([^\s{]+)\s*\{$/u.exec(line)
     if (!opening) return []
-    const end = lines.indexOf('}', index + 1)
+    const end = blockEnd(lines, index)
     return [
       {
         keyword: opening[1] ?? '',

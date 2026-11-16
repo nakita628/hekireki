@@ -16,8 +16,8 @@ import {
   routeOperations,
   zodOpenapiHonoYaml,
 } from '../generator/zod-openapi-hono.js'
+import { getString } from '../prisma/config.js'
 import type { AuthKind } from '../types/index.js'
-import { getString } from '../utils/index.js'
 import { GeneratorConfigError, HonoTakibiError } from './errors.js'
 import { requireOutput } from './output.js'
 
@@ -87,8 +87,8 @@ export function zodOpenapiHono(options: GeneratorOptions) {
       })
     }
     const config = options.generator.config ?? {}
-    const prismaImport = getString(config.prisma) ?? './prisma'
-    const authOption = getString(config.auth)
+    const prismaImport = getString(config['prisma']) ?? './prisma'
+    const authOption = getString(config['auth'])
     const auth = AUTH_KINDS.find((kind) => kind === authOption)
     if (authOption !== undefined && auth === undefined) {
       return yield* new GeneratorConfigError({
@@ -99,8 +99,8 @@ export function zodOpenapiHono(options: GeneratorOptions) {
     const document = path.join(output, 'openapi.yaml')
     yield* emitRaw(
       zodOpenapiHonoYaml(datamodel, {
-        title: getString(config.title) ?? 'Generated from schema.prisma',
-        version: getString(config.version) ?? '1.0.0',
+        title: getString(config['title']) ?? 'Generated from schema.prisma',
+        version: getString(config['version']) ?? '1.0.0',
         ...(auth === undefined ? {} : { auth }),
       }),
       output,
@@ -116,7 +116,7 @@ export function zodOpenapiHono(options: GeneratorOptions) {
       files,
       (name) =>
         fillHandlerFile(path.join(handlers, name), operations, bodies, fromHandlers(prismaImport)),
-      { discard: true },
+      { discard: true, concurrency: 1 },
     )
     if (auth !== undefined) yield* guardApp(output, auth, guardedPaths(datamodel))
     return undefined

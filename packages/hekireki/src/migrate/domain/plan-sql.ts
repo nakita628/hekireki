@@ -72,71 +72,10 @@ export function planSql(
           after: report.rewrite.after,
           nullable: report.rewrite.nullable,
         })
-  const again = migration?.sql.split('\n').some((line) => line.trim() === GENERATED) === true
-  const errors = again
-    ? [
-        `${migration?.path ?? 'migration.sql'}: already written by hekireki migrate plan. Pass the migration.sql Prisma wrote (\`prisma migrate diff --script\` writes it again).`,
-      ]
-    : rewritten !== null
-      ? rewritten.errors.map((error) => `${migration?.path ?? 'migration.sql'}: ${error}.`)
-      : inMigration > 0
-        ? [
-            `The decisions ask the migration itself for ${plural(inMigration, 'change')} (a rename, a conversion, an added column filled, an enum value mapped in its cast or values moved to another table): pass --migration with the migration.sql Prisma wrote for this schema.`,
-          ]
-        : []
+  const errors = planErrors(migration, rewritten, inMigration)
   const transaction = rewritten?.transaction === true
-  const postgres = report.database.dialect === 'postgresql' && !report.database.cockroach
   const before = report.fixes.filter((fix) => !fix.inMigration)
-  // A fix over this many rows is one to plan for: one UPDATE or DELETE, one long lock.
-  const heavy = before.filter((fix) => (fix.rows ?? 0) >= HEAVY_ROWS)
-  const lossy =
-    before.some(isLossyFix) ||
-    (rewritten !== null && isDestructiveStep(splitStatements(rewritten.sql)))
-  const notes = [
-    ...(migration === null
-      ? before.length === 0
-        ? ['No fixes decided: nothing to run before the migration.']
-        : [
-            'Put it at the top of the migration Prisma writes for the schema (`prisma migrate dev --create-only` writes one to edit), or pass that migration with --migration.',
-          ]
-      : ['Put it in place of the migration.sql Prisma wrote.']),
-    transaction
-      ? 'One statement, a DO block PostgreSQL runs whole or not at all: if a statement in it fails, none of it is done, the fixes included.'
-      : 'Prisma runs a migration a statement at a time, with no transaction around it: if a statement fails, the ones before it, the fixes included, stay done.',
-    ...(postgres && migration === null && before.length > 0
-      ? [
-          'With --migration, the plan runs the fixes and the migration as one statement, whole or not at all.',
-        ]
-      : postgres && migration !== null && !transaction
-        ? [
-            'Not as one statement here: PostgreSQL cannot use an enum value in the transaction that adds it or make an index CONCURRENTLY in one, and a DO block does not run a SELECT as it is.',
-          ]
-        : []),
-    // What the check cannot promise: it counted the rows as they were when it ran.
-    ...(before.length === 0 && rewritten === null
-      ? []
-      : [
-          'The check counted the rows as they were when it ran. Rows written since are not in it: stop what writes to these tables while the plan runs, or run `hekireki migrate check` again right before it.',
-        ]),
-    ...heavy.map((fix) =>
-      batch !== null && !transaction && fix.parts !== null && fix.parts !== undefined
-        ? `${fix.subject}: ${plural(fix.rows ?? 0, 'row')}, ${batch} at a time. Each statement holds its locks only for its own rows; the last one takes whatever was written since the check.`
-        : `${fix.subject}: ${plural(fix.rows ?? 0, 'row')} in one statement, which holds its locks until it ends. On a table in use, run it while the table is quiet${transaction || fix.parts === null || fix.parts === undefined ? '' : ', or pass --batch to run it some rows at a time'}.`,
-    ),
-    ...(batch !== null && transaction
-      ? [
-          '--batch changes nothing here: the DO block is one transaction, which holds every lock until it ends however its statements are cut.',
-        ]
-      : []),
-    ...(rewritten === null ? [] : lostInRebuild(report, splitStatements(rewritten.sql))),
-    ...(lossy
-      ? [
-          transaction
-            ? 'It deletes rows, drops what holds them or writes over values. The DO block undoes itself only if it fails: once it has run, a backup taken before it is the only way back.'
-            : 'It deletes rows, drops what holds them or writes over values, and nothing here undoes a statement that has run: take a backup before it.',
-        ]
-      : []),
-  ]
+  const notes = planNotes({ report, migration, batch, rewritten, transaction, before })
   // A fix to a block of statements; the blocks, and the migration, apart by an empty line.
   const blocks = [
     ...before.map((fix) =>
@@ -157,4 +96,113 @@ export function planSql(
     errors,
     notes,
   }
+}
+
+type Migration = { readonly path: string; readonly sql: string }
+type Rewritten = ReturnType<typeof rewriteMigration>
+type Fix = Report['fixes'][number]
+
+/** What the plan cannot do: a migration it wrote itself, a change the migration has no statement for, or no migration given. */
+function planErrors(
+  migration: Migration | null,
+  rewritten: Rewritten | null,
+  /** The changes the decisions ask of the migration itself. */
+  inMigration: number,
+) {
+  const path = migration?.path ?? 'migration.sql'
+  if (migration?.sql.split('\n').some((line) => line.trim() === GENERATED) === true) {
+    return [
+      `${path}: already written by hekireki migrate plan. Pass the migration.sql Prisma wrote (\`prisma migrate diff --script\` writes it again).`,
+    ]
+  }
+  if (rewritten !== null) return rewritten.errors.map((error) => `${path}: ${error}.`)
+  if (inMigration > 0) {
+    return [
+      `The decisions ask the migration itself for ${plural(inMigration, 'change')} (a rename, a conversion, an added column filled, an enum value mapped in its cast or values moved to another table): pass --migration with the migration.sql Prisma wrote for this schema.`,
+    ]
+  }
+  return []
+}
+
+/** Where the plan goes. */
+function placementNote(migration: Migration | null, before: readonly Fix[]) {
+  if (migration !== null) return 'Put it in place of the migration.sql Prisma wrote.'
+  return before.length === 0
+    ? 'No fixes decided: nothing to run before the migration.'
+    : 'Put it at the top of the migration Prisma writes for the schema (`prisma migrate dev --create-only` writes one to edit), or pass that migration with --migration.'
+}
+
+/** On PostgreSQL: whether the plan could run, or why it does not run, as one statement. */
+function oneStatementNotes(
+  migration: Migration | null,
+  before: readonly Fix[],
+  transaction: boolean,
+) {
+  if (migration === null && before.length > 0) {
+    return [
+      'With --migration, the plan runs the fixes and the migration as one statement, whole or not at all.',
+    ]
+  }
+  if (migration !== null && !transaction) {
+    return [
+      'Not as one statement here: PostgreSQL cannot use an enum value in the transaction that adds it or make an index CONCURRENTLY in one, and a DO block does not run a SELECT as it is.',
+    ]
+  }
+  return []
+}
+
+/** A fix over many rows: how long it holds its locks. */
+function heavyNote(fix: Fix, batch: number | null, transaction: boolean) {
+  const parted = fix.parts !== null && fix.parts !== undefined
+  const rows = plural(fix.rows ?? 0, 'row')
+  if (batch !== null && !transaction && parted) {
+    return `${fix.subject}: ${rows}, ${batch} at a time. Each statement holds its locks only for its own rows; the last one takes whatever was written since the check.`
+  }
+  return `${fix.subject}: ${rows} in one statement, which holds its locks until it ends. On a table in use, run it while the table is quiet${transaction || !parted ? '' : ', or pass --batch to run it some rows at a time'}.`
+}
+
+/** What a person needs to know about running the plan, for the command to print. */
+function planNotes(plan: {
+  readonly report: Report
+  readonly migration: Migration | null
+  readonly batch: number | null
+  readonly rewritten: Rewritten | null
+  readonly transaction: boolean
+  readonly before: readonly Fix[]
+}) {
+  const { report, migration, batch, rewritten, transaction, before } = plan
+  const postgres = report.database.dialect === 'postgresql' && !report.database.cockroach
+  // A fix over this many rows is one to plan for: one UPDATE or DELETE, one long lock.
+  const heavy = before.filter((fix) => (fix.rows ?? 0) >= HEAVY_ROWS)
+  const migrationStatements = rewritten === null ? null : splitStatements(rewritten.sql)
+  const lossy =
+    before.some(isLossyFix) ||
+    (migrationStatements !== null && isDestructiveStep(migrationStatements))
+  return [
+    placementNote(migration, before),
+    transaction
+      ? 'One statement, a DO block PostgreSQL runs whole or not at all: if a statement in it fails, none of it is done, the fixes included.'
+      : 'Prisma runs a migration a statement at a time, with no transaction around it: if a statement fails, the ones before it, the fixes included, stay done.',
+    ...(postgres ? oneStatementNotes(migration, before, transaction) : []),
+    // What the check cannot promise: it counted the rows as they were when it ran.
+    ...(before.length === 0 && rewritten === null
+      ? []
+      : [
+          'The check counted the rows as they were when it ran. Rows written since are not in it: stop what writes to these tables while the plan runs, or run `hekireki migrate check` again right before it.',
+        ]),
+    ...heavy.map((fix) => heavyNote(fix, batch, transaction)),
+    ...(batch !== null && transaction
+      ? [
+          '--batch changes nothing here: the DO block is one transaction, which holds every lock until it ends however its statements are cut.',
+        ]
+      : []),
+    ...(migrationStatements === null ? [] : lostInRebuild(report, migrationStatements)),
+    ...(lossy ? [lossyNote(transaction)] : []),
+  ]
+}
+
+function lossyNote(transaction: boolean) {
+  return transaction
+    ? 'It deletes rows, drops what holds them or writes over values. The DO block undoes itself only if it fails: once it has run, a backup taken before it is the only way back.'
+    : 'It deletes rows, drops what holds them or writes over values, and nothing here undoes a statement that has run: take a backup before it.'
 }

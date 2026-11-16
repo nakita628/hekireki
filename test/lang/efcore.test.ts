@@ -25,10 +25,15 @@ function dotnet(args: readonly string[], stdout: 'inherit' | 'ignore' = 'inherit
     .status
 }
 
+const canRun = hasDotnet && hasPostgres
+
+// A CI leg has every toolchain; a local run may not.
+const ON_CI = (process.env.CI ?? '') !== ''
+
 describe('efcore', () => {
   // Skipping keeps `vp test` runnable without .NET or PostgreSQL; a CI leg that silently skipped
   // would be a false green.
-  it.runIf(!!process.env.CI)('the .NET SDK and a PostgreSQL server are available', () => {
+  it.runIf(ON_CI)('the .NET SDK and a PostgreSQL server are available', () => {
     expect({ dotnet: hasDotnet, postgres: hasPostgres }).toStrictEqual({
       dotnet: true,
       postgres: true,
@@ -92,17 +97,14 @@ describe('efcore', () => {
   // schema, fact by fact from PostgreSQL's catalog: tables, column types, nullability, defaults,
   // keys, foreign keys with their delete actions, indexes and enum labels in order. Only the
   // differences Program.cs lists — each one documented — may remain.
-  it.skipIf(!(hasDotnet && hasPostgres)).each(SCHEMAS)(
-    '%s: creates the schema Prisma Migrate creates',
-    (name) => {
-      expect(dotnet(['run', '--no-build', '--', 'compare', name, `${name}.sql`])).toBe(0)
-    },
-  )
+  it.skipIf(!canRun).each(SCHEMAS)('%s: creates the schema Prisma Migrate creates', (name) => {
+    expect(dotnet(['run', '--no-build', '--', 'compare', name, `${name}.sql`])).toBe(0)
+  })
 
   // Reads and writes through the model on the database Prisma Migrate creates, checking the raw
   // columns: defaults, generated ids, @updatedAt, enums, lists, native types, referential actions
   // and the join tables' A/B columns.
-  it.skipIf(!(hasDotnet && hasPostgres)).each(SCHEMAS)(
+  it.skipIf(!canRun).each(SCHEMAS)(
     '%s: reads and writes the database Prisma Migrate creates',
     (name) => {
       expect(dotnet(['run', '--no-build', '--', 'smoke', name, `${name}.sql`])).toBe(0)

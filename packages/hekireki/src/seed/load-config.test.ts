@@ -32,6 +32,11 @@ function failure(exit: Exit.Exit<unknown, unknown>) {
   return error === null ? '' : String(error)
 }
 
+/** Fails the test with the cause unless the effect succeeded, and narrows the exit to its value. */
+function assertSuccess<A, E>(exit: Exit.Exit<A, E>): asserts exit is Exit.Success<A, E> {
+  if (Exit.isFailure(exit)) throw new Error(`expected a success, got ${String(exit.cause)}`)
+}
+
 describe('resolveConfigPath', () => {
   it('looks for hekireki.config.ts and nothing else', async () => {
     expect(CONFIG_FILE).toBe('hekireki.config.ts')
@@ -76,13 +81,12 @@ describe('loadSeedConfig', () => {
 `,
     )
     const exit = await run(loadSeedConfig(file))
-    expect(Exit.isSuccess(exit)).toBe(true)
-    if (!Exit.isSuccess(exit)) return
+    assertSuccess(exit)
     expect(exit.value.seed).toBe(7)
     expect(exit.value.locale).toStrictEqual(['ja', 'en'])
-    expect(exit.value.models?.User?.count).toBe(3)
-    expect(exit.value.models?.User?.fields?.age).toStrictEqual({ min: 1, max: 2 })
-    expect(typeof exit.value.models?.User?.fields?.name).toBe('function')
+    expect(exit.value.models?.['User']?.count).toBe(3)
+    expect(exit.value.models?.['User']?.fields?.['age']).toStrictEqual({ min: 1, max: 2 })
+    expect(typeof exit.value.models?.['User']?.fields?.['name']).toBe('function')
   })
 
   it('accepts real data rows and rejects a value no column can hold', async () => {
@@ -100,17 +104,15 @@ describe('loadSeedConfig', () => {
 `,
     )
     const exit = await run(loadSeedConfig(file))
-    expect(Exit.isSuccess(exit)).toBe(true)
-    if (!Exit.isSuccess(exit)) return
-    expect(exit.value.models?.User?.data?.[0]?.email).toBe('ann@example.com')
+    assertSuccess(exit)
+    expect(exit.value.models?.['User']?.data?.[0]?.['email']).toBe('ann@example.com')
     // A second file: an ES module is imported once per path, so the first content would come back.
     const other = path.join(dir, 'bad.config.ts')
     writeFileSync(other, `export default { models: { User: { data: [{ id: () => 1 }] } } }\n`)
     const bad = await Effect.runPromiseExit(
       loadSeedConfig(other).pipe(Effect.provide(NodeFileSystem.layer), Effect.flip),
     )
-    expect(Exit.isSuccess(bad)).toBe(true)
-    if (!Exit.isSuccess(bad)) return
+    assertSuccess(bad)
     expect(bad.value.message.split('\n')).toStrictEqual([
       `Invalid config in ${other}:`,
       '   models.User.data.0.id: Expected a string, number, bigint, boolean, Date, bytes, null, or JSON of those',
@@ -178,8 +180,7 @@ export default config
     const exit = await Effect.runPromiseExit(
       loadSeedConfig(file).pipe(Effect.provide(NodeFileSystem.layer), Effect.flip),
     )
-    expect(Exit.isSuccess(exit)).toBe(true)
-    if (!Exit.isSuccess(exit)) return
+    assertSuccess(exit)
     expect(exit.value).toBeInstanceOf(SeedConfigError)
     expect(exit.value.message.split('\n')).toStrictEqual([
       `Invalid config in ${file}:`,
@@ -201,8 +202,7 @@ export default config
     const exit = await Effect.runPromiseExit(
       loadSeedConfig(file).pipe(Effect.provide(NodeFileSystem.layer), Effect.flip),
     )
-    expect(Exit.isSuccess(exit)).toBe(true)
-    if (!Exit.isSuccess(exit)) return
+    assertSuccess(exit)
     expect(exit.value.message.split('\n')).toStrictEqual([
       `Invalid config in ${file}:`,
       '   seeds: Expected no excess property',
@@ -403,8 +403,7 @@ describe('loadSeedConfig, every option checked', () => {
     const exit = await Effect.runPromiseExit(
       loadSeedConfig(file).pipe(Effect.provide(NodeFileSystem.layer), Effect.flip),
     )
-    expect(Exit.isSuccess(exit)).toBe(true)
-    if (!Exit.isSuccess(exit)) return
+    assertSuccess(exit)
     expect(exit.value.message.split('\n')).toStrictEqual([
       `Invalid config in ${file}:`,
       ...expected.map((line) => `   ${line}`),
@@ -465,15 +464,17 @@ describe('loadSeedConfig, every option checked', () => {
 `,
     )
     const exit = await run(loadSeedConfig(file))
-    expect(Exit.isSuccess(exit)).toBe(true)
-    if (!Exit.isSuccess(exit)) return
-    const row = exit.value.models?.Sample?.data?.[0]
-    expect(row?.big).toBe(10n)
-    expect(row?.bytes).toStrictEqual(new Uint8Array([1, 2]))
-    expect(row?.when).toStrictEqual(new Date('2025-01-01T00:00:00.000Z'))
-    expect(row?.json).toStrictEqual({ list: [1, 'two', { three: null }], nested: { deep: true } })
-    expect(row?.links).toStrictEqual([1, { label: 'x' }])
-    expect(exit.value.models?.Other?.fields?.d).toStrictEqual({
+    assertSuccess(exit)
+    const row = exit.value.models?.['Sample']?.data?.[0]
+    expect(row?.['big']).toBe(10n)
+    expect(row?.['bytes']).toStrictEqual(new Uint8Array([1, 2]))
+    expect(row?.['when']).toStrictEqual(new Date('2025-01-01T00:00:00.000Z'))
+    expect(row?.['json']).toStrictEqual({
+      list: [1, 'two', { three: null }],
+      nested: { deep: true },
+    })
+    expect(row?.['links']).toStrictEqual([1, { label: 'x' }])
+    expect(exit.value.models?.['Other']?.fields?.['d']).toStrictEqual({
       from: new Date(0),
       to: '2025-01-01',
     })
@@ -493,8 +494,7 @@ describe('loadSeedConfig, every option checked', () => {
     const exit = await Effect.runPromiseExit(
       loadSeedConfig(file).pipe(Effect.provide(NodeFileSystem.layer), Effect.flip),
     )
-    expect(Exit.isSuccess(exit)).toBe(true)
-    if (!Exit.isSuccess(exit)) return
+    assertSuccess(exit)
     expect(exit.value.message).toBe(`Invalid config in ${file}:\n   (root): Expected object`)
   })
 
@@ -505,8 +505,7 @@ describe('loadSeedConfig, every option checked', () => {
     const exit = await Effect.runPromiseExit(
       loadSeedConfig(file).pipe(Effect.provide(NodeFileSystem.layer), Effect.flip),
     )
-    expect(Exit.isSuccess(exit)).toBe(true)
-    if (!Exit.isSuccess(exit)) return
+    assertSuccess(exit)
     expect(exit.value.message).toBe(`Cannot load ${file}: no database today`)
   })
 

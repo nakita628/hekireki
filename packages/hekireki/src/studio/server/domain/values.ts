@@ -66,34 +66,19 @@ const MakeDbValueInput = z
 export function makeDbValue(input: z.infer<typeof MakeDbValueInput>): unknown {
   const { dialect, field, value } = input
   if (value === null) return null
-  if (field.isList) {
-    if (dialect !== 'postgresql') return typeof value === 'string' ? value : JSON.stringify(value)
-    try {
-      return typeof value === 'string' ? JSON.parse(value) : value
-    } catch {
-      return value
-    }
-  }
+  if (field.isList) return listDbValue(dialect, value)
   if (field.kind === 'enum') return String(value)
   switch (field.type) {
     case 'Int':
-    case 'Float': {
-      if (typeof value === 'number') return value
-      if (typeof value === 'boolean') return value ? 1 : 0
-      const result = Number(value)
-      return Number.isNaN(result) ? value : result
-    }
+    case 'Float':
+      return numberDbValue(value)
     case 'BigInt':
     case 'Decimal':
       return String(value)
     case 'Boolean': {
-      const flag =
-        typeof value === 'boolean'
-          ? value
-          : typeof value === 'number'
-            ? value !== 0
-            : value === 'true' || value === '1'
-      return dialect === 'sqlite' ? (flag ? 1 : 0) : flag
+      const flag = flagOf(value)
+      if (dialect !== 'sqlite') return flag
+      return flag ? 1 : 0
     }
     case 'DateTime':
       return dialect === 'sqlite' ? String(value) : new Date(String(value))
@@ -102,6 +87,34 @@ export function makeDbValue(input: z.infer<typeof MakeDbValueInput>): unknown {
     default:
       return String(value)
   }
+}
+
+type DbCell = string | number | boolean
+
+// PostgreSQL binds a list as an array, parsed from the JSON text the UI edits; the others store
+// the JSON text.
+function listDbValue(dialect: z.infer<typeof Dialect>, value: DbCell): unknown {
+  if (dialect !== 'postgresql') return typeof value === 'string' ? value : JSON.stringify(value)
+  try {
+    return typeof value === 'string' ? JSON.parse(value) : value
+  } catch {
+    return value
+  }
+}
+
+// A number as the driver binds it; text that is not a number is passed on for the database to refuse.
+function numberDbValue(value: DbCell) {
+  if (typeof value === 'number') return value
+  if (typeof value === 'boolean') return value ? 1 : 0
+  const result = Number(value)
+  return Number.isNaN(result) ? value : result
+}
+
+// Whether a cell means true: a boolean as it is, a number other than 0, or the text `true` or `1`.
+function flagOf(value: DbCell) {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+  return value === 'true' || value === '1'
 }
 
 const MakeRowInput = z

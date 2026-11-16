@@ -1,7 +1,14 @@
 // The Data tab and the SQL page against the SQLite workspace database.
 import type { Locator, Page } from '@playwright/test'
 
-import { expect, expectNoHorizontalOverflow, expectTexts, fieldHeaders, test } from './studio.js'
+import {
+  expect,
+  expectNoHorizontalOverflow,
+  expectTexts,
+  fieldHeaders,
+  present,
+  test,
+} from './studio.js'
 import { runSql } from './workspace.js'
 
 /**
@@ -303,6 +310,22 @@ test('folded-away columns stay folded across a reload', async ({ page }) => {
 })
 
 // The SQL editor is CodeMirror: `fill` on its content replaces the whole buffer.
+/** Where the first `User` in the editor is drawn, read in the browser. */
+function centreOfUser(content: Element) {
+  // 4 is NodeFilter.SHOW_TEXT, a global the browser has and the lint environment does not.
+  const walker = document.createTreeWalker(content, 4)
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    const at = node.textContent?.indexOf('User') ?? -1
+    if (at < 0) continue
+    const range = document.createRange()
+    range.setStart(node, at)
+    range.setEnd(node, at + 4)
+    const rect = range.getBoundingClientRect()
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+  }
+  return null
+}
+
 function sqlEditor(page: Page) {
   return page.locator('.cm-content')
 }
@@ -468,21 +491,7 @@ test('the SQL editor completes columns with their types after an alias, and expl
   await expect(editor).toHaveText('SELECT * FROM "User" u WHERE u.role')
 
   // Resting the pointer on a table names its model and lists its columns.
-  const word = await editor.evaluate((content) => {
-    // 4 is NodeFilter.SHOW_TEXT, a global the browser has and the lint environment does not.
-    const walker = document.createTreeWalker(content, 4)
-    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-      const at = node.textContent?.indexOf('User') ?? -1
-      if (at < 0) continue
-      const range = document.createRange()
-      range.setStart(node, at)
-      range.setEnd(node, at + 4)
-      const rect = range.getBoundingClientRect()
-      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
-    }
-    return null
-  })
-  if (word === null) throw new Error('the table name is not in the editor')
+  const word = present(await editor.evaluate(centreOfUser), 'the table name is not in the editor')
   // The hover watches the pointer travel, so it moves onto the word rather than appearing on it.
   await page.mouse.move(word.x - 40, word.y)
   await page.mouse.move(word.x, word.y, { steps: 6 })

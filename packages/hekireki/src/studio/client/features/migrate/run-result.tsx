@@ -6,6 +6,39 @@ import { BACKUPS, RESULT } from './messages.js'
 import { RowCounts } from './row-counts.js'
 import type { useMigrationRun } from './run.js'
 
+/** The backup taken for the run: the way to undo it while it can still be restored. */
+function BackupNote({
+  backup,
+  busy,
+  onUndo,
+}: {
+  readonly backup: NonNullable<ReturnType<typeof useMigrationRun>['finished']>['backup']
+  readonly busy: boolean
+  readonly onUndo: (backup: string) => void
+}) {
+  const tk = useMessages(BACKUPS)
+  if (backup === null) return null
+  if (!backup.restorable) {
+    return <span className="text-code text-muted">{tk.taken(backup.name)}</span>
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2.5">
+      <Button
+        size="sm"
+        variant="secondary"
+        isDisabled={busy}
+        onPress={() => {
+          onUndo(backup.name)
+        }}
+      >
+        <LuArchiveRestore size={13} />
+        {tk.undoRun}
+      </Button>
+      <span className="text-code text-muted">{tk.undoNote(backup.name)}</span>
+    </div>
+  )
+}
+
 /**
  * What the last run did, checked after it: whether the database now matches the schema, the rows
  * of every table before and after, and the backup taken for it, which can undo the run.
@@ -23,7 +56,6 @@ export function RunResult({
   readonly onDismiss: () => void
 }) {
   const tf = useMessages(RESULT)
-  const tk = useMessages(BACKUPS)
   return (
     <div
       data-testid="migrate-result"
@@ -55,24 +87,7 @@ export function RunResult({
           <RowCounts tables={finished.tables} />
         </div>
       )}
-      {finished.backup?.restorable === true ? (
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Button
-            size="sm"
-            variant="secondary"
-            isDisabled={busy}
-            onPress={() => {
-              if (finished.backup !== null) onUndo(finished.backup.name)
-            }}
-          >
-            <LuArchiveRestore size={13} />
-            {tk.undoRun}
-          </Button>
-          <span className="text-code text-muted">{tk.undoNote(finished.backup.name)}</span>
-        </div>
-      ) : finished.backup === null ? null : (
-        <span className="text-code text-muted">{tk.taken(finished.backup.name)}</span>
-      )}
+      <BackupNote backup={finished.backup} busy={busy} onUndo={onUndo} />
     </div>
   )
 }

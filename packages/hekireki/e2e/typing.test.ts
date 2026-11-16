@@ -132,26 +132,32 @@ test('formatting moves the spacing and leaves everything else where it was', asy
 // The header carries a chip that comes up while a line is half-typed and goes again when it is
 // finished. A header that wrapped to fit it grew taller and pushed the editor down the page
 // mid-keystroke: the text moved under the cursor. Nothing about the header may move the editor.
+/**
+ * Samples, in the browser, where the editor sits and how tall the header is, keeping only what
+ * changes, on `globalThis.placements`.
+ */
+function recordPlacements() {
+  const view = document.querySelector('.monaco-editor')
+  const header = document.querySelector('header')
+  const seen: { top: number; height: number }[] = []
+  Object.defineProperty(globalThis, 'placements', { value: seen, configurable: true })
+  setInterval(() => {
+    const editorBox = view?.getBoundingClientRect()
+    const headerBox = header?.getBoundingClientRect()
+    if (editorBox === undefined || headerBox === undefined) return
+    const now = { top: Math.round(editorBox.top), height: Math.round(headerBox.height) }
+    const last = seen.at(-1)
+    if (last === undefined || last.top !== now.top || last.height !== now.height) seen.push(now)
+  }, 40)
+}
+
 test.describe('at a width where the header has to choose what to show', () => {
   test.use({ viewport: { width: 1024, height: 800 } })
 
   test('the editor does not move while an error comes and goes', async ({ page }) => {
     const editor = editorOf(page)
     // Sample where the editor sits and how tall the header is, and keep only what changes.
-    await page.evaluate(() => {
-      const view = document.querySelector('.monaco-editor')
-      const header = document.querySelector('header')
-      const seen: { top: number; height: number }[] = []
-      Object.defineProperty(globalThis, 'placements', { value: seen, configurable: true })
-      setInterval(() => {
-        const editorBox = view?.getBoundingClientRect()
-        const headerBox = header?.getBoundingClientRect()
-        if (editorBox === undefined || headerBox === undefined) return
-        const now = { top: Math.round(editorBox.top), height: Math.round(headerBox.height) }
-        const last = seen.at(-1)
-        if (last === undefined || last.top !== now.top || last.height !== now.height) seen.push(now)
-      }, 40)
-    })
+    await page.evaluate(recordPlacements)
 
     await editor.goto(10, 1)
     await page.keyboard.press('End')
@@ -185,6 +191,8 @@ const SUBSTITUTIONS = [
   { marker: 'dash', sent: '\u2014', meant: '-', name: 'a dash' },
 ]
 
+const DASH_MEANT = SUBSTITUTIONS[4]?.meant ?? ''
+
 test('what the operating system would rather you had typed does not reach the schema', async ({
   page,
   request,
@@ -208,9 +216,7 @@ test('what the operating system would rather you had typed does not reach the sc
     }, substitution.sent)
   }
 
-  await expect
-    .poll(() => fileOnDisk(request, 'base.prisma'))
-    .toContain(`dash${SUBSTITUTIONS[4]?.meant ?? ''}`)
+  await expect.poll(() => fileOnDisk(request, 'base.prisma')).toContain(`dash${DASH_MEANT}`)
   const written = await fileOnDisk(request, 'base.prisma')
   for (const substitution of SUBSTITUTIONS) {
     expect(written, substitution.name).toContain(`${substitution.marker}${substitution.meant}`)

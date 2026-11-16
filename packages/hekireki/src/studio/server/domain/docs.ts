@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import * as z from 'zod'
 
-import { lowerFirst } from '../../../utils/index.js'
+import { lowerFirst } from '../../../naming/case.js'
 
 const MakeDocsInput = z
   .object({
@@ -155,7 +155,7 @@ function defaultText(value: DMMF.Field['default']) {
 function fieldDirectives(field: DMMF.Field) {
   return Object.entries(field).flatMap(([key, set]) => {
     const directive = FIELD_DIRECTIVES.get(key)
-    if (!set || directive === undefined) return []
+    if (directive === undefined || set !== true) return []
     if (key !== 'hasDefaultValue' || field.default === undefined) return [directive]
     const text = defaultText(field.default)
     return text === null ? [] : [text]
@@ -169,6 +169,61 @@ function fieldType(field: DMMF.Field) {
 
 function typeRef(ref: DMMF.InputTypeRef | DMMF.OutputTypeRef) {
   return { type: ref.type, isList: ref.isList, location: ref.location }
+}
+
+type Operation = (typeof OPERATIONS)[number]
+
+// The name Prisma Client gives each operation of a model. Prisma 2 named the single-row ones
+// `findOne`, `createOne` and so on, and its mapping is read where it has them.
+function clientNames(
+  mapping: DMMF.ModelMapping | undefined,
+): Record<Operation, string | null | undefined> {
+  const result = LegacyMapping.safeParse(mapping ?? {})
+  const legacy: z.infer<typeof LegacyMapping> = result.success ? result.data : {}
+  const current: Partial<DMMF.ModelMapping> = mapping ?? {}
+  return {
+    findUnique: legacy.findSingle ?? legacy.findOne ?? current.findUnique,
+    findFirst: current.findFirst,
+    findMany: current.findMany,
+    create: legacy.createOne ?? legacy.createSingle ?? current.create,
+    update: legacy.updateOne ?? legacy.updateSingle ?? current.update,
+    updateMany: current.updateMany,
+    upsert: legacy.upsertOne ?? legacy.upsertSingle ?? current.upsert,
+    delete: legacy.deleteOne ?? legacy.deleteSingle ?? current.delete,
+    deleteMany: current.deleteMany,
+  }
+}
+
+// One operation of a model as the docs show it: what it does, a call, its inputs and its output.
+function operationDoc(input: {
+  readonly dmmf: DMMF.Document
+  readonly model: string
+  readonly name: Operation
+  readonly clientName: string | null | undefined
+  readonly singular: string
+  readonly plural: string
+}) {
+  const { dmmf, model, name, clientName, singular, plural } = input
+  const { description, queryType } = describeOperation(name, singular, plural)
+  const field = (dmmf.schema.outputObjectTypes.prisma ?? [])
+    .find((t) => t.name === queryType)
+    ?.fields.find((f) => f.name === clientName)
+  return {
+    name,
+    description,
+    usage: usageOf(name, singular, plural, `prisma.${lowerFirst(model)}.${name}`),
+    inputs:
+      field?.args.map((arg) => ({
+        name: arg.name,
+        types: arg.inputTypes.map(typeRef),
+        required: arg.isRequired,
+      })) ?? null,
+    output: {
+      type: field ? field.outputType.type : null,
+      required: field?.isNullable !== true,
+      list: field?.outputType.isList ?? false,
+    },
+  }
 }
 
 /**
@@ -189,29 +244,7 @@ export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
   const models = dmmf.datamodel.models.map((model) => {
     const singular = capitalize(model.name)
     const plural = capitalize(singular)
-    const mapping = operationsOf.get(model.name)
-    const result = LegacyMapping.safeParse(mapping ?? {})
-    const names: Record<(typeof OPERATIONS)[number], string | null | undefined> = {
-      findUnique: result.success
-        ? (result.data.findSingle ?? result.data.findOne ?? mapping?.findUnique)
-        : mapping?.findUnique,
-      findFirst: mapping?.findFirst,
-      findMany: mapping?.findMany,
-      create: result.success
-        ? (result.data.createOne ?? result.data.createSingle ?? mapping?.create)
-        : mapping?.create,
-      update: result.success
-        ? (result.data.updateOne ?? result.data.updateSingle ?? mapping?.update)
-        : mapping?.update,
-      updateMany: mapping?.updateMany,
-      upsert: result.success
-        ? (result.data.upsertOne ?? result.data.upsertSingle ?? mapping?.upsert)
-        : mapping?.upsert,
-      delete: result.success
-        ? (result.data.deleteOne ?? result.data.deleteSingle ?? mapping?.delete)
-        : mapping?.delete,
-      deleteMany: mapping?.deleteMany,
-    }
+    const names = clientNames(operationsOf.get(model.name))
     return {
       name: model.name,
       documentation: model.documentation ?? null,
@@ -230,28 +263,9 @@ export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
         documentation: field.documentation ?? null,
         required: field.isRequired,
       })),
-      operations: OPERATIONS.map((name) => {
-        const { description, queryType } = describeOperation(name, singular, plural)
-        const field = (dmmf.schema.outputObjectTypes.prisma ?? [])
-          .find((t) => t.name === queryType)
-          ?.fields.find((f) => f.name === names[name])
-        return {
-          name,
-          description,
-          usage: usageOf(name, singular, plural, `prisma.${lowerFirst(model.name)}.${name}`),
-          inputs:
-            field?.args.map((arg) => ({
-              name: arg.name,
-              types: arg.inputTypes.map(typeRef),
-              required: arg.isRequired,
-            })) ?? null,
-          output: {
-            type: field ? field.outputType.type : null,
-            required: !field?.isNullable,
-            list: field?.outputType.isList ?? false,
-          },
-        }
-      }),
+      operations: OPERATIONS.map((name) =>
+        operationDoc({ dmmf, model: model.name, name, clientName: names[name], singular, plural }),
+      ),
     }
   })
   return {
@@ -277,7 +291,7 @@ export function makeDocs(input: z.infer<typeof MakeDocsInput>) {
         name: field.name,
         types: [typeRef(field.outputType)],
         // The original page shows "Nullable: Yes" for non-null output fields; kept as it was.
-        nullable: !field.isNullable,
+        nullable: field.isNullable !== true,
       })),
     })),
     enumTypes: [

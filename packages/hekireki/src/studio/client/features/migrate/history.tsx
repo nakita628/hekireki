@@ -55,6 +55,42 @@ function Badge({
   )
 }
 
+type MigrationState = 'applied' | 'pending' | 'edited' | 'failed' | 'rolledBack'
+
+/** Where an applied migration stands: failed and edited say more than having been rolled back. */
+function appliedState(
+  migration: Status['applied'][number],
+  failed: ReadonlySet<string>,
+  edited: ReadonlySet<string>,
+): MigrationState {
+  if (failed.has(migration.name)) return 'failed'
+  if (edited.has(migration.name)) return 'edited'
+  return migration.rolledBackAt === null ? 'applied' : 'rolledBack'
+}
+
+const STATE_BADGES = {
+  applied: { tone: 'ok', Icon: LuCircleCheck },
+  pending: { tone: 'warn', Icon: LuClock },
+  edited: { tone: 'danger', Icon: LuPencil },
+  failed: { tone: 'danger', Icon: LuCircleAlert },
+  rolledBack: { tone: 'muted', Icon: LuCircleAlert },
+} as const
+
+function StateBadge({
+  state,
+  labels,
+}: {
+  readonly state: MigrationState
+  readonly labels: { readonly [K in MigrationState]: string }
+}) {
+  const { tone, Icon } = STATE_BADGES[state]
+  return (
+    <Badge tone={tone} icon={<Icon size={13} />}>
+      {labels[state]}
+    </Badge>
+  )
+}
+
 /** What one migration runs, read from its migration.sql when it is asked for. */
 function MigrationSql({ name }: { readonly name: string }) {
   const t = useMessages(HISTORY)
@@ -98,18 +134,14 @@ export function History({
   // The migrations whose SQL is open, read when they are opened.
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   const missing = new Set(status.missingFiles)
+  const failed = new Set(status.failed)
+  const edited = new Set(status.edited)
   const rows = [
     ...status.applied.map((migration) => ({
       name: migration.name,
       at: migration.finishedAt ?? migration.startedAt,
       steps: migration.appliedStepsCount,
-      state: status.failed.includes(migration.name)
-        ? ('failed' as const)
-        : status.edited.includes(migration.name)
-          ? ('edited' as const)
-          : migration.rolledBackAt !== null
-            ? ('rolledBack' as const)
-            : ('applied' as const),
+      state: appliedState(migration, failed, edited),
     })),
     ...status.pending.map((name) => ({
       name,
@@ -146,27 +178,7 @@ export function History({
                 <td className={`${CELL} font-mono`}>{row.name}</td>
                 <td className={CELL}>
                   <span className="flex flex-wrap items-center gap-1.5">
-                    {row.state === 'applied' ? (
-                      <Badge tone="ok" icon={<LuCircleCheck size={13} />}>
-                        {t.applied}
-                      </Badge>
-                    ) : row.state === 'pending' ? (
-                      <Badge tone="warn" icon={<LuClock size={13} />}>
-                        {t.pending}
-                      </Badge>
-                    ) : row.state === 'edited' ? (
-                      <Badge tone="danger" icon={<LuPencil size={13} />}>
-                        {t.edited}
-                      </Badge>
-                    ) : row.state === 'failed' ? (
-                      <Badge tone="danger" icon={<LuCircleAlert size={13} />}>
-                        {t.failed}
-                      </Badge>
-                    ) : (
-                      <Badge tone="muted" icon={<LuCircleAlert size={13} />}>
-                        {t.rolledBack}
-                      </Badge>
-                    )}
+                    <StateBadge state={row.state} labels={t} />
                     {missing.has(row.name) ? (
                       <Badge tone="danger" icon={<LuFileX size={13} />}>
                         {t.noFile}

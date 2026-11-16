@@ -4,7 +4,7 @@ import type { GetDMMFError } from '@prisma/get-dmmf'
 import { Effect, Exit } from 'effect'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { lowerFirst } from '../utils/index.js'
+import { lowerFirst } from '../naming/case.js'
 import { isSeedClient, seedWithClient } from './client.js'
 import { makeSeedPlan } from './plan.js'
 import type { SeedTableRows } from './plan.js'
@@ -93,6 +93,16 @@ const ENTRIES: readonly SeedTableRows[] = [
   },
 ]
 
+/** Fails the test with the cause unless the effect succeeded, and narrows the exit to its value. */
+function assertSuccess<A, E>(exit: Exit.Exit<A, E>): asserts exit is Exit.Success<A, E> {
+  if (Exit.isFailure(exit)) throw new Error(`expected a success, got ${String(exit.cause)}`)
+}
+
+/** The operation a log entry records, or the entry itself when it is not one. */
+function opOf(entry: unknown) {
+  return typeof entry === 'object' && entry !== null && 'op' in entry ? entry.op : entry
+}
+
 describe('isSeedClient', () => {
   it('asks for a transaction, raw SQL and disconnect', () => {
     expect(isSeedClient(fakeClient([]).client)).toBe(true)
@@ -141,11 +151,13 @@ describe('seedWithClient', () => {
     await Effect.runPromise(
       seedWithClient({ client, entries: ENTRIES, reset: false, dialect: 'sqlite' }),
     )
-    expect(
-      log.map((entry) =>
-        typeof entry === 'object' && entry !== null && 'op' in entry ? entry.op : entry,
-      ),
-    ).toStrictEqual(['createMany', 'createMany', 'createMany', 'update', 'disconnect'])
+    expect(log.map(opOf)).toStrictEqual([
+      'createMany',
+      'createMany',
+      'createMany',
+      'update',
+      'disconnect',
+    ])
   })
 
   it('names a model the client does not know, and a client that is not one', async () => {
@@ -318,7 +330,8 @@ describe('seedWithClient, the edges', () => {
     const exit = await Effect.runPromiseExit(
       seedWithClient({ client: value, entries: [], reset: false, dialect: null }).pipe(Effect.flip),
     )
-    expect(Exit.isSuccess(exit) ? exit.value.message : '').toBe(
+    assertSuccess(exit)
+    expect(exit.value.message).toBe(
       '`client` must return a Prisma Client: an object with $transaction, $executeRawUnsafe and $disconnect.\n   Write `client: () => new PrismaClient({ adapter })` in hekireki.config.ts.',
     )
   })
@@ -337,7 +350,8 @@ describe('seedWithClient, the edges', () => {
         dialect: null,
       }).pipe(Effect.flip),
     )
-    expect(Exit.isSuccess(exit) ? exit.value.message : '').toBe(
+    assertSuccess(exit)
+    expect(exit.value.message).toBe(
       'The Prisma Client has no model delegate `post` with createMany, deleteMany and update.\n   Run `prisma generate` so the client knows Post.',
     )
     expect(log).toStrictEqual([])
@@ -358,6 +372,7 @@ describe('seedWithClient, the edges', () => {
         dialect: null,
       }).pipe(Effect.flip),
     )
-    expect(Exit.isSuccess(exit) ? exit.value.message : '').toBe('unique constraint')
+    assertSuccess(exit)
+    expect(exit.value.message).toBe('unique constraint')
   })
 })

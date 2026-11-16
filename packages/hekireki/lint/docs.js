@@ -50,6 +50,25 @@ function returnsSomething(fn) {
   return annotated !== 'TSVoidKeyword' && annotated !== 'TSNeverKeyword'
 }
 
+// Whether a doc holds every one of `needles`.
+function holdsAll(doc, needles) {
+  const lacks = (needle) => !doc.includes(needle)
+  return !needles.some(lacks)
+}
+
+// The tags a layer asks for that a function's TSDoc lacks, as they read in the message.
+function missingTags(tags, fn, doc) {
+  return [
+    ...(tags.params && fn !== null
+      ? paramNames(fn)
+          .filter((p) => !hasParam(doc, p))
+          .map((p) => `\`@param ${p}\``)
+      : []),
+    ...(tags.returns && returnsSomething(fn) && !/@returns\b/u.test(doc) ? ['`@returns`'] : []),
+    ...(tags.example && !/@example\b/u.test(doc) ? ['`@example`'] : []),
+  ]
+}
+
 // Report each exported function whose TSDoc does not hold every one of `needles`.
 function requireInDoc(context, { needles, message }) {
   const filename = filenameOf(context)
@@ -60,7 +79,7 @@ function requireInDoc(context, { needles, message }) {
       for (const { name, kind, node: target } of exportedDeclarations(node)) {
         if (kind !== 'function') continue
         const doc = leadingTsdoc(text, target) ?? ''
-        if (needles.every((needle) => doc.includes(needle))) continue
+        if (holdsAll(doc, needles)) continue
         context.report({ node: target, message: message(name) })
       }
     },
@@ -97,17 +116,7 @@ export const docRules = {
               continue
             }
             if (tags === null || kind !== 'function') continue
-            const missing = [
-              ...(tags.params && fn !== null
-                ? paramNames(fn)
-                    .filter((p) => !hasParam(doc, p))
-                    .map((p) => `\`@param ${p}\``)
-                : []),
-              ...(tags.returns && returnsSomething(fn) && !/@returns\b/u.test(doc)
-                ? ['`@returns`']
-                : []),
-              ...(tags.example && !/@example\b/u.test(doc) ? ['`@example`'] : []),
-            ]
+            const missing = missingTags(tags, fn, doc)
             if (missing.length === 0) continue
             context.report({
               node: target,

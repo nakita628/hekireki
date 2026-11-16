@@ -132,8 +132,10 @@ function namespaceOf(tables: readonly EditorTable[]): SQLNamespace {
  * The dialect's grammar with two completion sources: the tables and columns of the schema, and
  * the keywords — which stay out of the way after a dot, where only a column can follow.
  */
+const SQL_DIALECTS = { postgresql: PostgreSQL, mysql: MySQL, sqlite: SQLite } as const
+
 function languageOf(dialect: Dialect, tables: readonly EditorTable[]) {
-  const chosen = dialect === 'postgresql' ? PostgreSQL : dialect === 'mysql' ? MySQL : SQLite
+  const chosen = SQL_DIALECTS[dialect ?? 'sqlite']
   const schema = schemaCompletionSource({ dialect: chosen, schema: namespaceOf(tables) })
   const keywords = keywordCompletionSource(chosen, true)
   return new LanguageSupport(chosen.language, [
@@ -181,6 +183,44 @@ function tooltipDom(title: string, detail: string, lines: readonly string[]) {
   return dom
 }
 
+function tableTooltip(table: EditorTable, from: number, to: number) {
+  return {
+    pos: from,
+    end: to,
+    above: true,
+    create: () => ({
+      dom: tooltipDom(
+        table.name,
+        table.detail,
+        table.columns.map((column) => `${column.name}  ${column.detail}`),
+      ),
+    }),
+  }
+}
+
+/** The first table in scope with a column of the folded name, as a hover over that column. */
+function columnTooltip(
+  scope: readonly (EditorTable | undefined)[],
+  folded: string,
+  from: number,
+  to: number,
+) {
+  for (const table of scope) {
+    const column = table?.columns.find((candidate) => fold(candidate.name) === folded)
+    if (table !== undefined && column !== undefined) {
+      return {
+        pos: from,
+        end: to,
+        above: true,
+        create: () => ({
+          dom: tooltipDom(`${table.name}.${column.name}`, column.detail, [table.detail]),
+        }),
+      }
+    }
+  }
+  return null
+}
+
 /**
  * What the pointer rests on: a table shows its model and columns, a column its type, resolved
  * through the alias it is written with (`u.email`) or, bare, through every table in the text.
@@ -203,20 +243,7 @@ function schemaHover(tables: readonly EditorTable[]) {
     const qualified = text[start - 1] === '.' ? text.slice(0, start - 1).match(/[\w$"`]+$/u) : null
     if (qualified === null && text[start - 1] !== '.') {
       const table = tables.find((candidate) => fold(candidate.name) === folded)
-      if (table !== undefined) {
-        return {
-          pos: from,
-          end: to,
-          above: true,
-          create: () => ({
-            dom: tooltipDom(
-              table.name,
-              table.detail,
-              table.columns.map((column) => `${column.name}  ${column.detail}`),
-            ),
-          }),
-        }
-      }
+      if (table !== undefined) return tableTooltip(table, from, to)
     }
     const scope =
       qualified === null
@@ -225,20 +252,7 @@ function schemaHover(tables: readonly EditorTable[]) {
             aliases.get(fold(qualified[0])) ??
               tables.find((t) => fold(t.name) === fold(qualified[0])),
           ]
-    for (const table of scope) {
-      const column = table?.columns.find((candidate) => fold(candidate.name) === folded)
-      if (table !== undefined && column !== undefined) {
-        return {
-          pos: from,
-          end: to,
-          above: true,
-          create: () => ({
-            dom: tooltipDom(`${table.name}.${column.name}`, column.detail, [table.detail]),
-          }),
-        }
-      }
-    }
-    return null
+    return columnTooltip(scope, folded, from, to)
   })
 }
 

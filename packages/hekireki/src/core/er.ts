@@ -6,11 +6,11 @@ import { Effect } from 'effect'
 import { emitRaw } from '../emit/index.js'
 import { dbmlContent, erDiagramPng, erDiagramSvg } from '../generator/dbml.js'
 import { erContent } from '../generator/mermaid-er.js'
-import { getString, getStrings } from '../utils/index.js'
+import { getString, getStrings } from '../prisma/config.js'
 import { GeneratorConfigError } from './errors.js'
 
 function themeOf(options: GeneratorOptions) {
-  return getString(options.generator.config?.theme) === 'dark' ? 'dark' : 'light'
+  return getString(options.generator.config?.['theme']) === 'dark' ? 'dark' : 'light'
 }
 
 /**
@@ -75,14 +75,16 @@ function endsIn(name: string) {
  */
 function filesOf(options: GeneratorOptions, outputs: readonly string[] | undefined) {
   return Effect.gen(function* () {
-    const output = options.generator.isCustomOutput ? options.generator.output?.value : undefined
-    if (output && outputs !== undefined) {
+    const value =
+      options.generator.isCustomOutput === true ? options.generator.output?.value : undefined
+    const output = value !== undefined && value !== null && value !== '' ? value : undefined
+    if (output !== undefined && outputs !== undefined) {
       return yield* new GeneratorConfigError({
         message:
           'Hekireki-ER takes output or outputs, not both: output names one file, outputs lists several.',
       })
     }
-    if (output) {
+    if (output !== undefined) {
       const extension = path.extname(output).toLowerCase()
       if (!isFormat(extension)) {
         return yield* new GeneratorConfigError({
@@ -102,22 +104,26 @@ function filesOf(options: GeneratorOptions, outputs: readonly string[] | undefin
       })
     }
     const base = path.dirname(options.generator.sourceFilePath)
-    return yield* Effect.forEach(outputs, (name) => {
-      const extension = path.extname(name).toLowerCase()
-      if (!isFormat(extension)) {
-        return new GeneratorConfigError({
-          message: `outputs for Hekireki-ER has to name files ending in ${EXTENSIONS}; "${name}" ends in ${endsIn(name)}.`,
-        })
-      }
-      return Effect.succeed({ file: path.resolve(base, name), extension })
-    })
+    return yield* Effect.forEach(
+      outputs,
+      (name) => {
+        const extension = path.extname(name).toLowerCase()
+        if (!isFormat(extension)) {
+          return new GeneratorConfigError({
+            message: `outputs for Hekireki-ER has to name files ending in ${EXTENSIONS}; "${name}" ends in ${endsIn(name)}.`,
+          })
+        }
+        return Effect.succeed({ file: path.resolve(base, name), extension })
+      },
+      { concurrency: 1 },
+    )
   })
 }
 
 export function er(options: GeneratorOptions) {
   return Effect.gen(function* () {
     const config = options.generator.config ?? {}
-    const outputs = getStrings(config.outputs)
+    const outputs = getStrings(config['outputs'])
     const files = yield* filesOf(options, outputs)
     // Every option belongs to a format, so the options a block may carry are the ones the
     // formats it writes read between them — and `outputs`, which picks those formats.
@@ -140,7 +146,7 @@ export function er(options: GeneratorOptions) {
       files,
       ({ file, extension }) =>
         emitRaw(FORMATS[extension].render(options), path.dirname(file), file),
-      { discard: true },
+      { discard: true, concurrency: 1 },
     )
   })
 }

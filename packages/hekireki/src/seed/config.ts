@@ -253,8 +253,8 @@ export type Data<
  * rows are returned as they are; the check is the same one `defineConfig` makes.
  */
 export function defineData<const S extends SeedSchema, M extends ModelName<S>>(
-  schema: S,
-  model: M,
+  _schema: S,
+  _model: M,
   rows: NoInfer<Data<S, M>>,
 ) {
   return rows

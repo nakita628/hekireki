@@ -2,6 +2,7 @@ import { Button, buttonVariants, Dropdown, SearchField, Tabs, toast, Tooltip } f
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import {
   LuCopy,
   LuDownload,
@@ -91,6 +92,273 @@ function plural(count: number) {
   return count === 1 ? 'row' : 'rows'
 }
 
+/** The tab a page opens on: the one asked for, the fields for a named field, else the data. */
+function openingTab(
+  tab: 'data' | 'fields' | null,
+  field: string | null,
+  connected: boolean,
+): 'data' | 'fields' {
+  if (tab !== null) return tab
+  if (field !== null) return 'fields'
+  return connected ? 'data' : 'fields'
+}
+
+/** What the data tab shows: why there are no rows, or the grid once there are. */
+function RowsPane({
+  connected,
+  error,
+  failed,
+  grid,
+}: {
+  readonly connected: boolean
+  readonly error: string | null
+  readonly failed: boolean
+  readonly grid: ReactNode
+}) {
+  if (!connected) {
+    return (
+      <div className="m-6 rounded-[10px] border border-line bg-surface p-5 text-muted">
+        <div className="mb-1 font-semibold text-ink">No database connected</div>
+        <pre className="m-0 font-mono text-code whitespace-pre-wrap">
+          {error ?? 'Start Studio with --url <connection string> or set DATABASE_URL.'}
+        </pre>
+      </div>
+    )
+  }
+  if (failed) return <div className="error-box m-6">The rows could not be loaded.</div>
+  if (grid === null) return <div className="p-6 text-muted">Loading rows…</div>
+  return grid
+}
+
+/** The fields tab: the model's description over its fields. */
+function FieldsPane({
+  schema,
+  model,
+  query,
+  field,
+}: {
+  readonly schema: Schema
+  readonly model: Model
+  readonly query: string
+  readonly field: string | null
+}) {
+  return (
+    <>
+      {(model.documentation ?? '') !== '' ? (
+        <p className="m-0 border-b border-line bg-surface-2 px-6 py-2.5 whitespace-pre-wrap text-muted">
+          {model.documentation}
+        </p>
+      ) : null}
+      <FieldsTable schema={schema} model={model} query={query} highlight={field} />
+    </>
+  )
+}
+
+/** What the data tab can do from the header: add a row, export the page, fold columns away. */
+function DataActions({
+  connected,
+  exportable,
+  onAdd,
+  onExport,
+  columns,
+  hidden,
+  onHiddenChange,
+}: {
+  readonly connected: boolean
+  readonly exportable: boolean
+  readonly onAdd: () => void
+  readonly onExport: (action: string | number) => void
+  readonly columns: readonly string[]
+  readonly hidden: ReadonlySet<string>
+  readonly onHiddenChange: (next: ReadonlySet<string>) => void
+}) {
+  return (
+    <>
+      <Button variant="outline" isDisabled={!connected} onPress={onAdd}>
+        <LuPlus size={15} />
+        Add row
+      </Button>
+      <Dropdown>
+        <Button variant="outline" isDisabled={!exportable}>
+          <LuDownload size={15} />
+          Export
+        </Button>
+        <Dropdown.Popover placement="bottom start">
+          <Dropdown.Menu aria-label="Export this page of rows" onAction={onExport}>
+            <Dropdown.Item id="csv" textValue="Download CSV">
+              <LuDownload size={14} />
+              Download CSV
+            </Dropdown.Item>
+            <Dropdown.Item id="json" textValue="Download JSON">
+              <LuDownload size={14} />
+              Download JSON
+            </Dropdown.Item>
+            <Dropdown.Item id="copy-tsv" textValue="Copy this page">
+              <LuCopy size={14} />
+              Copy this page
+            </Dropdown.Item>
+            <Dropdown.Item id="copy-csv" textValue="Copy this page as CSV">
+              <LuCopy size={14} />
+              Copy this page as CSV
+            </Dropdown.Item>
+            <Dropdown.Item id="copy-json" textValue="Copy this page as JSON">
+              <LuCopy size={14} />
+              Copy this page as JSON
+            </Dropdown.Item>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
+      <ColumnsPicker columns={columns} hidden={hidden} onHiddenChange={onHiddenChange} />
+    </>
+  )
+}
+
+/** Where else the model is shown: the diagram and the schema file. */
+function ModelLinks({ name }: { readonly name: string }) {
+  return (
+    <>
+      <Link className={buttonVariants({ variant: 'ghost' })} to="/" search={{ focus: name }}>
+        <LuGitCompare size={15} />
+        Show in diagram
+      </Link>
+      <Link className={buttonVariants({ variant: 'ghost' })} to="/prisma" search={{ focus: name }}>
+        <LuFileText size={15} />
+        Prisma schema
+      </Link>
+    </>
+  )
+}
+
+/**
+ * What the ticked rows can have done to them, next to the count of them. Nothing here is
+ * reachable any other way, so the strip only exists while a row is ticked.
+ */
+function SelectionStrip({
+  chosen,
+  columns,
+  saving,
+  onDelete,
+  onClear,
+}: {
+  readonly chosen: readonly Row[]
+  readonly columns: readonly string[]
+  readonly saving: boolean
+  readonly onDelete: () => void
+  readonly onClear: () => void
+}) {
+  if (chosen.length === 0) return null
+  return (
+    <div className="ml-auto flex items-center gap-2">
+      <span className="text-ui text-muted">
+        {chosen.length.toLocaleString()} {plural(chosen.length)} selected
+      </span>
+      <Button
+        variant="outline"
+        onPress={() => {
+          copyText(toTsv(columns, chosen), `${chosen.length} ${plural(chosen.length)}`)
+        }}
+      >
+        <LuCopy size={15} />
+        Copy
+      </Button>
+      <Button variant="danger" isDisabled={saving} onPress={onDelete}>
+        <LuTrash2 size={15} />
+        Delete
+      </Button>
+      <Button variant="ghost" isIconOnly aria-label="Clear selection" onPress={onClear}>
+        <LuX size={15} />
+      </Button>
+    </div>
+  )
+}
+
+/** What the search box searches, by tab. */
+const SEARCH_LABELS = { data: 'Search every column', fields: 'Search every field' } as const
+
+/** The rows of the page that came back, and the columns that tell them apart. */
+function pageView(page: { readonly key: readonly string[]; readonly rows: readonly Row[] } | null) {
+  if (page === null) return { rowKey: [], pageRows: [] }
+  return { rowKey: page.key, pageRows: page.rows }
+}
+
+function ModelTitle({ model }: { readonly model: Model }) {
+  return (
+    <>
+      <h1 className="page-title">{model.name}</h1>
+      {(model.dbName ?? '') !== '' ? (
+        <span className="font-mono text-ui text-muted">{model.dbName}</span>
+      ) : null}
+    </>
+  )
+}
+
+function DetailsToggle({
+  details,
+  onToggle,
+}: {
+  readonly details: boolean
+  readonly onToggle: () => void
+}) {
+  return (
+    <Tooltip>
+      <Button
+        variant={details ? 'secondary' : 'ghost'}
+        isIconOnly
+        className="ml-auto"
+        aria-label="Toggle details"
+        onPress={onToggle}
+      >
+        <LuInfo />
+      </Button>
+      <Tooltip.Content>Toggle details</Tooltip.Content>
+    </Tooltip>
+  )
+}
+
+/** Asks before the picked rows are deleted, naming the first few. */
+function DeleteDialog({
+  pending,
+  modelName,
+  rowKey,
+  deleting,
+  onConfirm,
+  onCancel,
+}: {
+  readonly pending: readonly Row[] | null
+  readonly modelName: string
+  readonly rowKey: readonly string[]
+  readonly deleting: boolean
+  readonly onConfirm: () => void
+  readonly onCancel: () => void
+}) {
+  const doomed = pending ?? []
+  return (
+    <ConfirmDialog
+      isOpen={pending !== null}
+      title={`Delete ${doomed.length} ${plural(doomed.length)} from ${modelName}?`}
+      detail={
+        <>
+          <p className="m-0">This writes to the database and cannot be undone.</p>
+          <ul className="mt-2 mb-0 list-none space-y-1 p-0 font-mono text-code text-ink">
+            {doomed.slice(0, 5).map((row) => (
+              <li key={rowId(row, rowKey)}>{keyLabel(row, rowKey)}</li>
+            ))}
+            {doomed.length > 5 ? (
+              <li className="text-muted">and {doomed.length - 5} more</li>
+            ) : null}
+          </ul>
+        </>
+      }
+      confirmLabel={`Delete ${doomed.length} ${plural(doomed.length)}`}
+      isPending={deleting}
+      onConfirm={onConfirm}
+      onOpenChange={(open) => {
+        if (!open) onCancel()
+      }}
+    />
+  )
+}
+
 export function ModelView({
   schema,
   model,
@@ -108,8 +376,7 @@ export function ModelView({
   const database = useDb().data ?? null
   const connected = database?.connected ?? false
   // A link that names a field means the fields, whichever tab the database would have opened.
-  const activeTab: 'data' | 'fields' =
-    tab ?? (field !== null ? 'fields' : connected ? 'data' : 'fields')
+  const activeTab = openingTab(tab, field, connected)
   const [query, setQuery] = useState('')
   const [skip, setSkip] = useState(0)
   const [details, setDetails] = useState(true)
@@ -182,11 +449,10 @@ export function ModelView({
   const remove = useDeleteDbRowsModelName()
   const saving = insert.isPending || update.isPending || remove.isPending
   const page = rows.data ?? null
-  const rowKey = page?.key ?? []
+  const { rowKey, pageRows } = pageView(page)
   const scalars = model.fields.filter((f) => f.kind !== 'object').map((f) => f.name)
   const columns = scalars.filter((name) => !hidden.has(name))
   const param = { modelName: model.name }
-  const pageRows = page?.rows ?? []
   const chosen = pageRows.filter((row) => selected.has(rowId(row, rowKey)))
 
   const clearSelection = () => {
@@ -242,109 +508,77 @@ export function ModelView({
     if (action === 'copy-tsv') copyText(toTsv(columns, page.rows), 'This page')
   }
 
+  const grid =
+    page === null ? null : (
+      <DataGrid
+        schema={schema}
+        model={model}
+        rows={page.rows}
+        rowKey={page.key}
+        hiddenColumns={hidden}
+        total={page.total}
+        skip={page.skip}
+        search={applied}
+        loading={rows.isFetching}
+        saving={saving}
+        adding={adding}
+        selected={selected}
+        onSelectedChange={setSelected}
+        onAddingChange={setAdding}
+        onPage={goToPage}
+        onClearSearch={() => {
+          search('')
+        }}
+        onInsert={(values: Row) => {
+          insert.mutate({ param, json: { values } })
+        }}
+        onUpdate={(where, values) => {
+          update.mutate({ param, json: { where, values } })
+        }}
+        onDeleteRequest={setPending}
+      />
+    )
+
   return (
     <section
       className={`grid min-h-0 flex-1 overflow-hidden ${details ? 'grid-cols-[minmax(0,1fr)_320px]' : 'grid-cols-[minmax(0,1fr)]'}`}
     >
       <div className="flex min-h-0 min-w-0 flex-col">
         <header className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-6 py-3">
-          <h1 className="page-title">{model.name}</h1>
-          {model.dbName ? (
-            <span className="font-mono text-ui text-muted">{model.dbName}</span>
-          ) : null}
+          <ModelTitle model={model} />
           <SearchField
             className="min-w-[200px] flex-1"
-            aria-label={activeTab === 'data' ? 'Search every column' : 'Search every field'}
+            aria-label={SEARCH_LABELS[activeTab]}
             value={query}
             onChange={search}
           >
             <SearchField.Group>
               <SearchField.SearchIcon />
-              <SearchField.Input
-                ref={searchBox}
-                placeholder={activeTab === 'data' ? 'Search every column…' : 'Search every field…'}
-              />
+              <SearchField.Input ref={searchBox} placeholder={`${SEARCH_LABELS[activeTab]}…`} />
               <SearchField.ClearButton />
             </SearchField.Group>
           </SearchField>
           {activeTab === 'data' ? (
-            <>
-              <Button
-                variant="outline"
-                isDisabled={!connected}
-                onPress={() => {
-                  setAdding(true)
-                }}
-              >
-                <LuPlus size={15} />
-                Add row
-              </Button>
-              <Dropdown>
-                <Button variant="outline" isDisabled={!page}>
-                  <LuDownload size={15} />
-                  Export
-                </Button>
-                <Dropdown.Popover placement="bottom start">
-                  <Dropdown.Menu aria-label="Export this page of rows" onAction={exportRows}>
-                    <Dropdown.Item id="csv" textValue="Download CSV">
-                      <LuDownload size={14} />
-                      Download CSV
-                    </Dropdown.Item>
-                    <Dropdown.Item id="json" textValue="Download JSON">
-                      <LuDownload size={14} />
-                      Download JSON
-                    </Dropdown.Item>
-                    <Dropdown.Item id="copy-tsv" textValue="Copy this page">
-                      <LuCopy size={14} />
-                      Copy this page
-                    </Dropdown.Item>
-                    <Dropdown.Item id="copy-csv" textValue="Copy this page as CSV">
-                      <LuCopy size={14} />
-                      Copy this page as CSV
-                    </Dropdown.Item>
-                    <Dropdown.Item id="copy-json" textValue="Copy this page as JSON">
-                      <LuCopy size={14} />
-                      Copy this page as JSON
-                    </Dropdown.Item>
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
-              </Dropdown>
-              <ColumnsPicker columns={scalars} hidden={hidden} onHiddenChange={hideColumns} />
-            </>
-          ) : (
-            <>
-              <Link
-                className={buttonVariants({ variant: 'ghost' })}
-                to="/"
-                search={{ focus: model.name }}
-              >
-                <LuGitCompare size={15} />
-                Show in diagram
-              </Link>
-              <Link
-                className={buttonVariants({ variant: 'ghost' })}
-                to="/prisma"
-                search={{ focus: model.name }}
-              >
-                <LuFileText size={15} />
-                Prisma schema
-              </Link>
-            </>
-          )}
-          <Tooltip>
-            <Button
-              variant={details ? 'secondary' : 'ghost'}
-              isIconOnly
-              className="ml-auto"
-              aria-label="Toggle details"
-              onPress={() => {
-                setDetails((d) => !d)
+            <DataActions
+              connected={connected}
+              exportable={page !== null}
+              onAdd={() => {
+                setAdding(true)
               }}
-            >
-              <LuInfo />
-            </Button>
-            <Tooltip.Content>Toggle details</Tooltip.Content>
-          </Tooltip>
+              onExport={exportRows}
+              columns={scalars}
+              hidden={hidden}
+              onHiddenChange={hideColumns}
+            />
+          ) : (
+            <ModelLinks name={model.name} />
+          )}
+          <DetailsToggle
+            details={details}
+            onToggle={() => {
+              setDetails((d) => !d)
+            }}
+          />
         </header>
         <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-6 py-2">
           <Tabs
@@ -364,118 +598,36 @@ export function ModelView({
               </Tabs.List>
             </Tabs.ListContainer>
           </Tabs>
-          {/* What the ticked rows can have done to them, next to the count of them. Nothing here
-              is reachable any other way, so the strip only exists while a row is ticked. */}
-          {chosen.length > 0 ? (
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-ui text-muted">
-                {chosen.length.toLocaleString()} {plural(chosen.length)} selected
-              </span>
-              <Button
-                variant="outline"
-                onPress={() => {
-                  copyText(toTsv(columns, chosen), `${chosen.length} ${plural(chosen.length)}`)
-                }}
-              >
-                <LuCopy size={15} />
-                Copy
-              </Button>
-              <Button
-                variant="danger"
-                isDisabled={saving}
-                onPress={() => {
-                  setPending(chosen)
-                }}
-              >
-                <LuTrash2 size={15} />
-                Delete
-              </Button>
-              <Button
-                variant="ghost"
-                isIconOnly
-                aria-label="Clear selection"
-                onPress={clearSelection}
-              >
-                <LuX size={15} />
-              </Button>
-            </div>
-          ) : null}
+          <SelectionStrip
+            chosen={chosen}
+            columns={columns}
+            saving={saving}
+            onDelete={() => {
+              setPending(chosen)
+            }}
+            onClear={clearSelection}
+          />
         </div>
         {activeTab === 'data' ? (
-          !connected ? (
-            <div className="m-6 rounded-[10px] border border-line bg-surface p-5 text-muted">
-              <div className="mb-1 font-semibold text-ink">No database connected</div>
-              <pre className="m-0 font-mono text-code whitespace-pre-wrap">
-                {database?.error ??
-                  'Start Studio with --url <connection string> or set DATABASE_URL.'}
-              </pre>
-            </div>
-          ) : rows.isError ? (
-            <div className="error-box m-6">The rows could not be loaded.</div>
-          ) : page === null ? (
-            <div className="p-6 text-muted">Loading rows…</div>
-          ) : (
-            <DataGrid
-              schema={schema}
-              model={model}
-              rows={page.rows}
-              rowKey={page.key}
-              hiddenColumns={hidden}
-              total={page.total}
-              skip={page.skip}
-              search={applied}
-              loading={rows.isFetching}
-              saving={saving}
-              adding={adding}
-              selected={selected}
-              onSelectedChange={setSelected}
-              onAddingChange={setAdding}
-              onPage={goToPage}
-              onClearSearch={() => {
-                search('')
-              }}
-              onInsert={(values: Row) => {
-                insert.mutate({ param, json: { values } })
-              }}
-              onUpdate={(where, values) => {
-                update.mutate({ param, json: { where, values } })
-              }}
-              onDeleteRequest={setPending}
-            />
-          )
+          <RowsPane
+            connected={connected}
+            error={database?.error ?? null}
+            failed={rows.isError}
+            grid={grid}
+          />
         ) : (
-          <>
-            {model.documentation ? (
-              <p className="m-0 border-b border-line bg-surface-2 px-6 py-2.5 whitespace-pre-wrap text-muted">
-                {model.documentation}
-              </p>
-            ) : null}
-            <FieldsTable schema={schema} model={model} query={query} highlight={field} />
-          </>
+          <FieldsPane schema={schema} model={model} query={query} field={field} />
         )}
       </div>
       {details ? <DetailsPanel schema={schema} model={model} /> : null}
-      <ConfirmDialog
-        isOpen={pending !== null}
-        title={`Delete ${(pending ?? []).length} ${plural((pending ?? []).length)} from ${model.name}?`}
-        detail={
-          <>
-            <p className="m-0">This writes to the database and cannot be undone.</p>
-            <ul className="mt-2 mb-0 list-none space-y-1 p-0 font-mono text-code text-ink">
-              {(pending ?? []).slice(0, 5).map((row) => (
-                <li key={rowId(row, rowKey)}>{keyLabel(row, rowKey)}</li>
-              ))}
-              {(pending ?? []).length > 5 ? (
-                <li className="text-muted">and {(pending ?? []).length - 5} more</li>
-              ) : null}
-            </ul>
-          </>
-        }
-        confirmLabel={`Delete ${(pending ?? []).length} ${plural((pending ?? []).length)}`}
-        isPending={remove.isPending}
+      <DeleteDialog
+        pending={pending}
+        modelName={model.name}
+        rowKey={rowKey}
+        deleting={remove.isPending}
         onConfirm={confirmDelete}
-        onOpenChange={(open) => {
-          if (!open) setPending(null)
+        onCancel={() => {
+          setPending(null)
         }}
       />
     </section>

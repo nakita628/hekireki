@@ -114,6 +114,18 @@ const DATAMODEL: DMMF.Datamodel = {
   indexes: [],
 }
 
+/** A model of the fixture, which has it. */
+function modelNamed(name: string) {
+  const model = DATAMODEL.models.find((entry) => entry.name === name)
+  if (model === undefined) throw new Error(`the datamodel has no ${name}`)
+  return model
+}
+
+/** The paths of a document, none where it has no paths. */
+function pathsOf(document: { readonly paths?: object | undefined }) {
+  return Object.keys(document.paths ?? {})
+}
+
 const CONFIG = { title: 'Blog', version: '2.0.0', paths: false }
 
 describe('openapiDocument', () => {
@@ -133,7 +145,7 @@ describe('openapiDocument', () => {
   it('puts the CRUD of each table before the components, with the input schemas, when asked', () => {
     const document = openapiDocument(DATAMODEL, { ...CONFIG, paths: true })
     expect(Object.keys(document)).toStrictEqual(['openapi', 'info', 'paths', 'components'])
-    expect(Object.keys(document.paths ?? {})).toStrictEqual([
+    expect(pathsOf(document)).toStrictEqual([
       '/users',
       '/users/{id}',
       '/posts',
@@ -269,14 +281,13 @@ components:
   })
 
   it('tells two models apart that would share a resource name', () => {
-    const tag = DATAMODEL.models.find((model) => model.name === 'Tag')
-    if (tag === undefined) throw new Error('the datamodel has no Tag')
+    const tag = modelNamed('Tag')
     const twin: DMMF.Model = { ...tag, name: 'Tags', dbName: 'tags_2' }
     const document = openapiDocument(
       { ...DATAMODEL, models: [...DATAMODEL.models, twin] },
       { ...CONFIG, paths: true },
     )
-    expect(Object.keys(document.paths ?? {}).filter((p) => p.startsWith('/tags'))).toStrictEqual([
+    expect(pathsOf(document).filter((p) => p.startsWith('/tags'))).toStrictEqual([
       '/tags',
       '/tags/{id}',
       '/tags1',

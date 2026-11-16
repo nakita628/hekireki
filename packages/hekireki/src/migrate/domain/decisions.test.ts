@@ -196,7 +196,7 @@ describe('makeDecisionModels', () => {
 
   it('offers a choice for every check a decision answers', () => {
     const named = Object.entries(CHOICES).map(([kind, choices]) => {
-      const made = makeDecisionModels([decision({ kind, choice: choices[0] ?? '', value: 'x' })])
+      const made = makeDecisionModels([decision({ kind, choice: firstOf(choices), value: 'x' })])
       return { kind, choices: choices.length, models: Object.keys(made).join(',') }
     })
     // Every kind offers something (the type of CHOICES has no empty list), and every choice
@@ -208,15 +208,34 @@ describe('makeDecisionModels', () => {
   })
 })
 
+function firstOf(choices: readonly string[]) {
+  return choices[0] ?? ''
+}
+
+/** What the schema says is wrong with a not-null decision changed by `over`. */
+function issuesOf(over: Partial<z.input<typeof Decision>>) {
+  const result = Decision.safeParse({
+    kind: 'not-null',
+    modelName: 'User',
+    field: 'name',
+    choice: 'value',
+    ...over,
+  })
+  return result.success
+    ? []
+    : result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+}
+
 describe('Decision', () => {
   it('reads a decision a check offers, a value left out as null', () => {
-    const result = Decision.safeParse({
-      kind: 'unique',
-      modelName: 'User',
-      field: 'email',
-      choice: 'keep-first-delete',
-    })
-    expect(result.success && result.data).toStrictEqual({
+    expect(
+      Decision.parse({
+        kind: 'unique',
+        modelName: 'User',
+        field: 'email',
+        choice: 'keep-first-delete',
+      }),
+    ).toStrictEqual({
       kind: 'unique',
       modelName: 'User',
       field: 'email',
@@ -226,18 +245,6 @@ describe('Decision', () => {
   })
 
   it('refuses a kind there is no check of, a choice the check does not offer, and no model', () => {
-    const issuesOf = (over: Partial<z.input<typeof Decision>>) => {
-      const result = Decision.safeParse({
-        kind: 'not-null',
-        modelName: 'User',
-        field: 'name',
-        choice: 'value',
-        ...over,
-      })
-      return result.success
-        ? []
-        : result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-    }
     expect(issuesOf({})).toStrictEqual([])
     expect(issuesOf({ kind: 'no-such-check' })).toStrictEqual([
       'kind: There is no check of this kind.',

@@ -589,7 +589,7 @@ export function openMysqlCopy(input: {
   return Effect.gen(function* () {
     const { driver } = input
     const found = yield* driver.query({ sql: 'SELECT DATABASE() AS `name`', params: [] })
-    const source = found.rows[0]?.name
+    const source = found.rows[0]?.['name']
     const name = `hk_rehearsal_${globalThis.crypto.randomUUID().replaceAll('-', '')}`
     const quoted = quoteIdentifier('mysql', name)
     yield* driver.executeScript(`CREATE DATABASE ${quoted}`)
@@ -639,7 +639,7 @@ function fillMysqlCopy(input: {
     })
     yield* copy.executeRaw({ sql: 'SET FOREIGN_KEY_CHECKS = 0', params: [] })
     yield* Effect.forEach(
-      tables.rows.flatMap((row) => (typeof row.table === 'string' ? [row.table] : [])),
+      tables.rows.flatMap((row) => (typeof row['table'] === 'string' ? [row['table']] : [])),
       (table) => copyMysqlTable({ ...input, table }),
       { concurrency: 1, discard: true },
     )
@@ -649,7 +649,7 @@ function fillMysqlCopy(input: {
       params: [],
     })
     yield* Effect.forEach(
-      triggers.rows.flatMap((row) => (typeof row.name === 'string' ? [row.name] : [])),
+      triggers.rows.flatMap((row) => (typeof row['name'] === 'string' ? [row['name']] : [])),
       (trigger) => copyMysqlTrigger({ driver, copy, trigger }),
       { concurrency: 1, discard: true },
     )
@@ -700,7 +700,7 @@ function copyMysqlTable(input: {
     })
     const names = columns.rows
       .flatMap((row) =>
-        typeof row.column === 'string' ? [quoteIdentifier('mysql', row.column)] : [],
+        typeof row['column'] === 'string' ? [quoteIdentifier('mysql', row['column'])] : [],
       )
       .join(', ')
     yield* input.copy.executeRaw({
@@ -795,6 +795,13 @@ export function openShadowDatabase(input: {
  * @param input.schemaDir - where relative sqlite files resolve from
  * @returns the status, the driver, the URL as found and how to close it
  */
+function openDriver(dialect: Dialect, url: string, cwd: string, schemaDir: string) {
+  if (dialect === 'sqlite') {
+    return isLibsqlUrl({ url }) ? openLibsql(url, cwd) : openSqlite(url, schemaDir)
+  }
+  return dialect === 'postgresql' ? openPostgres(url, cwd) : openMysql(url, cwd)
+}
+
 export function connectDatabase(input: z.infer<typeof ConnectDatabaseInput>) {
   return Effect.gen(function* () {
     const found = yield* resolveDatabaseUrl(input).pipe(
@@ -810,14 +817,7 @@ export function connectDatabase(input: z.infer<typeof ConnectDatabaseInput>) {
         reason: `Cannot tell which database "${url}" points at.\n   Use a postgresql://, mysql:// or file: URL.`,
       })
     }
-    const driver =
-      dialect === 'sqlite'
-        ? isLibsqlUrl({ url: found.url })
-          ? yield* openLibsql(found.url, input.cwd)
-          : yield* openSqlite(found.url, input.schemaDir)
-        : dialect === 'postgresql'
-          ? yield* openPostgres(found.url, input.cwd)
-          : yield* openMysql(found.url, input.cwd)
+    const driver = yield* openDriver(dialect, found.url, input.cwd, input.schemaDir)
     return {
       status: { connected: true, dialect, url, source: found.source, error: null },
       driver: Effect.succeed(driver),

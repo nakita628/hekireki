@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import { RuleTester } from 'oxlint/plugins-dev'
 import { describe, expect, it, test } from 'vite-plus/test'
 
@@ -580,13 +582,37 @@ tester.run('domain-only-from-usecases', rule('domain-only-from-usecases'), {
   ],
 })
 
+// The rule looks for the test file on disk: the cases name real files of this package.
+function fromPackage(file: string) {
+  return path.resolve(import.meta.dirname, '..', file)
+}
+
+tester.run('domain-require-test', rule('domain-require-test'), {
+  valid: [
+    tsCase('export const x = 1', fromPackage('src/migrate/domain/plan.ts')),
+    tsCase('export const x = 1', fromPackage('src/migrate/domain/plan.test.ts')),
+    tsCase("export * from './plan.js'", fromPackage('src/studio/server/domain/index.ts')),
+  ],
+  invalid: [
+    {
+      ...tsCase('export const x = 1', fromPackage('src/migrate/domain/untested.ts')),
+      errors: [
+        {
+          message:
+            'Write untested.test.ts beside this domain module: domain is pure, and each module is tested where it is.',
+        },
+      ],
+    },
+  ],
+})
+
 tester.run('domain-import-allowlist', rule('domain-import-allowlist'), {
   valid: [
     tsCase(`import * as z from 'zod'`, DOMAIN_FILE),
     tsCase(`import { parse } from 'acorn'`, DOMAIN_FILE),
     tsCase(`import { makeCell } from './values.js'`, DOMAIN_FILE),
     tsCase(`import { quoteIdentifier } from '../../../sql/index.js'`, DOMAIN_FILE),
-    tsCase(`import { erKey } from '../../../utils/relation.js'`, DOMAIN_FILE),
+    tsCase(`import { erKey } from '../../../prisma/relation.js'`, DOMAIN_FILE),
     tsCase(`import type { DMMF } from '@prisma/generator-helper'`, DOMAIN_FILE),
   ],
   invalid: [
@@ -969,7 +995,7 @@ tester.run('generator-pure', rule('generator-pure'), {
 
 tester.run('helper-no-generator-import', rule('helper-no-generator-import'), {
   valid: [
-    generatorCase(`import { stripAnnotations } from '../utils/index.js'`),
+    generatorCase(`import { stripAnnotations } from '../annotation/index.js'`),
     generatorCase(`import { makeZodSchema } from './zod.js'`),
     {
       code: `import { djangoCode } from '../generator/django.js'`,
@@ -979,7 +1005,28 @@ tester.run('helper-no-generator-import', rule('helper-no-generator-import'), {
   invalid: [
     {
       ...generatorCase(`import { djangoCode } from '../generator/django.js'`),
-      errors: [{ message: /utils -> helper -> generator/u }],
+      errors: [{ message: /leaves -> helper -> generator/u }],
     },
+  ],
+})
+
+tester.run('no-utils-module', rule('no-utils-module'), {
+  valid: [
+    tsCase('export const x = 1', fromPackage('src/naming/case.ts')),
+    tsCase('export const x = 1', fromPackage('src/list/index.test.ts')),
+    tsCase('export const x = 1', fromPackage('src/studio/client/lib/date-utils.ts')),
+    tsCase('export const x = 1', fromPackage('src/utilities/index.ts')),
+  ],
+  invalid: [
+    {
+      ...tsCase('export const x = 1', fromPackage('src/utils/index.ts')),
+      errors: [{ message: /named `utils`/u }],
+    },
+    {
+      ...tsCase('export const x = 1', fromPackage('src/studio/server/utils/format.test.ts')),
+      errors: 1,
+    },
+    { ...tsCase('export const x = 1', fromPackage('src/studio/client/lib/utils.ts')), errors: 1 },
+    { ...tsCase('export const x = 1', fromPackage('src/studio/client/lib/utils.tsx')), errors: 1 },
   ],
 })

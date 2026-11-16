@@ -142,7 +142,10 @@ describe('migrate routes over sqlite', () => {
 
     const created = await call('/api/migrate/migrations', 'POST', {
       name: 'profile',
-      sql: plan.steps.flatMap((step) => step.statements.map((sql) => `${sql};`)).join('\n'),
+      sql: plan.steps
+        .flatMap((step) => step.statements)
+        .map((sql) => `${sql};`)
+        .join('\n'),
     })
     expect(created.status).toBe(200)
     const { name } = created.json as { name: string; file: string }
@@ -262,9 +265,9 @@ describe('deciding on the page', () => {
       checks: { kind: string; field: string; choices: string[]; status: string }[]
       steps: { kind: string }[]
     }
-    const notNull = before.checks.find(
-      (check) => check.kind === 'not-null' && check.field === 'name',
-    )
+    const notNull = before.checks
+      .filter((check) => check.kind === 'not-null')
+      .find((check) => check.field === 'name')
     expect(notNull).toMatchObject({ field: 'name', status: 'blocking' })
     expect(notNull?.choices).toContain('value')
     expect(before.errors).toHaveLength(1)
@@ -284,9 +287,9 @@ describe('deciding on the page', () => {
     }
     // Nothing blocks any more, and the decision is a step with the rows it will change on it.
     expect(after.errors).toStrictEqual([])
-    const decidedCheck = after.checks.find(
-      (check) => check.kind === 'not-null' && check.field === 'name',
-    )
+    const decidedCheck = after.checks
+      .filter((check) => check.kind === 'not-null')
+      .find((check) => check.field === 'name')
     expect(decidedCheck?.status).not.toBe('blocking')
     const fix = after.steps.find((step) => step.kind === 'fix')
     expect(fix?.title).toContain('User.name')

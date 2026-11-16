@@ -234,6 +234,12 @@ describe('suggestionsAt through every input type', () => {
     return context === null ? null : suggestionsAt(context, TYPED).map((entry) => entry.label)
   }
 
+  /** The suggestions at an offset of the text, or none where the text gives no context. */
+  function suggestionsFor(text: string, cursor: number) {
+    const context = contextAt(text, cursor)
+    return context === null ? [] : suggestionsAt(context, TYPED)
+  }
+
   it.each([
     [
       'title',
@@ -406,17 +412,13 @@ describe('suggestionsAt through every input type', () => {
   })
 
   it('tells each operation apart as a read or a write, with what it does', () => {
-    const context = contextAt('prisma.item.', 12)
-    expect(context === null ? [] : suggestionsAt(context, TYPED).slice(0, 2)).toStrictEqual([
+    const suggestions = suggestionsFor('prisma.item.', 12)
+    expect(suggestions.slice(0, 2)).toStrictEqual([
       { label: 'findMany', detail: 'read · every matching row', kind: 'operation' },
       { label: 'findFirst', detail: 'read · the first matching row, or null', kind: 'operation' },
     ])
     expect(
-      context === null
-        ? []
-        : suggestionsAt(context, TYPED)
-            .filter((entry) => entry.detail.startsWith('write'))
-            .map((entry) => entry.label),
+      suggestions.filter((entry) => entry.detail.startsWith('write')).map((entry) => entry.label),
     ).toStrictEqual([
       'create',
       'createMany',

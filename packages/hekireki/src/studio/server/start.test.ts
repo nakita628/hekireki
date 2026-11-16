@@ -25,6 +25,27 @@ function setup() {
   return { dir, schemaPath }
 }
 
+/** The status of a GET, and the body of one as text. */
+function statusOf(url: string) {
+  return Effect.promise(async () => {
+    const response = await fetch(url)
+    return response.status
+  })
+}
+
+function textOf(url: string) {
+  return Effect.promise(async () => {
+    const response = await fetch(url)
+    return response.text()
+  })
+}
+
+/** Why a run that has to fail failed. */
+function causeOf<A, E>(exit: Exit.Exit<A, E>) {
+  if (!Exit.isFailure(exit)) throw new Error('expected the second server to fail')
+  return exit.cause
+}
+
 function addressPort(server: { address: () => unknown }) {
   const address = server.address()
   return typeof address === 'object' && address !== null && 'port' in address
@@ -45,12 +66,8 @@ describe('startStudioServer', () => {
             databaseUrl: null,
           })
           const port = addressPort(started.server)
-          const schema = yield* Effect.promise(() =>
-            fetch(`http://127.0.0.1:${port}/api/schema`).then((r) => r.status),
-          )
-          const index = yield* Effect.promise(() =>
-            fetch(`http://127.0.0.1:${port}/`).then((r) => r.status),
-          )
+          const schema = yield* statusOf(`http://127.0.0.1:${port}/api/schema`)
+          const index = yield* statusOf(`http://127.0.0.1:${port}/`)
           return { port, schema, index, models: started.snapshot.schema?.models.length }
         }),
       ).pipe(Effect.provide(NodeFileSystem.layer)),
@@ -75,9 +92,7 @@ describe('startStudioServer', () => {
             databaseUrl: null,
           })
           const port = addressPort(started.server)
-          const html = yield* Effect.promise(() =>
-            fetch(`http://127.0.0.1:${port}/docs`).then((r) => r.text()),
-          )
+          const html = yield* textOf(`http://127.0.0.1:${port}/docs`)
           return { html, database: started.database }
         }),
       ).pipe(Effect.provide(NodeFileSystem.layer)),
@@ -108,8 +123,7 @@ describe('startStudioServer', () => {
         }),
       ).pipe(Effect.provide(NodeFileSystem.layer)),
     )
-    if (!Exit.isFailure(exit)) throw new Error('expected the second server to fail')
-    expect(String(exit.cause)).toContain('EADDRINUSE')
+    expect(String(causeOf(exit))).toContain('EADDRINUSE')
   })
 
   it('fails with SchemaLoadError for a missing schema', async () => {

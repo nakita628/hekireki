@@ -5,6 +5,12 @@ import { describe, expect, it } from 'vite-plus/test'
 import { PRISMA_DATE_TIME_RS } from '../helper/sea-orm.js'
 import { seaOrmFiles } from './sea-orm.js'
 
+/** The datamodel `getDMMF` parsed, or its parse error thrown. */
+function datamodelOf(result: ReturnType<typeof getDMMF>) {
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel
+}
+
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
   return {
     kind: 'scalar',
@@ -308,8 +314,7 @@ enum Tone {
         ],
       ],
     })
-    if ('type' in dmmf) throw new Error(dmmf.error.message)
-    const { models: documented, enums: documentedEnums } = dmmf.datamodel
+    const { models: documented, enums: documentedEnums } = datamodelOf(dmmf)
     const files = seaOrmFiles(documented, documentedEnums)
     expect(files.find((file) => file.fileName === 'tone.rs')?.code)
       .toBe(`use sea_orm::entity::prelude::*;

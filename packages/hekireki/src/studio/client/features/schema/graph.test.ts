@@ -140,6 +140,11 @@ describe('buildEdges of a self relation', () => {
   })
 })
 
+/** The fields a model node lists; any other node lists none. */
+function modelFieldNames(node: ReturnType<typeof buildNodes>[number] | undefined) {
+  return node?.type === 'model' ? node.data.fields.map((f) => f.name) : []
+}
+
 describe('buildNodes', () => {
   it('creates one node per model and one per enum, at stored or zero positions', () => {
     const nodes = buildNodes(
@@ -155,10 +160,7 @@ describe('buildNodes', () => {
       ['Tag', 'model', { x: 0, y: 0 }],
       ['Role', 'enum', { x: 0, y: 0 }],
     ])
-    const first = nodes[0]
-    expect(first?.type === 'model' ? first.data.fields.map((f) => f.name) : []).toStrictEqual([
-      'id',
-    ])
+    expect(modelFieldNames(nodes[0])).toStrictEqual(['id'])
   })
 
   it('links an enum-typed field to the card of its enum', () => {
@@ -227,7 +229,7 @@ describe('edge captions', () => {
     const captions = buildEdges({
       ...schema,
       relations: [inferred, { ...inferred, id: 'User.id->Post.editorId' }],
-    }).map((edge) => edge.data?.caption)
+    }).map((edge) => edge.data?.['caption'])
     expect(captions).toStrictEqual([
       ['one to many', 'on delete set null'],
       ['one to many', 'on delete set null'],

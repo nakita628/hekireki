@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { eloquentEnum, eloquentModelCodes, eloquentSupportFiles } from '../helper/eloquent.js'
-import { makePascalCase } from '../utils/index.js'
+import { makePascalCase } from '../naming/case.js'
 
 export function eloquentModelFiles(
   models: readonly DMMF.Model[],

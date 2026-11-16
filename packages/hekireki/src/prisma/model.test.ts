@@ -12,7 +12,7 @@ import {
   primaryKeyFields,
   relationEnds,
   uuidDefaultVersion,
-} from './prisma-model.js'
+} from './model.js'
 
 function fieldWith(type: string, def: DMMF.Field['default']): DMMF.Field {
   return {
@@ -27,8 +27,29 @@ function fieldWith(type: string, def: DMMF.Field['default']): DMMF.Field {
     isGenerated: false,
     isUpdatedAt: false,
     hasDefaultValue: def !== undefined,
-    default: def,
+    ...(def === undefined ? {} : { default: def }),
   }
+}
+
+/** The entry of that name, which the fixture has. */
+function named<T extends { readonly name: string }>(items: readonly T[], name: string): T {
+  const item = items.find((entry) => entry.name === name)
+  if (item === undefined) throw new Error(`fixture: no ${name}`)
+  return item
+}
+
+/** What a relation end says: its kind, its field, the field at its other end, and for a
+ * many-to-many which side of the join table it is. */
+function endSummary(end: ReturnType<typeof relationEnds>[number]) {
+  if (end.kind === 'manyToMany') {
+    return {
+      kind: end.kind,
+      field: end.field.name,
+      inverse: end.inverse.name,
+      isSideA: end.isSideA,
+    }
+  }
+  return { kind: end.kind, field: end.field.name, inverse: end.inverse?.name ?? null }
 }
 
 // DMMF carries a default as a function call (`{ name, args }`), a list, or a plain value.
@@ -139,8 +160,7 @@ model WithCompoundUnique {
     ['WithUnique', ['token']],
     ['WithCompoundUnique', ['identifier', 'token']],
   ])('%s: %j', (name, expected) => {
-    const model = models.find((m) => m.name === name)
-    expect(model && primaryKeyFields(model)).toStrictEqual(expected)
+    expect(primaryKeyFields(named(models, name))).toStrictEqual(expected)
   })
 })
 
@@ -175,8 +195,7 @@ model Employee {
     ['friends', true],
     ['friendOf', true],
   ])('%s: %s', (name, expected) => {
-    const field = employee.fields.find((f) => f.name === name)
-    expect(field && isImplicitManyToMany(field, employee, models)).toBe(expected)
+    expect(isImplicitManyToMany(named(employee.fields, name), employee, models)).toBe(expected)
   })
 })
 
@@ -213,10 +232,13 @@ model Tag {
     ['Tag', 'users', 'tags', true],
     ['User', 'tags', 'users', false],
   ])('%s.%s: %s', (modelName, fieldName, inverseName, expected) => {
-    const owner = models.find((m) => m.name === modelName)
-    const field = owner?.fields.find((f) => f.name === fieldName)
-    const inverse = models.flatMap((m) => m.fields).find((f) => f.name === inverseName)
-    expect(owner && field && inverse && isJoinSideA(field, owner, inverse)).toBe(expected)
+    const owner = named(models, modelName)
+    const field = named(owner.fields, fieldName)
+    const inverse = named(
+      models.flatMap((m) => m.fields),
+      inverseName,
+    )
+    expect(isJoinSideA(field, owner, inverse)).toBe(expected)
   })
 })
 
@@ -253,20 +275,7 @@ model Tag {
   const { models } = result.datamodel
 
   it('names each relation field of a model, in declaration order, with its other end', () => {
-    const [user] = models
-    if (user === undefined) throw new Error('fixture')
-    expect(
-      relationEnds(user, models).map((end) =>
-        end.kind === 'manyToMany'
-          ? {
-              kind: end.kind,
-              field: end.field.name,
-              inverse: end.inverse.name,
-              isSideA: end.isSideA,
-            }
-          : { kind: end.kind, field: end.field.name, inverse: end.inverse?.name ?? null },
-      ),
-    ).toStrictEqual([
+    expect(relationEnds(named(models, 'User'), models).map(endSummary)).toStrictEqual([
       { kind: 'hasMany', field: 'reports', inverse: 'manager' },
       { kind: 'belongsTo', field: 'manager', inverse: 'reports' },
       { kind: 'hasOne', field: 'profile', inverse: 'user' },

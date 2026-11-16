@@ -19,7 +19,7 @@ export class DatabaseUrlNotFoundError extends Data.TaggedError('DatabaseUrlNotFo
  */
 export function environmentVariable(name: string) {
   return Config.option(Config.String(name)).pipe(
-    Effect.map((value) => Option.getOrNull(Option.filter(value, (text) => text !== ''))),
+    Effect.map(nonEmptyOrNull),
     Effect.orElseSucceed(() => null),
   )
 }
@@ -62,4 +62,8 @@ export function makeDatabaseUrl(input: {
     if (choice.found !== null) return choice.found
     return yield* new DatabaseUrlNotFoundError({ reason: choice.reason })
   })
+}
+
+function nonEmptyOrNull(value: Option.Option<string>) {
+  return Option.getOrNull(Option.filter(value, (text) => text !== ''))
 }

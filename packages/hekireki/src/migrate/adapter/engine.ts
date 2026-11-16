@@ -82,8 +82,7 @@ function instantiate() {
         const instance = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(bytes)), {
           './schema_engine_bg.js': bindings,
         })
-        // oxlint-disable-next-line eslint/no-underscore-dangle -- wasm-bindgen names its two hooks
-        const result = WasmStart.safeParse(instance.exports.__wbindgen_start)
+        const result = WasmStart.safeParse(instance.exports['__wbindgen_start'])
         if (!result.success) {
           throw new TypeError('The engine module exports no __wbindgen_start.')
         }

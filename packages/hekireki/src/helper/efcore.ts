@@ -1,9 +1,9 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { pluralize } from '../utils/humanizer.js'
-import { stripAnnotations } from '../utils/index.js'
-import { allocate, pascalCase } from '../utils/naming.js'
-import { exprRef, typeRef } from '../utils/placeholder.js'
+import { stripAnnotations } from '../annotation/index.js'
+import { exprRef, typeRef } from '../literal/placeholder.js'
+import { pluralize } from '../naming/humanizer.js'
+import { allocate, pascalCase } from '../naming/index.js'
 import {
   backRelation,
   columnName,
@@ -13,8 +13,8 @@ import {
   manyToManyRelations,
   scalarFields,
   tableName,
-} from '../utils/prisma-model.js'
-import type { ManyToMany } from '../utils/prisma-model.js'
+} from '../prisma/model.js'
+import type { ManyToMany } from '../prisma/model.js'
 import {
   entityKey,
   fieldNames,
@@ -29,8 +29,8 @@ import {
   sqlArray,
   sqlString,
   sqlTimestamp,
-} from '../utils/prisma-postgres.js'
-import type { IndexInfo } from '../utils/prisma-postgres.js'
+} from '../prisma/postgres.js'
+import type { IndexInfo } from '../prisma/postgres.js'
 
 // Generated C# names a framework type through a placeholder, `\0T|System.DateTime\0` in a type
 // position or `\0E|...\0` in an expression. Only once a whole file is assembled is it known which
@@ -226,14 +226,16 @@ function foreignKeys(
   models: readonly DMMF.Model[],
   indexesOf: (model: DMMF.Model) => readonly IndexInfo[],
 ) {
+  const modelByName = new Map(models.map((m) => [m.name, m]))
   return models.flatMap((dependent) =>
     dependent.fields
       .filter((f) => f.kind === 'object' && (f.relationFromFields ?? []).length > 0)
       .flatMap((navigation): ForeignKey[] => {
-        const principal = models.find((m) => m.name === navigation.type)
+        const principal = modelByName.get(navigation.type)
         if (!principal) return []
         const from = navigation.relationFromFields ?? []
         const to = navigation.relationToFields ?? []
+        const sourceOf = new Map(to.map((target, index) => [target, from[index]]))
         const principalIndexes = indexesOf(principal)
         const referenced = principalIndexes.find(
           (index) =>
@@ -243,7 +245,7 @@ function foreignKeys(
         // EF Core matches a foreign key to a key by position, so the pairs follow the order of the
         // key they reference rather than the order `references` lists them in.
         const pairs = (referenced ? fieldNames(referenced) : to).flatMap((target) => {
-          const source = from[to.indexOf(target)]
+          const source = sourceOf.get(target)
           return source === undefined ? [] : [{ from: source, to: target }]
         })
         const isKey =
@@ -444,115 +446,99 @@ function fieldMapping(field: DMMF.Field, names: Names, provider: Provider) {
   return sqliteMapping(field.type)
 }
 
+const POSTGRES_NATIVE: {
+  readonly [name: string]: (length: string | null, args: readonly string[]) => ClrMapping
+} = {
+  Text: () => mapping('string', false),
+  VarChar: (length) =>
+    length === null
+      ? mapping('string', false, [columnType('character varying')], 'character varying')
+      : mapping('string', false, [`.HasMaxLength(${length})`], `character varying(${length})`),
+  Char: (length) =>
+    mapping(
+      'string',
+      false,
+      [`.HasMaxLength(${length ?? '1'})`, '.IsFixedLength()'],
+      `character(${length ?? '1'})`,
+    ),
+  Citext: () => mapping('string', false, [columnType('citext')], 'citext'),
+  Xml: () => mapping('string', false, [columnType('xml')], 'xml'),
+  Uuid: () => mapping(typeRef(CS.Guid), true),
+  // IPAddress would drop the netmask an inet column can hold; NpgsqlInet keeps it.
+  Inet: () => mapping(typeRef(CS.NpgsqlInet), true),
+  Bit: (length) => {
+    const storeType = `bit(${length ?? '1'})`
+    return mapping(typeRef(CS.BitArray), false, [columnType(storeType)], storeType)
+  },
+  VarBit: (length) =>
+    length === null
+      ? mapping(typeRef(CS.BitArray), false)
+      : mapping(
+          typeRef(CS.BitArray),
+          false,
+          [`.HasMaxLength(${length})`],
+          `bit varying(${length})`,
+        ),
+  SmallInt: () => mapping('short', true),
+  Integer: () => mapping('int', true),
+  Oid: () => mapping('uint', true, [columnType('oid')], 'oid'),
+  BigInt: () => mapping('long', true),
+  Real: () => mapping('float', true),
+  DoublePrecision: () => mapping('double', true),
+  Money: () => mapping('decimal', true, [columnType('money')], 'money'),
+  Decimal: (_length, args) => {
+    const [precision, scale] = args
+    return precision !== undefined && scale !== undefined
+      ? mapping(
+          'decimal',
+          true,
+          [`.HasPrecision(${precision}, ${scale})`],
+          `numeric(${precision},${scale})`,
+        )
+      : mapping('decimal', true)
+  },
+  Timestamp: (length) => {
+    const storeType =
+      length === null ? 'timestamp without time zone' : `timestamp(${length}) without time zone`
+    return mapping(typeRef(CS.DateTime), true, [columnType(storeType)], storeType, 'timestamp')
+  },
+  Timestamptz: (length) =>
+    length === null
+      ? mapping(typeRef(CS.DateTime), true, [], null, 'timestamptz')
+      : mapping(
+          typeRef(CS.DateTime),
+          true,
+          [`.HasPrecision(${length})`],
+          `timestamp(${length}) with time zone`,
+          'timestamptz',
+        ),
+  Date: () => mapping(typeRef(CS.DateOnly), true, [], null, 'date'),
+  Time: (length) =>
+    length === null
+      ? mapping(typeRef(CS.TimeOnly), true, [], null, 'time')
+      : mapping(
+          typeRef(CS.TimeOnly),
+          true,
+          [`.HasPrecision(${length})`],
+          `time(${length}) without time zone`,
+          'time',
+        ),
+  Timetz: (length) => {
+    const storeType = length === null ? 'time with time zone' : `time(${length}) with time zone`
+    return mapping(typeRef(CS.DateTimeOffset), true, [columnType(storeType)], storeType, 'timetz')
+  },
+  Json: () => mapping('string', false, [columnType('json')], 'json'),
+  JsonB: () => mapping('string', false, [columnType('jsonb')], 'jsonb'),
+  ByteA: () => mapping('byte[]', false),
+  Boolean: () => mapping('bool', true),
+}
+
 // The column of each Prisma type, described as `dotnet ef dbcontext scaffold` describes the same
 // column with Npgsql: nothing where Npgsql maps the CLR type to that column already, a facet (max
 // length, precision) where that is enough, the store type otherwise.
 function postgresNativeMapping(nativeName: string, args: readonly string[]) {
-  const length = lengthArg(args)
-  switch (nativeName) {
-    case 'Text':
-      return mapping('string', false)
-    case 'VarChar':
-      return length
-        ? mapping('string', false, [`.HasMaxLength(${length})`], `character varying(${length})`)
-        : mapping('string', false, [columnType('character varying')], 'character varying')
-    case 'Char':
-      return mapping(
-        'string',
-        false,
-        [`.HasMaxLength(${length ?? '1'})`, '.IsFixedLength()'],
-        `character(${length ?? '1'})`,
-      )
-    case 'Citext':
-      return mapping('string', false, [columnType('citext')], 'citext')
-    case 'Xml':
-      return mapping('string', false, [columnType('xml')], 'xml')
-    case 'Uuid':
-      return mapping(typeRef(CS.Guid), true)
-    // IPAddress would drop the netmask an inet column can hold; NpgsqlInet keeps it.
-    case 'Inet':
-      return mapping(typeRef(CS.NpgsqlInet), true)
-    case 'Bit': {
-      const storeType = `bit(${length ?? '1'})`
-      return mapping(typeRef(CS.BitArray), false, [columnType(storeType)], storeType)
-    }
-    case 'VarBit':
-      return length
-        ? mapping(
-            typeRef(CS.BitArray),
-            false,
-            [`.HasMaxLength(${length})`],
-            `bit varying(${length})`,
-          )
-        : mapping(typeRef(CS.BitArray), false)
-    case 'SmallInt':
-      return mapping('short', true)
-    case 'Integer':
-      return mapping('int', true)
-    case 'Oid':
-      return mapping('uint', true, [columnType('oid')], 'oid')
-    case 'BigInt':
-      return mapping('long', true)
-    case 'Real':
-      return mapping('float', true)
-    case 'DoublePrecision':
-      return mapping('double', true)
-    case 'Money':
-      return mapping('decimal', true, [columnType('money')], 'money')
-    case 'Decimal': {
-      const [precision, scale] = args
-      return precision !== undefined && scale !== undefined
-        ? mapping(
-            'decimal',
-            true,
-            [`.HasPrecision(${precision}, ${scale})`],
-            `numeric(${precision},${scale})`,
-          )
-        : mapping('decimal', true)
-    }
-    case 'Timestamp': {
-      const storeType = length
-        ? `timestamp(${length}) without time zone`
-        : 'timestamp without time zone'
-      return mapping(typeRef(CS.DateTime), true, [columnType(storeType)], storeType, 'timestamp')
-    }
-    case 'Timestamptz':
-      return length
-        ? mapping(
-            typeRef(CS.DateTime),
-            true,
-            [`.HasPrecision(${length})`],
-            `timestamp(${length}) with time zone`,
-            'timestamptz',
-          )
-        : mapping(typeRef(CS.DateTime), true, [], null, 'timestamptz')
-    case 'Date':
-      return mapping(typeRef(CS.DateOnly), true, [], null, 'date')
-    case 'Time':
-      return length
-        ? mapping(
-            typeRef(CS.TimeOnly),
-            true,
-            [`.HasPrecision(${length})`],
-            `time(${length}) without time zone`,
-            'time',
-          )
-        : mapping(typeRef(CS.TimeOnly), true, [], null, 'time')
-    case 'Timetz': {
-      const storeType = length ? `time(${length}) with time zone` : 'time with time zone'
-      return mapping(typeRef(CS.DateTimeOffset), true, [columnType(storeType)], storeType, 'timetz')
-    }
-    case 'Json':
-      return mapping('string', false, [columnType('json')], 'json')
-    case 'JsonB':
-      return mapping('string', false, [columnType('jsonb')], 'jsonb')
-    case 'ByteA':
-      return mapping('byte[]', false)
-    case 'Boolean':
-      return mapping('bool', true)
-    default:
-      return null
-  }
+  const make = POSTGRES_NATIVE[nativeName]
+  return make === undefined ? null : make(lengthArg(args), args)
 }
 
 function postgresScalarMapping(type: string) {
@@ -687,51 +673,65 @@ type ValueGeneratorKind =
   | { readonly kind: 'nanoid'; readonly size: number }
   | { readonly kind: 'now'; readonly clr: 'DateTime' | 'DateOnly' | 'TimeOnly' }
 
+const NOW_GENERATOR = {
+  DateTime: 'UtcNowGenerator',
+  DateOnly: 'UtcTodayGenerator',
+  TimeOnly: 'UtcTimeOfDayGenerator',
+} as const
+
 function generatorKey(generator: ValueGeneratorKind) {
   if (generator.kind === 'uuid') {
     return `UuidV${generator.version}${generator.clr === 'Guid' ? 'Guid' : 'String'}Generator`
   }
   if (generator.kind === 'ulid') return 'UlidGenerator'
   if (generator.kind === 'cuid') return generator.version === 2 ? 'Cuid2Generator' : 'CuidGenerator'
-  if (generator.kind === 'now') {
-    return generator.clr === 'DateTime'
-      ? 'UtcNowGenerator'
-      : generator.clr === 'DateOnly'
-        ? 'UtcTodayGenerator'
-        : 'UtcTimeOfDayGenerator'
-  }
+  if (generator.kind === 'now') return NOW_GENERATOR[generator.clr]
   return `Nanoid${generator.size}Generator`
+}
+
+// Prisma Client sends now() itself, the instant of the query in UTC; the DEFAULT the database
+// has would take the session's time zone for a column without one.
+function nowGenerator(clr: ClrMapping): ValueGeneratorKind | null {
+  if (clr.temporal === 'timestamp' || clr.temporal === 'timestamptz') {
+    return { kind: 'now', clr: 'DateTime' }
+  }
+  if (clr.temporal === 'date') return { kind: 'now', clr: 'DateOnly' }
+  return clr.temporal === 'time' ? { kind: 'now', clr: 'TimeOnly' } : null
+}
+
+function uuidGenerator(
+  arg: string | number | undefined,
+  clr: ClrMapping,
+): ValueGeneratorKind | null {
+  const isGuid = clr.clr === typeRef(CS.Guid)
+  return isGuid || clr.clr === 'string'
+    ? { kind: 'uuid', version: arg === 7 ? 7 : 4, clr: isGuid ? 'Guid' : 'string' }
+    : null
+}
+
+// The generators of a string property's ulid(), cuid() and nanoid().
+function stringGenerator(
+  name: string,
+  arg: string | number | undefined,
+): ValueGeneratorKind | null {
+  switch (name) {
+    case 'ulid':
+      return { kind: 'ulid' }
+    case 'cuid':
+      return { kind: 'cuid', version: arg === 2 ? 2 : 1 }
+    case 'nanoid':
+      return { kind: 'nanoid', size: typeof arg === 'number' && arg > 0 ? arg : 21 }
+    default:
+      return null
+  }
 }
 
 function valueGeneratorOf(field: DMMF.Field, clr: ClrMapping): ValueGeneratorKind | null {
   if (!isFunctionDefault(field.default) || field.isList) return null
-  const isGuid = clr.clr === typeRef(CS.Guid)
-  const isString = clr.clr === 'string'
-  const [arg] = field.default.args
-  switch (field.default.name) {
-    case 'uuid':
-      return isGuid || isString
-        ? { kind: 'uuid', version: arg === 7 ? 7 : 4, clr: isGuid ? 'Guid' : 'string' }
-        : null
-    case 'ulid':
-      return isString ? { kind: 'ulid' } : null
-    case 'cuid':
-      return isString ? { kind: 'cuid', version: arg === 2 ? 2 : 1 } : null
-    case 'nanoid':
-      return isString
-        ? { kind: 'nanoid', size: typeof arg === 'number' && arg > 0 ? arg : 21 }
-        : null
-    // Prisma Client sends now() itself, the instant of the query in UTC; the DEFAULT the database
-    // has would take the session's time zone for a column without one.
-    case 'now':
-      if (clr.temporal === 'timestamp' || clr.temporal === 'timestamptz') {
-        return { kind: 'now', clr: 'DateTime' }
-      }
-      if (clr.temporal === 'date') return { kind: 'now', clr: 'DateOnly' }
-      return clr.temporal === 'time' ? { kind: 'now', clr: 'TimeOnly' } : null
-    default:
-      return null
-  }
+  const { name, args } = field.default
+  if (name === 'now') return nowGenerator(clr)
+  if (name === 'uuid') return uuidGenerator(args[0], clr)
+  return clr.clr === 'string' ? stringGenerator(name, args[0]) : null
 }
 
 function integerLiteral(value: string | number | boolean) {
@@ -765,6 +765,46 @@ function temporalLiteral(value: string, temporal: TemporalKind) {
   return `new ${typeRef(CS.DateTime)}(${[moment.year, moment.month, moment.day, ...clockArgs(moment)].join(', ')}, ${exprRef(CS.DateTimeKind)}.Utc)`
 }
 
+// Each C# type's spelling of a default, or null where the value has none.
+const CLR_LITERAL: { readonly [clr: string]: (value: string | number | boolean) => string | null } =
+  {
+    string: (value) => (typeof value === 'string' ? csharpString(value) : null),
+    bool: (value) => (typeof value === 'boolean' ? String(value) : null),
+    int: integerLiteral,
+    short: (value) => {
+      const text = integerLiteral(value)
+      return text === null ? null : `(short)${text}`
+    },
+    uint: (value) => {
+      const text = integerLiteral(value)
+      return text === null || text.startsWith('-') ? null : `${text}u`
+    },
+    // DMMF carries a BigInt default as a string of digits when it is past 2^53.
+    long: (value) => (/^-?\d+$/u.test(String(value)) ? `${value}L` : null),
+    double: (value) => (typeof value === 'number' ? doubleLiteral(value) : null),
+    float: (value) => (typeof value === 'number' ? `${value}f` : null),
+    decimal: (value) =>
+      /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/iu.test(String(value)) ? `${value}m` : null,
+    // A Bytes default is the base64 of the bytes.
+    'byte[]': (value) =>
+      typeof value === 'string'
+        ? `${exprRef(CS.Convert)}.FromBase64String(${csharpString(value)})`
+        : null,
+  }
+
+function enumLiteral(
+  value: string | number | boolean,
+  field: DMMF.Field,
+  names: Names,
+  enums: readonly DMMF.DatamodelEnum[],
+) {
+  const isKnown = enums.find((e) => e.name === field.type)?.values.some((v) => v.name === value)
+  const member = names.enumMembers.get(field.type)?.get(String(value))
+  return isKnown === true && member !== undefined
+    ? `${exprRef(generatedRef(names, enumName(names, field.type)))}.${member}`
+    : null
+}
+
 // A default as a C# expression of the property's type, or null when the value has no spelling
 // here that is sure to mean what the column's default means.
 function literal(
@@ -774,48 +814,12 @@ function literal(
   names: Names,
   enums: readonly DMMF.DatamodelEnum[],
 ) {
-  if (field.kind === 'enum') {
-    const isKnown = enums.find((e) => e.name === field.type)?.values.some((v) => v.name === value)
-    const member = names.enumMembers.get(field.type)?.get(String(value))
-    return isKnown && member
-      ? `${exprRef(generatedRef(names, enumName(names, field.type)))}.${member}`
-      : null
-  }
+  if (field.kind === 'enum') return enumLiteral(value, field, names, enums)
   if (clr.temporal !== null) {
     return typeof value === 'string' ? temporalLiteral(value, clr.temporal) : null
   }
-  switch (clr.clr) {
-    case 'string':
-      return typeof value === 'string' ? csharpString(value) : null
-    case 'bool':
-      return typeof value === 'boolean' ? String(value) : null
-    case 'int':
-      return integerLiteral(value)
-    case 'short': {
-      const text = integerLiteral(value)
-      return text === null ? null : `(short)${text}`
-    }
-    case 'uint': {
-      const text = integerLiteral(value)
-      return text === null || text.startsWith('-') ? null : `${text}u`
-    }
-    // DMMF carries a BigInt default as a string of digits when it is past 2^53.
-    case 'long':
-      return /^-?\d+$/u.test(String(value)) ? `${value}L` : null
-    case 'double':
-      return typeof value === 'number' ? doubleLiteral(value) : null
-    case 'float':
-      return typeof value === 'number' ? `${value}f` : null
-    case 'decimal':
-      return /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/iu.test(String(value)) ? `${value}m` : null
-    // A Bytes default is the base64 of the bytes.
-    case 'byte[]':
-      return typeof value === 'string'
-        ? `${exprRef(CS.Convert)}.FromBase64String(${csharpString(value)})`
-        : null
-    default:
-      break
-  }
+  const spell = CLR_LITERAL[clr.clr]
+  if (spell !== undefined) return spell(value)
   if (clr.clr === typeRef(CS.Guid) && typeof value === 'string') {
     return `new ${typeRef(CS.Guid)}(${csharpString(value)})`
   }
@@ -841,6 +845,52 @@ type DefaultPlan =
       readonly sql: string | null
     }
 
+function functionDefaultPlan(
+  def: { readonly name: string; readonly args: readonly (string | number)[] },
+  field: DMMF.Field,
+  clr: ClrMapping,
+): DefaultPlan | null {
+  const [arg] = def.args
+  if (def.name === 'autoincrement') return { kind: 'autoincrement' }
+  if (def.name === 'dbgenerated') {
+    return typeof arg === 'string' && arg.length > 0
+      ? { kind: 'sql', sql: arg }
+      : { kind: 'generated' }
+  }
+  // now() keeps the DEFAULT Prisma Migrate writes, for a row inserted some other way.
+  const sql = def.name === 'now' ? 'CURRENT_TIMESTAMP' : null
+  const generator = valueGeneratorOf(field, clr)
+  if (!generator) return sql === null ? null : { kind: 'sql', sql }
+  // A value generator fires for a property left null. That is what leaving a required field out
+  // means, but an optional field can be set to null on purpose, which Prisma stores as NULL; so an
+  // optional field starts out with its generated value instead, and null stays NULL.
+  return field.isRequired
+    ? { kind: 'generator', generator, sql }
+    : { kind: 'initializer', generator, sql }
+}
+
+function listDefaultPlan(
+  def: readonly (string | number | boolean)[],
+  field: DMMF.Field,
+  clr: ClrMapping,
+  names: Names,
+  enums: readonly DMMF.DatamodelEnum[],
+): DefaultPlan {
+  const isTemporal = clr.temporal !== null
+  const elements = def.map((value) => literal(value, field, clr, names, enums))
+  const sqlValues = def.map((value) => (isTemporal ? sqlTimestamp(value) : String(value)))
+  if (!elements.every((element) => element !== null)) {
+    return { kind: 'sql', sql: sqlArray(sqlValues) }
+  }
+  const listType = `${typeRef(CS.List)}<${clr.clr}>`
+  return {
+    kind: 'literal',
+    expr:
+      elements.length === 0 ? `new ${listType}()` : `new ${listType} { ${elements.join(', ')} }`,
+    sql: isTemporal ? sqlArray(sqlValues) : null,
+  }
+}
+
 function defaultPlan(
   field: DMMF.Field,
   clr: ClrMapping,
@@ -849,43 +899,12 @@ function defaultPlan(
 ): DefaultPlan | null {
   const def = field.default
   if (def === undefined || def === null) return null
-  if (isFunctionDefault(def)) {
-    const [arg] = def.args
-    if (def.name === 'autoincrement') return { kind: 'autoincrement' }
-    if (def.name === 'dbgenerated') {
-      return typeof arg === 'string' && arg.length > 0
-        ? { kind: 'sql', sql: arg }
-        : { kind: 'generated' }
-    }
-    // now() keeps the DEFAULT Prisma Migrate writes, for a row inserted some other way.
-    const sql = def.name === 'now' ? 'CURRENT_TIMESTAMP' : null
-    const generator = valueGeneratorOf(field, clr)
-    if (!generator) return sql === null ? null : { kind: 'sql', sql }
-    // A value generator fires for a property left null. That is what leaving a required field out
-    // means, but an optional field can be set to null on purpose, which Prisma stores as NULL; so an
-    // optional field starts out with its generated value instead, and null stays NULL.
-    return field.isRequired
-      ? { kind: 'generator', generator, sql }
-      : { kind: 'initializer', generator, sql }
-  }
+  if (isFunctionDefault(def)) return functionDefaultPlan(def, field, clr)
   // A timestamp literal means one thing to Prisma Client and another to the DEFAULT clause Prisma
   // Migrate writes for it, so the column keeps the literal verbatim while the property holds what
   // Prisma Client would write.
   const isTemporal = clr.temporal !== null
-  if (isListDefault(def)) {
-    const elements = def.map((value) => literal(value, field, clr, names, enums))
-    const sqlValues = def.map((value) => (isTemporal ? sqlTimestamp(value) : String(value)))
-    if (!elements.every((element) => element !== null)) {
-      return { kind: 'sql', sql: sqlArray(sqlValues) }
-    }
-    const listType = `${typeRef(CS.List)}<${clr.clr}>`
-    return {
-      kind: 'literal',
-      expr:
-        elements.length === 0 ? `new ${listType}()` : `new ${listType} { ${elements.join(', ')} }`,
-      sql: isTemporal ? sqlArray(sqlValues) : null,
-    }
-  }
+  if (isListDefault(def)) return listDefaultPlan(def, field, clr, names, enums)
   const expr = literal(def, field, clr, names, enums)
   if (expr !== null) {
     return { kind: 'literal', expr, sql: isTemporal ? sqlString(sqlTimestamp(def)) : null }
@@ -903,7 +922,9 @@ function isSystemNamespace(name: string) {
 // `dotnet format`'s order: System namespaces first, then the rest, each alphabetically.
 function compareUsings(left: string, right: string) {
   if (isSystemNamespace(left) !== isSystemNamespace(right)) return isSystemNamespace(left) ? -1 : 1
-  return left < right ? -1 : left > right ? 1 : 0
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
 }
 
 /**
@@ -1071,10 +1092,12 @@ export function planEfCore(
 ): EfCorePlan {
   // DMMF leaves an `@ignore` field out of the model, but not out of an index that lists it: the
   // entity has no property for such an index to name, so it is left out with the field.
-  const indexesOf = (model: DMMF.Model) =>
-    modelIndexes(model, datamodel.indexes ?? []).filter((index) =>
-      index.fields.every((f) => model.fields.some((field) => field.name === f.name)),
+  const indexesOf = (model: DMMF.Model) => {
+    const fieldNamesOf = new Set(model.fields.map((field) => field.name))
+    return modelIndexes(model, datamodel.indexes ?? []).filter((index) =>
+      index.fields.every((f) => fieldNamesOf.has(f.name)),
     )
+  }
   const schema = {
     provider: options.provider,
     models: datamodel.models,
@@ -1125,6 +1148,17 @@ function memberType(plan: EfCorePlan, field: DMMF.Field) {
   return match?.[1] ?? null
 }
 
+function scalarPropertyType(field: DMMF.Field, clr: ClrMapping) {
+  if (field.isList) return `${typeRef(CS.List)}<${clr.clr}>?`
+  return field.isRequired ? clr.clr : `${clr.clr}?`
+}
+
+function propertyInitializer(field: DMMF.Field, clr: ClrMapping, def: DefaultPlan | null) {
+  if (def?.kind === 'literal') return ` = ${def.expr};`
+  if (def?.kind === 'initializer') return ` = ${nextValue(def.generator)};`
+  return !field.isList && field.isRequired && !clr.isValueType ? ' = null!;' : ''
+}
+
 function entityProperty(plan: EfCorePlan, model: DMMF.Model, field: DMMF.Field) {
   const name = propertyName(plan.names, model, field.name)
   const summary = summaryLines(stripAnnotations(field.documentation), '    ')
@@ -1147,19 +1181,8 @@ function entityProperty(plan: EfCorePlan, model: DMMF.Model, field: DMMF.Field) 
     ]
   }
   const { clr, def } = fieldPlan(plan, field)
-  const type = field.isList
-    ? `${typeRef(CS.List)}<${clr.clr}>?`
-    : field.isRequired
-      ? clr.clr
-      : `${clr.clr}?`
-  const initializer =
-    def?.kind === 'literal'
-      ? ` = ${def.expr};`
-      : def?.kind === 'initializer'
-        ? ` = ${nextValue(def.generator)};`
-        : !field.isList && field.isRequired && !clr.isValueType
-          ? ' = null!;'
-          : ''
+  const type = scalarPropertyType(field, clr)
+  const initializer = propertyInitializer(field, clr, def)
   const lines = [...summary, `    public ${type} ${name} { get; set; }${initializer}`]
   return def?.kind === 'initializer' ? withCuidV1(def.generator, lines) : lines
 }
@@ -1254,6 +1277,59 @@ function valueGenerationCalls(
   return []
 }
 
+// EF Core generates a value on insert for a lone numeric or Guid key by convention.
+function isGeneratedByConvention(field: DMMF.Field, clr: ClrMapping, key: readonly string[]) {
+  return (
+    key.length === 1 &&
+    key[0] === field.name &&
+    !field.isList &&
+    ['int', 'long', 'short', 'uint', typeRef(CS.Guid)].includes(clr.clr)
+  )
+}
+
+function columnFacets(field: DMMF.Field, clr: ClrMapping) {
+  if (!field.isList) return clr.facets
+  return clr.elementStoreType === null ? [] : [columnType(`${clr.elementStoreType}[]`)]
+}
+
+// Npgsql makes an integer property that is generated on insert an identity column; one the
+// database fills some other way (a trigger, say) is left as the column Prisma creates.
+function isTriggerFilledInteger(
+  plan: EfCorePlan,
+  field: DMMF.Field,
+  clr: ClrMapping,
+  def: DefaultPlan | null,
+) {
+  return (
+    plan.provider === 'postgresql' &&
+    def?.kind === 'generated' &&
+    !field.isList &&
+    ['int', 'long', 'short'].includes(clr.clr)
+  )
+}
+
+function defaultValueCalls(def: DefaultPlan | null) {
+  return [
+    ...(def?.kind === 'literal' && def.sql === null ? [`.HasDefaultValue(${def.expr})`] : []),
+    ...(def !== null && 'sql' in def && def.sql !== null
+      ? [`.HasDefaultValueSql(${csharpString(def.sql)})`]
+      : []),
+  ]
+}
+
+function conversionCalls(plan: EfCorePlan, field: DMMF.Field, clr: ClrMapping) {
+  const dateKey = dateConverter(clr, field.isList, plan.provider)
+  const converter =
+    dateKey ??
+    (field.kind === 'enum' && plan.provider !== 'postgresql' ? `enum:${field.type}` : null)
+  if (converter === null) return []
+  const comparer =
+    dateKey?.endsWith('ListConverter') === true
+      ? `, ${plan.names.fileClasses.get('DateTimeListComparer')}`
+      : ''
+  return [`.HasConversion<${plan.names.fileClasses.get(converter)}${comparer}>()`]
+}
+
 function propertyConfig(
   plan: EfCorePlan,
   model: DMMF.Model,
@@ -1262,46 +1338,17 @@ function propertyConfig(
 ) {
   const { clr, def } = fieldPlan(plan, field)
   const name = propertyName(plan.names, model, field.name)
-  // EF Core generates a value on insert for a lone numeric or Guid key by convention.
-  const isConventionallyGenerated =
-    key.length === 1 &&
-    key[0] === field.name &&
-    !field.isList &&
-    ['int', 'long', 'short', 'uint', typeRef(CS.Guid)].includes(clr.clr)
-  const valueGeneration = valueGenerationCalls(plan, def, isConventionallyGenerated)
-  const facets = field.isList
-    ? clr.elementStoreType === null
-      ? []
-      : [columnType(`${clr.elementStoreType}[]`)]
-    : clr.facets
+  const valueGeneration = valueGenerationCalls(plan, def, isGeneratedByConvention(field, clr, key))
+  const facets = columnFacets(field, clr)
   const column = columnName(field)
-  // Npgsql makes an integer property that is generated on insert an identity column; one the
-  // database fills some other way (a trigger, say) is left as the column Prisma creates.
-  const isTriggerFilledInteger =
-    plan.provider === 'postgresql' &&
-    def?.kind === 'generated' &&
-    !field.isList &&
-    ['int', 'long', 'short'].includes(clr.clr)
-  const dateKey = dateConverter(clr, field.isList, plan.provider)
-  const converter =
-    dateKey ??
-    (field.kind === 'enum' && plan.provider !== 'postgresql' ? `enum:${field.type}` : null)
-  const comparer = dateKey?.endsWith('ListConverter')
-    ? `, ${plan.names.fileClasses.get('DateTimeListComparer')}`
-    : ''
   const calls = [
     ...valueGeneration,
     ...facets.filter((f) => !f.startsWith('.HasColumnType')),
-    ...(def?.kind === 'literal' && def.sql === null ? [`.HasDefaultValue(${def.expr})`] : []),
-    ...(def !== null && 'sql' in def && def.sql !== null
-      ? [`.HasDefaultValueSql(${csharpString(def.sql)})`]
-      : []),
-    ...(converter === null
-      ? []
-      : [`.HasConversion<${plan.names.fileClasses.get(converter)}${comparer}>()`]),
+    ...defaultValueCalls(def),
+    ...conversionCalls(plan, field, clr),
     ...facets.filter((f) => f.startsWith('.HasColumnType')),
     ...(column === name ? [] : [`.HasColumnName(${csharpString(column)})`]),
-    ...(isTriggerFilledInteger
+    ...(isTriggerFilledInteger(plan, field, clr, def)
       ? [`.Metadata.SetValueGenerationStrategy(${exprRef(CS.NpgsqlValueGenerationStrategy)}.None)`]
       : []),
   ]
@@ -1336,9 +1383,8 @@ function relationConfig(plan: EfCorePlan, fk: ForeignKey) {
   const withCall = `.With${isOneToOne ? 'One' : 'Many'}(${
     fk.inverse ? `p => p.${propertyName(names, fk.principal, fk.inverse.name)}` : ''
   })`
-  const isRequired = fk.pairs.every(
-    (pair) => fk.dependent.fields.find((f) => f.name === pair.from)?.isRequired === true,
-  )
+  const dependentFields = new Map(fk.dependent.fields.map((f) => [f.name, f]))
+  const isRequired = fk.pairs.every((pair) => dependentFields.get(pair.from)?.isRequired === true)
   const principalKey = fk.alternateKey
     ? [
         `.HasPrincipalKey${isOneToOne ? `<${modelType(names, fk.principal)}>` : ''}(${keyLambda(
@@ -1352,7 +1398,7 @@ function relationConfig(plan: EfCorePlan, fk: ForeignKey) {
     [
       tableName(fk.dependent),
       ...(fk.navigation.relationFromFields ?? []).map((from) => {
-        const field = fk.dependent.fields.find((f) => f.name === from)
+        const field = dependentFields.get(from)
         return field ? columnName(field) : from
       }),
     ].join('_'),
@@ -1380,9 +1426,10 @@ function manyToManyConfig(plan: EfCorePlan, m2m: ManyToMany) {
   const table = prismaConstraintName(`_${m2m.relationName}`, '')
   const joinName = (suffix: string) => csharpString(prismaConstraintName(table, suffix))
   const cascade = `${exprRef(CS.DeleteBehavior)}.Cascade`
-  const toTable = m2m.a.model.schema
-    ? `j.ToTable(${csharpString(table)}, ${csharpString(m2m.a.model.schema)});`
-    : `j.ToTable(${csharpString(table)});`
+  const toTable =
+    m2m.a.model.schema !== null
+      ? `j.ToTable(${csharpString(table)}, ${csharpString(m2m.a.model.schema)});`
+      : `j.ToTable(${csharpString(table)});`
   return [
     `            entity.HasMany(d => d.${propertyName(names, m2m.a.model, m2m.a.field.name)}).WithMany(p => p.${propertyName(names, m2m.b.model, m2m.b.field.name)})`,
     `                .UsingEntity<${typeRef(CS.Dictionary)}<string, object>>(`,
@@ -1425,13 +1472,11 @@ function indexConfig(
   const method =
     index.algorithm === undefined || !isPostgres ? undefined : INDEX_METHODS[index.algorithm]
   // Npgsql writes no operator class for a column given an empty one: that column keeps the default.
+  const fieldByName = new Map(model.fields.map((mf) => [mf.name, mf]))
   const operators = index.fields.map((f) =>
     f.operatorClass === undefined || !isPostgres
       ? ''
-      : operatorClassName(
-          f.operatorClass,
-          model.fields.find((mf) => mf.name === f.name)?.nativeType?.[0],
-        ),
+      : operatorClassName(f.operatorClass, fieldByName.get(f.name)?.nativeType?.[0]),
   )
   const calls = [
     ...(index.type === 'unique' ? ['.IsUnique()'] : []),
@@ -1442,6 +1487,11 @@ function indexConfig(
       : []),
   ]
   return chain(`entity.HasIndex(${keyLambda('e', properties)}, ${name})`, calls, '            ')
+}
+
+// The same key for the same set of fields, whatever order they are listed in.
+function fieldSetKey(fields: readonly string[]) {
+  return fields.toSorted().join('\0')
 }
 
 function entityConfig(plan: EfCorePlan, model: DMMF.Model) {
@@ -1459,13 +1509,16 @@ function entityConfig(plan: EfCorePlan, model: DMMF.Model) {
         '            ',
       )
     : ['            entity.HasNoKey();']
-  const table = model.schema
-    ? `            entity.ToTable(${csharpString(tableName(model))}, ${csharpString(model.schema)});`
-    : `            entity.ToTable(${csharpString(tableName(model))});`
+  const table =
+    model.schema !== null
+      ? `            entity.ToTable(${csharpString(tableName(model))}, ${csharpString(model.schema)});`
+      : `            entity.ToTable(${csharpString(tableName(model))});`
   // A unique criterion another model's foreign key references is an alternate key to EF Core,
   // which enforces it with a unique constraint of that name in place of the unique index.
-  const referencedKeys = plan.foreignKeys.flatMap((fk) =>
-    fk.principal === model && fk.alternateKey ? [fieldNames(fk.alternateKey)] : [],
+  const referencedKeys = new Set(
+    plan.foreignKeys.flatMap((fk) =>
+      fk.principal === model && fk.alternateKey ? [fieldSetKey(fieldNames(fk.alternateKey))] : [],
+    ),
   )
   const indexBlocks = indexes
     .filter((index) => (index.type === 'unique' || index.type === 'normal') && index !== key)
@@ -1474,8 +1527,7 @@ function entityConfig(plan: EfCorePlan, model: DMMF.Model) {
         plan,
         model,
         index,
-        index.type === 'unique' &&
-          referencedKeys.some((fields) => isSameFieldSet(fields, fieldNames(index))),
+        index.type === 'unique' && referencedKeys.has(fieldSetKey(fieldNames(index))),
       ),
     )
   return [
@@ -1578,13 +1630,13 @@ function withCuidV1(generator: ValueGeneratorKind, lines: readonly string[]) {
     : lines
 }
 
+function generatorValueType(generator: ValueGeneratorKind) {
+  if (generator.kind === 'now') return typeRef(CS[generator.clr])
+  return generator.kind === 'uuid' && generator.clr === 'Guid' ? typeRef(CS.Guid) : 'string'
+}
+
 function generatorClass(name: string, generator: ValueGeneratorKind) {
-  const valueType =
-    generator.kind === 'now'
-      ? typeRef(CS[generator.clr])
-      : generator.kind === 'uuid' && generator.clr === 'Guid'
-        ? typeRef(CS.Guid)
-        : 'string'
+  const valueType = generatorValueType(generator)
   const next = nextValue(generator)
   const nextLine = `    public override ${valueType} Next(${typeRef(CS.EntityEntry)} entry) => ${next};`
   return [

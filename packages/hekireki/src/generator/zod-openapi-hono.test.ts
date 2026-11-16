@@ -11,6 +11,11 @@ import {
   zodOpenapiHonoDocument,
 } from './zod-openapi-hono.js'
 
+/** The property names of a component schema, none where it has no properties. */
+function propertyNames(schema: { readonly properties?: object | undefined } | undefined) {
+  return Object.keys(schema?.properties ?? {})
+}
+
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
   return {
     kind: 'scalar',
@@ -92,7 +97,7 @@ const document = zodOpenapiHonoDocument(DATAMODEL, { title: 'API', version: '1.0
 
 describe('zodOpenapiHonoDocument', () => {
   it('writes a row as Prisma Client reads it: Prisma names, enum names, every field present', () => {
-    expect(document.components.schemas.User).toStrictEqual({
+    expect(document.components.schemas['User']).toStrictEqual({
       type: 'object',
       properties: {
         id: { type: 'string' },
@@ -108,19 +113,19 @@ describe('zodOpenapiHonoDocument', () => {
   })
 
   it('requires what a create cannot do without, and nothing for an update, which leaves out the key', () => {
-    expect(document.components.schemas.UserCreate?.required).toStrictEqual(['email'])
-    expect(Object.keys(document.components.schemas.UserUpdate?.properties ?? {})).toStrictEqual([
+    expect(document.components.schemas['UserCreate']?.required).toStrictEqual(['email'])
+    expect(propertyNames(document.components.schemas['UserUpdate'])).toStrictEqual([
       'email',
       'role',
       'tags',
       'meta',
     ])
-    expect(document.components.schemas.UserUpdate).not.toHaveProperty('required')
+    expect(document.components.schemas['UserUpdate']).not.toHaveProperty('required')
   })
 
   it('takes no field the server fills: a generated @default or @updatedAt', () => {
     // id is @default(uuid()), createdAt is @updatedAt; role's @default("USER") is a plain value.
-    expect(Object.keys(document.components.schemas.UserCreate?.properties ?? {})).toStrictEqual([
+    expect(propertyNames(document.components.schemas['UserCreate'])).toStrictEqual([
       'email',
       'role',
       'tags',
@@ -129,7 +134,7 @@ describe('zodOpenapiHonoDocument', () => {
   })
 
   it('pages a list by limit and offset, at most 100, and says the total in a header', () => {
-    expect(document.paths['/users']?.get).toMatchObject({
+    expect(document.paths['/users']?.['get']).toMatchObject({
       parameters: [
         {
           name: 'limit',
@@ -160,7 +165,7 @@ describe('zodOpenapiHonoDocument', () => {
   })
 
   it('types a bigint as an integer, a decimal as a string, bytes as base64', () => {
-    expect(document.components.schemas.OrderItem?.properties).toStrictEqual({
+    expect(document.components.schemas['OrderItem']?.properties).toStrictEqual({
       orderId: { type: 'integer' },
       sku: { type: 'string' },
       price: { type: 'string' },
@@ -187,7 +192,7 @@ describe('zodOpenapiHonoDocument with auth', () => {
       bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
     })
     const item = guarded.paths['/users/{id}']
-    expect(item?.parameters).toStrictEqual(document.paths['/users/{id}']?.parameters)
+    expect(item?.['parameters']).toStrictEqual(document.paths['/users/{id}']?.['parameters'])
     for (const method of ['get', 'patch', 'delete']) {
       const operation = item?.[method]
       expect(operation).toMatchObject({
@@ -209,7 +214,7 @@ describe('zodOpenapiHonoDocument with auth', () => {
     expect(access.components.securitySchemes).toStrictEqual({
       cloudflareAccess: { type: 'apiKey', in: 'header', name: 'Cf-Access-Jwt-Assertion' },
     })
-    expect(access.paths['/users/{id}']?.get).toMatchObject({
+    expect(access.paths['/users/{id}']?.['get']).toMatchObject({
       security: [{ cloudflareAccess: [] }],
       responses: { '401': { description: 'No valid Cloudflare Access token.' } },
     })
@@ -292,9 +297,10 @@ describe('handlerBodies', () => {
   })
 
   it('has only the list and the create for a model without a key', () => {
-    expect(
-      [...bodies.keys()].filter((id) => id.endsWith('Log') || id.endsWith('Logs')),
-    ).toStrictEqual(['listLogs', 'createLog'])
+    expect([...bodies.keys()].filter((id) => /Logs?$/u.test(id))).toStrictEqual([
+      'listLogs',
+      'createLog',
+    ])
   })
 })
 
@@ -465,20 +471,12 @@ describe('@api.hidden and @api.readonly', () => {
   })
 
   it('answers neither hidden field, and the readonly one', () => {
-    expect(Object.keys(doc.components.schemas.Account?.properties ?? {})).toStrictEqual([
-      'id',
-      'email',
-      'role',
-    ])
+    expect(propertyNames(doc.components.schemas['Account'])).toStrictEqual(['id', 'email', 'role'])
   })
 
   it('takes neither the hidden nor the readonly fields, on a create or an update', () => {
-    expect(Object.keys(doc.components.schemas.AccountCreate?.properties ?? {})).toStrictEqual([
-      'email',
-    ])
-    expect(Object.keys(doc.components.schemas.AccountUpdate?.properties ?? {})).toStrictEqual([
-      'email',
-    ])
+    expect(propertyNames(doc.components.schemas['AccountCreate'])).toStrictEqual(['email'])
+    expect(propertyNames(doc.components.schemas['AccountUpdate'])).toStrictEqual(['email'])
   })
 
   it('omits the hidden fields from every row Prisma answers, and never encodes one', () => {

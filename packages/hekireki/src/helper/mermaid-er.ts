@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
+import { stripAnnotations } from '../annotation/index.js'
 import type { Cardinality } from '../types/index.js'
-import { stripAnnotations } from '../utils/index.js'
 
 // Mermaid spells a cardinality differently on each side of the line, so that both crow's feet
 // open away from the entity they touch. https://mermaid.js.org/syntax/entityRelationshipDiagram.html
@@ -58,7 +58,7 @@ function keyMarkers(
 export function modelFields(model: DMMF.Model) {
   const fkFields = new Set(
     model.fields
-      .filter((f) => f.relationFromFields && f.relationFromFields.length > 0)
+      .filter((f) => (f.relationFromFields?.length ?? 0) > 0)
       .flatMap((f) => f.relationFromFields ?? []),
   )
   const primaryKey = new Set(model.primaryKey?.fields)
@@ -68,7 +68,7 @@ export function modelFields(model: DMMF.Model) {
 
   return model.fields
     .map((field) => {
-      if (field.relationName) return null
+      if (field.relationName !== undefined) return null
       const commentPart = stripAnnotations(field.documentation) ?? ''
       const markers = keyMarkers(field, primaryKey, fkFields, uniques)
       const keyPart = markers.length > 0 ? ` ${markers.join(', ')}` : ''

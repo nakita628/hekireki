@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { makeValidationExtractor } from '../utils/index.js'
-import { validationSchemas } from '../utils/validation-schema.js'
+import { makeValidationExtractor } from '../annotation/index.js'
+import { validationSchemas } from './validation-schema.js'
 import {
   makeZodEnumExpression,
   makeZodInfer,
@@ -16,11 +16,11 @@ import {
 describe('helper/zod', () => {
   describe('PRISMA_TO_ZOD', () => {
     it('PRISMA_TO_ZOD maps String to string()', () => {
-      expect(PRISMA_TO_ZOD.String).toBe('string()')
-      expect(PRISMA_TO_ZOD.Int).toBe('number()')
-      expect(PRISMA_TO_ZOD.Boolean).toBe('boolean()')
-      expect(PRISMA_TO_ZOD.DateTime).toBe('iso.datetime()')
-      expect(PRISMA_TO_ZOD.BigInt).toBe('bigint()')
+      expect(PRISMA_TO_ZOD['String']).toBe('string()')
+      expect(PRISMA_TO_ZOD['Int']).toBe('number()')
+      expect(PRISMA_TO_ZOD['Boolean']).toBe('boolean()')
+      expect(PRISMA_TO_ZOD['DateTime']).toBe('iso.datetime()')
+      expect(PRISMA_TO_ZOD['BigInt']).toBe('bigint()')
     })
   })
 

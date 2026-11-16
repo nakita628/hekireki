@@ -8,6 +8,17 @@ import {
   makeOpenApiPaths,
   makeOpenApiTable,
 } from './openapi.js'
+import type { OpenApiSchema } from './openapi.js'
+
+/** The path item at `index`, which the test expects to be there. */
+function pathItem(
+  paths: readonly (readonly [string, OpenApiSchema])[],
+  index: number,
+): OpenApiSchema {
+  const entry = paths[index]
+  if (entry === undefined) throw new Error(`no path item at ${index}`)
+  return entry[1]
+}
 
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
@@ -351,7 +362,7 @@ describe('makeOpenApiInput', () => {
   it('requires nothing of an update', () => {
     const input = makeOpenApiInput(post, [], 'update')
     expect(input).not.toHaveProperty('required')
-    expect(input.properties).toStrictEqual(makeOpenApiInput(post, [], 'create').properties)
+    expect(input['properties']).toStrictEqual(makeOpenApiInput(post, [], 'create')['properties'])
   })
 })
 
@@ -368,20 +379,20 @@ describe('makeOpenApiPaths', () => {
   it('writes the collection and the row under the resource, named for the model', () => {
     const paths = makeOpenApiPaths(item, [], 'order-items')
     expect(paths.map(([path]) => path)).toStrictEqual(['/order-items', '/order-items/{id}'])
-    const [, collection = {}] = paths[0] ?? []
-    const [, row = {}] = paths[1] ?? []
+    const collection = pathItem(paths, 0)
+    const row = pathItem(paths, 1)
     expect(Object.keys(collection)).toStrictEqual(['get', 'post'])
     expect(Object.keys(row)).toStrictEqual(['parameters', 'get', 'patch', 'delete'])
-    expect(row.parameters).toStrictEqual([
+    expect(row['parameters']).toStrictEqual([
       { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
     ])
-    expect(collection.get).toMatchObject({
+    expect(collection['get']).toMatchObject({
       tags: ['OrderItem'],
       summary: 'List order items',
       operationId: 'listOrderItems',
       responses: { '200': { description: 'The order items.' } },
     })
-    expect(collection.post).toStrictEqual({
+    expect(collection['post']).toStrictEqual({
       tags: ['OrderItem'],
       summary: 'Create an order item',
       operationId: 'createOrderItem',
@@ -400,16 +411,16 @@ describe('makeOpenApiPaths', () => {
         },
       },
     })
-    expect(row.get).toMatchObject({ summary: 'Get an order item', operationId: 'getOrderItem' })
-    expect(row.patch).toMatchObject({
+    expect(row['get']).toMatchObject({ summary: 'Get an order item', operationId: 'getOrderItem' })
+    expect(row['patch']).toMatchObject({
       summary: 'Update an order item',
       operationId: 'updateOrderItem',
     })
-    expect(row.patch).toHaveProperty(
+    expect(row['patch']).toHaveProperty(
       ['requestBody', 'content', 'application/json', 'schema', '$ref'],
       '#/components/schemas/order_items_update',
     )
-    expect(row.delete).toMatchObject({
+    expect(row['delete']).toMatchObject({
       summary: 'Delete an order item',
       operationId: 'deleteOrderItem',
       responses: {
@@ -424,8 +435,8 @@ describe('makeOpenApiPaths', () => {
       name: 'Tag',
       fields: [makeField({ name: 'id', type: 'Int', isId: true })],
     })
-    const [, collection = {}] = makeOpenApiPaths(tag, [], 'tags')[0] ?? []
-    expect(collection.post).toMatchObject({ summary: 'Create a tag', operationId: 'createTag' })
+    const collection = pathItem(makeOpenApiPaths(tag, [], 'tags'), 0)
+    expect(collection['post']).toMatchObject({ summary: 'Create a tag', operationId: 'createTag' })
   })
 
   it('addresses a row of a composite primary key by one parameter per field, in its order', () => {
@@ -443,7 +454,7 @@ describe('makeOpenApiPaths', () => {
       '/follows',
       '/follows/{followerId}/{followingId}',
     ])
-    expect(paths[1]?.[1].parameters).toStrictEqual([
+    expect(paths[1]?.[1]['parameters']).toStrictEqual([
       { name: 'followerId', in: 'path', required: true, schema: { type: 'string' } },
       { name: 'followingId', in: 'path', required: true, schema: { type: 'string' } },
     ])

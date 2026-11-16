@@ -10,7 +10,7 @@ import {
   generateThroughModel,
   resolveNames,
 } from '../helper/django.js'
-import { primaryKeyFields } from '../utils/prisma-model.js'
+import { primaryKeyFields } from '../prisma/model.js'
 
 export function djangoCode(
   models: readonly DMMF.Model[],

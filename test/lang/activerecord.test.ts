@@ -15,10 +15,13 @@ const hasRuby =
     return major > 3 || (major === 3 && minor >= 2)
   })()
 
+// A CI leg has every toolchain; a local run may not.
+const ON_CI = (process.env.CI ?? '') !== ''
+
 describe('activerecord', () => {
   // Skipping keeps `vp test` runnable without Ruby installed; a CI leg that
   // silently skipped would be a false green.
-  it.runIf(!!process.env.CI)('the Ruby toolchain is installed', () => {
+  it.runIf(ON_CI)('the Ruby toolchain is installed', () => {
     expect(hasRuby).toBe(true)
   })
 

@@ -36,16 +36,74 @@ export function columnStep(
   context: FixContext,
   state: FixState,
   entry: FixedTable,
-  column: ReturnType<typeof makeExpectedTables>[number]['columns'][number],
-  fix: NonNullable<ModelFixes['fields']>[string],
+  column: ExpectedColumn,
+  fix: FieldFix,
   /** What the change of the column's type refuses or changes, from `makeConversions`. */
   conversions: ReturnType<typeof makeConversions>,
 ): FixState {
-  const { dialect, keyOf, q, current, version, listOf } = context
+  const { dialect, keyOf, q, current, version } = context
   const { table, actual } = entry
   const key = keyOf(table)
-  const base = qualifiedName(dialect, table)
   const from = current(state, key)
+  const values = columnValues(dialect, q, actual, column, fix, conversions)
+  const { refused, invalid, mapped, fill, expression } = values
+  if (invalid === undefined && mapped.length === 0 && fill === null) return state
+  // The condition of the rows the fix deletes, or null where it keeps them all.
+  const removed = invalid === 'delete' && refused !== null ? refused : null
+  const next = version(
+    state,
+    key,
+    `SELECT ${actual.columns
+      .map((c) => (c.name === column.column ? `${expression} AS ${q(c.name)}` : q(c.name)))
+      .join(', ')} FROM ${from}${removed === null ? '' : ` WHERE (${removed}) IS NOT TRUE`}`,
+  )
+  const site: ColumnSite = {
+    table,
+    subject: `${table.model}.${column.field}`,
+    base: qualifiedName(dialect, table),
+    from,
+    name: q(column.column),
+    kept: removed === null ? '' : `(${removed}) IS NOT TRUE AND `,
+  }
+  const fixes = [
+    ...invalidFix(q, site, values),
+    ...mappedFix(q, site, values),
+    ...nullsFix(q, site, values, fix),
+  ]
+  const withFixes = { ...next.state, fixes: [...next.state.fixes, ...fixes] }
+  return followChangedRows(context, withFixes, key, actual, column, site, values, removed)
+}
+
+type ExpectedColumn = ReturnType<typeof makeExpectedTables>[number]['columns'][number]
+type FieldFix = NonNullable<ModelFixes['fields']>[string]
+
+/** Where a column's fixes run: the names their statements are written with. */
+type ColumnSite = {
+  readonly table: FixedTable['table']
+  readonly subject: string
+  /** The table as the plan writes it. */
+  readonly base: string
+  /** The table as the check reads it, after the fixes before this one. */
+  readonly from: string
+  readonly name: string
+  /** What leaves out the rows the fix deletes, before a count's own condition. */
+  readonly kept: string
+}
+
+type ColumnValues = ReturnType<typeof columnValues>
+
+/**
+ * A column's value as its fixes leave it, one stage at a time: the values the new type refuses
+ * replaced, the stored enum values mapped, and the NULLs filled.
+ */
+function columnValues(
+  dialect: FixContext['dialect'],
+  q: FixContext['q'],
+  actual: FixedTable['actual'],
+  column: ExpectedColumn,
+  fix: FieldFix,
+  conversions: ReturnType<typeof makeConversions>,
+) {
   const name = q(column.column)
   const blocking = conversions.filter(
     (c) => c.severity === 'blocking' && c.kind !== 'column-recreated' && c.condition !== null,
@@ -54,119 +112,156 @@ export function columnStep(
   const invalid = refused === null ? undefined : fix.invalid
   const bounded = blocking.find((c) => c.bounds !== null)?.bounds ?? null
   const length = blocking.find((c) => c.length !== null)?.length ?? null
-  const replaced =
-    invalid === undefined || invalid === 'delete'
-      ? null
-      : invalid === 'null'
-        ? 'NULL'
-        : invalid === 'clamp'
-          ? bounded === null
-            ? null
-            : `CASE WHEN ${name} < ${bounded.min} THEN ${bounded.min} ELSE ${bounded.max} END`
-          : invalid === 'truncate'
-            ? length === null
-              ? null
-              : dialect === 'sqlite'
-                ? `SUBSTR(${name}, 1, ${length})`
-                : `LEFT(${name}, ${length})`
-            : valueSql(dialect, column, invalid.set)
-  const deletes = invalid === 'delete'
+  const replaced = replacementSql(dialect, column, name, invalid, bounded, length)
   const afterInvalid =
     replaced === null || refused === null
       ? name
       : `CASE WHEN ${refused} THEN ${replaced} ELSE ${name} END`
-  const existing = actual.columns.find((c) => c.name === column.column)?.enumValues ?? null
-  // The stored values and the members they become, written as the plain text they are. A
-  // member the column's type does not have yet is mapped by the migration, in its cast.
-  const asText = { ...column, kind: 'scalar', type: 'String', isList: false }
-  const mapped = mappedValues(column, fix.values)
-    .filter((m) => existing === null || dialect === 'sqlite' || existing.includes(m.to))
-    .map((m) => ({ from: valueSql(dialect, asText, m.from), to: valueSql(dialect, asText, m.to) }))
+  const mapped = storedValuesMapped(dialect, actual, column, fix)
   const afterValues = mapped.length === 0 ? afterInvalid : caseMap(afterInvalid, mapped)
   const fill = fix.nulls === undefined ? null : valueSql(dialect, column, fix.nulls)
   const expression = fill === null ? afterValues : `COALESCE(${afterValues}, ${fill})`
-  if (invalid === undefined && mapped.length === 0 && fill === null) return state
-  const kept = deletes && refused !== null ? `(${refused}) IS NOT TRUE AND ` : ''
-  const next = version(
-    state,
-    key,
-    `SELECT ${actual.columns
-      .map((c) => (c.name === column.column ? `${expression} AS ${q(c.name)}` : q(c.name)))
-      .join(
-        ', ',
-      )} FROM ${from}${deletes && refused !== null ? ` WHERE (${refused}) IS NOT TRUE` : ''}`,
-  )
-  const subject = `${table.model}.${column.field}`
+  return { refused, invalid, replaced, afterInvalid, mapped, afterValues, fill, expression }
+}
+
+/** What a value the new type refuses becomes, or null where it is not replaced. */
+function replacementSql(
+  dialect: FixContext['dialect'],
+  column: ExpectedColumn,
+  name: string,
+  invalid: FieldFix['invalid'],
+  bounded: { readonly min: string; readonly max: string } | null,
+  length: number | null,
+) {
+  if (invalid === undefined || invalid === 'delete') return null
+  if (invalid === 'null') return 'NULL'
+  if (invalid === 'clamp') {
+    return bounded === null
+      ? null
+      : `CASE WHEN ${name} < ${bounded.min} THEN ${bounded.min} ELSE ${bounded.max} END`
+  }
+  if (invalid === 'truncate') {
+    if (length === null) return null
+    return dialect === 'sqlite' ? `SUBSTR(${name}, 1, ${length})` : `LEFT(${name}, ${length})`
+  }
+  return valueSql(dialect, column, invalid.set)
+}
+
+/**
+ * The stored values and the members they become, written as the plain text they are. A member
+ * the column's type does not have yet is mapped by the migration, in its cast.
+ */
+function storedValuesMapped(
+  dialect: FixContext['dialect'],
+  actual: FixedTable['actual'],
+  column: ExpectedColumn,
+  fix: FieldFix,
+) {
+  const existing = actual.columns.find((c) => c.name === column.column)?.enumValues ?? null
+  const members = existing === null ? null : new Set(existing)
+  const asText = { ...column, kind: 'scalar', type: 'String', isList: false }
+  return mappedValues(column, fix.values)
+    .filter((m) => members === null || dialect === 'sqlite' || members.has(m.to))
+    .map((m) => ({ from: valueSql(dialect, asText, m.from), to: valueSql(dialect, asText, m.to) }))
+}
+
+const INVALID_ACTIONS = {
+  null: 'values the new type refuses set to NULL',
+  delete: 'rows whose value the new type refuses deleted',
+  clamp: 'values out of range clamped to the range',
+  truncate: 'values too long cut to the length',
+}
+
+/** The fix of the values the new type refuses: replaced, or their rows deleted. */
+function invalidFix(q: FixContext['q'], site: ColumnSite, values: ColumnValues) {
+  const { invalid, refused, replaced } = values
+  if (invalid === undefined || refused === null) return []
+  const { table, subject, base, from, name } = site
   // Each statement in two halves, so the plan can run it a batch of rows at a time.
-  const invalidHead = deletes
-    ? `DELETE FROM ${base}`
-    : `UPDATE ${base} SET ${name} = ${replaced ?? name}`
-  const mappedHead = `UPDATE ${base} SET ${name} = ${caseMap(name, mapped)}`
-  const mappedWhere = `${name} IN (${mapped.map((m) => m.from).join(', ')})`
-  const fixes = [
-    ...(invalid === undefined || refused === null
-      ? []
-      : [
-          {
-            model: table.model,
-            table,
-            subject,
-            kind: 'invalid',
-            inMigration: false,
-            action:
-              typeof invalid === 'string'
-                ? {
-                    null: 'values the new type refuses set to NULL',
-                    delete: 'rows whose value the new type refuses deleted',
-                    clamp: 'values out of range clamped to the range',
-                    truncate: 'values too long cut to the length',
-                  }[invalid]
-                : `values the new type refuses set to ${describe(invalid.set)}`,
-            count: `SELECT COUNT(*) AS ${q('count')} FROM ${from} WHERE ${refused}`,
-            statements: [`${invalidHead} WHERE ${refused}`],
-            parts: { head: invalidHead, table: base, where: refused },
-          },
-        ]),
-    ...(mapped.length === 0
-      ? []
-      : [
-          {
-            model: table.model,
-            table,
-            subject,
-            kind: 'values',
-            inMigration: false,
-            action:
-              `values mapped: ${mapped.map((m) => `${m.from} → ${m.to}`).join(', ')}`.replaceAll(
-                "'",
-                '',
-              ),
-            count: `SELECT COUNT(*) AS ${q('count')} FROM ${from} WHERE ${kept}${afterInvalid} IN (${mapped.map((m) => m.from).join(', ')})`,
-            statements: [`${mappedHead} WHERE ${mappedWhere}`],
-            parts: { head: mappedHead, table: base, where: mappedWhere },
-          },
-        ]),
-    ...(fill === null
-      ? []
-      : [
-          {
-            model: table.model,
-            table,
-            subject,
-            kind: 'nulls',
-            inMigration: false,
-            action: `NULLs set to ${describe(fix.nulls ?? null)}`,
-            count: `SELECT COUNT(*) AS ${q('count')} FROM ${from} WHERE ${kept}${afterValues} IS NULL`,
-            statements: [`UPDATE ${base} SET ${name} = ${fill} WHERE ${name} IS NULL`],
-            parts: {
-              head: `UPDATE ${base} SET ${name} = ${fill}`,
-              table: base,
-              where: `${name} IS NULL`,
-            },
-          },
-        ]),
+  const head =
+    invalid === 'delete'
+      ? `DELETE FROM ${base}`
+      : `UPDATE ${base} SET ${name} = ${replaced ?? name}`
+  return [
+    {
+      model: table.model,
+      table,
+      subject,
+      kind: 'invalid',
+      inMigration: false,
+      action:
+        typeof invalid === 'string'
+          ? INVALID_ACTIONS[invalid]
+          : `values the new type refuses set to ${describe(invalid.set)}`,
+      count: `SELECT COUNT(*) AS ${q('count')} FROM ${from} WHERE ${refused}`,
+      statements: [`${head} WHERE ${refused}`],
+      parts: { head, table: base, where: refused },
+    },
   ]
-  const withFixes = { ...next.state, fixes: [...next.state.fixes, ...fixes] }
+}
+
+/** The fix of the stored enum values mapped to the members they become. */
+function mappedFix(q: FixContext['q'], site: ColumnSite, values: ColumnValues) {
+  const { mapped, afterInvalid } = values
+  if (mapped.length === 0) return []
+  const { table, subject, base, from, name, kept } = site
+  const head = `UPDATE ${base} SET ${name} = ${caseMap(name, mapped)}`
+  const where = `${name} IN (${mapped.map((m) => m.from).join(', ')})`
+  return [
+    {
+      model: table.model,
+      table,
+      subject,
+      kind: 'values',
+      inMigration: false,
+      action: `values mapped: ${mapped.map((m) => `${m.from} → ${m.to}`).join(', ')}`.replaceAll(
+        "'",
+        '',
+      ),
+      count: `SELECT COUNT(*) AS ${q('count')} FROM ${from} WHERE ${kept}${afterInvalid} IN (${mapped.map((m) => m.from).join(', ')})`,
+      statements: [`${head} WHERE ${where}`],
+      parts: { head, table: base, where },
+    },
+  ]
+}
+
+/** The fix of the NULLs filled with a value. */
+function nullsFix(q: FixContext['q'], site: ColumnSite, values: ColumnValues, fix: FieldFix) {
+  const { fill, afterValues } = values
+  if (fill === null) return []
+  const { table, subject, base, from, name, kept } = site
+  return [
+    {
+      model: table.model,
+      table,
+      subject,
+      kind: 'nulls',
+      inMigration: false,
+      action: `NULLs set to ${describe(fix.nulls ?? null)}`,
+      count: `SELECT COUNT(*) AS ${q('count')} FROM ${from} WHERE ${kept}${afterValues} IS NULL`,
+      statements: [`UPDATE ${base} SET ${name} = ${fill} WHERE ${name} IS NULL`],
+      parts: {
+        head: `UPDATE ${base} SET ${name} = ${fill}`,
+        table: base,
+        where: `${name} IS NULL`,
+      },
+    },
+  ]
+}
+
+/** What the database does to the rows pointing at the ones a column's fixes change or delete. */
+function followChangedRows(
+  context: FixContext,
+  state: FixState,
+  key: string,
+  actual: FixedTable['actual'],
+  column: ExpectedColumn,
+  site: ColumnSite,
+  values: ColumnValues,
+  removed: string | null,
+) {
+  const { listOf } = context
+  const { replaced, refused, mapped, afterInvalid } = values
   const columns = actual.columns.map((c) => c.name)
   const changedRows = [
     ...(replaced !== null && refused !== null ? [refused] : []),
@@ -174,25 +269,25 @@ export function columnStep(
   ]
   const afterUpdate =
     changedRows.length === 0
-      ? withFixes
+      ? state
       : updated(
           context,
-          withFixes,
+          state,
           key,
-          `SELECT ${listOf(columns)} FROM ${from} WHERE ${anyOf(changedRows)}`,
+          `SELECT ${listOf(columns)} FROM ${site.from} WHERE ${anyOf(changedRows)}`,
           [column.column],
-          subject,
+          site.subject,
         )
-  return deletes && refused !== null
-    ? cascade(
+  return removed === null
+    ? afterUpdate
+    : cascade(
         context,
         afterUpdate,
         key,
-        `SELECT ${listOf(columns)} FROM ${from} WHERE ${refused}`,
-        subject,
+        `SELECT ${listOf(columns)} FROM ${site.from} WHERE ${removed}`,
+        site.subject,
         [key],
       )
-    : afterUpdate
 }
 
 /**
@@ -213,10 +308,8 @@ function ranked(
   table: ReturnType<typeof makeExpectedTables>[number],
 ) {
   const direction = duplicate.fix.keep === 'first' ? 'ASC' : 'DESC'
-  const order = [
-    ...duplicate.order,
-    ...table.primaryKey.filter((c) => !duplicate.order.includes(c)),
-  ]
+  const ordered = new Set(duplicate.order)
+  const order = [...duplicate.order, ...table.primaryKey.filter((c) => !ordered.has(c))]
     .map((c) => `${q(c)} ${direction}`)
     .join(', ')
   const rank = q('hk_rank')
@@ -264,13 +357,14 @@ export function duplicateStep(
   const columns = actual.columns.map((c) => q(c.name))
   const rows = ranked(q, from, columns, duplicate, table)
   const clear = duplicate.fix.others === 'null'
+  const keyColumns = new Set(duplicate.key)
   const next = version(
     state,
     key,
     clear
       ? `SELECT ${actual.columns
           .map((c) =>
-            duplicate.key.includes(c.name)
+            keyColumns.has(c.name)
               ? `CASE WHEN ${rows.chosen} THEN NULL ELSE ${q(c.name)} END AS ${q(c.name)}`
               : q(c.name),
           )
@@ -283,10 +377,11 @@ export function duplicateStep(
   const identity = identityColumns(actual, table.primaryKey, duplicate.key) ?? table.primaryKey
   // `"id"`, or `("a", "b")` for a composite key, as IN compares them.
   const keys = identity.length === 1 ? q(identity[0] ?? '') : `(${identity.map(q).join(', ')})`
+  const identifying = new Set(identity)
   const inPlace = ranked(
     q,
     base,
-    [...identity.map(q), ...duplicate.key.filter((c) => !identity.includes(c)).map(q)],
+    [...identity.map(q), ...duplicate.key.filter((c) => !identifying.has(c)).map(q)],
     duplicate,
     table,
   )
@@ -361,13 +456,14 @@ export function orphanStep(
       : qualifiedName(dialect, parentTable)
   const inPlace = condition(parentInPlace)
   const clear = relation.orphans === 'null'
+  const keyColumns = new Set(fk.fromColumns)
   const next = version(
     state,
     key,
     clear
       ? `SELECT ${actual.columns
           .map((c) =>
-            fk.fromColumns.includes(c.name)
+            keyColumns.has(c.name)
               ? `CASE WHEN ${simulated} THEN NULL ELSE ${child}.${q(c.name)} END AS ${q(c.name)}`
               : `${child}.${q(c.name)}`,
           )
@@ -389,9 +485,7 @@ export function orphanStep(
     statements: [
       clear
         ? `UPDATE ${base} AS ${child} SET ${fk.fromColumns.map((c) => `${q(c)} = NULL`).join(', ')} WHERE ${inPlace}`
-        : dialect === 'mysql'
-          ? `DELETE ${child} FROM ${base} AS ${child} WHERE ${inPlace}`
-          : `DELETE FROM ${base} AS ${child} WHERE ${inPlace}`,
+        : `DELETE ${dialect === 'mysql' ? `${child} ` : ''}FROM ${base} AS ${child} WHERE ${inPlace}`,
     ],
     // Over an alias, which MySQL's UPDATE and DELETE with a LIMIT do not take.
     parts: null,
@@ -436,11 +530,13 @@ export function migrationStep(
   const key = keyOf(table)
   const from = current(state, key)
   const converted = entry.resolved.columns.filter((c) => !c.added && c.fix.convert !== undefined)
+  const enumValuesOf = new Map(actual.columns.toReversed().map((c) => [c.name, c.enumValues]))
   const mappings = entry.resolved.columns.flatMap(({ column, fix, added }) => {
     if (added || column.kind !== 'enum' || dialect === 'sqlite') return []
-    const existing = actual.columns.find((c) => c.name === column.column)?.enumValues ?? null
+    const existing = enumValuesOf.get(column.column) ?? null
     if (existing === null) return []
-    const late = mappedValues(column, fix.values).filter((m) => !existing.includes(m.to))
+    const members = new Set(existing)
+    const late = mappedValues(column, fix.values).filter((m) => !members.has(m.to))
     return late.length === 0 ? [] : [{ column, existing, mapping: late }]
   })
   const fills = entry.resolved.columns.filter((c) => c.added && c.fix.nulls !== undefined)
@@ -448,15 +544,17 @@ export function migrationStep(
   if (converted.length + mappings.length + fills.length + movedIn.length === 0) return state
   const read = (column: string) =>
     dialect === 'postgresql' ? `CAST(${q(column)} AS TEXT)` : q(column)
+  const conversionOf = new Map(converted.toReversed().map((each) => [each.column.column, each]))
+  const mappingOf = new Map(mappings.toReversed().map((m) => [m.column.column, m]))
   const select = [
     ...actual.columns.map((c) => {
-      const conversion = converted.find((each) => each.column.column === c.name)
+      const conversion = conversionOf.get(c.name)
       if (conversion !== undefined) {
         const sql = `(${conversion.fix.convert?.sql ?? q(c.name)})`
         const type = dialect === 'postgresql' ? postgresType(conversion.column) : null
         return `${type === null ? sql : `CAST(${sql} AS ${type})`} AS ${q(c.name)}`
       }
-      const mapping = mappings.find((m) => m.column.column === c.name)
+      const mapping = mappingOf.get(c.name)
       if (mapping !== undefined) {
         return `${caseMap(
           read(c.name),

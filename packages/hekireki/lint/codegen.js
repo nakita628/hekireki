@@ -1,6 +1,7 @@
 // Rules for the code generators: what they read from a `///` comment and how they write it back
 // out (src/helper, src/generator), that they return the same text for the same schema, that a
 // helper does not import a generator, and the options each reads against the README (src/core).
+// And one for the modules they are built from: none of them is named `utils`.
 
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -59,6 +60,9 @@ function isGeneratorConfig(node) {
 
 const READMES = new Map()
 
+// A `utils` directory anywhere on the path, or a module of that name.
+const UTILS_MODULE = /(^|[\\/])utils([\\/]|\.tsx?$)/u
+
 // The package README beside the `src` the file sits in, read once.
 function readmeOf(filename) {
   const at = filename.lastIndexOf(`${path.sep}src${path.sep}`)
@@ -90,6 +94,28 @@ export function documentedOptions(readme, provider) {
 
 // Read from options.generator, not from its config: every generator block has it.
 const STANDARD_OPTIONS = new Set(['output'])
+const GENERATOR_EFFECTS = new Set([
+  'fetch',
+  'setTimeout',
+  'setInterval',
+  'setImmediate',
+  'queueMicrotask',
+])
+const GENERATOR_AMBIENT = new Set(['console', 'process'])
+
+// The option a member expression reads: `config.title` and, the config being an index signature
+// (noPropertyAccessFromIndexSignature), `config['title']`.
+function optionName(node) {
+  if (!node.computed && node.property.type === 'Identifier') return node.property.name
+  if (
+    node.computed &&
+    node.property.type === 'Literal' &&
+    typeof node.property.value === 'string'
+  ) {
+    return node.property.value
+  }
+  return null
+}
 
 export const codegenRules = {
   // Why: a `///` comment holds the prose a person wrote and the annotation lines a generator reads
@@ -146,7 +172,7 @@ export const codegenRules = {
         context.report({
           node,
           message:
-            'Write a generated `/** */` comment with `docBlockLines(prose, indent)` from src/utils: it escapes a `*/` in the prose and keeps one line on one line.',
+            'Write a generated `/** */` comment with `docBlockLines(prose, indent)` from src/annotation: it escapes a `*/` in the prose and keeps one line on one line.',
         })
       }
       return { Literal: check, TemplateLiteral: check }
@@ -177,7 +203,7 @@ export const codegenRules = {
           }
         },
         MemberExpression(node) {
-          if (node.computed || node.property.type !== 'Identifier') return
+          if (optionName(node) === null) return
           const object = node.object
           const isConfig =
             isGeneratorConfig(object) ||
@@ -190,17 +216,18 @@ export const codegenRules = {
             for (const node of read) {
               context.report({
                 node,
-                message: `${provider} reads \`${node.property.name}\`, and the README has no table row for ${provider}: add one that lists its options.`,
+                message: `${provider} reads \`${optionName(node)}\`, and the README has no table row for ${provider}: add one that lists its options.`,
               })
             }
             return
           }
-          const names = new Set([...read].map((node) => node.property.name))
+          const names = new Set([...read].map((node) => optionName(node)))
+          const listed = new Set(documented)
           for (const node of read) {
-            if (documented.includes(node.property.name)) continue
+            if (listed.has(optionName(node))) continue
             context.report({
               node,
-              message: `${provider} reads \`${node.property.name}\`, which its row of the README's options table does not list. Add it to the row.`,
+              message: `${provider} reads \`${optionName(node)}\`, which its row of the README's options table does not list. Add it to the row.`,
             })
           }
           for (const name of documented) {
@@ -234,14 +261,6 @@ export const codegenRules = {
         crypto: ['randomUUID', 'getRandomValues', 'randomBytes'],
         performance: ['now'],
       }
-      const effects = new Set([
-        'fetch',
-        'setTimeout',
-        'setInterval',
-        'setImmediate',
-        'queueMicrotask',
-      ])
-      const ambient = new Set(['console', 'process'])
       function reportAsync(node) {
         if (!node.async) return
         context.report({ node, message: `An async function in a generator. ${tail}` })
@@ -263,7 +282,7 @@ export const codegenRules = {
           }
           if (
             callee.type === 'Identifier' &&
-            (callee.name === 'Date' || effects.has(callee.name))
+            (callee.name === 'Date' || GENERATOR_EFFECTS.has(callee.name))
           ) {
             context.report({ node, message: `\`${callee.name}()\` in a generator. ${tail}` })
           }
@@ -278,7 +297,7 @@ export const codegenRules = {
           }
         },
         MemberExpression(node) {
-          if (node.object.type === 'Identifier' && ambient.has(node.object.name)) {
+          if (node.object.type === 'Identifier' && GENERATOR_AMBIENT.has(node.object.name)) {
             context.report({ node, message: `\`${node.object.name}\` in a generator. ${tail}` })
           }
         },
@@ -289,7 +308,7 @@ export const codegenRules = {
     },
   },
 
-  // Why: the generators are built in one direction, utils -> helper -> generator -> core: helper
+  // Why: the generators are built in one direction, leaves -> helper -> generator -> core: helper
   //      holds the per-target logic, and generator assembles helper's output into files. A helper
   //      that imports a generator turns that around and ties the pieces into a cycle. A test may
   //      run a generator to check a helper through it.
@@ -304,7 +323,31 @@ export const codegenRules = {
           context.report({
             node,
             message:
-              'A helper imports nothing of src/generator: the generators are built from the helpers (utils -> helper -> generator -> core). Move what both need into the helper, or into src/utils.',
+              'A helper imports nothing of src/generator: the generators are built from the helpers (leaves -> helper -> generator -> core). Move what both need into the helper, or into the leaf module it belongs to.',
+          })
+        },
+      }
+    },
+  },
+  // Why: `utils` names no subject, so anything can go in it, and it grows into the module
+  //      everything imports and nobody can describe. A module named for what it holds (annotation, naming,
+  //      prisma, literal, list) keeps one subject, and its name says what does not belong in it.
+  //   NG: src/utils/index.ts
+  //   NG: src/studio/client/lib/utils.ts
+  //   OK: src/naming/case.ts
+  //   OK: src/list/index.ts
+  'no-utils-module': {
+    meta: { docs: { description: 'no module or directory is named utils' } },
+    create(context) {
+      // Relative to where lint runs, so a `utils` folder above the checkout is not counted.
+      const filename = path.relative(process.cwd(), filenameOf(context))
+      if (!UTILS_MODULE.test(filename)) return {}
+      return {
+        Program(node) {
+          context.report({
+            node,
+            message:
+              'A module named `utils` holds whatever has no other home. Name the module for what it holds (src/annotation, src/naming, src/list, ...) and move each function to the module of its subject.',
           })
         },
       }

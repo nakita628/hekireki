@@ -39,7 +39,7 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
 }
 
 /** User.id <- Post.userId, with the requiredness of the foreign key under test. */
-function oneToMany(fkRequired: boolean) {
+function oneToMany(fkRequired: boolean): readonly [DMMF.Model, DMMF.Model] {
   return [
     makeModel({
       name: 'User',
@@ -566,7 +566,7 @@ describe('erRelations', () => {
         ...post,
         name: 'Post',
         fields: [
-          ...(post?.fields ?? []),
+          ...post.fields,
           makeField({
             name: 'tags',
             type: 'Tag',
@@ -589,7 +589,7 @@ describe('erRelations', () => {
           }),
         ],
       }),
-      ...(user ? [user] : []),
+      user,
     ]
     expect(erRelations(models).map((relation) => [erKey(relation), relation.origin])).toStrictEqual(
       [

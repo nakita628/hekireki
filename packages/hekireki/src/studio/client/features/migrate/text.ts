@@ -14,7 +14,7 @@ export function useCheckText() {
     Record<string, ((facts: Check['facts'], count: number) => string) | undefined>
   > = useMessages(CHECKS)
   return (check: Pick<Check, 'kind' | 'facts' | 'count'>) =>
-    (checks[check.kind] ?? checks.other ?? (() => ''))(check.facts, check.count ?? 0)
+    (checks[check.kind] ?? checks['other'] ?? (() => ''))(check.facts, check.count ?? 0)
 }
 
 /** What a step does, one line per change, in the language of the page. */

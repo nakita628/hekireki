@@ -5,7 +5,7 @@ import { Effect } from 'effect'
 
 import { emitRaw } from '../emit/index.js'
 import { openapiContent } from '../generator/openapi.js'
-import { getBool, getString } from '../utils/index.js'
+import { getBool, getString } from '../prisma/config.js'
 import { GeneratorConfigError } from './errors.js'
 import { outputFile, requireOutput } from './output.js'
 
@@ -22,9 +22,9 @@ export function openapi(options: GeneratorOptions) {
     }
     const config = options.generator.config ?? {}
     const content = openapiContent(options.dmmf.datamodel, {
-      title: getString(config.title) ?? 'Generated from schema.prisma',
-      version: getString(config.version) ?? '1.0.0',
-      paths: getBool(config.paths),
+      title: getString(config['title']) ?? 'Generated from schema.prisma',
+      version: getString(config['version']) ?? '1.0.0',
+      paths: getBool(config['paths']),
       format: extension === '.json' ? 'json' : 'yaml',
     })
     return yield* emitRaw(content, resolved.dir, resolved.file)

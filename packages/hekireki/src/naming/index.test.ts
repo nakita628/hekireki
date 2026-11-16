@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { pascalCase, uniqueName } from './naming.js'
+import { pascalCase, uniqueName } from './index.js'
 
 describe('pascalCase', () => {
   it.each([

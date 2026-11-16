@@ -49,11 +49,14 @@ export function readSchemaFiles(schemaPath: string) {
         message: `No .prisma files found in ${schemaPath}\n   Add a schema.prisma file or pass --schema <path>.`,
       })
     }
-    return yield* Effect.forEach(paths, (file) =>
-      readFile(file).pipe(
-        Effect.map((content): SchemaFile => ({ path: file, content })),
-        Effect.mapError((error) => new SchemaFileError({ message: error.message })),
-      ),
+    return yield* Effect.forEach(
+      paths,
+      (file) =>
+        readFile(file).pipe(
+          Effect.map((content): SchemaFile => ({ path: file, content })),
+          Effect.mapError((error) => new SchemaFileError({ message: error.message })),
+        ),
+      { concurrency: 1 },
     )
   })
 }

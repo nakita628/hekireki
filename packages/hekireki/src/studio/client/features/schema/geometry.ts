@@ -116,7 +116,7 @@ function geometryCard(node: InternalNode<Node>): GeometryCard {
 
 /** The caption an edge carries; `Edge['data']` is loosely typed, so its lines are read back. */
 function captionOf(edge: Edge): readonly string[] {
-  const caption: unknown = edge.data?.caption
+  const caption: unknown = edge.data?.['caption']
   return Array.isArray(caption) ? caption.filter((line) => typeof line === 'string') : []
 }
 

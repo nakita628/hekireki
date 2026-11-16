@@ -1,10 +1,4 @@
-import {
-  docBlockLines,
-  extractObjectType,
-  groupByModel,
-  isFields,
-  stripAnnotations,
-} from './index.js'
+import { docBlockLines, extractObjectType, stripAnnotations } from '../annotation/index.js'
 
 export function makePropertiesGenerator(
   libraryPrefix: string,
@@ -21,7 +15,7 @@ export function makePropertiesGenerator(
     }[],
   ) {
     return modelFields
-      .filter((field) => field.validation)
+      .filter((field) => field.validation !== null && field.validation !== '')
       .map((field) => {
         const base = `${libraryPrefix}.${field.validation}`
         const wrapped = wrapCardinality ? wrapCardinality(base, field.isRequired) : base
@@ -83,7 +77,7 @@ export function validationSchemas(
   const resolveElement = (field: { readonly type: string; readonly kind: string }) => {
     if (config.typeMapping) {
       const mapped = config.typeMapping[field.type]
-      if (mapped) return mapped
+      if (mapped !== undefined && mapped !== '') return mapped
     }
     if (config.enums && config.formatEnum && field.kind === 'enum') {
       const enumDef = config.enums.find((e) => e.name === field.type)
@@ -118,16 +112,14 @@ export function validationSchemas(
   )
 
   if (config.onWarning) {
+    const enumNames = new Set((config.enums ?? []).map((e) => e.name))
     const missing = models.flatMap((model) =>
       model.fields
         .filter((f) => f.kind !== 'object')
         .filter((f) => {
           if (config.extractValidation(f.documentation) !== null) return false
-          if (config.typeMapping?.[f.type]) return false
-          if (config.enums && f.kind === 'enum' && config.enums.some((e) => e.name === f.type)) {
-            return false
-          }
-          return true
+          if ((config.typeMapping?.[f.type] ?? '') !== '') return false
+          return !(f.kind === 'enum' && enumNames.has(f.type))
         })
         .map((f) => ({ modelName: model.name, fieldName: f.name })),
     )
@@ -152,4 +144,70 @@ export function validationSchemas(
     .join('\n\n')
 
   return config.importStatement ? [config.importStatement, '', schemas].join('\n') : schemas
+}
+
+export function groupByModel(
+  validFields: readonly {
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+  }[],
+) {
+  const raw = Object.groupBy(validFields, (f) => f.modelName)
+  return Object.fromEntries(
+    Object.entries(raw).filter(
+      (entry): entry is [string, (typeof validFields)[number][]] => entry[1] !== undefined,
+    ),
+  )
+}
+
+export function isFields(
+  modelFields: {
+    readonly documentation: string | undefined
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+  }[][],
+) {
+  return modelFields.flat().filter(
+    (
+      field,
+    ): field is Required<{
+      documentation: string
+      modelName: string
+      fieldName: string
+      validation: string | null
+      isRequired: boolean
+    }> => field.validation !== null,
+  )
+}
+
+export function schemaFromFields(
+  modelFields: readonly {
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+    readonly comment?: string
+  }[],
+  schemaBuilder: (modelName: string, fields: string, objectType?: 'strict' | 'loose') => string,
+  propertiesGenerator: (
+    fields: readonly {
+      readonly documentation: string
+      readonly modelName: string
+      readonly fieldName: string
+      readonly validation: string | null
+      readonly isRequired: boolean
+      readonly comment?: string
+    }[],
+  ) => string,
+  objectType?: 'strict' | 'loose',
+) {
+  const modelName = modelFields[0]?.modelName ?? ''
+  const fields = propertiesGenerator(modelFields)
+  return schemaBuilder(modelName, fields, objectType)
 }

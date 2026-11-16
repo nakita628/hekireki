@@ -238,8 +238,8 @@ describe('edge captions', () => {
     })
     const boxes = captionBoxes(svg)
     expect(boxes).toHaveLength(1)
-    const [box] = boxes
-    expect(box && box.x > 380 && box.x < 720).toBe(false)
+    // Not between x 380 and 720, where the Order card is: at least 170 from its middle.
+    expect(Math.abs(Number(boxes[0]?.x) - 550)).toBeGreaterThanOrEqual(170)
   })
 
   it('draws the captions after the models, so a label is never hidden behind one', () => {

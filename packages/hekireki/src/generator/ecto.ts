@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { dateTimeFields, dateTimeModule, ectoDateTypes, ectoSchemas } from '../helper/ecto.js'
-import { makeSnakeCase } from '../utils/index.js'
+import { makeSnakeCase } from '../naming/case.js'
 
 export function ectoSchemaFiles(
   models: readonly DMMF.Model[],

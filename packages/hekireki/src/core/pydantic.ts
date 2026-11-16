@@ -3,7 +3,7 @@ import { Effect } from 'effect'
 
 import { emitRaw } from '../emit/index.js'
 import { pydanticCode } from '../generator/pydantic.js'
-import { getBool } from '../utils/index.js'
+import { getBool } from '../prisma/config.js'
 import { outputFile, requireOutput } from './output.js'
 
 export function pydantic(options: GeneratorOptions) {
@@ -13,7 +13,7 @@ export function pydantic(options: GeneratorOptions) {
     const code = pydanticCode(
       options.dmmf.datamodel.models,
       options.dmmf.datamodel.enums,
-      getBool(options.generator.config?.relation),
+      getBool(options.generator.config?.['relation']),
     )
     return yield* emitRaw(code, resolved.dir, resolved.file)
   })

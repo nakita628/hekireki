@@ -142,24 +142,26 @@ describe('enum member translation', () => {
 
   it('maps a Prisma member name to its stored value on the way in', () => {
     const values = makeEnumWriteValues({ model: withRole, enums: ROLE })
-    expect([...(values.get('role') ?? [])]).toStrictEqual([
-      ['ADMIN', 'admin'],
-      ['VIEWER', 'VIEWER'],
-    ])
+    expect(values.get('role')).toStrictEqual(
+      new Map([
+        ['ADMIN', 'admin'],
+        ['VIEWER', 'VIEWER'],
+      ]),
+    )
   })
 
   it('maps a stored value back to its Prisma name on the way out, keyed by column', () => {
     const values = makeEnumReadValues({ model: withRole, enums: ROLE })
-    expect([...(values.get('role_name') ?? [])]).toStrictEqual([
-      ['admin', 'ADMIN'],
-      ['VIEWER', 'VIEWER'],
-    ])
+    expect(values.get('role_name')).toStrictEqual(
+      new Map([
+        ['admin', 'ADMIN'],
+        ['VIEWER', 'VIEWER'],
+      ]),
+    )
   })
 
   it('leaves an enum the schema does not declare with no translation at all', () => {
-    expect([
-      ...(makeEnumWriteValues({ model: withRole, enums: [] }).get('role') ?? []),
-    ]).toStrictEqual([])
+    expect(makeEnumWriteValues({ model: withRole, enums: [] }).get('role')).toStrictEqual(new Map())
   })
 })
 

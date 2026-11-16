@@ -234,67 +234,78 @@ function flattenMysql(
 ): readonly z.infer<typeof PlanNode>[] {
   if (Array.isArray(value)) {
     // `nested_loop` and its kin hold one entry per input; the array is the operation, its entries feed it.
-    const node = {
-      id,
-      parent,
-      label: key.replaceAll('_', ' '),
-      detail: null,
-      cost: null,
-      rows: null,
-    }
     return [
-      node,
+      mysqlOperationNode(id, parent, key),
       ...value.flatMap((item, index) => childrenOfMysql(item, id, `${id}.${index + 1}`)),
     ]
   }
   if (typeof value !== 'object' || value === null) return []
   if (key === 'table') {
-    const result = MysqlTable.safeParse(value)
-    if (!result.success) return []
-    const parts = [
-      result.data.key === undefined ? null : `key ${result.data.key}`,
-      result.data.attached_condition ?? null,
-    ].filter((part) => part !== null)
-    const node = {
-      id,
-      parent,
-      label: `${result.data.access_type ?? 'scan'} ${result.data.table_name}`,
-      detail: parts.length === 0 ? null : parts.join(' · '),
-      cost:
-        Number(
-          result.data.cost_info?.prefix_cost ?? result.data.cost_info?.read_cost ?? Number.NaN,
-        ) || null,
-      rows: result.data.rows_produced_per_join ?? result.data.rows_examined_per_scan ?? null,
-    }
-    return [node, ...childrenOfMysql(value, id, id)]
+    const node = mysqlTableNode(value, parent, id)
+    return node === null ? [] : [node, ...childrenOfMysql(value, id, id)]
   }
   if (key === 'query_block') {
-    const result = MysqlBlock.safeParse(value)
-    const node = {
-      id,
-      parent,
-      label:
-        result.success && result.data.select_id !== undefined
-          ? `query block #${result.data.select_id}`
-          : 'query block',
-      detail: result.success ? (result.data.message ?? null) : null,
-      cost: result.success ? Number(result.data.cost_info?.query_cost ?? Number.NaN) || null : null,
-      rows: null,
-    }
-    return [node, ...childrenOfMysql(value, id, id)]
+    return [mysqlBlockNode(value, parent, id), ...childrenOfMysql(value, id, id)]
   }
   if (MYSQL_OPERATIONS.has(key)) {
-    const node = {
-      id,
-      parent,
-      label: key.replaceAll('_', ' '),
-      detail: null,
-      cost: null,
-      rows: null,
-    }
-    return [node, ...childrenOfMysql(value, id, id)]
+    return [mysqlOperationNode(id, parent, key), ...childrenOfMysql(value, id, id)]
   }
   return childrenOfMysql(value, parent, id)
+}
+
+/** An operation MySQL names by its key (`nested_loop`, `ordering_operation`), with nothing of its own. */
+function mysqlOperationNode(
+  id: string,
+  parent: string | null,
+  key: string,
+): z.infer<typeof PlanNode> {
+  return { id, parent, label: key.replaceAll('_', ' '), detail: null, cost: null, rows: null }
+}
+
+/** A table MySQL reads: how, by which key and condition, at what cost; null where it is not one. */
+function mysqlTableNode(
+  value: object,
+  parent: string | null,
+  id: string,
+): z.infer<typeof PlanNode> | null {
+  const result = MysqlTable.safeParse(value)
+  if (!result.success) return null
+  const parts = [
+    result.data.key === undefined ? null : `key ${result.data.key}`,
+    result.data.attached_condition ?? null,
+  ].filter((part) => part !== null)
+  return {
+    id,
+    parent,
+    label: `${result.data.access_type ?? 'scan'} ${result.data.table_name}`,
+    detail: parts.length === 0 ? null : parts.join(' · '),
+    cost:
+      Number(
+        result.data.cost_info?.prefix_cost ?? result.data.cost_info?.read_cost ?? Number.NaN,
+      ) || null,
+    rows: result.data.rows_produced_per_join ?? result.data.rows_examined_per_scan ?? null,
+  }
+}
+
+/** A query block: its number, MySQL's note on it and its cost, where it reads as one. */
+function mysqlBlockNode(
+  value: object,
+  parent: string | null,
+  id: string,
+): z.infer<typeof PlanNode> {
+  const result = MysqlBlock.safeParse(value)
+  if (!result.success) {
+    return { id, parent, label: 'query block', detail: null, cost: null, rows: null }
+  }
+  return {
+    id,
+    parent,
+    label:
+      result.data.select_id === undefined ? 'query block' : `query block #${result.data.select_id}`,
+    detail: result.data.message ?? null,
+    cost: Number(result.data.cost_info?.query_cost ?? Number.NaN) || null,
+    rows: null,
+  }
 }
 
 /** The operations nested in an object, numbered under `base` (`1.2` → `1.2.1`, `1.2.2`, ...). */
@@ -373,7 +384,7 @@ export function makePlan(input: z.infer<typeof MakePlanInput>) {
     case 'postgresql':
       return makePostgresPlan({ document: input.rows[0]?.['QUERY PLAN'] ?? null })
     case 'mysql':
-      return makeMysqlPlan({ document: input.rows[0]?.EXPLAIN ?? null })
+      return makeMysqlPlan({ document: input.rows[0]?.['EXPLAIN'] ?? null })
     default:
       return input.dialect satisfies never
   }

@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import * as z from 'zod'
 
-import { lowerFirst } from '../utils/index.js'
+import { lowerFirst } from '../naming/case.js'
 
 /**
  * One query of a model as the docs show it: the Prisma Client call, and the request the client
@@ -40,16 +40,19 @@ const SAMPLES: Readonly<Record<string, { readonly code: string; readonly json: u
 
 const SCALARS = { $scalars: true, $composites: true } as const
 
+// A value of one element of the field: the first value of an enum, a sample of a scalar.
+function elementSample(
+  field: DMMF.Field,
+  enums: readonly DMMF.DatamodelEnum[],
+): { readonly code: string; readonly json: unknown } | undefined {
+  if (field.kind === 'scalar') return SAMPLES[field.type]
+  if (field.kind !== 'enum') return undefined
+  const first = enums.find((e) => e.name === field.type)?.values[0]?.name
+  return first === undefined ? undefined : { code: `'${first}'`, json: first }
+}
+
 function sampleOf(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]) {
-  const value =
-    field.kind === 'enum'
-      ? (() => {
-          const first = enums.find((e) => e.name === field.type)?.values[0]?.name
-          return first === undefined ? undefined : { code: `'${first}'`, json: first }
-        })()
-      : field.kind === 'scalar'
-        ? SAMPLES[field.type]
-        : undefined
+  const value = elementSample(field, enums)
   if (value === undefined) return null
   return field.isList ? { code: `[${value.code}]`, json: [value.json] } : value
 }
@@ -89,7 +92,11 @@ function uniqueWhere(model: DMMF.Model, enums: readonly DMMF.DatamodelEnum[]) {
       ? null
       : { fields: [single.name], where: objectOf(entries) }
   }
-  const fields = compound.fields.flatMap((name) => model.fields.filter((f) => f.name === name))
+  const byName = new Map(model.fields.map((f) => [f.name, f]))
+  const fields = compound.fields.flatMap((name) => {
+    const field = byName.get(name)
+    return field === undefined ? [] : [field]
+  })
   const entries = entriesOf(fields, enums)
   if (entries === null || fields.length !== compound.fields.length) return null
   const inner = objectOf(entries)
@@ -116,9 +123,10 @@ export function queryExamples(
   document: Pick<DMMF.Document, 'datamodel' | 'mappings'>,
 ): readonly QueryExample[] {
   const { datamodel } = document
+  const mappings = new Map(document.mappings.modelOperations.map((m) => [m.model, m]))
   return datamodel.models.flatMap((model) => {
     // The actions the client has for the model, by the name the JSON protocol gives each.
-    const mapping = document.mappings.modelOperations.find((m) => m.model === model.name)
+    const mapping = mappings.get(model.name)
     const actions = new Set(
       Object.entries(mapping ?? {}).flatMap(([action, name]) =>
         typeof name === 'string' && action !== 'model' && action !== 'plural' ? [action] : [],
@@ -148,20 +156,21 @@ export function queryExamples(
         (f.kind === 'scalar' || f.kind === 'enum') &&
         f.isRequired &&
         !f.hasDefaultValue &&
-        !f.isUpdatedAt &&
-        !f.isGenerated,
+        f.isUpdatedAt !== true &&
+        f.isGenerated !== true,
     )
     const createEntries = entriesOf(required, datamodel.enums)
     const create = createEntries === null ? null : objectOf(createEntries)
     // An update writes one column that neither finds the row nor holds a key of another table.
     const keys = new Set(relations.flatMap((f) => f.relationFromFields ?? []))
+    const findsRow = new Set(unique?.fields)
     const updated = model.fields.find(
       (f) =>
         (f.kind === 'scalar' || f.kind === 'enum') &&
         !f.isId &&
-        !f.isUpdatedAt &&
+        f.isUpdatedAt !== true &&
         !keys.has(f.name) &&
-        !(unique?.fields.includes(f.name) ?? false) &&
+        !findsRow.has(f.name) &&
         sampleOf(f, datamodel.enums) !== null,
     )
     const updateEntries = updated === undefined ? null : entriesOf([updated], datamodel.enums)

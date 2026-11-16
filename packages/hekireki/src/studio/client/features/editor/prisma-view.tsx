@@ -94,6 +94,106 @@ function initialSplit() {
   return Number.isNaN(stored) || stored < 20 || stored > 80 ? 50 : stored
 }
 
+/** Where a model or enum of the schema is declared, when the page is asked to open at one. */
+function focusLocation(schema: Snapshot['schema'], focus: string | null): Location {
+  if (schema === null) return null
+  return (
+    schema.models.find((m) => m.name === focus)?.location ??
+    schema.enums.find((e) => e.name === focus)?.location ??
+    null
+  )
+}
+
+/** The datasource provider after the line count, when the schema names one. */
+function providerSuffix(schema: Snapshot['schema']) {
+  const provider = schema?.provider ?? ''
+  return provider === '' ? '' : ` · ${provider}`
+}
+
+/** The file to show: the first one asked for, else the first file of the schema. */
+function openingPath(asked: readonly (string | null | undefined)[], files: Snapshot['files']) {
+  return asked.find((path) => path !== null && path !== undefined) ?? files[0]?.path ?? ''
+}
+
+/**
+ * The problems the chip shows, once they have held for a moment: while a line is being typed the
+ * schema is briefly invalid and every keystroke saves. What the chip shows is what tells one state
+ * from the next: Prisma's error text quotes the lines around the problem, so it changes with every
+ * keystroke even while the problem is the same one, and keying on it would hide the chip and show
+ * it again for each.
+ */
+function useSteadyProblems(snapshot: Snapshot) {
+  const problems = useMemo(
+    () =>
+      snapshot.error === null
+        ? null
+        : schemaProblems({ error: snapshot.error, diagnostics: snapshot.diagnostics }),
+    [snapshot.error, snapshot.diagnostics],
+  )
+  return useSteady(
+    snapshot.error === null ? null : snapshot,
+    700,
+    problems === null ? undefined : `${problems.count}\n${problems.summary}`,
+  )
+}
+
+/**
+ * The text in the editor and how it stands against the file: while there is no unsaved draft
+ * the editor mirrors the file on disk, so changes made by other tools show up on their own.
+ */
+function draftState(draft: Draft | null, content: string | undefined) {
+  if (draft === null) return { text: content ?? '', dirty: false, changedOnDisk: false }
+  return {
+    text: draft.text,
+    dirty: draft.text !== (content ?? ''),
+    changedOnDisk: content !== undefined && content !== draft.base,
+  }
+}
+
+function DiskChangedBanner({ onReload }: { readonly onReload: () => void }) {
+  return (
+    <div className="flex items-center gap-3 border-b border-danger-line bg-danger-soft px-6 py-2 text-code text-ink">
+      <span className="flex-1">
+        This file changed on disk while you were editing; your next save overwrites it.
+      </span>
+      <Button variant="outline" size="sm" onPress={onReload}>
+        Load the disk version
+      </Button>
+    </div>
+  )
+}
+
+function FileTabs({
+  files,
+  selected,
+  onSelect,
+}: {
+  readonly files: Snapshot['files']
+  readonly selected: string
+  readonly onSelect: (path: string) => void
+}) {
+  if (files.length <= 1) return null
+  return (
+    <Tabs
+      className="overflow-x-auto border-b border-line bg-surface px-6 py-2"
+      selectedKey={selected}
+      onSelectionChange={(key) => {
+        onSelect(String(key))
+      }}
+    >
+      <Tabs.ListContainer className="w-fit">
+        <Tabs.List aria-label="Schema files">
+          {files.map((f) => (
+            <Tabs.Tab key={f.path} id={f.path} className="font-mono">
+              {f.path}
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
+      </Tabs.ListContainer>
+    </Tabs>
+  )
+}
+
 export function PrismaView({
   snapshot,
   focus,
@@ -110,18 +210,15 @@ export function PrismaView({
 }) {
   const schema = snapshot.schema
   const theme = useUiStore((s) => s.theme)
-  const location =
-    schema?.models.find((m) => m.name === focus)?.location ??
-    schema?.enums.find((e) => e.name === focus)?.location ??
-    null
+  const location = focusLocation(schema, focus)
   const [chosenPath, setChosenPath] = useState<string | null>(null)
-  const activePath = chosenPath ?? requestedFile ?? location?.file ?? snapshot.files[0]?.path ?? ''
+  const activePath = openingPath([chosenPath, requestedFile, location?.file], snapshot.files)
   const file = snapshot.files.find((f) => f.path === activePath) ?? snapshot.files[0]
   const [draft, setDraft] = useState<Draft | null>(null)
   const [cursorLine, setCursorLine] = useState(1)
   const [symbols, setSymbols] = useState<readonly PlainSymbol[]>([])
   const [revealLine, setRevealLine] = useState<number | null>(
-    requestedLine ?? location?.line ?? null,
+    () => requestedLine ?? location?.line ?? null,
   )
   const [split, setSplit] = useState(initialSplit)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -136,32 +233,10 @@ export function PrismaView({
     },
   })
   const { copied, copy } = useCopy()
-  // While a line is being typed the schema is briefly invalid and every keystroke saves; the
-  // error chip and the "Saving…" dot only show once those states have held for a moment. What
-  // the chip shows is what tells one state from the next: the snapshot is a new object after
-  // every save, and the same error in a new object is not a new error.
-  // What the chip shows is what tells one state from the next: Prisma's error text quotes the
-  // lines around the problem, so it changes with every keystroke even while the problem is the
-  // same one, and keying on it would hide the chip and show it again for each.
-  const problems = useMemo(
-    () =>
-      snapshot.error === null
-        ? null
-        : schemaProblems({ error: snapshot.error, diagnostics: snapshot.diagnostics }),
-    [snapshot.error, snapshot.diagnostics],
-  )
-  const steadyProblems = useSteady(
-    snapshot.error === null ? null : snapshot,
-    700,
-    problems === null ? undefined : `${problems.count}\n${problems.summary}`,
-  )
+  const steadyProblems = useSteadyProblems(snapshot)
   const steadySaving = useSteady(save.isPending ? true : null, 300)
 
-  // While there is no unsaved draft the editor mirrors the file on disk, so changes made by
-  // other tools show up on their own.
-  const text = draft?.text ?? file?.content ?? ''
-  const dirty = draft !== null && draft.text !== (file?.content ?? '')
-  const changedOnDisk = draft !== null && file !== undefined && file.content !== draft.base
+  const { text, dirty, changedOnDisk } = draftState(draft, file?.content)
 
   const scheduleSave = (path: string, content: string) => {
     if (timer.current !== null) clearTimeout(timer.current)
@@ -328,7 +403,7 @@ export function PrismaView({
         <h1 className="page-title shrink-0">Prisma schema</h1>
         <span className="hidden shrink-0 text-lead text-muted sm:inline">
           {text.split('\n').length} lines
-          {schema?.provider ? ` · ${schema.provider}` : ''}
+          {providerSuffix(schema)}
         </span>
         <span className="ml-auto flex min-w-0 items-center gap-3">
           <SchemaErrorStatus
@@ -363,42 +438,21 @@ export function PrismaView({
         </Button>
       </header>
       {changedOnDisk ? (
-        <div className="flex items-center gap-3 border-b border-danger-line bg-danger-soft px-6 py-2 text-code text-ink">
-          <span className="flex-1">
-            This file changed on disk while you were editing; your next save overwrites it.
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onPress={() => {
-              setDraft(null)
-            }}
-          >
-            Load the disk version
-          </Button>
-        </div>
-      ) : null}
-      {snapshot.files.length > 1 ? (
-        <Tabs
-          className="overflow-x-auto border-b border-line bg-surface px-6 py-2"
-          selectedKey={file.path}
-          onSelectionChange={(key) => {
-            setChosenPath(String(key))
+        <DiskChangedBanner
+          onReload={() => {
             setDraft(null)
-            setRevealLine(null)
           }}
-        >
-          <Tabs.ListContainer className="w-fit">
-            <Tabs.List aria-label="Schema files">
-              {snapshot.files.map((f) => (
-                <Tabs.Tab key={f.path} id={f.path} className="font-mono">
-                  {f.path}
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
-          </Tabs.ListContainer>
-        </Tabs>
+        />
       ) : null}
+      <FileTabs
+        files={snapshot.files}
+        selected={file.path}
+        onSelect={(path) => {
+          setChosenPath(path)
+          setDraft(null)
+          setRevealLine(null)
+        }}
+      />
       <div
         className="grid min-h-0 flex-1"
         style={{ gridTemplateColumns: `minmax(0, ${split}fr) 6px minmax(0, ${100 - split}fr)` }}

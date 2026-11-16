@@ -7,11 +7,15 @@ import { beforeAll, describe, expect, it } from 'vite-plus/test'
 const harness = resolve(import.meta.dirname, '..', 'harness', 'eloquent')
 const hasPhp = spawnSync('php', ['--version'], { stdio: 'ignore' }).status === 0
 const hasComposer = spawnSync('composer', ['--version'], { stdio: 'ignore' }).status === 0
+const canLoad = hasPhp && hasComposer
+
+// A CI leg has every toolchain; a local run may not.
+const ON_CI = (process.env.CI ?? '') !== ''
 
 describe('eloquent', () => {
   // Skipping keeps `vp test` runnable without PHP installed; a CI leg that
   // silently skipped would be a false green.
-  it.runIf(!!process.env.CI)('the PHP toolchain is installed', () => {
+  it.runIf(ON_CI)('the PHP toolchain is installed', () => {
     expect({ php: hasPhp, composer: hasComposer }).toStrictEqual({ php: true, composer: true })
   })
 
@@ -40,7 +44,7 @@ describe('eloquent', () => {
 
   // smoke.php instantiates every model and resolves its casts, so a bad
   // $casts entry or an unknown relation method fails here.
-  it.skipIf(!hasPhp || !hasComposer)('loads against the real Eloquent API', () => {
+  it.skipIf(!canLoad)('loads against the real Eloquent API', () => {
     const result = spawnSync('php', ['smoke.php'], { cwd: harness, stdio: 'inherit' })
     expect(result.status).toBe(0)
   })

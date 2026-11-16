@@ -1,5 +1,5 @@
-import { docBlockLines, makeValidationExtractor, schemaFromFields } from '../utils/index.js'
-import { validationSchemas } from '../utils/validation-schema.js'
+import { docBlockLines, makeValidationExtractor } from '../annotation/index.js'
+import { schemaFromFields, validationSchemas } from './validation-schema.js'
 
 export function makeTypeBoxInfer(modelName: string) {
   return `export type ${modelName} = Static<typeof ${modelName}Schema>`
@@ -86,9 +86,10 @@ export function makeTypeBoxRelations(
         `  ${r.key}: ${r.isMany ? `Type.Array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
     )
     .join('\n')
-  const typeLine = options?.includeType
-    ? `\n\nexport type ${model.name}Relations = Static<typeof ${model.name}RelationsSchema>`
-    : ''
+  const typeLine =
+    options?.includeType === true
+      ? `\n\nexport type ${model.name}Relations = Static<typeof ${model.name}RelationsSchema>`
+      : ''
   return `export const ${model.name}RelationsSchema = Type.Object({\n${base}\n${rels}\n})${typeLine}`
 }
 
@@ -120,7 +121,7 @@ export function typeboxSchemaCode(
     inferType: makeTypeBoxInfer,
     schemas: makeTypeBoxSchemas,
     typeMapping: PRISMA_TO_TYPEBOX,
-    enums,
+    ...(enums === undefined ? {} : { enums }),
     formatEnum: makeTypeBoxEnumExpression,
     wrapList: makeTypeBoxListExpression,
   })

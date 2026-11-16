@@ -42,7 +42,7 @@ function studioApi(): Plugin {
       const listener = getRequestListener((request) => opened.app.fetch(request))
       // Mounting on '/api' would strip the prefix the Hono app routes on, so the path is checked here.
       server.middlewares.use((req, res, next) => {
-        if (req.url?.startsWith('/api/')) {
+        if (req.url?.startsWith('/api/') === true) {
           void listener(req, res)
           return
         }

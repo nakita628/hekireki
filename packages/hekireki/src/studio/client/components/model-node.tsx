@@ -18,6 +18,12 @@ import { OpenNodeLink } from './open-node-link.js'
 // A row is taller than its name when the field is documented; the edges still meet the name.
 const ROW_HANDLE = { top: NODE_ROW_HEIGHT / 2 } as const
 
+/** The card's border: the selection ring, the accent while lit up, or the plain line. */
+function borderOf(selected: boolean, lit: boolean) {
+  if (selected) return 'border-accent ring-[3px] ring-accent-soft'
+  return lit ? 'border-accent' : 'border-line-strong'
+}
+
 function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
   const { model, fields, highlight } = data
   const primaryKey = new Set(model.primaryKey)
@@ -26,13 +32,10 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
   const dim = highlight?.dim ?? false
   return (
     <div
-      className={`model-node w-[340px] overflow-visible rounded-lg border bg-surface font-mono shadow-sm transition-opacity ${
-        selected
-          ? 'border-accent ring-[3px] ring-accent-soft'
-          : highlight !== null && !dim
-            ? 'border-accent'
-            : 'border-line-strong'
-      } ${dim ? 'opacity-35' : ''}`}
+      className={`model-node w-[340px] overflow-visible rounded-lg border bg-surface font-mono shadow-sm transition-opacity ${borderOf(
+        selected,
+        highlight !== null && !dim,
+      )} ${dim ? 'opacity-35' : ''}`}
     >
       <div className="relative flex h-9 items-center gap-2 rounded-t-[7px] bg-node px-2.5 text-node-text">
         <Handle
@@ -43,7 +46,7 @@ function ModelNodeComponent({ data, selected }: NodeProps<ModelNodeType>) {
         />
         <span className="mr-auto flex min-w-0 items-center gap-2">
           <span className="text-body font-bold">{model.name}</span>
-          {model.dbName ? (
+          {(model.dbName ?? '') !== '' ? (
             <span className="truncate text-meta opacity-60">{model.dbName}</span>
           ) : null}
         </span>

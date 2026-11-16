@@ -25,9 +25,10 @@ export function FieldIcon({
   readonly blank?: ReactNode
 }) {
   const classes = (color: string) => (className === undefined ? color : `${color} ${className}`)
+  const sized = size === undefined ? {} : { size }
   if (field.isId || primaryKey.has(field.name)) {
-    return <LuKey size={size} className={classes('text-key')} />
+    return <LuKey {...sized} className={classes('text-key')} />
   }
-  if (field.isForeignKey) return <LuLink size={size} className={classes('text-accent')} />
+  if (field.isForeignKey) return <LuLink {...sized} className={classes('text-accent')} />
   return blank
 }

@@ -48,6 +48,12 @@ export function paramKey(parameter: { readonly index: number; readonly placehold
     : `#${parameter.index}`
 }
 
+function paramInputOf(value: string | number | boolean | null) {
+  if (value === null) return 'NULL'
+  if (typeof value === 'boolean') return value ? '1' : '0'
+  return String(value)
+}
+
 /**
  * The parameter fields filled with values a statement was bound with, positional placeholders
  * (`?`, `$1`) keyed by their 1-based position as the analysis numbers them. A boolean is written
@@ -55,10 +61,5 @@ export function paramKey(parameter: { readonly index: number; readonly placehold
  * keep booleans as integers) as the integer the database holds.
  */
 export function paramInputsOf(values: readonly (string | number | boolean | null)[]) {
-  return Object.fromEntries(
-    values.map((value, index) => [
-      `#${index + 1}`,
-      value === null ? 'NULL' : typeof value === 'boolean' ? (value ? '1' : '0') : String(value),
-    ]),
-  )
+  return Object.fromEntries(values.map((value, index) => [`#${index + 1}`, paramInputOf(value)]))
 }

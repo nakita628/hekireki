@@ -53,6 +53,36 @@ function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string
   }
 }
 
+/** The `posts<index>` side of relation `relationName`, as a full DMMF field. */
+function postsFieldDmmf(relationName: string, index: number): DMMF.Field {
+  return {
+    name: `posts${index}`,
+    kind: 'object',
+    isList: true,
+    isRequired: false,
+    isUnique: false,
+    isId: false,
+    isReadOnly: false,
+    hasDefaultValue: false,
+    type: 'Post',
+    relationName,
+    isGenerated: false,
+    isUpdatedAt: false,
+  }
+}
+
+/** The `posts<index>` side of relation `relationName`. */
+function postsField(relationName: string, index: number): DMMF.Field {
+  return makeField({
+    name: `posts${index}`,
+    type: 'Post',
+    kind: 'object',
+    isList: true,
+    isRequired: false,
+    relationName,
+  })
+}
+
 describe('helper/dbml', () => {
   describe('noteLiteral', () => {
     it('wraps and escapes via makePrismaColumn note', () => {
@@ -1263,20 +1293,7 @@ describe('helper/dbml', () => {
               'PostSetDefaultToUser',
               'PostNoActionToUser',
               'PostRestrictToUser',
-            ].map<DMMF.Field>((relationName, index) => ({
-              name: `posts${index}`,
-              kind: 'object',
-              isList: true,
-              isRequired: false,
-              isUnique: false,
-              isId: false,
-              isReadOnly: false,
-              hasDefaultValue: false,
-              type: 'Post',
-              relationName,
-              isGenerated: false,
-              isUpdatedAt: false,
-            })),
+            ].map(postsFieldDmmf),
           ],
           primaryKey: null,
           uniqueFields: [],
@@ -1508,16 +1525,7 @@ describe('helper/dbml', () => {
               'SetDefaultPostToUser',
               'NoActionPostToUser',
               'RestrictPostToUser',
-            ].map((relationName, index) =>
-              makeField({
-                name: `posts${index}`,
-                type: 'Post',
-                kind: 'object',
-                isList: true,
-                isRequired: false,
-                relationName,
-              }),
-            ),
+            ].map(postsField),
           ],
         }),
         makeModel({

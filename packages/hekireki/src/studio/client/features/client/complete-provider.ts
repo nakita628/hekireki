@@ -17,6 +17,14 @@ const asked = new WeakMap<
  * Completion: TypeScript's, through the API, with the type of the highlighted item fetched as
  * its detail; or the schema's models, operations and argument keys when there are no types.
  */
+/** The Monaco kind each schema suggestion is shown as. */
+const SUGGESTION_KINDS = {
+  model: 'Class',
+  operation: 'Method',
+  argument: 'Keyword',
+  field: 'Property',
+} as const
+
 export function completionProvider() {
   return {
     triggerCharacters: ['.', '{', ',', '"', "'"],
@@ -30,15 +38,7 @@ export function completionProvider() {
         const suggestions = suggestionsAt(at, registry.models).map((suggestion) => ({
           label: suggestion.label,
           detail: suggestion.detail,
-          kind: languages.CompletionItemKind[
-            suggestion.kind === 'model'
-              ? 'Class'
-              : suggestion.kind === 'operation'
-                ? 'Method'
-                : suggestion.kind === 'argument'
-                  ? 'Keyword'
-                  : 'Property'
-          ],
+          kind: languages.CompletionItemKind[SUGGESTION_KINDS[suggestion.kind]],
           insertText: suggestion.label,
           range,
         }))
@@ -74,8 +74,10 @@ export function completionProvider() {
       if (detail === null) return item
       return {
         ...item,
-        detail: detail.detail ?? undefined,
-        documentation: detail.documentation === null ? undefined : { value: detail.documentation },
+        ...(detail.detail === null ? {} : { detail: detail.detail }),
+        ...(detail.documentation === null
+          ? {}
+          : { documentation: { value: detail.documentation } }),
       }
     },
   } satisfies languages.CompletionItemProvider

@@ -6,10 +6,10 @@ import {
   makeOpenApiPaths,
   makeOpenApiTable,
 } from '../helper/openapi.js'
-import { pluralize } from '../utils/humanizer.js'
-import { makeSnakeCase } from '../utils/index.js'
-import { allocate } from '../utils/naming.js'
-import { toYaml } from '../utils/yaml.js'
+import { toYaml } from '../literal/yaml.js'
+import { makeSnakeCase } from '../naming/case.js'
+import { pluralize } from '../naming/humanizer.js'
+import { allocate } from '../naming/index.js'
 
 /**
  * The OpenAPI 3.1 document Atlas's template writes for the database Prisma Migrate makes: `info`

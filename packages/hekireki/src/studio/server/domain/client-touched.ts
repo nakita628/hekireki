@@ -62,6 +62,25 @@ const MakeClientTouchedInput = z
 // The argument keys whose values are field names written as strings: `by: ['role']`, `distinct: 'email'`.
 const FIELD_LISTS = new Set(['by', 'distinct'])
 
+type TouchedField = z.infer<typeof MakeClientTouchedInput>['models'][number]['fields'][number]
+
+// The fields one key names: the key itself where it is a field, or the field names under `by`
+// or `distinct`.
+function namedHere(
+  entry: {
+    readonly key: string
+    readonly inner: unknown
+    readonly field: TouchedField | undefined
+  },
+  fields: ReadonlyMap<string, TouchedField>,
+): readonly string[] {
+  if (entry.field !== undefined) return [entry.key]
+  if (!FIELD_LISTS.has(entry.key)) return []
+  return (Array.isArray(entry.inner) ? entry.inner : [entry.inner]).filter(
+    (name): name is string => typeof name === 'string' && fields.has(name),
+  )
+}
+
 /**
  * The model and field pairs the value names, read as arguments of `model`; a model a relation
  * reaches comes with no field, so it is touched even when nothing of it is named.
@@ -89,26 +108,15 @@ function namedIn(
     field: fields.get(key),
   }))
   // The fields named here: a key that is one, or one written as a string under `by` or `distinct`.
-  const own = entries.flatMap(({ key, inner, field }) =>
-    field !== undefined
-      ? [key]
-      : FIELD_LISTS.has(key)
-        ? (Array.isArray(inner) ? inner : [inner]).filter(
-            (name): name is string => typeof name === 'string' && fields.has(name),
-          )
-        : [],
-  )
+  const own = entries.flatMap((entry) => namedHere(entry, fields))
   // Under a relation, the arguments of the model it reaches; under an argument or an operator
   // (`where`, `select`, `AND`, `some`, `_count`), this model's again.
-  const deeper = entries.flatMap(({ key, inner, field }) =>
-    field === undefined
-      ? FIELD_LISTS.has(key)
-        ? []
-        : namedIn(inner, model, models)
-      : field.kind === 'object'
-        ? namedIn(inner, field.type, models)
-        : [],
-  )
+  const deeper = entries.flatMap(({ key, inner, field }) => {
+    if (field !== undefined) {
+      return field.kind === 'object' ? namedIn(inner, field.type, models) : []
+    }
+    return FIELD_LISTS.has(key) ? [] : namedIn(inner, model, models)
+  })
   const reached = entries.flatMap(({ field }) =>
     field?.kind === 'object' && modelNames.has(field.type) ? [[field.type, null] as const] : [],
   )

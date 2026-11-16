@@ -23,6 +23,53 @@ import {
   uniqueColumns,
 } from './layout.js'
 
+type Layout = ReturnType<typeof autoLayout>
+type Block = {
+  readonly name: string
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
+/** Where the layout put a block, which it places every block of. */
+function positionOf(positions: Layout, name: string) {
+  const position = positions[name]
+  if (position === undefined) throw new Error(`${name} is not positioned`)
+  return position
+}
+
+/** The box each placed block takes, a model or an enum sized as the diagram draws it. */
+function blockBoxes(schema: Parameters<typeof autoLayout>[0], positions: Layout): Block[] {
+  const models = new Map(schema.models.map((m) => [m.name, m]))
+  const enums = new Map((schema.enums ?? []).map((e) => [e.name, e]))
+  return Object.entries(positions).map(([name, position]) => {
+    const model = models.get(name)
+    const value = enums.get(name)
+    if (model !== undefined) {
+      return { name, x: position.x, y: position.y, width: NODE_WIDTH, height: nodeHeight(model) }
+    }
+    const height = value === undefined ? 0 : enumHeight(value)
+    return { name, x: position.x, y: position.y, width: ENUM_WIDTH, height }
+  })
+}
+
+/** Each pair of blocks that overlap, both ways round. */
+function overlappingPairs(boxes: readonly Block[]) {
+  return boxes.flatMap((a) =>
+    boxes
+      .filter(
+        (b) =>
+          a.name !== b.name &&
+          a.x + a.width > b.x &&
+          b.x + b.width > a.x &&
+          a.y + a.height > b.y &&
+          b.y + b.height > a.y,
+      )
+      .map((b) => `${a.name} and ${b.name}`),
+  )
+}
+
 function field(overrides: Partial<DiagramField> = {}): DiagramField {
   return { kind: 'scalar', type: 'String', documentation: null, ...overrides }
 }
@@ -196,10 +243,9 @@ describe('autoLayout', () => {
 
   it('lays the relation out left to right: the referencing model, then the referenced one, then its enum', () => {
     const positions = autoLayout(schema)
-    const post = positions.Post
-    const user = positions.User
-    const role = positions.Role
-    if (!post || !user || !role) throw new Error('every block is positioned')
+    const post = positionOf(positions, 'Post')
+    const user = positionOf(positions, 'User')
+    const role = positionOf(positions, 'Role')
     expect(post.x + NODE_WIDTH).toBeLessThanOrEqual(user.x)
     expect(user.x + NODE_WIDTH).toBeLessThanOrEqual(role.x)
     expect(role.x + ENUM_WIDTH).toBeGreaterThan(role.x)
@@ -207,24 +253,7 @@ describe('autoLayout', () => {
 
   it('does not overlap two blocks', () => {
     const positions = autoLayout(schema)
-    const boxes = Object.entries(positions).map(([name, position]) => {
-      const model = schema.models.find((m) => m.name === name)
-      const value = schema.enums.find((e) => e.name === name)
-      const width = model ? NODE_WIDTH : ENUM_WIDTH
-      const height = model ? nodeHeight(model) : value ? enumHeight(value) : 0
-      return { name, x: position.x, y: position.y, width, height }
-    })
-    for (const a of boxes) {
-      for (const b of boxes) {
-        if (a.name === b.name) continue
-        const apart =
-          a.x + a.width <= b.x ||
-          b.x + b.width <= a.x ||
-          a.y + a.height <= b.y ||
-          b.y + b.height <= a.y
-        expect(apart, `${a.name} and ${b.name}`).toBe(true)
-      }
-    }
+    expect(overlappingPairs(blockBoxes(schema, positions))).toStrictEqual([])
   })
 
   it('puts every block on the grid', () => {
@@ -244,7 +273,7 @@ describe('autoLayout', () => {
       relations: [{ from: { model: 'Post' }, to: { model: 'User' } }],
       enums: [{ name: 'Status', values: ['DRAFT', 'PUBLISHED'] }],
     })
-    expect(positions.Status?.x).toBe(positions.User?.x)
+    expect(positions['Status']?.x).toBe(positions['User']?.x)
   })
 
   it('ignores self relations, unknown models and repeated edges', () => {

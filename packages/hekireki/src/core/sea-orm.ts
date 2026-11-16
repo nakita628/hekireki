@@ -3,15 +3,15 @@ import { Effect } from 'effect'
 
 import { emitMany } from '../emit/index.js'
 import { seaOrmFiles } from '../generator/sea-orm.js'
-import { getString } from '../utils/index.js'
+import { getString } from '../prisma/config.js'
 import { GeneratorConfigError } from './errors.js'
 import { requireOutput } from './output.js'
 
 export function seaOrm(options: GeneratorOptions) {
   return Effect.gen(function* () {
     const output = yield* requireOutput(options, 'Hekireki-SeaORM')
-    const renameAll = getString(options.generator.config?.renameAll)
-    const serde = { renameAll }
+    const renameAll = getString(options.generator.config?.['renameAll'])
+    const serde = renameAll === undefined ? {} : { renameAll }
     const enums = options.dmmf.datamodel.enums
     const models = options.dmmf.datamodel.models
     // sqlx has no chrono type for TIMETZ and SeaORM no column type, so no entity could read it.

@@ -104,6 +104,32 @@ function runForEngine<A>(
   )
 }
 
+/** No value seen yet in a column. */
+const UNSEEN = Symbol('unseen')
+
+/**
+ * A raw statement of the engine. The engine replays a migration file into a shadow database as
+ * one raw statement. A driver prepares one statement at a time and would run only the first of
+ * the file, so a statement with no arguments that is several is run as the script it is.
+ */
+function executeForEngine(driver: Driver, query: EngineQuery) {
+  // The engine takes an exclusive lock on a SQLite file as it connects, which a connection of
+  // its own gives back when the command closes it. Studio's connection is not closed: the lock
+  // would outlast the command and keep every other process (the app, `prisma migrate status`)
+  // from reading the file until Studio stops. The file stays shared, as it is for the rest of
+  // Studio.
+  if (driver.dialect === 'sqlite' && EXCLUSIVE_LOCK.test(query.sql)) {
+    return Promise.resolve(engineSuccess(0))
+  }
+  if (
+    query.args.length === 0 &&
+    splitStatements(query.sql).filter((statement) => statement.trim() !== '').length > 1
+  ) {
+    return runForEngine(driver.dialect, driver.executeScript(query.sql).pipe(Effect.as(0)))
+  }
+  return runForEngine(driver.dialect, driver.executeRaw({ sql: query.sql, params: query.args }))
+}
+
 /**
  * The open connection the engine sends its statements through. Only `queryRaw`, `executeRaw` and
  * `executeScript` are ever reached for: the schema engine reads catalogues and runs DDL, and does
@@ -123,13 +149,20 @@ function connection(
         driver.dialect,
         driver.queryRaw({ sql: query.sql, params: query.args }).pipe(
           Effect.map((rows) => {
+            // A PRAGMA and an expression have no declared type; the first value that is there
+            // says what the column holds, and an all-null column is read as text.
+            const firstValues = rows.rows.reduce<readonly unknown[]>(
+              (found, row) =>
+                found.map((value, index) =>
+                  value === UNSEEN && row[index] !== null ? row[index] : value,
+                ),
+              rows.columns.map(() => UNSEEN),
+            )
             const columnTypes = rows.columns.map((column, index) => {
               const declared = columnTypeOfNative(driver.dialect, column.nativeType)
               if (declared !== null) return declared
-              // A PRAGMA and an expression have no declared type; the first value that is there
-              // says what the column holds, and an all-null column is read as text.
-              const row = rows.rows.find((candidate) => candidate[index] !== null)
-              return columnTypeOfValue(row?.[index] ?? null)
+              const first = firstValues[index]
+              return columnTypeOfValue(first === UNSEEN ? null : (first ?? null))
             })
             return {
               columnNames: rows.columns.map((column) => column.name),
@@ -152,21 +185,7 @@ function connection(
           }),
         ),
       ),
-    // The engine replays a migration file into a shadow database as one raw statement. A driver
-    // prepares one statement at a time and would run only the first of the file, so a statement
-    // with no arguments that is several is run as the script it is.
-    executeRaw: (query: EngineQuery) =>
-      // The engine takes an exclusive lock on a SQLite file as it connects, which a connection of
-      // its own gives back when the command closes it. Studio's connection is not closed: the lock
-      // would outlast the command and keep every other process (the app, `prisma migrate status`)
-      // from reading the file until Studio stops. The file stays shared, as it is for the rest of
-      // Studio.
-      driver.dialect === 'sqlite' && EXCLUSIVE_LOCK.test(query.sql)
-        ? Promise.resolve(engineSuccess(0))
-        : query.args.length === 0 &&
-            splitStatements(query.sql).filter((statement) => statement.trim() !== '').length > 1
-          ? runForEngine(driver.dialect, driver.executeScript(query.sql).pipe(Effect.as(0)))
-          : runForEngine(driver.dialect, driver.executeRaw({ sql: query.sql, params: query.args })),
+    executeRaw: (query: EngineQuery) => executeForEngine(driver, query),
     executeScript: (script: string) => runForEngine(driver.dialect, driver.executeScript(script)),
     dispose,
   }

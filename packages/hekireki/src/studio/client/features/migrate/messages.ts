@@ -187,100 +187,101 @@ export const PAGE = defineMessages({
 export const CHECKS = defineMessages({
   en: {
     'not-null': (f: Facts, n: number) =>
-      `${f.model}.${f.field} becomes required, but ${rows(n)} ${n === 1 ? 'has' : 'have'} no value`,
+      `${f['model']}.${f['field']} becomes required, but ${rows(n)} ${n === 1 ? 'has' : 'have'} no value`,
     'column-added': (f: Facts, n: number) =>
-      `${f.model} gets the required column ${f.field}, with no value for the ${rows(n)} already there`,
+      `${f['model']} gets the required column ${f['field']}, with no value for the ${rows(n)} already there`,
     enum: (f: Facts, n: number) =>
-      `${rows(n)} of ${f.model}.${f.field} ${n === 1 ? 'holds' : 'hold'} ${f.removed === '' ? 'a value' : f.removed}, which the enum ${f.enum} no longer has`,
+      `${rows(n)} of ${f['model']}.${f['field']} ${n === 1 ? 'holds' : 'hold'} ${f['removed'] === '' ? 'a value' : f['removed']}, which the enum ${f['enum']} no longer has`,
     unique: (f: Facts, n: number) =>
-      `${f.model}.${f.fields} becomes unique, but ${n === 1 ? '1 group of rows shares' : `${n} groups of rows share`} a value`,
+      `${f['model']}.${f['fields']} becomes unique, but ${n === 1 ? '1 group of rows shares' : `${n} groups of rows share`} a value`,
     'foreign-key': (f: Facts, n: number) =>
-      `${f.model}.${f.field} will point at ${f.target}, but ${rows(n)} ${n === 1 ? 'points' : 'point'} at a ${f.target} that does not exist`,
+      `${f['model']}.${f['field']} will point at ${f['target']}, but ${rows(n)} ${n === 1 ? 'points' : 'point'} at a ${f['target']} that does not exist`,
     'column-dropped': (f: Facts, n: number) =>
-      `The column ${f.model}.${f.column} goes away, and ${values(n)} with it`,
+      `The column ${f['model']}.${f['column']} goes away, and ${values(n)} with it`,
     'column-type': (f: Facts, n: number) =>
-      `${f.model}.${f.field} changes from ${f.from} to ${f.to}; SQLite copies its ${values(n)} as they are`,
+      `${f['model']}.${f['field']} changes from ${f['from']} to ${f['to']}; SQLite copies its ${values(n)} as they are`,
     'column-recreated': (f: Facts, n: number) =>
-      `${f.model}.${f.field} cannot be cast from ${f.from} to ${f.to}: the column is dropped and added again, and ${values(n)} ${n === 1 ? 'is' : 'are'} lost`,
+      `${f['model']}.${f['field']} cannot be cast from ${f['from']} to ${f['to']}: the column is dropped and added again, and ${values(n)} ${n === 1 ? 'is' : 'are'} lost`,
     'value-out-of-range': (f: Facts, n: number) =>
-      `${values(n)} of ${f.model}.${f.field} ${n === 1 ? 'is' : 'are'} out of the range of ${f.to}`,
+      `${values(n)} of ${f['model']}.${f['field']} ${n === 1 ? 'is' : 'are'} out of the range of ${f['to']}`,
     'value-too-long': (f: Facts, n: number) =>
-      `${values(n)} of ${f.model}.${f.field} ${n === 1 ? 'is' : 'are'} too long for ${f.to}`,
+      `${values(n)} of ${f['model']}.${f['field']} ${n === 1 ? 'is' : 'are'} too long for ${f['to']}`,
     'value-not-convertible': (f: Facts, n: number) =>
-      `${values(n)} of ${f.model}.${f.field} cannot become ${f.to}`,
+      `${values(n)} of ${f['model']}.${f['field']} cannot become ${f['to']}`,
     'value-rounded': (f: Facts, n: number) =>
-      `${values(n)} of ${f.model}.${f.field} will be rounded as they become ${f.to}`,
+      `${values(n)} of ${f['model']}.${f['field']} will be rounded as they become ${f['to']}`,
     'value-truncated': (f: Facts, n: number) =>
-      `${values(n)} of ${f.model}.${f.field} will be cut short as they become ${f.to}`,
+      `${values(n)} of ${f['model']}.${f['field']} will be cut short as they become ${f['to']}`,
     'table-dropped': (f: Facts, n: number) =>
-      `The table ${f.table} goes away, and its ${rows(n)} with it`,
+      `The table ${f['table']} goes away, and its ${rows(n)} with it`,
     'delete-cascades': (f: Facts, n: number) =>
-      /SET NULL/u.test(f.what ?? '')
-        ? `${rows(n)} of ${f.subject} lose their key, as the rows they point at are deleted`
-        : `${rows(n)} of ${f.subject} are deleted too, with the rows they point at`,
+      /SET NULL/u.test(f['what'] ?? '')
+        ? `${rows(n)} of ${f['subject']} lose their key, as the rows they point at are deleted`
+        : `${rows(n)} of ${f['subject']} are deleted too, with the rows they point at`,
     'delete-refused': (f: Facts, n: number) =>
-      `The database refuses to delete rows that ${rows(n)} of ${f.subject} still point at`,
+      `The database refuses to delete rows that ${rows(n)} of ${f['subject']} still point at`,
     'update-cascades': (f: Facts, n: number) =>
-      /SET NULL/u.test(f.what ?? '')
-        ? `${rows(n)} of ${f.subject} lose their key, as the key they point at changes`
-        : `${rows(n)} of ${f.subject} follow the key they point at to its new value`,
+      /SET NULL/u.test(f['what'] ?? '')
+        ? `${rows(n)} of ${f['subject']} lose their key, as the key they point at changes`
+        : `${rows(n)} of ${f['subject']} follow the key they point at to its new value`,
     'update-refused': (f: Facts, n: number) =>
-      `The database refuses to change a key that ${rows(n)} of ${f.subject} still point at`,
+      `The database refuses to change a key that ${rows(n)} of ${f['subject']} still point at`,
     'check-constraint': (f: Facts, n: number) =>
-      `The fixes leave ${rows(n)} that a CHECK constraint of the table refuses (${f.subject}): the database would stop the plan there`,
+      `The fixes leave ${rows(n)} that a CHECK constraint of the table refuses (${f['subject']}): the database would stop the plan there`,
     'trigger-unfollowed': (f: Facts, n: number) =>
-      `${f.subject} has ${n} ${n === 1 ? 'trigger' : 'triggers'} that fire as the fixes write to it, and the checks cannot follow what they do`,
+      `${f['subject']} has ${n} ${n === 1 ? 'trigger' : 'triggers'} that fire as the fixes write to it, and the checks cannot follow what they do`,
     'move-ambiguous': (f: Facts, n: number) =>
-      `${rows(n)} of ${f.model} ${n === 1 ? 'is' : 'are'} offered different values for ${f.subject}: the first is kept, the others go with the column`,
-    other: (f: Facts, n: number) => `${f.subject}: ${f.what} (${n})`,
+      `${rows(n)} of ${f['model']} ${n === 1 ? 'is' : 'are'} offered different values for ${f['subject']}: the first is kept, the others go with the column`,
+    other: (f: Facts, n: number) => `${f['subject']}: ${f['what']} (${n})`,
   },
   ja: {
     'not-null': (f: Facts, n: number) =>
-      `${f.model}.${f.field} が必須になりますが、値が空（NULL）の行が ${n} 件あります`,
+      `${f['model']}.${f['field']} が必須になりますが、値が空（NULL）の行が ${n} 件あります`,
     'column-added': (f: Facts, n: number) =>
-      `${f.model} に必須の列 ${f.field} が追加されますが、既存の ${n} 行に入れる値がありません`,
+      `${f['model']} に必須の列 ${f['field']} が追加されますが、既存の ${n} 行に入れる値がありません`,
     enum: (f: Facts, n: number) =>
-      `${f.model}.${f.field} の ${n} 行が、新しい ${f.enum} にない値${f.removed === '' ? '' : `（${f.removed}）`}を持っています`,
+      `${f['model']}.${f['field']} の ${n} 行が、新しい ${f['enum']} にない値${f['removed'] === '' ? '' : `（${f['removed']}）`}を持っています`,
     unique: (f: Facts, n: number) =>
-      `${f.model}.${f.fields} が一意になりますが、値が重複している組が ${n} 組あります`,
+      `${f['model']}.${f['fields']} が一意になりますが、値が重複している組が ${n} 組あります`,
     'foreign-key': (f: Facts, n: number) =>
-      `${f.model}.${f.field} が ${f.target} を参照するようになりますが、存在しない ${f.target} を指す行が ${n} 件あります`,
+      `${f['model']}.${f['field']} が ${f['target']} を参照するようになりますが、存在しない ${f['target']} を指す行が ${n} 件あります`,
     'column-dropped': (f: Facts, n: number) =>
-      `列 ${f.model}.${f.column} がなくなり、${n} 件の値が失われます`,
+      `列 ${f['model']}.${f['column']} がなくなり、${n} 件の値が失われます`,
     'column-type': (f: Facts, n: number) =>
-      `${f.model}.${f.field} の型が ${f.from} から ${f.to} に変わります。SQLite は ${n} 件の値をそのままコピーします`,
+      `${f['model']}.${f['field']} の型が ${f['from']} から ${f['to']} に変わります。SQLite は ${n} 件の値をそのままコピーします`,
     'column-recreated': (f: Facts, n: number) =>
-      `${f.model}.${f.field} は ${f.from} から ${f.to} に変換できないため列が作り直され、${n} 件の値が失われます`,
+      `${f['model']}.${f['field']} は ${f['from']} から ${f['to']} に変換できないため列が作り直され、${n} 件の値が失われます`,
     'value-out-of-range': (f: Facts, n: number) =>
-      `${f.model}.${f.field} の ${n} 件の値が ${f.to} の範囲を超えています`,
+      `${f['model']}.${f['field']} の ${n} 件の値が ${f['to']} の範囲を超えています`,
     'value-too-long': (f: Facts, n: number) =>
-      `${f.model}.${f.field} の ${n} 件の値が ${f.to} には長すぎます`,
+      `${f['model']}.${f['field']} の ${n} 件の値が ${f['to']} には長すぎます`,
     'value-not-convertible': (f: Facts, n: number) =>
-      `${f.model}.${f.field} の ${n} 件の値を ${f.to} に変換できません`,
+      `${f['model']}.${f['field']} の ${n} 件の値を ${f['to']} に変換できません`,
     'value-rounded': (f: Facts, n: number) =>
-      `${f.model}.${f.field} の ${n} 件の値が ${f.to} への変換で丸められます`,
+      `${f['model']}.${f['field']} の ${n} 件の値が ${f['to']} への変換で丸められます`,
     'value-truncated': (f: Facts, n: number) =>
-      `${f.model}.${f.field} の ${n} 件の値が ${f.to} への変換で切り詰められます`,
-    'table-dropped': (f: Facts, n: number) => `テーブル ${f.table} がなくなり、${n} 行が失われます`,
+      `${f['model']}.${f['field']} の ${n} 件の値が ${f['to']} への変換で切り詰められます`,
+    'table-dropped': (f: Facts, n: number) =>
+      `テーブル ${f['table']} がなくなり、${n} 行が失われます`,
     'delete-cascades': (f: Facts, n: number) =>
-      /SET NULL/u.test(f.what ?? '')
-        ? `参照先の行が削除されるため、${f.subject} の ${n} 行の参照が空になります`
-        : `参照先の行と一緒に、${f.subject} の ${n} 行も削除されます`,
+      /SET NULL/u.test(f['what'] ?? '')
+        ? `参照先の行が削除されるため、${f['subject']} の ${n} 行の参照が空になります`
+        : `参照先の行と一緒に、${f['subject']} の ${n} 行も削除されます`,
     'delete-refused': (f: Facts, n: number) =>
-      `${f.subject} の ${n} 行が参照しているため、データベースが削除を拒否します`,
+      `${f['subject']} の ${n} 行が参照しているため、データベースが削除を拒否します`,
     'update-cascades': (f: Facts, n: number) =>
-      /SET NULL/u.test(f.what ?? '')
-        ? `参照先のキーが変わるため、${f.subject} の ${n} 行の参照が空になります`
-        : `参照先のキーが変わるのに合わせて、${f.subject} の ${n} 行も更新されます`,
+      /SET NULL/u.test(f['what'] ?? '')
+        ? `参照先のキーが変わるため、${f['subject']} の ${n} 行の参照が空になります`
+        : `参照先のキーが変わるのに合わせて、${f['subject']} の ${n} 行も更新されます`,
     'update-refused': (f: Facts, n: number) =>
-      `${f.subject} の ${n} 行が参照しているため、データベースがキーの変更を拒否します`,
+      `${f['subject']} の ${n} 行が参照しているため、データベースがキーの変更を拒否します`,
     'check-constraint': (f: Facts, n: number) =>
-      `修正後の ${n} 行が、テーブルの CHECK 制約（${f.subject}）に違反します。データベースがそこで計画の実行を拒否します`,
+      `修正後の ${n} 行が、テーブルの CHECK 制約（${f['subject']}）に違反します。データベースがそこで計画の実行を拒否します`,
     'trigger-unfollowed': (f: Facts, n: number) =>
-      `${f.subject} にはトリガーが ${n} 個あり、修正の書き込みで発火します。トリガーが行う変更はチェックでは追えません`,
+      `${f['subject']} にはトリガーが ${n} 個あり、修正の書き込みで発火します。トリガーが行う変更はチェックでは追えません`,
     'move-ambiguous': (f: Facts, n: number) =>
-      `${f.model} の ${n} 行に、${f.subject} へ入れる値の候補が複数あり一致しません。主キーが最も小さい行の値が残り、他は列と一緒に失われます`,
-    other: (f: Facts, n: number) => `${f.subject}: ${f.what}（${n}）`,
+      `${f['model']} の ${n} 行に、${f['subject']} へ入れる値の候補が複数あり一致しません。主キーが最も小さい行の値が残り、他は列と一緒に失われます`,
+    other: (f: Facts, n: number) => `${f['subject']}: ${f['what']}（${n}）`,
   },
 })
 
@@ -290,29 +291,32 @@ export const CHECKS = defineMessages({
  */
 export const TOPICS = defineMessages({
   en: {
-    'not-null': (f: Facts) => `The empty values of ${f.model}.${f.field}, which becomes required`,
+    'not-null': (f: Facts) =>
+      `The empty values of ${f['model']}.${f['field']}, which becomes required`,
     'column-added': (f: Facts) =>
-      `The rows already there, for the new required ${f.model}.${f.field}`,
+      `The rows already there, for the new required ${f['model']}.${f['field']}`,
     enum: (f: Facts) =>
-      `The values of ${f.model}.${f.field} that ${f.enum ?? 'the enum'} no longer has`,
+      `The values of ${f['model']}.${f['field']} that ${f['enum'] ?? 'the enum'} no longer has`,
     unique: (f: Facts) =>
-      `The duplicates of ${f.model}.${f.fields ?? f.field}, which becomes unique`,
-    'foreign-key': (f: Facts) => `The rows of ${f.model}.${f.field} that point at nothing`,
-    'column-dropped': (f: Facts) => `The values of the column ${f.model}.${f.column ?? f.field}`,
-    'column-type': (f: Facts) => `The values of ${f.model}.${f.field}, as its type changes`,
-    'column-recreated': (f: Facts) => `The values of ${f.model}.${f.field}, as its type changes`,
-    other: (f: Facts) => `The values of ${f.model}.${f.field} the new type does not take`,
+      `The duplicates of ${f['model']}.${f['fields'] ?? f['field']}, which becomes unique`,
+    'foreign-key': (f: Facts) => `The rows of ${f['model']}.${f['field']} that point at nothing`,
+    'column-dropped': (f: Facts) =>
+      `The values of the column ${f['model']}.${f['column'] ?? f['field']}`,
+    'column-type': (f: Facts) => `The values of ${f['model']}.${f['field']}, as its type changes`,
+    'column-recreated': (f: Facts) =>
+      `The values of ${f['model']}.${f['field']}, as its type changes`,
+    other: (f: Facts) => `The values of ${f['model']}.${f['field']} the new type does not take`,
   },
   ja: {
-    'not-null': (f: Facts) => `必須になる ${f.model}.${f.field} の空（NULL）の値`,
-    'column-added': (f: Facts) => `必須の列 ${f.model}.${f.field} を追加するときの既存の行`,
-    enum: (f: Facts) => `${f.model}.${f.field} のうち ${f.enum ?? 'enum'} にない値`,
-    unique: (f: Facts) => `一意になる ${f.model}.${f.fields ?? f.field} の重複`,
-    'foreign-key': (f: Facts) => `${f.model}.${f.field} の参照先がない行`,
-    'column-dropped': (f: Facts) => `列 ${f.model}.${f.column ?? f.field} の値`,
-    'column-type': (f: Facts) => `型が変わる ${f.model}.${f.field} の値`,
-    'column-recreated': (f: Facts) => `型が変わる ${f.model}.${f.field} の値`,
-    other: (f: Facts) => `${f.model}.${f.field} の新しい型に合わない値`,
+    'not-null': (f: Facts) => `必須になる ${f['model']}.${f['field']} の空（NULL）の値`,
+    'column-added': (f: Facts) => `必須の列 ${f['model']}.${f['field']} を追加するときの既存の行`,
+    enum: (f: Facts) => `${f['model']}.${f['field']} のうち ${f['enum'] ?? 'enum'} にない値`,
+    unique: (f: Facts) => `一意になる ${f['model']}.${f['fields'] ?? f['field']} の重複`,
+    'foreign-key': (f: Facts) => `${f['model']}.${f['field']} の参照先がない行`,
+    'column-dropped': (f: Facts) => `列 ${f['model']}.${f['column'] ?? f['field']} の値`,
+    'column-type': (f: Facts) => `型が変わる ${f['model']}.${f['field']} の値`,
+    'column-recreated': (f: Facts) => `型が変わる ${f['model']}.${f['field']} の値`,
+    other: (f: Facts) => `${f['model']}.${f['field']} の新しい型に合わない値`,
   },
 })
 
@@ -397,68 +401,69 @@ export const CHOICES = defineMessages({
 /** Why a suggestion is the one offered. */
 export const REASONS = defineMessages({
   en: {
-    'schema-default': (f: Facts) => `The @default of the field: ${f.default}.`,
+    'schema-default': (f: Facts) => `The @default of the field: ${f['default']}.`,
     uuid: () => 'A new UUID for each row, as @default(uuid()) makes them.',
     'random-id': () => 'A random id for each row, as the @default of the field makes them.',
     now: () => 'The date and time the migration runs.',
     'from-key': (f: Facts) =>
-      `The column is unique, so each row gets its own value, made from its key: ${f.field}-1, ${f.field}-2, …`,
+      `The column is unique, so each row gets its own value, made from its key: ${f['field']}-1, ${f['field']}-2, …`,
     'empty-string': () => 'An empty string, to be put right later.',
     zero: () => 'Zero.',
     false: () => 'false.',
     'empty-object': () => 'An empty JSON object.',
-    'enum-first': (f: Facts) => `${f.member}, the first member of the enum.`,
-    'enum-default': (f: Facts) => `${f.member}, the @default of the field.`,
+    'enum-first': (f: Facts) => `${f['member']}, the first member of the enum.`,
+    'enum-default': (f: Facts) => `${f['member']}, the @default of the field.`,
     'enum-same-name': (f: Facts) =>
-      `Each stored value becomes the member it spells, case and separators aside${f.member === '' ? '' : `; the others become ${f.member}, the @default or first member`}.`,
+      `Each stored value becomes the member it spells, case and separators aside${f['member'] === '' ? '' : `; the others become ${f['member']}, the @default or first member`}.`,
     'first-referenced': (f: Facts) =>
-      `The column points at ${f.target}: each row gets the ${f.target} with the smallest key, so the foreign key holds. Point the rows at the right one afterwards.`,
+      `The column points at ${f['target']}: each row gets the ${f['target']} with the smallest key, so the foreign key holds. Point the rows at the right one afterwards.`,
     'enum-replaced': (f: Facts) =>
-      `${f.removed} left the enum as ${f.member} came into it: it reads as a rename.`,
-    oldest: (f: Facts) => `The row with the earliest ${f.orderBy} stays.`,
+      `${f['removed']} left the enum as ${f['member']} came into it: it reads as a rename.`,
+    oldest: (f: Facts) => `The row with the earliest ${f['orderBy']} stays.`,
     'first-by-key': () => 'The row with the smallest primary key stays.',
     'optional-relation': () => 'The relation is optional: the rows stay, without it.',
     'required-relation': () =>
       'The relation is required: a row that points at nothing cannot stay.',
     renamed: (f: Facts) =>
-      `${f.renamedTo} is added to the same table with a matching type: it reads as a rename.`,
+      `${f['renamedTo']} is added to the same table with a matching type: it reads as a rename.`,
     moved: (f: Facts) =>
-      `${f.movedTo}, of a related model, is added under the same name and type: it reads as moved there. Each row gets the value of the row it is related to; a model the migration creates gets a row for each one with a value.`,
+      `${f['movedTo']}, of a related model, is added under the same name and type: it reads as moved there. Each row gets the value of the row it is related to; a model the migration creates gets a row for each one with a value.`,
     'convert-number': (f: Facts) =>
-      `Each value, blanks trimmed and an empty string read as NULL, becomes ${f.to}.`,
+      `Each value, blanks trimmed and an empty string read as NULL, becomes ${f['to']}.`,
     clamp: () => 'Each value becomes the nearest the new type can hold.',
     truncate: () => 'Each value is cut to the length the new type holds.',
     nullable: () => 'The column may be empty.',
     'not-nullable': () => 'The column cannot be empty, so the rows go.',
   },
   ja: {
-    'schema-default': (f: Facts) => `フィールドの @default の値（${f.default}）です。`,
+    'schema-default': (f: Facts) => `フィールドの @default の値（${f['default']}）です。`,
     uuid: () => '@default(uuid()) と同じ形式の UUID を行ごとに作ります。',
     'random-id': () => 'フィールドの @default と同じく、行ごとにランダムな ID を作ります。',
     now: () => 'マイグレーションを実行した日時を入れます。',
     'from-key': (f: Facts) =>
-      `一意な列なので、主キーから行ごとに違う値を作ります（${f.field}-1、${f.field}-2 …）。`,
+      `一意な列なので、主キーから行ごとに違う値を作ります（${f['field']}-1、${f['field']}-2 …）。`,
     'empty-string': () => '空文字を入れます。後から正しい値に直せます。',
     zero: () => '0 を入れます。',
     false: () => 'false を入れます。',
     'empty-object': () => '空の JSON オブジェクトを入れます。',
-    'enum-first': (f: Facts) => `enum の最初のメンバー ${f.member} にします。`,
-    'enum-default': (f: Facts) => `フィールドの @default の ${f.member} にします。`,
+    'enum-first': (f: Facts) => `enum の最初のメンバー ${f['member']} にします。`,
+    'enum-default': (f: Facts) => `フィールドの @default の ${f['member']} にします。`,
     'enum-same-name': (f: Facts) =>
-      `大文字小文字や区切り文字を無視して、同じ名前のメンバーに置き換えます${f.member === '' ? '' : `。一致しない値は ${f.member}（@default か最初のメンバー）にします`}。`,
+      `大文字小文字や区切り文字を無視して、同じ名前のメンバーに置き換えます${f['member'] === '' ? '' : `。一致しない値は ${f['member']}（@default か最初のメンバー）にします`}。`,
     'first-referenced': (f: Facts) =>
-      `この列は ${f.target} を参照しているため、存在しない値は入れられません。主キーが一番小さい ${f.target} を仮に指すようにします。後で正しい行を指すように直してください。`,
+      `この列は ${f['target']} を参照しているため、存在しない値は入れられません。主キーが一番小さい ${f['target']} を仮に指すようにします。後で正しい行を指すように直してください。`,
     'enum-replaced': (f: Facts) =>
-      `${f.removed} がなくなり ${f.member} が増えているので、名前の変更と判断しました。`,
-    oldest: (f: Facts) => `${f.orderBy} が一番古い行を残します。`,
+      `${f['removed']} がなくなり ${f['member']} が増えているので、名前の変更と判断しました。`,
+    oldest: (f: Facts) => `${f['orderBy']} が一番古い行を残します。`,
     'first-by-key': () => '主キーが一番小さい行を残します。',
     'optional-relation': () => '任意のリレーションなので、参照だけを空にして行は残します。',
     'required-relation': () => '必須のリレーションなので、参照先のない行は残せません。',
     renamed: (f: Facts) =>
-      `同じテーブルに型の合う ${f.renamedTo} が増えているので、名前の変更と判断しました。`,
+      `同じテーブルに型の合う ${f['renamedTo']} が増えているので、名前の変更と判断しました。`,
     moved: (f: Facts) =>
-      `関連するモデルに同じ名前・型の ${f.movedTo} が増えているので、そこへ移動したと判断しました。各行には関連する行の値が入ります。マイグレーションで新しく作られるモデルなら、値のある行ごとに行を作ります。`,
-    'convert-number': (f: Facts) => `前後の空白を除き、空文字は NULL として ${f.to} に変換します。`,
+      `関連するモデルに同じ名前・型の ${f['movedTo']} が増えているので、そこへ移動したと判断しました。各行には関連する行の値が入ります。マイグレーションで新しく作られるモデルなら、値のある行ごとに行を作ります。`,
+    'convert-number': (f: Facts) =>
+      `前後の空白を除き、空文字は NULL として ${f['to']} に変換します。`,
     clamp: () => '新しい型に収まる一番近い値にします。',
     truncate: () => '新しい型に収まる長さで切ります。',
     nullable: () => '列が空を許すので、空にします。',
@@ -945,12 +950,14 @@ export const HOW = defineMessages({
         ? `After the migration creates it, the rows of ${target.split('.')[0] ?? target} are made from them.`
         : `As the migration adds ${target}, it is filled from them.`,
     dropStep: 'The table they were kept in is dropped.',
-    unknown: (value: string, move: boolean) =>
-      value === ''
-        ? move
+    unknown: (value: string, move: boolean) => {
+      if (value === '') {
+        return move
           ? 'Name the model and field the column moved to.'
           : 'Name the field the column is called now.'
-        : `${value} is not a column this migration adds ${move ? 'to a related model' : 'to this table'}: the plan will refuse it.`,
+      }
+      return `${value} is not a column this migration adds ${move ? 'to a related model' : 'to this table'}: the plan will refuse it.`
+    },
     misfit: (type: string) => `${type} may not take these values: check they read back as one.`,
     drop: (n: number) =>
       `${n === 1 ? 'The value is' : `The ${n} values are`} lost with the column. Only the backup taken before the run keeps ${n === 1 ? 'it' : 'them'}.`,
@@ -1008,12 +1015,14 @@ export const HOW = defineMessages({
         ? `マイグレーションで ${target.split('.')[0] ?? target} が作られた後、退避した値から行を作ります。`
         : `マイグレーションで ${target} が追加されるときに、退避した値で埋めます。`,
     dropStep: '退避に使ったテーブルを削除します。',
-    unknown: (value: string, move: boolean) =>
-      value === ''
-        ? move
+    unknown: (value: string, move: boolean) => {
+      if (value === '') {
+        return move
           ? '移動先のモデルとフィールドを入力してください。'
           : '新しいフィールド名を入力してください。'
-        : `${value} は、このマイグレーションで${move ? '関連するモデル' : 'このテーブル'}に追加される列ではありません。このままではプランが作れません。`,
+      }
+      return `${value} は、このマイグレーションで${move ? '関連するモデル' : 'このテーブル'}に追加される列ではありません。このままではプランが作れません。`
+    },
     misfit: (type: string) =>
       `${type} にはこの値が入らない可能性があります。変換して読めるか確認してください。`,
     drop: (n: number) =>

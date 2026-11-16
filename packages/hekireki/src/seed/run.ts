@@ -101,13 +101,14 @@ function makeFaker(seed: number | null, locales: readonly string[] | null) {
  * per-model counts of the config included; models given as `data` keep their rows.
  */
 function withOverrides(config: SeedConfig, overrides: SeedOverrides) {
+  const { count } = overrides
   const models =
-    overrides.count === null
+    count === null
       ? config.models
       : Object.fromEntries(
           Object.entries(config.models ?? {}).map(([name, rule]) => [
             name,
-            rule.data === undefined ? { ...rule, count: overrides.count ?? undefined } : rule,
+            rule.data === undefined ? { ...rule, count } : rule,
           ]),
         )
   return {

@@ -129,8 +129,7 @@ function loadCompiler(schemaPath: string, dialect: Dialect) {
           WebAssembly.Module.imports(module).map((entry) => [entry.module, exported.data]),
         )
         const instance = new WebAssembly.Instance(module, imports)
-        // oxlint-disable-next-line eslint/no-underscore-dangle -- wasm-bindgen names its two hooks
-        const start = WasmStart.safeParse(instance.exports.__wbindgen_start)
+        const start = WasmStart.safeParse(instance.exports['__wbindgen_start'])
         if (!start.success) throw new TypeError('The compiler module exports no __wbindgen_start.')
         // oxlint-disable-next-line eslint/no-underscore-dangle -- wasm-bindgen names its two hooks
         runtime.data.__wbg_set_wasm(instance.exports)
@@ -170,24 +169,27 @@ export function compileQueries(input: {
         }),
       catch: compilerError,
     })
-    return yield* Effect.forEach(input.examples, (example) =>
-      Effect.try({
-        try: () => compiler.compile(JSON.stringify(example.request)),
-        catch: compilerError,
-      }).pipe(
-        Effect.match({
-          onSuccess: (plan): CompiledQuery => ({
-            example,
-            statements: planStatements(plan),
-            error: null,
+    return yield* Effect.forEach(
+      input.examples,
+      (example) =>
+        Effect.try({
+          try: () => compiler.compile(JSON.stringify(example.request)),
+          catch: compilerError,
+        }).pipe(
+          Effect.match({
+            onSuccess: (plan): CompiledQuery => ({
+              example,
+              statements: planStatements(plan),
+              error: null,
+            }),
+            onFailure: (error): CompiledQuery => ({
+              example,
+              statements: null,
+              error: error.message,
+            }),
           }),
-          onFailure: (error): CompiledQuery => ({
-            example,
-            statements: null,
-            error: error.message,
-          }),
-        }),
-      ),
+        ),
+      { concurrency: 1 },
     )
   })
 }

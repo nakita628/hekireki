@@ -14,15 +14,15 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
  * @returns the reason to show, or null when there is none to give
  */
 export function problemReason(error: unknown) {
-  const carried = isRecord(error) && isRecord(error.detail) ? error.detail.data : undefined
+  const carried = isRecord(error) && isRecord(error['detail']) ? error['detail']['data'] : undefined
   if (isRecord(carried)) {
-    const errors = Array.isArray(carried.errors)
-      ? carried.errors.flatMap((entry) =>
-          isRecord(entry) && typeof entry.message === 'string' ? [entry.message] : [],
+    const errors = Array.isArray(carried['errors'])
+      ? carried['errors'].flatMap((entry) =>
+          isRecord(entry) && typeof entry['message'] === 'string' ? [entry['message']] : [],
         )
       : []
     if (errors.length > 0) return errors.join('\n')
-    if (typeof carried.detail === 'string') return carried.detail
+    if (typeof carried['detail'] === 'string') return carried['detail']
   }
   return error instanceof Error && error.message !== '' ? error.message : null
 }

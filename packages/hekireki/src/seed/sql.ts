@@ -1,6 +1,6 @@
 import type { Dialect } from '../database/url.js'
+import { chunks } from '../list/index.js'
 import { qualifiedName, quoteIdentifier, stringLiteral } from '../sql/index.js'
-import { chunks } from '../utils/index.js'
 import type { SeedValue } from './config.js'
 import type { EnumMember, SeedTable, SeedTableRows } from './plan.js'
 
@@ -42,50 +42,54 @@ function enumStored(column: ColumnShape, value: string) {
   return column.enumValues?.find((member) => member.name === value)?.dbName ?? value
 }
 
+/** An array element as text, before it is quoted. */
+function elementText(column: ColumnShape, value: SeedValue) {
+  if (value instanceof Date) return `${timestamp(value)}+00`
+  if (value instanceof Uint8Array) return `\\x${Buffer.from(value).toString('hex')}`
+  if (typeof value === 'string') return column.kind === 'enum' ? enumStored(column, value) : value
+  return JSON.stringify(value)
+}
+
 /** One element of a PostgreSQL array literal (`'{...}'`), quoted and escaped as the array parser expects. */
 function arrayElement(column: ColumnShape, value: SeedValue) {
   if (value === null) return 'NULL'
   if (typeof value === 'boolean') return value ? 't' : 'f'
   if (typeof value === 'number' || typeof value === 'bigint') return String(value)
-  const text =
-    value instanceof Date
-      ? `${timestamp(value)}+00`
-      : value instanceof Uint8Array
-        ? `\\x${Buffer.from(value).toString('hex')}`
-        : typeof value === 'string'
-          ? column.kind === 'enum'
-            ? enumStored(column, value)
-            : value
-          : JSON.stringify(value)
+  const text = elementText(column, value)
   return `"${text.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+}
+
+function listLiteral(dialect: Dialect, column: ColumnShape, value: SeedValue) {
+  const items = isSeedList(value) ? value : [value]
+  return dialect === 'postgresql'
+    ? stringLiteral(dialect, `{${items.map((item) => arrayElement(column, item)).join(',')}}`)
+    : stringLiteral(dialect, JSON.stringify(items.map((item) => jsonValue(item))))
+}
+
+function booleanLiteral(dialect: Dialect, value: boolean) {
+  if (dialect === 'sqlite') return value ? '1' : '0'
+  return value ? 'TRUE' : 'FALSE'
+}
+
+function dateLiteral(dialect: Dialect, value: Date) {
+  if (dialect === 'postgresql') return `'${timestamp(value)}+00'`
+  if (dialect === 'mysql') return `'${timestamp(value)}'`
+  // Prisma Client's own text on SQLite: `=` compares text, so the `Z` form would miss it.
+  return `'${value.toISOString().replace('Z', '+00:00')}'`
 }
 
 /** The SQL literal for a value in the column, as the dialect reads it. */
 export function renderLiteral(dialect: Dialect, column: ColumnShape, value: SeedValue) {
   if (value === null || value === undefined) return 'NULL'
-  if (column.isList) {
-    const items = isSeedList(value) ? value : [value]
-    return dialect === 'postgresql'
-      ? stringLiteral(dialect, `{${items.map((item) => arrayElement(column, item)).join(',')}}`)
-      : stringLiteral(dialect, JSON.stringify(items.map((item) => jsonValue(item))))
-  }
+  if (column.isList) return listLiteral(dialect, column, value)
   if (column.type === 'Json') return stringLiteral(dialect, JSON.stringify(jsonValue(value)))
   if (typeof value === 'string') {
     return stringLiteral(dialect, column.kind === 'enum' ? enumStored(column, value) : value)
   }
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NULL'
   if (typeof value === 'bigint') return value.toString()
-  if (typeof value === 'boolean') {
-    return dialect === 'sqlite' ? (value ? '1' : '0') : value ? 'TRUE' : 'FALSE'
-  }
-  if (value instanceof Date) {
-    return dialect === 'postgresql'
-      ? `'${timestamp(value)}+00'`
-      : dialect === 'mysql'
-        ? `'${timestamp(value)}'`
-        : // Prisma Client's own text on SQLite: `=` compares text, so the `Z` form would miss it.
-          `'${value.toISOString().replace('Z', '+00:00')}'`
-  }
+  if (typeof value === 'boolean') return booleanLiteral(dialect, value)
+  if (value instanceof Date) return dateLiteral(dialect, value)
   if (value instanceof Uint8Array) {
     const hex = Buffer.from(value).toString('hex')
     return dialect === 'postgresql' ? `'\\x${hex}'` : `X'${hex}'`
@@ -113,11 +117,10 @@ export function insertSql(dialect: Dialect, entry: SeedTableRows, chunk = INSERT
   const names = columns.map((c) => quoteIdentifier(dialect, c.column)).join(', ')
   // The field each column reads from a row: a model's rows are keyed by field name, a join
   // table's by column. Found once per column, not once per cell.
-  const fields = columns.map((column) =>
-    entry.table.kind === 'model'
-      ? (entry.table.columns.find((c) => c.column === column.column)?.field ?? column.column)
-      : column.column,
+  const fieldOf = new Map(
+    entry.table.kind === 'model' ? entry.table.columns.map((c) => [c.column, c.field]) : [],
   )
+  const fields = columns.map((column) => fieldOf.get(column.column) ?? column.column)
   return chunks(entry.rows, chunk).map(
     (rows) =>
       `INSERT INTO ${target} (${names}) VALUES\n${rows
@@ -148,19 +151,19 @@ export function resetSql(dialect: Dialect, tables: readonly SeedTable[]) {
  */
 export function sequenceSql(dialect: Dialect, tables: readonly SeedTable[]) {
   if (dialect !== 'postgresql') return []
-  return tables.flatMap((table) =>
-    table.kind === 'model'
-      ? table.autoincrement.flatMap((field) => {
-          const column = table.columns.find((c) => c.field === field)
-          if (column === undefined) return []
-          const target = qualifiedName(dialect, table)
-          const name = quoteIdentifier(dialect, column.column)
-          return [
-            `SELECT setval(pg_get_serial_sequence(${stringLiteral(dialect, target)}, ${stringLiteral(dialect, column.column)}), COALESCE((SELECT MAX(${name}) FROM ${target}), 0) + 1, false)`,
-          ]
-        })
-      : [],
-  )
+  return tables.flatMap((table) => {
+    if (table.kind !== 'model') return []
+    const byField = new Map(table.columns.map((c) => [c.field, c]))
+    return table.autoincrement.flatMap((field) => {
+      const column = byField.get(field)
+      if (column === undefined) return []
+      const target = qualifiedName(dialect, table)
+      const name = quoteIdentifier(dialect, column.column)
+      return [
+        `SELECT setval(pg_get_serial_sequence(${stringLiteral(dialect, target)}, ${stringLiteral(dialect, column.column)}), COALESCE((SELECT MAX(${name}) FROM ${target}), 0) + 1, false)`,
+      ]
+    })
+  })
 }
 
 /** The whole seed as one SQL script: a transaction around the optional reset, the inserts and the sequence fix-ups. */

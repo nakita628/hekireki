@@ -36,11 +36,14 @@ jobs:
 
       - run: vp link ./packages/hekireki
 
-      - run: vp run check
+      # The format, oxlint and type checks of every workspace. `pnpm lint` (Markdown, spelling,
+      # links, workflows, Knip) is the Lint workflow's, and is not run twice.
+      - run: vp run check:code
 
       # packages/hekireki only: the `test` package needs the Go / Rust / Python /
-      # Elixir / Ruby / PHP toolchains and is owned by the Lang Check matrix.
-      - run: vp run --filter ./packages/hekireki test
+      # Elixir / Ruby / PHP toolchains and is owned by the Lang Check matrix. The coverage
+      # thresholds in packages/hekireki/vite.config.ts fail the run when coverage drops.
+      - run: vp run --filter ./packages/hekireki coverage
         env:
           HEKIREKI_LIBSQL_URL: http://127.0.0.1:8080
 

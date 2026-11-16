@@ -41,25 +41,28 @@ export function readMigrationsList(baseDir: string) {
       Effect.orElseSucceed((): readonly string[] => []),
     )
     const names = entries.filter((name) => MIGRATION_DIRECTORY.test(name)).toSorted()
-    const migrationDirectories = yield* Effect.forEach(names, (name) =>
-      readFile(path.join(baseDir, name, MIGRATION_FILE)).pipe(
-        Effect.match({
-          onFailure: (error) => ({
-            path: name,
-            migrationFile: {
-              path: MIGRATION_FILE,
-              content: { tag: 'error' as const, value: error.message },
-            },
+    const migrationDirectories = yield* Effect.forEach(
+      names,
+      (name) =>
+        readFile(path.join(baseDir, name, MIGRATION_FILE)).pipe(
+          Effect.match({
+            onFailure: (error) => ({
+              path: name,
+              migrationFile: {
+                path: MIGRATION_FILE,
+                content: { tag: 'error' as const, value: error.message },
+              },
+            }),
+            onSuccess: (content) => ({
+              path: name,
+              migrationFile: {
+                path: MIGRATION_FILE,
+                content: { tag: 'ok' as const, value: content },
+              },
+            }),
           }),
-          onSuccess: (content) => ({
-            path: name,
-            migrationFile: {
-              path: MIGRATION_FILE,
-              content: { tag: 'ok' as const, value: content },
-            },
-          }),
-        }),
-      ),
+        ),
+      { concurrency: 1 },
     )
     const lock = yield* readFile(path.join(baseDir, LOCK_FILE)).pipe(
       Effect.orElseSucceed(() => null),
@@ -87,8 +90,10 @@ export type MigrationsList = Effect.Success<ReturnType<typeof readMigrationsList
 export function resolveMigrationsDir(input: { readonly cwd: string; readonly schemaDir: string }) {
   return Effect.gen(function* () {
     // The Prisma config under any of its names, in the working directory, else beside the schema.
-    const configs = yield* Effect.forEach([...new Set([input.cwd, input.schemaDir])], (dir) =>
-      readPrismaConfig(dir),
+    const configs = yield* Effect.forEach(
+      [...new Set([input.cwd, input.schemaDir])],
+      (dir) => readPrismaConfig(dir),
+      { concurrency: 1 },
     )
     const found = configs.find((config) => config !== null) ?? null
     const configured = found === null ? null : makeMigrationsPath(found.text)
@@ -113,10 +118,13 @@ export function migrationsStamp(baseDir: string) {
       Effect.orElseSucceed((): readonly string[] => []),
     )
     const names = entries.filter((name) => MIGRATION_DIRECTORY.test(name)).toSorted()
-    const stamps = yield* Effect.forEach(names, (name) =>
-      fileStamp(path.join(baseDir, name, MIGRATION_FILE)).pipe(
-        Effect.map((stamp) => `${name}=${stamp ?? ''}`),
-      ),
+    const stamps = yield* Effect.forEach(
+      names,
+      (name) =>
+        fileStamp(path.join(baseDir, name, MIGRATION_FILE)).pipe(
+          Effect.map((stamp) => `${name}=${stamp ?? ''}`),
+        ),
+      { concurrency: 1 },
     )
     const lock = yield* fileStamp(path.join(baseDir, LOCK_FILE))
     return [...stamps, `${LOCK_FILE}=${lock ?? ''}`].join('\n')

@@ -36,6 +36,27 @@ async function editorText(page: Page) {
 }
 
 /** Holds the page's requests to the Studio API path until the returned function lets them through. */
+/** The bodies of the preview requests the page sends from now on, in order. */
+function recordPreviews(page: Page) {
+  const previewed: string[] = []
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/client/preview')) previewed.push(request.postData() ?? '')
+  })
+  return previewed
+}
+
+/** Where a locator's right edge is drawn; one that is not drawn is off to the right. */
+async function rightOf(locator: Locator) {
+  const box = await locator.boundingBox()
+  return box === null ? Number.POSITIVE_INFINITY : box.x + box.width
+}
+
+/** Where a locator's left edge is drawn, or 0 while it is not drawn. */
+async function leftOf(locator: Locator) {
+  const box = await locator.boundingBox()
+  return box?.x ?? 0
+}
+
 async function hold(page: Page, path: string) {
   const gate = Promise.withResolvers()
   await page.route(`**/api${path}`, async (route) => {
@@ -154,10 +175,7 @@ test('says the call is running, then what it came back with', async ({ page }) =
 test('shows the SQL as the call is written, the result once it runs, and a write’s SQL only after it has run', async ({
   page,
 }) => {
-  const previewed: string[] = []
-  page.on('request', (request) => {
-    if (request.url().endsWith('/api/client/preview')) previewed.push(request.postData() ?? '')
-  })
+  const previewed = recordPreviews(page)
   const sqlTab = page.getByRole('tab', { name: /^SQL/u })
   const resultTab = page.getByRole('tab', { name: 'Result' })
   const state = page.getByRole('status', { name: 'SQL status' })
@@ -253,12 +271,7 @@ test('keeps a wide result inside its pane when the pane is narrowed, scrolling i
   // Narrowed after the result is drawn: the pane shrinks around the table, which scrolls.
   const handle = page.getByRole('button', { name: 'Resize the schema' })
   await handle.press('Home')
-  const rightOf = async (locator: Locator) => {
-    const box = await locator.boundingBox()
-    return box === null ? Number.POSITIVE_INFINITY : box.x + box.width
-  }
-  const split = await handle.boundingBox()
-  const edge = split?.x ?? 0
+  const edge = await leftOf(handle)
   expect(edge).toBeGreaterThan(0)
   for (const locator of [
     page.getByRole('status', { name: 'Run status' }),

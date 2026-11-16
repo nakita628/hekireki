@@ -3,7 +3,7 @@ import { Effect } from 'effect'
 
 import { emit } from '../emit/index.js'
 import { typeboxCode } from '../generator/typebox.js'
-import { getBool } from '../utils/index.js'
+import { getBool } from '../prisma/config.js'
 import { outputFile, requireOutput } from './output.js'
 
 export function typebox(options: GeneratorOptions) {
@@ -12,8 +12,8 @@ export function typebox(options: GeneratorOptions) {
     const resolved = outputFile(output, 'index.ts')
     const code = typeboxCode(
       options.dmmf,
-      getBool(options.generator.config?.type),
-      getBool(options.generator.config?.relation),
+      getBool(options.generator.config?.['type']),
+      getBool(options.generator.config?.['relation']),
     )
     return yield* emit(code, resolved.dir, resolved.file)
   })

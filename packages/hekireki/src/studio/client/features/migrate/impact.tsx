@@ -3,7 +3,7 @@ import type { InferResponseType } from 'hono/client'
 import { useState } from 'react'
 import { LuCircleCheck, LuDownload, LuEye, LuTriangleAlert } from 'react-icons/lu'
 
-import type { migrateClient } from '../../api/index.js'
+import type { dbClient, migrateClient } from '../../api/index.js'
 import { ResultTable } from '../../components/result-table.js'
 import { usePostDbSql } from '../../hooks/index.js'
 import { downloadFile } from '../../lib/index.js'
@@ -15,6 +15,57 @@ import { useCheckText } from './text.js'
 
 type Plan = InferResponseType<typeof migrateClient.migrate.plan.$post, 200>
 type Check = Plan['checks'][number]
+
+type SqlRows = InferResponseType<typeof dbClient.db.sql.$post, 200>
+
+/** The rows a loss takes, as the database holds them now, with a CSV of them to keep. */
+function LostRows({
+  pending,
+  failed,
+  data,
+  subject,
+}: {
+  readonly pending: boolean
+  readonly failed: boolean
+  readonly data: SqlRows | undefined
+  readonly subject: string
+}) {
+  const t = useMessages(IMPACT)
+  if (pending) {
+    return <p className="m-0 border-t border-line px-3 py-2 text-code text-muted">{t.reading}</p>
+  }
+  if (failed) {
+    return (
+      <p className="m-0 border-t border-line px-3 py-2 text-code text-danger">{t.unreadable}</p>
+    )
+  }
+  if (data === undefined) return null
+  if (data.rowCount === 0) {
+    return <p className="m-0 border-t border-line px-3 py-2 text-code text-muted">{t.none}</p>
+  }
+  return (
+    <div className="flex flex-col border-t border-line">
+      <div className="flex flex-wrap items-center gap-2.5 px-3 py-1.5">
+        <span className="text-code text-muted">{t.shown(data.rows.length, data.rowCount)}</span>
+        <Button
+          className="ml-auto"
+          size="sm"
+          variant="ghost"
+          onPress={() => {
+            downloadFile(
+              `${subject.replaceAll(/[^\w.-]/gu, '_')}-lost.csv`,
+              new Blob([toCsv(data.columns, data.rows)], { type: 'text/csv' }),
+            )
+          }}
+        >
+          <LuDownload size={13} />
+          {t.csv}
+        </Button>
+      </div>
+      <ResultTable columns={data.columns} rows={data.rows} />
+    </div>
+  )
+}
 
 /**
  * One loss: what goes, said in a sentence, and the rows themselves a press away, read from the
@@ -54,37 +105,14 @@ function Loss({ check }: { readonly check: Check }) {
           {open ? t.hide : t.show}
         </Button>
       </div>
-      {!open ? null : rows.isPending ? (
-        <p className="m-0 border-t border-line px-3 py-2 text-code text-muted">{t.reading}</p>
-      ) : rows.isError ? (
-        <p className="m-0 border-t border-line px-3 py-2 text-code text-danger">{t.unreadable}</p>
-      ) : rows.data === undefined ? null : rows.data.rowCount === 0 ? (
-        <p className="m-0 border-t border-line px-3 py-2 text-code text-muted">{t.none}</p>
-      ) : (
-        <div className="flex flex-col border-t border-line">
-          <div className="flex flex-wrap items-center gap-2.5 px-3 py-1.5">
-            <span className="text-code text-muted">
-              {t.shown(rows.data.rows.length, rows.data.rowCount)}
-            </span>
-            <Button
-              className="ml-auto"
-              size="sm"
-              variant="ghost"
-              onPress={() => {
-                if (rows.data === undefined) return
-                downloadFile(
-                  `${check.subject.replaceAll(/[^\w.-]/gu, '_')}-lost.csv`,
-                  new Blob([toCsv(rows.data.columns, rows.data.rows)], { type: 'text/csv' }),
-                )
-              }}
-            >
-              <LuDownload size={13} />
-              {t.csv}
-            </Button>
-          </div>
-          <ResultTable columns={rows.data.columns} rows={rows.data.rows} />
-        </div>
-      )}
+      {open ? (
+        <LostRows
+          pending={rows.isPending}
+          failed={rows.isError}
+          data={rows.data}
+          subject={check.subject}
+        />
+      ) : null}
     </li>
   )
 }

@@ -8,12 +8,13 @@ import { exists, readDirectory, removePath } from '../file/index.js'
 import { fmtMarkdown } from '../format/index.js'
 import { erDiagramSvg, neighborhood, schemaSvg } from '../generator/dbml.js'
 import { DOCS_FILES, docsMarkdown, modelDiagramPath } from '../generator/docs.js'
+import type { PlannedStatement } from '../generator/query-examples.js'
 import { queryExamples } from '../generator/query-examples.js'
 import { schemaSql } from '../migrate/adapter/schema-sql.js'
+import { getString } from '../prisma/config.js'
 import { dialectOf, readSchemaFiles, schemaText } from '../schema/index.js'
 import { formatSql } from '../sql/index.js'
 import { makeSchema } from '../studio/server/domain/schema.js'
-import { getString } from '../utils/index.js'
 import { GeneratorConfigError } from './errors.js'
 import { requireOutput } from './output.js'
 import { compileQueries } from './query-compiler.js'
@@ -43,7 +44,7 @@ export function docs(options: GeneratorOptions) {
         message: `Hekireki-Docs does not read ${unread.map((name) => `"${name}"`).join(', ')}; it takes theme.`,
       })
     }
-    const theme = getString(config.theme) === 'dark' ? 'dark' : 'light'
+    const theme = getString(config['theme']) === 'dark' ? 'dark' : 'light'
     // CockroachDB reads as PostgreSQL elsewhere, but its tables are not PostgreSQL's to write.
     const provider = options.datasources[0]?.activeProvider ?? null
     const dialect = provider === 'cockroachdb' ? null : dialectOf(provider)
@@ -66,15 +67,14 @@ export function docs(options: GeneratorOptions) {
     const queries = yield* Effect.forEach(
       compiled ?? examples.map((example) => ({ example, statements: null, error: null })),
       ({ example, statements: planned, error }) =>
-        Effect.forEach(planned ?? [], ({ sql, params }) =>
-          formatSql(sql, dialect).pipe(Effect.map((text) => ({ sql: text, params }))),
-        ).pipe(
+        formatStatements(planned ?? [], dialect).pipe(
           Effect.map((formatted) => ({
             example,
             statements: planned === null ? null : formatted,
             error,
           })),
         ),
+      { concurrency: 1 },
     )
     const readme = yield* fmtMarkdown(
       docsMarkdown({ datamodel: options.dmmf.datamodel, statements, queries }),
@@ -85,10 +85,9 @@ export function docs(options: GeneratorOptions) {
       provider: null,
       blocks: [],
     })
+    const related = new Set(schema.relations.flatMap((r) => [r.from.model, r.to.model]))
     const diagrams = schema.models
-      .filter((model) =>
-        schema.relations.some((r) => r.from.model === model.name || r.to.model === model.name),
-      )
+      .filter((model) => related.has(model.name))
       .map((model) => ({
         name: modelDiagramPath(model.name),
         data: schemaSvg(neighborhood(schema, model.name), theme),
@@ -99,7 +98,7 @@ export function docs(options: GeneratorOptions) {
     yield* Effect.forEach(
       present.filter((name) => name.endsWith('.svg') && !kept.has(name)),
       (name) => removePath(path.join(modelsDir, name)),
-      { discard: true },
+      { discard: true, concurrency: 1 },
     )
     return yield* Effect.forEach(
       [
@@ -111,7 +110,19 @@ export function docs(options: GeneratorOptions) {
         const file = path.join(dir, name)
         return emitRaw(data, path.dirname(file), file)
       },
-      { discard: true },
+      { discard: true, concurrency: 1 },
     )
   })
+}
+
+function formatStatements(
+  statements: readonly PlannedStatement[],
+  dialect: 'postgresql' | 'mysql' | 'sqlite' | null,
+) {
+  return Effect.forEach(
+    statements,
+    ({ sql, params }) =>
+      formatSql(sql, dialect).pipe(Effect.map((text) => ({ sql: text, params }))),
+    { concurrency: 1 },
+  )
 }

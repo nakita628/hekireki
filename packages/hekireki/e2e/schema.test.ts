@@ -4,6 +4,7 @@ import {
   expectNoHorizontalOverflow,
   expectTexts,
   loadedFiles,
+  present,
   resetSchema,
   test,
 } from './studio.js'
@@ -117,8 +118,10 @@ test('a broken schema keeps the last diagram and points at the editor', async ({
   await page.goto('/')
   await expect(page.locator('.react-flow__node')).toHaveCount(3)
   const files = await loadedFiles(request)
-  const base = files.find((file) => file.path.endsWith('base.prisma'))
-  if (base === undefined) throw new Error('base.prisma is not loaded')
+  const base = present(
+    files.find((file) => file.path.endsWith('base.prisma')),
+    'base.prisma is not loaded',
+  )
   await request.put('/api/schema/files', {
     data: { path: base.path, content: base.content.replace('name  String?', 'name  Nope?') },
   })

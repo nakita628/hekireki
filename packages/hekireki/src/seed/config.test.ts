@@ -156,7 +156,7 @@ describe('defineConfig', () => {
         User: {
           count: 5,
           fields: {
-            email: (faker, { row }) => `${String(row.id ?? 0)}-${faker.internet.email()}`,
+            email: (faker, { row }) => `${String(row.id)}-${faker.internet.email()}`,
             age: { min: 18, max: 65, nullRate: 0.2 },
             role: { values: ['ADMIN'] },
             joined: { from: '2024-01-01', to: new Date('2024-12-31') },
@@ -167,7 +167,7 @@ describe('defineConfig', () => {
         Post: { fields: { authorId: { value: 1 } } },
       },
     })
-    expect(config.models?.User?.count).toBe(5)
+    expect(config.models?.['User']?.count).toBe(5)
   })
 
   it('accepts nested rows, unique-key parents and keyed links, with no id written', () => {
@@ -186,7 +186,7 @@ describe('defineConfig', () => {
         Post: { data: [{ author: { email: 'bob@example.com' } }, { author: { id: 1 } }] },
       },
     })
-    expect(config.models?.User?.data?.length).toBe(1)
+    expect(config.models?.['User']?.data?.length).toBe(1)
     defineConfig(schema, {
       models: {
         // @ts-expect-error -- a key must be one of the model's unique keys, not any field
@@ -215,7 +215,7 @@ describe('defineConfig', () => {
         Post: { count: 3 },
       },
     })
-    expect(config.models?.User?.data?.length).toBe(2)
+    expect(config.models?.['User']?.data?.length).toBe(2)
   })
 
   it('rejects what the schema does not have, at compile time', () => {
@@ -345,7 +345,7 @@ describe('defineData and Row', () => {
       cy,
     ])
     expect(users).toHaveLength(2)
-    expect(defineConfig(schema, { models: { User: { data: users } } }).models?.User?.data).toBe(
+    expect(defineConfig(schema, { models: { User: { data: users } } }).models?.['User']?.data).toBe(
       users,
     )
     defineData(schema, 'User', [
@@ -362,6 +362,11 @@ describe('defineData and Row', () => {
     expect(loose).toStrictEqual({})
   })
 })
+
+function windowLength(dates: { readonly from: Date; readonly to: Date } | null) {
+  if (dates === null) throw new Error('expected a date window')
+  return dates.to.getTime() - dates.from.getTime()
+}
 
 describe('resolveSeedConfig', () => {
   it('leaves every omitted option unset: no value of its own', () => {
@@ -386,9 +391,7 @@ describe('resolveSeedConfig', () => {
     expect(resolved.dates?.to).toBeInstanceOf(Date)
     const until = resolveSeedConfig({ dates: { to: '2025-01-01T00:00:00.000Z' } })
     expect(until.dates?.to).toStrictEqual(new Date('2025-01-01T00:00:00.000Z'))
-    expect((until.dates?.to.getTime() ?? 0) - (until.dates?.from.getTime() ?? 0)).toBe(
-      365 * 24 * 60 * 60 * 1000,
-    )
+    expect(windowLength(until.dates)).toBe(365 * 24 * 60 * 60 * 1000)
   })
 
   it('keeps what is given, turning one locale into a list and date strings into dates', () => {

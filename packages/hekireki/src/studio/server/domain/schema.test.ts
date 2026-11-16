@@ -55,6 +55,12 @@ enum Role {
 }
 `
 
+/** A fixture's element that is there, or the fixture thrown out. */
+function defined<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('fixture')
+  return value
+}
+
 function parse(content: string) {
   return Effect.runSync(
     parseSchemaFiles({ files: [{ path: 'schema.prisma', content }], diagnostics: [] }),
@@ -426,12 +432,11 @@ model Post {
   author   User @relation(fields: [authorId], references: [id])
 }
 `)
-    const user = dmmf.datamodel.models[0]
-    const post = dmmf.datamodel.models[1]
-    if (!(user && post)) throw new Error('fixture')
-    const [userId, userPosts] = user.fields
-    const postAuthor = post.fields[2]
-    if (!(userId && userPosts && postAuthor)) throw new Error('fixture')
+    const user = defined(dmmf.datamodel.models[0])
+    const post = defined(dmmf.datamodel.models[1])
+    const userId = defined(user.fields[0])
+    const userPosts = defined(user.fields[1])
+    const postAuthor = defined(post.fields[2])
     expect(makeRelationAttribute({ field: userId, modelName: 'User' })).toBeNull()
     expect(makeRelationAttribute({ field: userPosts, modelName: 'User' })).toBeNull()
     expect(makeRelationAttribute({ field: postAuthor, modelName: 'Post' })).toBe(

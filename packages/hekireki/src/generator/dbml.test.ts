@@ -104,7 +104,7 @@ describe('erDiagramPng', () => {
     const height = view.getUint32(20)
     const svg = erDiagramSvg(datamodel)
     const size = /width="(?<w>[\d.]+)" height="(?<h>[\d.]+)"/u.exec(svg)?.groups
-    expect(width).toBe(Math.round(Number(size?.w) * 2))
-    expect(height).toBe(Math.round(Number(size?.h) * 2))
+    expect(width).toBe(Math.round(Number(size?.['w']) * 2))
+    expect(height).toBe(Math.round(Number(size?.['h']) * 2))
   })
 })

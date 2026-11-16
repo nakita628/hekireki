@@ -94,15 +94,18 @@ export function listBackups(input: { readonly driver: Driver; readonly schemaDir
         .filter((one) => /^backup_\d+\.db$/u.test(one))
         .toSorted()
         .toReversed()
-      return yield* Effect.forEach(files, (file) =>
-        fileStamp(path.join(directory, file)).pipe(
-          Effect.map((stamp) => ({
-            name: file.replace(/\.db$/u, ''),
-            location: path.join(directory, file),
-            size: Number(stamp?.split(':')[1] ?? 0),
-            restorable: true,
-          })),
-        ),
+      return yield* Effect.forEach(
+        files,
+        (file) =>
+          fileStamp(path.join(directory, file)).pipe(
+            Effect.map((stamp) => ({
+              name: file.replace(/\.db$/u, ''),
+              location: path.join(directory, file),
+              size: Number(stamp?.split(':')[1] ?? 0),
+              restorable: true,
+            })),
+          ),
+        { concurrency: 1 },
       )
     }
     // A backup that keeps the statements of its restore can be restored; one taken before Studio
@@ -114,10 +117,10 @@ export function listBackups(input: { readonly driver: Driver; readonly schemaDir
       })
       .pipe(Effect.orElseSucceed(() => ({ rows: [] })))
     return found.rows.map((row) => ({
-      name: String(row.name),
-      location: `schema ${String(row.name)}`,
+      name: String(row['name']),
+      location: `schema ${String(row['name'])}`,
       size: null,
-      restorable: row.restorable === true,
+      restorable: row['restorable'] === true,
     }))
   })
 }
@@ -196,22 +199,22 @@ function replaceWithAttached(driver: Driver) {
     const current = yield* backupObjects(driver, 'main')
     const saved = yield* backupObjects(driver, 'hekireki_backup')
     const drops = current.rows
-      .filter((row) => row.type === 'table' || row.type === 'view')
+      .filter((row) => row['type'] === 'table' || row['type'] === 'view')
       .map(
         (row) =>
-          `DROP ${row.type === 'view' ? 'VIEW' : 'TABLE'} IF EXISTS main.${quoteIdentifier('sqlite', String(row.name))}`,
+          `DROP ${row['type'] === 'view' ? 'VIEW' : 'TABLE'} IF EXISTS main.${quoteIdentifier('sqlite', String(row['name']))}`,
       )
-    const creates = saved.rows.map((row) => String(row.sql))
+    const creates = saved.rows.map((row) => String(row['sql']))
     const copies = saved.rows
-      .filter((row) => row.type === 'table')
+      .filter((row) => row['type'] === 'table')
       .map(
         (row) =>
-          `INSERT INTO main.${quoteIdentifier('sqlite', String(row.name))} SELECT * FROM hekireki_backup.${quoteIdentifier('sqlite', String(row.name))}`,
+          `INSERT INTO main.${quoteIdentifier('sqlite', String(row['name']))} SELECT * FROM hekireki_backup.${quoteIdentifier('sqlite', String(row['name']))}`,
       )
     const sequence = (yield* driver.query({
       sql: "SELECT COUNT(*) AS count FROM hekireki_backup.sqlite_master WHERE name = 'sqlite_sequence'",
       params: [],
-    })).rows[0]?.count
+    })).rows[0]?.['count']
     yield* driver
       .executeScript(
         [

@@ -105,6 +105,20 @@ function coversWire(box: Box, points: readonly Point[]) {
   })
 }
 
+type Geometry = ReturnType<typeof diagramGeometry>
+
+/** The corners of an edge's wire, or none when the pass left the edge out. */
+function pointsOf(geometry: Geometry, id: string): readonly Point[] {
+  return geometry.get(id)?.points ?? []
+}
+
+/** The chip an edge's caption is drawn in; an edge with no caption fails the test. */
+function chipOf(geometry: Geometry, id: string, caption: readonly string[]): Box {
+  const centre = geometry.get(id)?.caption
+  if (centre === undefined || centre === null) throw new Error(`${id} carries no caption`)
+  return captionBoxAt(centre, caption)
+}
+
 const user = card(0, 0, ['id', 'email'])
 const post = card(840, 200, ['id', 'authorId'])
 const pair = new Map([
@@ -115,7 +129,7 @@ const pair = new Map([
 describe('diagramGeometry', () => {
   it('runs an edge between the two handles its ends name', () => {
     const geometry = diagramGeometry([edge('r', ['User', 'id'], ['Post', 'authorId'])], pair)
-    const points = geometry.get('r')?.points ?? []
+    const points = pointsOf(geometry, 'r')
     expect(points[0]).toStrictEqual({ x: NODE_WIDTH, y: FIRST_ROW })
     expect(points.at(-1)).toStrictEqual({ x: 840, y: 200 + FIRST_ROW + ROW_HEIGHT })
   })
@@ -133,7 +147,7 @@ describe('diagramGeometry', () => {
       [edge('r', ['User', 'id'], ['Post', 'authorId'])],
       new Map([...pair, ['Between', between]]),
     )
-    expect(entersCard(geometry.get('r')?.points ?? [], between.box)).toBe(false)
+    expect(entersCard(pointsOf(geometry, 'r'), between.box)).toBe(false)
   })
 
   it('loops a self relation off the right of its own card', () => {
@@ -141,7 +155,7 @@ describe('diagramGeometry', () => {
       [edge('self', ['Category', 'parentId'], ['Category', 'id'])],
       new Map([['Category', card(0, 0, ['id', 'parentId'])]]),
     )
-    const points = geometry.get('self')?.points ?? []
+    const points = pointsOf(geometry, 'self')
     expect(points.every((point) => point.x >= NODE_WIDTH)).toBe(true)
     expect(Math.max(...points.map((point) => point.x))).toBeGreaterThan(NODE_WIDTH)
   })
@@ -155,11 +169,9 @@ describe('diagramGeometry', () => {
       [edge('self', ['Category', 'parentId'], ['Category', 'id'], caption)],
       new Map([['Category', card(0, 0, ['id', 'parentId'])]]),
     )
-    const wire = geometry.get('self')
-    expect(wire?.caption).toBeDefined()
-    const box = wire?.caption ? captionBoxAt(wire.caption, caption) : null
-    expect(box && coversWire(box, wire?.points ?? [])).toBe(true)
-    expect(box && hidesWire(box, wire?.points ?? [])).toBe(false)
+    const box = chipOf(geometry, 'self', caption)
+    expect(coversWire(box, pointsOf(geometry, 'self'))).toBe(true)
+    expect(hidesWire(box, pointsOf(geometry, 'self'))).toBe(false)
   })
 
   it('routes a wire that passes a self relation round its loop and caption', () => {
@@ -183,16 +195,15 @@ describe('diagramGeometry', () => {
     )
     // What the loop takes, worked out here rather than asked of the router: from where it leaves
     // the card, down its two rows, out to the far edge of its caption.
-    const [start = { x: 0, y: 0 }, , bottom = start] = geometry.get('tree')?.points ?? []
-    const centre = geometry.get('tree')?.caption ?? null
-    const chip = centre === null ? null : captionBoxAt(centre, ['tree · one to many'])
+    const [start = { x: 0, y: 0 }, , bottom = start] = pointsOf(geometry, 'tree')
+    const chip = chipOf(geometry, 'tree', ['tree · one to many'])
     const taken = {
       x: start.x,
       y: start.y,
-      width: (chip ? chip.x + chip.width : start.x) - start.x,
+      width: chip.x + chip.width - start.x,
       height: bottom.y - start.y,
     }
-    expect(entersCard(geometry.get('passes')?.points ?? [], taken)).toBe(false)
+    expect(entersCard(pointsOf(geometry, 'passes'), taken)).toBe(false)
   })
 
   it('keeps a caption off the models', () => {
@@ -201,11 +212,9 @@ describe('diagramGeometry', () => {
       [edge('r', ['User', 'id'], ['Post', 'authorId'], caption)],
       pair,
     )
-    const centre = geometry.get('r')?.caption
-    expect(centre).toBeDefined()
-    const box = centre === null || centre === undefined ? null : captionBoxAt(centre, caption)
-    expect(box && overlaps(box, user.box)).toBe(false)
-    expect(box && overlaps(box, post.box)).toBe(false)
+    const box = chipOf(geometry, 'r', caption)
+    expect(overlaps(box, user.box)).toBe(false)
+    expect(overlaps(box, post.box)).toBe(false)
   })
 
   it('fans the captions of two relations between the same pair apart', () => {
@@ -245,9 +254,7 @@ describe('diagramGeometry', () => {
       ],
       pair,
     )
-    const centre = withLink.get('r')?.caption
-    expect(centre).toBeDefined()
-    const box = centre === undefined || centre === null ? null : captionBoxAt(centre, caption)
-    expect(box && coversWire(box, withLink.get('link')?.points ?? [])).toBe(false)
+    const box = chipOf(withLink, 'r', caption)
+    expect(coversWire(box, pointsOf(withLink, 'link'))).toBe(false)
   })
 })

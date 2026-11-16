@@ -1,8 +1,19 @@
 import { parse } from 'acorn'
-import type { Expression, PrivateIdentifier, SpreadElement } from 'acorn'
+import type {
+  ArrayExpression,
+  CallExpression,
+  Expression,
+  Literal,
+  NewExpression,
+  ObjectExpression,
+  PrivateIdentifier,
+  Property,
+  SpreadElement,
+  UnaryExpression,
+} from 'acorn'
 import * as z from 'zod'
 
-import { lowerFirst } from '../../../utils/index.js'
+import { lowerFirst } from '../../../naming/case.js'
 
 /** The model operations that only read, in the order the Prisma docs list them. */
 const READ_OPERATIONS = [
@@ -72,15 +83,7 @@ function nameOf(node: Expression | PrivateIdentifier) {
 /** A literal read as the value it spells; anything that would need evaluating is refused. */
 function valueOf(node: Expression | SpreadElement, depth: number, now: number): Read<ClientValue> {
   if (depth > MAX_DEPTH) return fail(node, `The arguments nest deeper than ${MAX_DEPTH} levels`)
-  if (node.type === 'Literal') {
-    if (node.bigint !== undefined) return done(BigInt(node.bigint))
-    const { value } = node
-    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
-      ? done(value)
-      : value === null
-        ? done(null)
-        : fail(node, 'A regular expression is not a value')
-  }
+  if (node.type === 'Literal') return literalValue(node)
   if (node.type === 'TemplateLiteral') {
     const cooked = node.quasis[0]?.value.cooked
     return node.expressions.length > 0 || cooked === null || cooked === undefined
@@ -95,90 +98,132 @@ function valueOf(node: Expression | SpreadElement, depth: number, now: number): 
           `"${node.name}" is not a literal. Arguments are read, not evaluated: write strings, numbers, booleans, null, objects, arrays or new Date(...).`,
         )
   }
-  if (node.type === 'UnaryExpression') {
-    const inner = node.argument
-    if (node.operator === '-' && inner.type === 'Literal') {
-      return inner.bigint === undefined
-        ? typeof inner.value === 'number'
-          ? done(-inner.value)
-          : fail(inner, 'Expected a number after "-"')
-        : done(-BigInt(inner.bigint))
-    }
-    return fail(node, `"${node.operator}" is not supported: write the value out`)
-  }
-  if (node.type === 'ArrayExpression') {
-    return node.elements.reduce<Read<readonly ClientValue[]>>((items, element) => {
-      if (!items.ok) return items
-      if (element === null) return fail(node, 'An array cannot have a hole')
-      if (element.type === 'SpreadElement') {
-        return fail(element, 'Spread is not supported: write the items out')
-      }
-      const item = valueOf(element, depth + 1, now)
-      return item.ok ? done([...items.value, item.value]) : item
-    }, done([]))
-  }
-  if (node.type === 'ObjectExpression') {
-    return node.properties.reduce<Read<Readonly<Record<string, ClientValue>>>>(
-      (entries, property) => {
-        if (!entries.ok) return entries
-        if (property.type === 'SpreadElement') {
-          return fail(property, 'Spread is not supported: write the fields out')
-        }
-        if (property.computed) return fail(property.key, 'Computed keys are not supported')
-        if (property.shorthand) {
-          return fail(
-            property.key,
-            `"${nameOf(property.key) ?? ''}" is a variable: write "${nameOf(property.key) ?? ''}: <value>"`,
-          )
-        }
-        if (property.kind !== 'init' || property.method) {
-          return fail(property, 'A method is not a value')
-        }
-        const key =
-          property.key.type === 'Literal' ? String(property.key.value) : nameOf(property.key)
-        if (key === null) return fail(property.key, 'Expected a key')
-        const value = valueOf(property.value, depth + 1, now)
-        return value.ok ? done({ ...entries.value, [key]: value.value }) : value
-      },
-      done({}),
-    )
-  }
-  if (node.type === 'NewExpression') {
-    if (nameOf(node.callee) !== 'Date') {
-      return fail(
-        node,
-        `Only new Date(...) is supported, not new ${node.callee.type === 'Identifier' ? node.callee.name : '…'}`,
-      )
-    }
-    const [argument, second] = node.arguments
-    if (argument === undefined) return done(new Date(now))
-    if (second !== undefined) return fail(second, 'new Date takes one string or number')
-    if (
-      argument.type !== 'Literal' ||
-      argument.bigint !== undefined ||
-      (typeof argument.value !== 'string' && typeof argument.value !== 'number')
-    ) {
-      return fail(argument, 'new Date takes one string or number')
-    }
-    const date = new Date(argument.value)
-    return Number.isNaN(date.getTime())
-      ? fail(node, `Invalid date: ${argument.raw ?? ''}`)
-      : done(date)
-  }
+  if (node.type === 'UnaryExpression') return negatedValue(node)
+  if (node.type === 'ArrayExpression') return arrayValue(node, depth, now)
+  if (node.type === 'ObjectExpression') return objectValue(node, depth, now)
+  if (node.type === 'NewExpression') return dateValue(node, now)
   return fail(
     node,
     'Only literals are read: strings, numbers, booleans, null, objects, arrays and new Date(...).',
   )
 }
 
+function literalValue(node: Literal): Read<ClientValue> {
+  if (node.bigint !== undefined) return done(BigInt(node.bigint))
+  const { value } = node
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return done(value)
+  }
+  return value === null ? done(null) : fail(node, 'A regular expression is not a value')
+}
+
+/** `-1` and `-1n`: the one operator a literal is written with. */
+function negatedValue(node: UnaryExpression): Read<ClientValue> {
+  const inner = node.argument
+  if (node.operator !== '-' || inner.type !== 'Literal') {
+    return fail(node, `"${node.operator}" is not supported: write the value out`)
+  }
+  if (inner.bigint !== undefined) return done(-BigInt(inner.bigint))
+  return typeof inner.value === 'number'
+    ? done(-inner.value)
+    : fail(inner, 'Expected a number after "-"')
+}
+
+function arrayValue(node: ArrayExpression, depth: number, now: number): Read<ClientValue> {
+  return node.elements.reduce<Read<readonly ClientValue[]>>((items, element) => {
+    if (!items.ok) return items
+    if (element === null) return fail(node, 'An array cannot have a hole')
+    if (element.type === 'SpreadElement') {
+      return fail(element, 'Spread is not supported: write the items out')
+    }
+    const item = valueOf(element, depth + 1, now)
+    return item.ok ? done([...items.value, item.value]) : item
+  }, done([]))
+}
+
+function objectValue(node: ObjectExpression, depth: number, now: number): Read<ClientValue> {
+  return node.properties.reduce<Read<Readonly<Record<string, ClientValue>>>>(
+    (entries, property) => {
+      if (!entries.ok) return entries
+      const entry = entryOf(property, depth, now)
+      return entry.ok ? done({ ...entries.value, [entry.value.key]: entry.value.value }) : entry
+    },
+    done({}),
+  )
+}
+
+/** One `key: value` of an object literal; spread, computed keys, shorthand and methods are refused. */
+function entryOf(
+  property: Property | SpreadElement,
+  depth: number,
+  now: number,
+): Read<{ readonly key: string; readonly value: ClientValue }> {
+  if (property.type === 'SpreadElement') {
+    return fail(property, 'Spread is not supported: write the fields out')
+  }
+  if (property.computed) return fail(property.key, 'Computed keys are not supported')
+  if (property.shorthand) {
+    return fail(
+      property.key,
+      `"${nameOf(property.key) ?? ''}" is a variable: write "${nameOf(property.key) ?? ''}: <value>"`,
+    )
+  }
+  if (property.kind !== 'init' || property.method) {
+    return fail(property, 'A method is not a value')
+  }
+  const key = property.key.type === 'Literal' ? String(property.key.value) : nameOf(property.key)
+  if (key === null) return fail(property.key, 'Expected a key')
+  const value = valueOf(property.value, depth + 1, now)
+  return value.ok ? done({ key, value: value.value }) : value
+}
+
+/** `new Date()` (the time of the run) and `new Date(<string or number>)`. */
+function dateValue(node: NewExpression, now: number): Read<ClientValue> {
+  if (nameOf(node.callee) !== 'Date') {
+    return fail(
+      node,
+      `Only new Date(...) is supported, not new ${node.callee.type === 'Identifier' ? node.callee.name : '…'}`,
+    )
+  }
+  const [argument, second] = node.arguments
+  if (argument === undefined) return done(new Date(now))
+  if (second !== undefined) return fail(second, 'new Date takes one string or number')
+  if (
+    argument.type !== 'Literal' ||
+    argument.bigint !== undefined ||
+    (typeof argument.value !== 'string' && typeof argument.value !== 'number')
+  ) {
+    return fail(argument, 'new Date takes one string or number')
+  }
+  const date = new Date(argument.value)
+  return Number.isNaN(date.getTime())
+    ? fail(node, `Invalid date: ${argument.raw ?? ''}`)
+    : done(date)
+}
+
+/** A `$` tag on a template (`prisma.$queryRaw\`...\``) is raw SQL, which runs on the SQL page. */
+function rawTagRefusal(node: Expression) {
+  if (node.type !== 'TaggedTemplateExpression' || node.tag.type !== 'MemberExpression') return null
+  const tag = nameOf(node.tag.property)
+  if (tag?.startsWith('$') !== true) return null
+  return fail(node.tag.property, `${tag} is not supported here: run raw SQL on the SQL page`)
+}
+
+/** The client's own methods (`$transaction`, `$queryRaw`) where a delegate or an operation goes. */
+function clientMethodRefusal(name: string | null, node: Range) {
+  if (name?.startsWith('$') !== true) return null
+  return fail(
+    node,
+    name === '$transaction'
+      ? '$transaction cannot be nested'
+      : `${name} is not supported here: run raw SQL on the SQL page`,
+  )
+}
+
 /** `prisma.user.findMany({ ... })`: whatever the client is called, a delegate, an operation, one argument. */
 function callOf(node: Expression, now: number) {
-  if (node.type === 'TaggedTemplateExpression' && node.tag.type === 'MemberExpression') {
-    const tag = nameOf(node.tag.property)
-    if (tag?.startsWith('$')) {
-      return fail(node.tag.property, `${tag} is not supported here: run raw SQL on the SQL page`)
-    }
-  }
+  const tagged = rawTagRefusal(node)
+  if (tagged !== null) return tagged
   if (node.type !== 'CallExpression') {
     return fail(node, 'Expected a call such as prisma.user.findMany()')
   }
@@ -187,15 +232,8 @@ function callOf(node: Expression, now: number) {
     return fail(callee, 'Expected a call such as prisma.user.findMany()')
   }
   // `prisma.$transaction(...)` inside a batch, `prisma.$queryRaw(...)`: the client's own methods.
-  const own = nameOf(callee.property)
-  if (own?.startsWith('$')) {
-    return fail(
-      callee.property,
-      own === '$transaction'
-        ? '$transaction cannot be nested'
-        : `${own} is not supported here: run raw SQL on the SQL page`,
-    )
-  }
+  const own = clientMethodRefusal(nameOf(callee.property), callee.property)
+  if (own !== null) return own
   if (callee.object.type !== 'MemberExpression') {
     return fail(callee, 'Expected a call such as prisma.user.findMany()')
   }
@@ -204,14 +242,8 @@ function callOf(node: Expression, now: number) {
   if (delegate === null || callee.object.computed) {
     return fail(callee.object.property, 'Expected a model delegate such as "user"')
   }
-  if (delegate.startsWith('$')) {
-    return fail(
-      callee.object.property,
-      delegate === '$transaction'
-        ? '$transaction cannot be nested'
-        : `${delegate} is not supported here: run raw SQL on the SQL page`,
-    )
-  }
+  const method = clientMethodRefusal(delegate, callee.object.property)
+  if (method !== null) return method
   if (operation === null || callee.computed) {
     return fail(callee.property, 'Expected an operation such as "findMany"')
   }
@@ -226,6 +258,47 @@ function callOf(node: Expression, now: number) {
     start: node.start,
     end: node.end,
   })
+}
+
+/** `prisma.$transaction([...calls], options?)`: each call read, and the options as a value. */
+function transactionOf(expression: CallExpression, now: number) {
+  const [batch, options, extra] = expression.arguments
+  if (batch?.type !== 'ArrayExpression') {
+    return fail(
+      batch ?? expression,
+      '$transaction takes an array of calls here: prisma.$transaction([prisma.user.count(), ...])',
+    )
+  }
+  if (batch.elements.length === 0) return fail(batch, '$transaction needs at least one call')
+  if (extra !== undefined) {
+    return fail(extra, '$transaction takes the calls and, at most, options')
+  }
+  const calls = batch.elements.map((element) =>
+    element === null || element.type === 'SpreadElement'
+      ? fail(element ?? batch, 'Expected a call such as prisma.user.count()')
+      : callOf(element, now),
+  )
+  const refused = calls.find((call) => !call.ok)
+  if (refused !== undefined && !refused.ok) return refused
+  const read = options === undefined ? done(undefined) : valueOf(options, 1, now)
+  return read.ok
+    ? done({
+        calls: calls.flatMap((call) => (call.ok ? [call.value] : [])),
+        transaction: true,
+        options: read.value,
+      })
+    : read
+}
+
+/** The failure for text acorn cannot parse, at the place it stopped. */
+function syntaxFailure(e: unknown, text: string) {
+  // acorn says where it stopped; its "(line:column)" suffix is what the range is for.
+  const at =
+    e instanceof SyntaxError && 'pos' in e && typeof e.pos === 'number' ? e.pos : text.length
+  return fail(
+    { start: Math.min(at, text.length), end: Math.min(at + 1, text.length) },
+    e instanceof Error ? e.message.replace(/ \(\d+:\d+\)$/u, '') : 'The text could not be read',
+  )
 }
 
 /** The one statement of the text: a call, or a batch `$transaction` over several. */
@@ -253,48 +326,17 @@ function programOf(text: string, now: number) {
       statement.expression.type === 'AwaitExpression'
         ? statement.expression.argument
         : statement.expression
-    const transaction =
+    if (
       expression.type === 'CallExpression' &&
       expression.callee.type === 'MemberExpression' &&
       nameOf(expression.callee.property) === '$transaction'
-    if (!transaction) {
-      const call = callOf(expression, now)
-      return call.ok ? done({ calls: [call.value], transaction: false, options: undefined }) : call
+    ) {
+      return transactionOf(expression, now)
     }
-    const [batch, options, extra] = expression.arguments
-    if (batch?.type !== 'ArrayExpression') {
-      return fail(
-        batch ?? expression,
-        '$transaction takes an array of calls here: prisma.$transaction([prisma.user.count(), ...])',
-      )
-    }
-    if (batch.elements.length === 0) return fail(batch, '$transaction needs at least one call')
-    if (extra !== undefined) {
-      return fail(extra, '$transaction takes the calls and, at most, options')
-    }
-    const calls = batch.elements.map((element) =>
-      element === null || element.type === 'SpreadElement'
-        ? fail(element ?? batch, 'Expected a call such as prisma.user.count()')
-        : callOf(element, now),
-    )
-    const refused = calls.find((call) => !call.ok)
-    if (refused !== undefined && !refused.ok) return refused
-    const read = options === undefined ? done(undefined) : valueOf(options, 1, now)
-    return read.ok
-      ? done({
-          calls: calls.flatMap((call) => (call.ok ? [call.value] : [])),
-          transaction: true,
-          options: read.value,
-        })
-      : read
+    const call = callOf(expression, now)
+    return call.ok ? done({ calls: [call.value], transaction: false, options: undefined }) : call
   } catch (e) {
-    // acorn says where it stopped; its "(line:column)" suffix is what the range is for.
-    const at =
-      e instanceof SyntaxError && 'pos' in e && typeof e.pos === 'number' ? e.pos : text.length
-    return fail(
-      { start: Math.min(at, text.length), end: Math.min(at + 1, text.length) },
-      e instanceof Error ? e.message.replace(/ \(\d+:\d+\)$/u, '') : 'The text could not be read',
-    )
+    return syntaxFailure(e, text)
   }
 }
 

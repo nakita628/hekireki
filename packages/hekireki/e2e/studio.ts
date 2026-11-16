@@ -13,6 +13,17 @@ export { expect } from '@playwright/test'
 
 type Problems = { readonly errors: readonly string[] }
 
+/** The value a test cannot go on without; a missing one fails the test with what was missing. */
+export function present<T>(value: T | null | undefined, what: string): T {
+  if (value === null || value === undefined) throw new Error(what)
+  return value
+}
+
+/** Whether a reported problem is one the test said it provokes. */
+function isExpected(entry: string, expected: readonly RegExp[]) {
+  return expected.some((pattern) => pattern.test(entry))
+}
+
 export const test = base.extend<{
   readonly problems: Problems
   /**
@@ -42,9 +53,7 @@ export const test = base.extend<{
         }
       })
       await use({ errors })
-      const unexpected = errors.filter(
-        (entry) => !expectedProblems.some((pattern) => pattern.test(entry)),
-      )
+      const unexpected = errors.filter((entry) => !isExpected(entry, expectedProblems))
       expect(unexpected, 'the page reported errors').toStrictEqual([])
     },
     { auto: true },

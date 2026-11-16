@@ -12,17 +12,17 @@ import {
 describe('helper/ajv', () => {
   describe('PRISMA_TO_AJV', () => {
     it('maps Prisma types to JSON Schema types', () => {
-      expect(PRISMA_TO_AJV.String).toBe("{ type: 'string' as const }")
-      expect(PRISMA_TO_AJV.Int).toBe("{ type: 'integer' as const }")
-      expect(PRISMA_TO_AJV.Float).toBe("{ type: 'number' as const }")
-      expect(PRISMA_TO_AJV.Boolean).toBe("{ type: 'boolean' as const }")
-      expect(PRISMA_TO_AJV.DateTime).toBe(
+      expect(PRISMA_TO_AJV['String']).toBe("{ type: 'string' as const }")
+      expect(PRISMA_TO_AJV['Int']).toBe("{ type: 'integer' as const }")
+      expect(PRISMA_TO_AJV['Float']).toBe("{ type: 'number' as const }")
+      expect(PRISMA_TO_AJV['Boolean']).toBe("{ type: 'boolean' as const }")
+      expect(PRISMA_TO_AJV['DateTime']).toBe(
         "{ type: 'string' as const, format: 'date-time' as const }",
       )
-      expect(PRISMA_TO_AJV.BigInt).toBe("{ type: 'integer' as const }")
-      expect(PRISMA_TO_AJV.Decimal).toBe("{ type: 'number' as const }")
-      expect(PRISMA_TO_AJV.Json).toBe('{}')
-      expect(PRISMA_TO_AJV.Bytes).toBe("{ type: 'string' as const }")
+      expect(PRISMA_TO_AJV['BigInt']).toBe("{ type: 'integer' as const }")
+      expect(PRISMA_TO_AJV['Decimal']).toBe("{ type: 'number' as const }")
+      expect(PRISMA_TO_AJV['Json']).toBe('{}')
+      expect(PRISMA_TO_AJV['Bytes']).toBe("{ type: 'string' as const }")
     })
   })
 

@@ -32,21 +32,21 @@ describe('generateDefaults', () => {
       'createdAt',
       'tags',
     ])
-    expect(values.id).toMatch(
+    expect(values['id']).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
     )
-    expect(values.legacy).toMatch(
+    expect(values['legacy']).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
     )
-    expect(values.token).toMatch(/^c[0-9a-z]{24}$/u)
-    expect(values.handle).toMatch(/^[a-z][0-9a-z]{23}$/u)
-    expect(values.slug).toHaveLength(10)
-    expect(values.code).toHaveLength(21)
-    expect(values.order).toMatch(/^[0-9A-Z]{26}$/u)
-    const at = new Date(values.createdAt ?? '').getTime()
+    expect(values['token']).toMatch(/^c[0-9a-z]{24}$/u)
+    expect(values['handle']).toMatch(/^[a-z][0-9a-z]{23}$/u)
+    expect(values['slug']).toHaveLength(10)
+    expect(values['code']).toHaveLength(21)
+    expect(values['order']).toMatch(/^[0-9A-Z]{26}$/u)
+    const at = new Date(String(values['createdAt'])).getTime()
     expect(at).toBeGreaterThanOrEqual(before)
     expect(at).toBeLessThanOrEqual(Date.now())
-    expect(values.tags).toBe('[]')
+    expect(values['tags']).toBe('[]')
   })
 
   it('makes nothing for no fields', async () => {

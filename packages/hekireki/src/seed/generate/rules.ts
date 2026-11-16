@@ -1,6 +1,6 @@
 import { Effect } from 'effect'
 
-import type { LooseModelRule, SeedRow } from '../config.js'
+import type { LooseModelRule, RelationRule, SeedRow } from '../config.js'
 import { SeedGenerationError } from '../errors.js'
 import type { ResolvedSeedConfig } from '../options.js'
 import type { ModelTable, SeedTable } from '../plan.js'
@@ -13,6 +13,26 @@ import {
   modelTable,
 } from './context.js'
 
+/** What is wrong in the bound a rule sets on one relation field. */
+function relationRuleProblems(
+  tables: readonly SeedTable[],
+  table: ModelTable,
+  name: string,
+  field: string,
+  bound: RelationRule,
+): readonly string[] {
+  if (!isLinkField(tables, name, field) && !isParentSide(tables, table, field)) {
+    return [
+      `models.${name}.relations.${field}: ${name} has no relation field named ${field} that a rule can bound (a list, or the other side of a key).`,
+    ]
+  }
+  return bound.min !== undefined && bound.max !== undefined && bound.min > bound.max
+    ? [
+        `models.${name}.relations.${field}: min ${String(bound.min)} is above max ${String(bound.max)}.`,
+      ]
+    : []
+}
+
 /** What is wrong in one real row and the rows nested in it, as sentences. */
 function checkDataRow(
   tables: readonly SeedTable[],
@@ -20,8 +40,9 @@ function checkDataRow(
   row: SeedRow,
   where: string,
 ): readonly string[] {
+  const fields = new Map(table.model.fields.map((f) => [f.name, f]))
   return Object.entries(row).flatMap(([name, value]) => {
-    const field = table.model.fields.find((f) => f.name === name)
+    const field = fields.get(name)
     if (field === undefined) {
       return [`${where}.${name}: ${table.name} has no field named ${name}.`]
     }
@@ -100,15 +121,7 @@ function checkModel(name: string, rule: LooseModelRule, tables: readonly SeedTab
     return problems.filter(([found]) => found).map(([, message]) => message)
   })
   const relations = Object.entries(rule.relations ?? {}).flatMap(([field, bound]) =>
-    isLinkField(tables, name, field) || isParentSide(tables, table, field)
-      ? bound.min !== undefined && bound.max !== undefined && bound.min > bound.max
-        ? [
-            `models.${name}.relations.${field}: min ${String(bound.min)} is above max ${String(bound.max)}.`,
-          ]
-        : []
-      : [
-          `models.${name}.relations.${field}: ${name} has no relation field named ${field} that a rule can bound (a list, or the other side of a key).`,
-        ],
+    relationRuleProblems(tables, table, name, field, bound),
   )
   const count =
     rule.count !== undefined && (!Number.isInteger(rule.count) || rule.count < 0)

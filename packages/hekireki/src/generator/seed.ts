@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { tsString } from '../utils/typescript.js'
+import { tsString } from '../literal/typescript.js'
 
 /** One field as a value (`kind: 'scalar'`) or as a type (`readonly kind: 'scalar'`). */
 function fieldEntry(field: DMMF.Field, declaration: boolean) {
@@ -31,9 +31,7 @@ function uniqueSets(model: DMMF.Model) {
     ...model.uniqueFields,
   ]
   const all = [...singles, ...composite]
-  return all.filter(
-    (set, index) => all.findIndex((other) => other.join(' ') === set.join(' ')) === index,
-  )
+  return [...new Map(all.map((set) => [set.join(' '), set])).values()]
 }
 
 function modelEntries(datamodel: DMMF.Datamodel, declaration: boolean) {

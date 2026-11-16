@@ -10,10 +10,19 @@ const harness = resolve(import.meta.dirname, '..', 'harness', 'sea-orm')
 const hasCargo = spawnSync('cargo', ['--version'], { stdio: 'ignore' }).status === 0
 const hasRustfmt = spawnSync('rustfmt', ['--version'], { stdio: 'ignore' }).status === 0
 
+function rustFiles(dir: string) {
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.rs'))
+    .map((f) => join(dir, f))
+}
+
+// A CI leg has every toolchain; a local run may not.
+const ON_CI = (process.env.CI ?? '') !== ''
+
 describe('sea-orm', () => {
   // Skipping keeps `vp test` runnable without Rust installed; a CI leg that
   // silently skipped would be a false green.
-  it.runIf(!!process.env.CI)('the Rust toolchain is installed', () => {
+  it.runIf(ON_CI)('the Rust toolchain is installed', () => {
     expect({ cargo: hasCargo, rustfmt: hasRustfmt }).toStrictEqual({ cargo: true, rustfmt: true })
   })
 
@@ -26,11 +35,7 @@ describe('sea-orm', () => {
       join(harness, 'src', 'entities'),
       join(harness, 'src', 'variants', 'sqlite'),
       join(harness, 'src', 'variants', 'mysql'),
-    ].flatMap((dir) =>
-      readdirSync(dir)
-        .filter((f) => f.endsWith('.rs'))
-        .map((f) => join(dir, f)),
-    )
+    ].flatMap(rustFiles)
     expect(files.length).toBeGreaterThan(0)
 
     const result = spawnSync('rustfmt', ['--edition', '2021', '--check', ...files], {

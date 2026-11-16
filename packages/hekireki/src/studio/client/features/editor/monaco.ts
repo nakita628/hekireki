@@ -424,6 +424,26 @@ function wholeWordRange(model: editor.ITextModel, position: Position) {
     : undefined
 }
 
+/** A completion as Monaco shows it, at the cursor it was asked for. */
+function suggestionOf(
+  model: editor.ITextModel,
+  position: Position,
+  item: ReturnType<typeof toCompletions>[number],
+): languages.CompletionItem {
+  return {
+    label: item.label,
+    kind: languages.CompletionItemKind[item.kind],
+    ...(item.detail === null ? {} : { detail: item.detail }),
+    ...(item.documentation === null ? {} : { documentation: { value: item.documentation } }),
+    insertText: item.insertText,
+    insertTextRules: item.isSnippet
+      ? languages.CompletionItemInsertTextRule.InsertAsSnippet
+      : languages.CompletionItemInsertTextRule.None,
+    sortText: item.sortText,
+    range: rangeFor(model, position, item.insertText),
+  }
+}
+
 function completionProvider(): languages.CompletionItemProvider {
   return {
     // The characters the Prisma VS Code extension triggers on.
@@ -437,18 +457,7 @@ function completionProvider(): languages.CompletionItemProvider {
               ? (context.triggerCharacter ?? null)
               : null,
         })) ?? []
-      const suggestions = toCompletions(items).map((item) => ({
-        label: item.label,
-        kind: languages.CompletionItemKind[item.kind],
-        detail: item.detail ?? undefined,
-        documentation: item.documentation === null ? undefined : { value: item.documentation },
-        insertText: item.insertText,
-        insertTextRules: item.isSnippet
-          ? languages.CompletionItemInsertTextRule.InsertAsSnippet
-          : languages.CompletionItemInsertTextRule.None,
-        sortText: item.sortText,
-        range: rangeFor(model, position, item.insertText),
-      }))
+      const suggestions = toCompletions(items).map((item) => suggestionOf(model, position, item))
       return { suggestions }
     },
   }
@@ -458,11 +467,9 @@ function hoverProvider(): languages.HoverProvider {
   return {
     provideHover: async (model, position) => {
       const hover = await registry.services?.hover(requestAt(model, position))
-      if (!hover?.contents) return null
-      return {
-        contents: [{ value: hover.contents }],
-        range: hover.range ? toRange(hover.range) : wholeWordRange(model, position),
-      }
+      if (hover === undefined || hover.contents === null || hover.contents === '') return null
+      const range = hover.range ? toRange(hover.range) : wholeWordRange(model, position)
+      return { contents: [{ value: hover.contents }], ...(range === undefined ? {} : { range }) }
     },
   }
 }
@@ -625,6 +632,13 @@ function documentSymbolProvider(): languages.DocumentSymbolProvider {
   }
 }
 
+/** The line and column an opener is asked to show: where a range starts, or the top of the file. */
+function openedAt(at: Parameters<editor.ICodeEditorOpener['openCodeEditor']>[2]) {
+  if (at === undefined) return { line: 1, column: 1 }
+  if ('startLineNumber' in at) return { line: at.startLineNumber, column: at.startColumn }
+  return { line: at.lineNumber, column: at.column }
+}
+
 // "Go to definition" and the peek views open other files through the view, which switches the
 // editor to that file at the line.
 function editorOpener(): editor.ICodeEditorOpener {
@@ -632,18 +646,7 @@ function editorOpener(): editor.ICodeEditorOpener {
     openCodeEditor: (_source, resource, selectionOrPosition) => {
       const path = pathOf(resource)
       if (path === null || registry.services === null) return false
-      const line =
-        selectionOrPosition === undefined
-          ? 1
-          : 'startLineNumber' in selectionOrPosition
-            ? selectionOrPosition.startLineNumber
-            : selectionOrPosition.lineNumber
-      const column =
-        selectionOrPosition === undefined
-          ? 1
-          : 'startColumn' in selectionOrPosition
-            ? selectionOrPosition.startColumn
-            : selectionOrPosition.column
+      const { line, column } = openedAt(selectionOrPosition)
       registry.services.openLocation(path, line, column)
       return true
     },

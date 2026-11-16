@@ -2,6 +2,8 @@
 // maps HTTP to one usecase; a usecase composes services (I/O) and domain (pure decisions); a
 // service touches one piece of I/O; domain takes values and returns values.
 
+import { existsSync } from 'node:fs'
+
 import {
   INDEX_FILE,
   TEST_FILE,
@@ -34,11 +36,31 @@ const FORBIDDEN_IMPORTS = {
     handlers: 'Services sit below usecases; they do not call back up.',
   },
 }
+const DOMAIN_IO_CALLS = new Set([
+  'fetch',
+  'setTimeout',
+  'setInterval',
+  'setImmediate',
+  'queueMicrotask',
+  'require',
+])
+const DOMAIN_IO_OBJECTS = new Set(['console', 'process', 'window', 'document', 'globalThis'])
+const RAW_REQUEST_READERS = new Set([
+  'json',
+  'param',
+  'query',
+  'queries',
+  'parseBody',
+  'formData',
+  'text',
+  'arrayBuffer',
+  'blob',
+])
 const DOMAIN_ALLOWED = [
   /^zod(\/.*)?$/u,
   /^acorn$/u,
   /^\.\/[^/]+$/u,
-  /^(\.\.\/)+(types|utils|sql)(\/[\w-]+)?(\.js)?$/u,
+  /^(\.\.\/)+(types|annotation|naming|prisma|literal|list|network|sql)(\/[\w-]+)?(\.js)?$/u,
 ]
 
 // `import type` / `export type` carry no behaviour, so no layer rule counts them.
@@ -185,7 +207,7 @@ export const layerRules = {
           if (DOMAIN_ALLOWED.some((pattern) => pattern.test(source))) return
           context.report({
             node: node.source,
-            message: `Domain may import only zod, acorn, other domain modules and the package's pure modules (types, utils, sql), not \`${source}\`. Anything that talks to the outside world belongs in a service; the usecase passes the result in as a value. \`import type\` is fine.`,
+            message: `Domain may import only zod, acorn, other domain modules and the package's pure modules (types, annotation, naming, prisma, literal, list, network, sql), not \`${source}\`. Anything that talks to the outside world belongs in a service; the usecase passes the result in as a value. \`import type\` is fine.`,
           })
         }),
         ImportExpression(node) {
@@ -256,15 +278,6 @@ export const layerRules = {
     },
     create(context) {
       if (TEST_FILE.test(filenameOf(context))) return {}
-      const ioCalls = new Set([
-        'fetch',
-        'setTimeout',
-        'setInterval',
-        'setImmediate',
-        'queueMicrotask',
-        'require',
-      ])
-      const ioObjects = new Set(['console', 'process', 'window', 'document', 'globalThis'])
       const tail =
         'Domain functions take values and return values; do this in a service and pass the result in.'
       function reportAsync(node) {
@@ -277,12 +290,12 @@ export const layerRules = {
       }
       return {
         CallExpression(node) {
-          if (node.callee.type === 'Identifier' && ioCalls.has(node.callee.name)) {
+          if (node.callee.type === 'Identifier' && DOMAIN_IO_CALLS.has(node.callee.name)) {
             context.report({ node, message: `\`${node.callee.name}()\` in domain. ${tail}` })
           }
         },
         MemberExpression(node) {
-          if (node.object.type === 'Identifier' && ioObjects.has(node.object.name)) {
+          if (node.object.type === 'Identifier' && DOMAIN_IO_OBJECTS.has(node.object.name)) {
             context.report({ node, message: `\`${node.object.name}\` in domain. ${tail}` })
           }
         },
@@ -300,6 +313,32 @@ export const layerRules = {
               })
             }
           }
+        },
+      }
+    },
+  },
+
+  // Why: domain is the pure half, the part a test can hold without a database or a file. Each
+  //      module has its own test beside it, so a decision added there is tested where it is.
+  //   NG: domain/plan.ts with no domain/plan.test.ts
+  //   OK: domain/plan.ts and domain/plan.test.ts; a barrel (index.ts) needs none
+  'domain-require-test': {
+    meta: {
+      docs: { description: 'every domain module has a .test.ts of the same name beside it' },
+    },
+    create(context) {
+      const filename = filenameOf(context)
+      if (TEST_FILE.test(filename) || INDEX_FILE.test(filename) || filename.endsWith('.d.ts')) {
+        return {}
+      }
+      const testFile = filename.replace(/\.tsx?$/u, '.test.ts')
+      if (existsSync(testFile)) return {}
+      return {
+        Program(node) {
+          context.report({
+            node,
+            message: `Write ${testFile.split(/[\\/]/u).at(-1)} beside this domain module: domain is pure, and each module is tested where it is.`,
+          })
         },
       }
     },
@@ -362,17 +401,6 @@ export const layerRules = {
     },
     create(context) {
       if (TEST_FILE.test(filenameOf(context))) return {}
-      const rawReaders = new Set([
-        'json',
-        'param',
-        'query',
-        'queries',
-        'parseBody',
-        'formData',
-        'text',
-        'arrayBuffer',
-        'blob',
-      ])
       return {
         CallExpression(node) {
           const method = requestMethod(node)
@@ -386,7 +414,7 @@ export const layerRules = {
             })
             return
           }
-          if (!rawReaders.has(method)) return
+          if (!RAW_REQUEST_READERS.has(method)) return
           context.report({
             node,
             message: `\`c.req.${method}()\` reads the request before validation. Declare the input in main.tsp and read it as \`const data = c.req.valid('...')\`.`,

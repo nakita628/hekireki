@@ -19,7 +19,10 @@ function isFile(candidate: string) {
 export function resolveTypeScript(
   specifier: string,
   context: { readonly parentURL?: string | undefined },
-  next: (specifier: string) => { readonly url: string; readonly shortCircuit?: boolean },
+  next: (specifier: string) => {
+    readonly url: string
+    readonly shortCircuit?: boolean | undefined
+  },
 ) {
   const parent = context.parentURL
   const relative = specifier.startsWith('./') || specifier.startsWith('../')

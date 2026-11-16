@@ -65,7 +65,7 @@ describe('writeFile and makeDirectory', () => {
     await run(makeDirectory(nested))
     await run(writeFile(path.join(nested, 'text.txt'), 'hello'))
     await run(writeFile(path.join(nested, 'bytes.bin'), new Uint8Array([1, 2, 3])))
-    expect(readFileSync(path.join(nested, 'text.txt'), 'utf-8')).toBe('hello')
+    expect(readFileSync(path.join(nested, 'text.txt'), 'utf8')).toBe('hello')
     expect([...readFileSync(path.join(nested, 'bytes.bin'))]).toStrictEqual([1, 2, 3])
     expect(statSync(nested).isDirectory()).toBe(true)
   })
@@ -122,7 +122,8 @@ describe('importFromProject', () => {
 
   it('loads a package as the project resolves it', async () => {
     const zod: unknown = await Effect.runPromise(importFromProject('zod', project))
-    expect(typeof zod === 'object' && zod !== null && 'object' in zod).toBe(true)
+    expect(zod).toBeTypeOf('object')
+    expect(zod).toHaveProperty('object')
   })
 
   it('says which package the project could not load, and from where', async () => {

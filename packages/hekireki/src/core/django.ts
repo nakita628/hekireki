@@ -13,7 +13,7 @@ export function django(options: GeneratorOptions) {
     const resolved = outputFile(output, 'models.py')
     const enums = options.dmmf.datamodel.enums
     const indexes = options.dmmf.datamodel.indexes
-    const conflicts = findNameConflicts(options.dmmf.datamodel.models, enums)
+    const conflicts = findNameConflicts(enums)
     if (conflicts.length > 0) {
       return yield* new GeneratorConfigError({
         message: `Hekireki-Django cannot represent this schema:\n${conflicts.map((c) => `  - ${c}`).join('\n')}`,

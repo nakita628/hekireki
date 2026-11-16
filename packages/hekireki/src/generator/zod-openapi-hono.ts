@@ -9,12 +9,12 @@ import {
   makePaths,
   makeRowSchema,
 } from '../helper/zod-openapi-hono.js'
+import { toYaml } from '../literal/yaml.js'
+import type { YamlValue } from '../literal/yaml.js'
+import { makeSnakeCase } from '../naming/case.js'
+import { pluralize } from '../naming/humanizer.js'
+import { allocate } from '../naming/index.js'
 import type { AuthKind } from '../types/index.js'
-import { pluralize } from '../utils/humanizer.js'
-import { makeSnakeCase } from '../utils/index.js'
-import { allocate } from '../utils/naming.js'
-import { toYaml } from '../utils/yaml.js'
-import type { YamlValue } from '../utils/yaml.js'
 
 /** The names a model's schemas take: `User`, `UserCreate`, `UserUpdate`, a number added on a clash. */
 function schemaNames(models: readonly DMMF.Model[]) {
@@ -79,7 +79,7 @@ function guardedOperation(
   operation: OpenApiSchema,
   security: ReturnType<typeof securityScheme>,
 ): OpenApiSchema {
-  const responses = operation.responses
+  const responses = operation['responses']
   return {
     ...operation,
     security: [{ [security.name]: [] }],

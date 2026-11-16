@@ -108,12 +108,26 @@ describe('registerGenerator', () => {
   })
 })
 
+function isSourceFile(file: string) {
+  return file.endsWith('.ts') && !file.endsWith('.test.ts')
+}
+
+function baseName(file: string) {
+  return path.basename(file, '.ts')
+}
+
+// The two files here that are not generator shims.
+function isShim(name: string) {
+  return name !== 'index' && name !== 'hekireki'
+}
+
+function firstGroup(match: RegExpMatchArray) {
+  return match[1] ?? ''
+}
+
 describe('bin entries', () => {
   it('has one shim file per registered generator', () => {
-    const files = readdirSync(here)
-      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
-      .map((file) => path.basename(file, '.ts'))
-      .filter((name) => name !== 'index' && name !== 'hekireki')
+    const files = readdirSync(here).filter(isSourceFile).map(baseName).filter(isShim)
     expect(new Set(files)).toStrictEqual(new Set(SHIMS))
   })
 
@@ -141,7 +155,7 @@ describe('bin entries', () => {
 
   it('gives every shim a row of the README tables, and no other generator one', () => {
     const readme = readFileSync(path.join(packageRoot, 'README.md'), 'utf8')
-    const rows = [...readme.matchAll(/^\| `hekireki-([a-z-]+)`/gmu)].map((match) => match[1] ?? '')
+    const rows = [...readme.matchAll(/^\| `hekireki-([a-z-]+)`/gmu)].map(firstGroup)
     expect(rows.toSorted(byName)).toStrictEqual(SHIMS.toSorted(byName))
   })
 
@@ -151,7 +165,7 @@ describe('bin entries', () => {
       'utf8',
     )
     const providers = [...schema.matchAll(/^\s*provider\s*=\s*"hekireki-([a-z-]+)"/gmu)].map(
-      (match) => match[1] ?? '',
+      firstGroup,
     )
     expect(providers.toSorted(byName)).toStrictEqual(SHIMS.toSorted(byName))
   })

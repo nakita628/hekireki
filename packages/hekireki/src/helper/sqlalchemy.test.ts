@@ -5,6 +5,12 @@ import { describe, expect, it } from 'vite-plus/test'
 import { generateSingleFile } from '../generator/sqlalchemy.js'
 import { prismaTypeToPythonType, prismaTypeToSQLAlchemyType, pythonAttrName } from './sqlalchemy.js'
 
+/** The datamodel of a schema the test expects Prisma to parse. */
+function datamodelOf(result: ReturnType<typeof getDMMF>) {
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel
+}
+
 // What a PostgreSQL module with a DateTime carries above its models: the type every DateTime is
 // read through, as UTC, and the base that maps a plain `Mapped[datetime]` to it.
 const UTC_DATE_TIME = `class UtcDateTime(TypeDecorator[datetime]):
@@ -2872,8 +2878,7 @@ model DatabaseConfig {
         ],
       ],
     })
-    if ('type' in result) throw new Error(result.error.message)
-    const { models, enums, indexes } = result.datamodel
+    const { models, enums, indexes } = datamodelOf(result)
     const lines = generateSingleFile(models, enums, indexes)
       .split('\n')
       .filter((line) => line.includes('relationship('))
@@ -2923,8 +2928,7 @@ enum Tone {
         ],
       ],
     })
-    if ('type' in dmmf) throw new Error(dmmf.error.message)
-    const { models, enums, indexes } = dmmf.datamodel
+    const { models, enums, indexes } = datamodelOf(dmmf)
     expect(generateSingleFile(models, enums, indexes))
       .toBe(`from sqlalchemy import Enum, ForeignKey, MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship

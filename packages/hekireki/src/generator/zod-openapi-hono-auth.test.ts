@@ -348,8 +348,7 @@ describe('auth = "cloudflare-access"', () => {
     publishCerts([publicJwk])
     const app = await loadAuth('cloudflare-access')
     const { exp: _exp, ...forever } = claims()
-    const statusFor = async (token: string) =>
-      await statusWith(app, { 'Cf-Access-Jwt-Assertion': token })
+    const statusFor = (token: string) => statusWith(app, { 'Cf-Access-Jwt-Assertion': token })
     expect(
       await statusFor(await sign({ ...claims(), aud: ['another-application'] }, privateJwk)),
     ).toBe(401)

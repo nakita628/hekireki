@@ -55,12 +55,28 @@ function EntityLink({
   )
 }
 
+function dotColorOf(on: boolean, warn: boolean) {
+  if (on) return 'bg-ok ring-[3px] ring-ok/20'
+  return warn ? 'bg-danger' : 'bg-faint'
+}
+
 function StatusDot({ on, warn = false }: { readonly on: boolean; readonly warn?: boolean }) {
-  return (
-    <span
-      className={`size-2 shrink-0 rounded-full ${on ? 'bg-ok ring-[3px] ring-ok/20' : warn ? 'bg-danger' : 'bg-faint'}`}
-    />
-  )
+  return <span className={`size-2 shrink-0 rounded-full ${dotColorOf(on, warn)}`} />
+}
+
+function connectionLabelOf(connection: string) {
+  if (connection === 'live') return 'Watching'
+  return connection === 'offline' ? 'Disconnected' : 'Connecting'
+}
+
+function databaseLabelOf(
+  database: { readonly dialect: string | null; readonly url: string | null } | null,
+  connected: boolean,
+) {
+  if (database === null) return 'Database: checking…'
+  return connected
+    ? `${database.dialect ?? 'database'} · ${database.url ?? ''}`
+    : 'No database connected'
 }
 
 export function Sidebar({
@@ -78,8 +94,7 @@ export function Sidebar({
   const connected = database?.connected ?? false
   const models = schema?.models ?? []
   const enums = schema?.enums ?? []
-  const status =
-    connection === 'live' ? 'Watching' : connection === 'offline' ? 'Disconnected' : 'Connecting'
+  const status = connectionLabelOf(connection)
   return (
     <aside className="flex min-h-0 flex-col overflow-y-auto border-r border-line bg-surface">
       <div className="flex items-center gap-1.5 px-[18px] pt-[18px] pb-3.5">
@@ -191,17 +206,13 @@ export function Sidebar({
           <StatusDot on={connection === 'live'} warn={connection === 'offline'} />
           <span className="truncate">
             {status}
-            {schemaPath ? ` · ${schemaPath}` : ''}
+            {(schemaPath ?? '') === '' ? '' : ` · ${schemaPath}`}
           </span>
         </div>
         <div className="flex items-center gap-2">
           <StatusDot on={connected} />
           <span className="truncate" title={database?.error ?? undefined}>
-            {database === null
-              ? 'Database: checking…'
-              : connected
-                ? `${database.dialect ?? 'database'} · ${database.url ?? ''}`
-                : 'No database connected'}
+            {databaseLabelOf(database, connected)}
           </span>
         </div>
       </div>

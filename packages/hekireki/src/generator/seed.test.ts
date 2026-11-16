@@ -34,6 +34,12 @@ model Tag {
 }
 `
 
+/** The datamodel `getDMMF` parsed, or its parse error thrown. */
+function datamodelOf(result: ReturnType<typeof getDMMF>) {
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel
+}
+
 function datamodel() {
   const result: DMMF.Document | GetDMMFError = getDMMF({ datamodel: [['schema.prisma', SCHEMA]] })
   if ('type' in result) throw new Error(result.error.message)
@@ -128,8 +134,7 @@ model Category {
         ],
       ],
     })
-    if ('type' in result) throw new Error(result.error.message)
-    expect(seedSchemaCode(result.datamodel)).toBe(
+    expect(seedSchemaCode(datamodelOf(result))).toBe(
       `import { defineSchema } from 'hekireki'
 
 export const schema = defineSchema({

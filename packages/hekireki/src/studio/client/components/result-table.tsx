@@ -25,6 +25,15 @@ function compare(a: Row[string], b: Row[string]) {
  * send, so the filter and the ordering are done here: a result nobody paged through is a result
  * that can be narrowed and sorted without asking the database a second question.
  */
+/** Whether any cell of the row, as shown, contains the lowercased needle. */
+function rowContains(row: Row, columns: readonly string[], needle: string) {
+  return columns.some((column) =>
+    displayCell(row[column] ?? null)
+      .toLowerCase()
+      .includes(needle),
+  )
+}
+
 export function ResultTable({
   columns,
   rows,
@@ -37,16 +46,7 @@ export function ResultTable({
 
   const shown = useMemo(() => {
     const needle = filter.trim().toLowerCase()
-    const kept =
-      needle === ''
-        ? rows
-        : rows.filter((row) =>
-            columns.some((column) =>
-              displayCell(row[column] ?? null)
-                .toLowerCase()
-                .includes(needle),
-            ),
-          )
+    const kept = needle === '' ? rows : rows.filter((row) => rowContains(row, columns, needle))
     if (sort === null) return kept
     const column = String(sort.column)
     const ordered = [...kept].toSorted((a, b) => compare(a[column] ?? null, b[column] ?? null))
@@ -121,7 +121,7 @@ export function ResultTable({
           <Table.Content
             aria-label="Query result"
             className="font-mono text-code"
-            sortDescriptor={sort ?? undefined}
+            {...(sort === null ? {} : { sortDescriptor: sort })}
             onSortChange={setSort}
           >
             <Table.Header>
@@ -130,7 +130,7 @@ export function ResultTable({
                   {({ sortDirection }) => (
                     <Table.SortableColumnHeader
                       className="font-bold text-ink"
-                      sortDirection={sortDirection}
+                      {...(sortDirection === undefined ? {} : { sortDirection })}
                     >
                       {column}
                     </Table.SortableColumnHeader>
