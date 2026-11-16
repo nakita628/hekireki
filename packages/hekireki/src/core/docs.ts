@@ -43,7 +43,7 @@ export function docs(options: GeneratorOptions) {
         message: `Hekireki-Docs does not read ${unread.map((name) => `"${name}"`).join(', ')}; it takes theme.`,
       })
     }
-    const theme = getString(config.theme) === 'dark' ? 'dark' : 'light'
+    const theme = getString(config['theme']) === 'dark' ? 'dark' : 'light'
     // CockroachDB reads as PostgreSQL elsewhere, but its tables are not PostgreSQL's to write.
     const provider = options.datasources[0]?.activeProvider ?? null
     const dialect = provider === 'cockroachdb' ? null : dialectOf(provider)

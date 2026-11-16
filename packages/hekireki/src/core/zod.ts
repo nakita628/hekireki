@@ -12,9 +12,9 @@ export function zod(options: GeneratorOptions) {
     const resolved = outputFile(output, 'index.ts')
     const code = zodCode(
       options.dmmf,
-      getBool(options.generator.config?.type),
-      getBool(options.generator.config?.relation),
-      getString(options.generator.config?.zod) ?? 'v4',
+      getBool(options.generator.config?.['type']),
+      getBool(options.generator.config?.['relation']),
+      getString(options.generator.config?.['zod']) ?? 'v4',
     )
     return yield* emit(code, resolved.dir, resolved.file)
   })

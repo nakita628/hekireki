@@ -18,7 +18,7 @@ const COMMENT_LINE = /^\s*--\s*(?<title>.*?)\s*$/u
 const NAMES = /["`](?<name>[^"`]+)["`]/gu
 
 function namesOf(sql: string) {
-  return [...sql.matchAll(NAMES)].map((match) => match.groups?.name ?? '')
+  return [...sql.matchAll(NAMES)].map((match) => match.groups?.['name'] ?? '')
 }
 
 /** Whether the statement drops something or otherwise loses what a column holds. */
@@ -38,8 +38,8 @@ export function rebuiltTables(statements: readonly string[]) {
       /^\s*ALTER\s+TABLE\s+["`](?<from>[^"`]+)["`]\s+RENAME\s+TO\s+["`](?<to>[^"`]+)["`]/iu.exec(
         statement,
       )
-    const from = match?.groups?.from
-    const to = match?.groups?.to
+    const from = match?.groups?.['from']
+    const to = match?.groups?.['to']
     return from === undefined || to === undefined ? [] : [{ from, to }]
   })
   return new Set(
@@ -92,8 +92,10 @@ function describeStatement(sql: string, rebuilt: ReadonlySet<string>) {
   }
   if (/^ALTER\s+TABLE[\s\S]*FOREIGN\s+KEY/iu.test(statement)) {
     // `ALTER TABLE "X" ADD CONSTRAINT "c_fkey" FOREIGN KEY ("c") REFERENCES "Y"("id")`.
-    const key = /FOREIGN\s+KEY\s*\(\s*["`](?<column>[^"`]+)["`]/iu.exec(statement)?.groups?.column
-    const target = /REFERENCES\s+["`](?<table>[^"`]+)["`]/iu.exec(statement)?.groups?.table
+    const key = /FOREIGN\s+KEY\s*\(\s*["`](?<column>[^"`]+)["`]/iu.exec(statement)?.groups?.[
+      'column'
+    ]
+    const target = /REFERENCES\s+["`](?<table>[^"`]+)["`]/iu.exec(statement)?.groups?.['table']
     return change('foreign-key', first, key === undefined ? [] : [key], target)
   }
   // `CREATE [UNIQUE] INDEX "name" ON "Table"("column", ...)`: the index is named first.
@@ -187,7 +189,7 @@ function blocksOf(migration: string) {
   const blocks = [
     { title: null, lines: lines.slice(0, starts[0] ?? lines.length) },
     ...starts.map((start, index) => ({
-      title: COMMENT_LINE.exec(lines[start] ?? '')?.groups?.title ?? null,
+      title: COMMENT_LINE.exec(lines[start] ?? '')?.groups?.['title'] ?? null,
       lines: lines.slice(start + 1, ends[index] ?? lines.length),
     })),
   ]

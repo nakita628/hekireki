@@ -79,7 +79,7 @@ function guardedOperation(
   operation: OpenApiSchema,
   security: ReturnType<typeof securityScheme>,
 ): OpenApiSchema {
-  const responses = operation.responses
+  const responses = operation['responses']
   return {
     ...operation,
     security: [{ [security.name]: [] }],

@@ -10,7 +10,7 @@ import { getString, getStrings } from '../utils/index.js'
 import { GeneratorConfigError } from './errors.js'
 
 function themeOf(options: GeneratorOptions) {
-  return getString(options.generator.config?.theme) === 'dark' ? 'dark' : 'light'
+  return getString(options.generator.config?.['theme']) === 'dark' ? 'dark' : 'light'
 }
 
 /**
@@ -117,7 +117,7 @@ function filesOf(options: GeneratorOptions, outputs: readonly string[] | undefin
 export function er(options: GeneratorOptions) {
   return Effect.gen(function* () {
     const config = options.generator.config ?? {}
-    const outputs = getStrings(config.outputs)
+    const outputs = getStrings(config['outputs'])
     const files = yield* filesOf(options, outputs)
     // Every option belongs to a format, so the options a block may carry are the ones the
     // formats it writes read between them — and `outputs`, which picks those formats.

@@ -110,7 +110,7 @@ export function CheckCard({
   const title =
     check !== null && decision === null
       ? describe(check)
-      : (topics[kind] ?? topics.other ?? (() => ''))(
+      : (topics[kind] ?? topics['other'] ?? (() => ''))(
           check?.facts ?? { model: decision?.modelName ?? '', field: decision?.field ?? '' },
         )
   const chosen =

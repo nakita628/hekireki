@@ -373,7 +373,7 @@ export function makePlan(input: z.infer<typeof MakePlanInput>) {
     case 'postgresql':
       return makePostgresPlan({ document: input.rows[0]?.['QUERY PLAN'] ?? null })
     case 'mysql':
-      return makeMysqlPlan({ document: input.rows[0]?.EXPLAIN ?? null })
+      return makeMysqlPlan({ document: input.rows[0]?.['EXPLAIN'] ?? null })
     default:
       return input.dialect satisfies never
   }

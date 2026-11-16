@@ -18,7 +18,7 @@ export function gorm(options: GeneratorOptions) {
       })
     }
     const resolved = outputFile(output, 'models.go')
-    const packageName = getString(options.generator.config.package) ?? 'model'
+    const packageName = getString(options.generator.config['package']) ?? 'model'
     const enums = options.dmmf.datamodel.enums
     const indexes = options.dmmf.datamodel.indexes
     const code = generateGormModels(

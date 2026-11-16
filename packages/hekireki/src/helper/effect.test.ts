@@ -14,9 +14,9 @@ import {
 describe('helper/effect', () => {
   describe('PRISMA_TO_EFFECT', () => {
     it('PRISMA_TO_EFFECT maps String to Schema.String', () => {
-      expect(PRISMA_TO_EFFECT.String).toBe('Schema.String')
-      expect(PRISMA_TO_EFFECT.Int).toBe('Schema.Number')
-      expect(PRISMA_TO_EFFECT.BigInt).toBe('Schema.BigIntFromSelf')
+      expect(PRISMA_TO_EFFECT['String']).toBe('Schema.String')
+      expect(PRISMA_TO_EFFECT['Int']).toBe('Schema.Number')
+      expect(PRISMA_TO_EFFECT['BigInt']).toBe('Schema.BigIntFromSelf')
     })
   })
 

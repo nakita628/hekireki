@@ -23,7 +23,7 @@ export function atlas(options: GeneratorOptions) {
         message: `Unsupported provider for Hekireki-Atlas: ${provider}. Supported providers are postgresql, cockroachdb, mysql, and sqlite.`,
       })
     }
-    const schemaName = getString(options.generator.config?.schemaName)
+    const schemaName = getString(options.generator.config?.['schemaName'])
     const content = atlasSchema(options.dmmf.datamodel, provider, { schemaName })
     const resolved = outputFile(output, 'schema.hcl')
     return yield* emitRaw(content, resolved.dir, resolved.file)

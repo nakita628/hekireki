@@ -367,7 +367,7 @@ describe('the drivers of the project', () => {
 
 // A libSQL server to run against: Turso, or `sqld` started with
 // `docker run -p 8080:8080 ghcr.io/tursodatabase/libsql-server` (HEKIREKI_LIBSQL_URL=http://127.0.0.1:8080).
-const LIBSQL_URL = process.env.HEKIREKI_LIBSQL_URL
+const LIBSQL_URL = process.env['HEKIREKI_LIBSQL_URL']
 
 describe.skipIf(LIBSQL_URL === undefined)('the libSQL driver', () => {
   it('reads, writes and runs a script on the server, and refuses the copies a file allows', async () => {

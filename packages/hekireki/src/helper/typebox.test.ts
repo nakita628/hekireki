@@ -14,15 +14,15 @@ import {
 describe('helper/typebox', () => {
   describe('PRISMA_TO_TYPEBOX', () => {
     it('maps Prisma types to TypeBox types', () => {
-      expect(PRISMA_TO_TYPEBOX.String).toBe('Type.String()')
-      expect(PRISMA_TO_TYPEBOX.Int).toBe('Type.Integer()')
-      expect(PRISMA_TO_TYPEBOX.Float).toBe('Type.Number()')
-      expect(PRISMA_TO_TYPEBOX.Boolean).toBe('Type.Boolean()')
-      expect(PRISMA_TO_TYPEBOX.DateTime).toBe('Type.Date()')
-      expect(PRISMA_TO_TYPEBOX.BigInt).toBe('Type.BigInt()')
-      expect(PRISMA_TO_TYPEBOX.Decimal).toBe('Type.Number()')
-      expect(PRISMA_TO_TYPEBOX.Json).toBe('Type.Unknown()')
-      expect(PRISMA_TO_TYPEBOX.Bytes).toBe('Type.Any()')
+      expect(PRISMA_TO_TYPEBOX['String']).toBe('Type.String()')
+      expect(PRISMA_TO_TYPEBOX['Int']).toBe('Type.Integer()')
+      expect(PRISMA_TO_TYPEBOX['Float']).toBe('Type.Number()')
+      expect(PRISMA_TO_TYPEBOX['Boolean']).toBe('Type.Boolean()')
+      expect(PRISMA_TO_TYPEBOX['DateTime']).toBe('Type.Date()')
+      expect(PRISMA_TO_TYPEBOX['BigInt']).toBe('Type.BigInt()')
+      expect(PRISMA_TO_TYPEBOX['Decimal']).toBe('Type.Number()')
+      expect(PRISMA_TO_TYPEBOX['Json']).toBe('Type.Unknown()')
+      expect(PRISMA_TO_TYPEBOX['Bytes']).toBe('Type.Any()')
     })
   })
 
@@ -305,15 +305,15 @@ describe('helper/typebox', () => {
 
   describe('multiple Prisma scalar types', () => {
     it('maps all scalar types correctly', () => {
-      expect(PRISMA_TO_TYPEBOX.String).toBe('Type.String()')
-      expect(PRISMA_TO_TYPEBOX.Int).toBe('Type.Integer()')
-      expect(PRISMA_TO_TYPEBOX.Float).toBe('Type.Number()')
-      expect(PRISMA_TO_TYPEBOX.Boolean).toBe('Type.Boolean()')
-      expect(PRISMA_TO_TYPEBOX.DateTime).toBe('Type.Date()')
-      expect(PRISMA_TO_TYPEBOX.BigInt).toBe('Type.BigInt()')
-      expect(PRISMA_TO_TYPEBOX.Decimal).toBe('Type.Number()')
-      expect(PRISMA_TO_TYPEBOX.Json).toBe('Type.Unknown()')
-      expect(PRISMA_TO_TYPEBOX.Bytes).toBe('Type.Any()')
+      expect(PRISMA_TO_TYPEBOX['String']).toBe('Type.String()')
+      expect(PRISMA_TO_TYPEBOX['Int']).toBe('Type.Integer()')
+      expect(PRISMA_TO_TYPEBOX['Float']).toBe('Type.Number()')
+      expect(PRISMA_TO_TYPEBOX['Boolean']).toBe('Type.Boolean()')
+      expect(PRISMA_TO_TYPEBOX['DateTime']).toBe('Type.Date()')
+      expect(PRISMA_TO_TYPEBOX['BigInt']).toBe('Type.BigInt()')
+      expect(PRISMA_TO_TYPEBOX['Decimal']).toBe('Type.Number()')
+      expect(PRISMA_TO_TYPEBOX['Json']).toBe('Type.Unknown()')
+      expect(PRISMA_TO_TYPEBOX['Bytes']).toBe('Type.Any()')
     })
   })
 

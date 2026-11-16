@@ -17,13 +17,13 @@ export function efcore(options: GeneratorOptions) {
         message: `Unsupported provider for Hekireki-EFCore: ${provider}. Supported providers are postgresql, mysql and sqlite.`,
       })
     }
-    const namespace = getString(options.generator.config?.namespace) ?? 'Models'
+    const namespace = getString(options.generator.config?.['namespace']) ?? 'Models'
     if (!namespace.split('.').every(isCSharpIdentifier)) {
       return yield* new GeneratorConfigError({
         message: `namespace for Hekireki-EFCore must be a C# namespace such as "MyApp.Models": ${namespace}`,
       })
     }
-    const context = getString(options.generator.config?.context) ?? 'AppDbContext'
+    const context = getString(options.generator.config?.['context']) ?? 'AppDbContext'
     if (!isCSharpTypeName(context)) {
       return yield* new GeneratorConfigError({
         message: `context for Hekireki-EFCore must be a C# class name such as "AppDbContext": ${context}`,

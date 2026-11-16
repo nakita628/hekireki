@@ -227,7 +227,7 @@ describe('edge captions', () => {
     const captions = buildEdges({
       ...schema,
       relations: [inferred, { ...inferred, id: 'User.id->Post.editorId' }],
-    }).map((edge) => edge.data?.caption)
+    }).map((edge) => edge.data?.['caption'])
     expect(captions).toStrictEqual([
       ['one to many', 'on delete set null'],
       ['one to many', 'on delete set null'],

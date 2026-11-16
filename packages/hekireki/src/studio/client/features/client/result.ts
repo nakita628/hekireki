@@ -33,10 +33,10 @@ export function tableOf(value: unknown) {
 export function problemMessage(error: unknown) {
   if (!(error instanceof Error)) return 'The query could not be run.'
   const detail: unknown = Reflect.get(error, 'detail')
-  const data: unknown = isRecord(detail) ? detail.data : undefined
+  const data: unknown = isRecord(detail) ? detail['data'] : undefined
   try {
     const body: unknown = typeof data === 'string' ? JSON.parse(data) : data
-    return isRecord(body) && typeof body.detail === 'string' ? body.detail : error.message
+    return isRecord(body) && typeof body['detail'] === 'string' ? body['detail'] : error.message
   } catch {
     return error.message
   }

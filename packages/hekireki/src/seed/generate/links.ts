@@ -116,7 +116,7 @@ export function makeJoinRows(context: Context, table: JoinTable) {
 function dedupe(pairs: readonly SeedRow[]) {
   const seen = new Set<string>()
   return pairs.filter((pair) => {
-    const key = `${keyOf(pair.A ?? null)} ${keyOf(pair.B ?? null)}`
+    const key = `${keyOf(pair['A'] ?? null)} ${keyOf(pair['B'] ?? null)}`
     if (seen.has(key)) return false
     seen.add(key)
     return true

@@ -145,7 +145,7 @@ describe('adviseChecks', () => {
       value: 'VIEWER',
       reason: 'schema-default',
     })
-    expect(role?.facts.default).toBe('VIEWER')
+    expect(role?.facts['default']).toBe('VIEWER')
     expect(token?.suggestion).toStrictEqual({
       choice: 'sql',
       value: 'gen_random_uuid()::text',
@@ -197,7 +197,7 @@ describe('adviseChecks', () => {
       check('foreign-key', 'Post.owner → Owner'),
     ])
     expect(author?.suggestion).toMatchObject({ choice: 'null', reason: 'optional-relation' })
-    expect(author?.facts.target).toBe('User')
+    expect(author?.facts['target']).toBe('User')
     expect(owner?.suggestion).toMatchObject({ choice: 'delete', reason: 'required-relation' })
   })
 
@@ -220,7 +220,7 @@ describe('adviseChecks', () => {
       value: 'admin=ADMIN, Writer=WRITER, guest=VIEWER',
       reason: 'enum-same-name',
     })
-    expect(role?.facts.member).toBe('VIEWER')
+    expect(role?.facts['member']).toBe('VIEWER')
   })
 
   it('gives a column added to two dropped ones to the one it reads as, and not to both', () => {
@@ -255,7 +255,7 @@ describe('adviseChecks', () => {
       value: '(SELECT MIN("id") FROM "Owner")',
       reason: 'first-referenced',
     })
-    expect(owner?.facts.target).toBe('Owner')
+    expect(owner?.facts['target']).toBe('Owner')
   })
 
   it('reads a column a related model gains under the same name as moved there', () => {
@@ -284,7 +284,7 @@ describe('adviseChecks', () => {
       value: 'Profile.bio',
       reason: 'moved',
     })
-    expect(facts[0]?.facts.movedTo).toBe('Profile.bio')
+    expect(facts[0]?.facts['movedTo']).toBe('Profile.bio')
     // The places to complete the decision with come with the suggestion too.
     expect(facts[0]?.destinations.map((place) => place.value)).toStrictEqual(['Profile.bio'])
   })
@@ -352,7 +352,7 @@ describe('adviseChecks', () => {
     const [views] = advise([check('column-dropped', 'Post.views')])
     expect(views?.suggestion).toBeNull()
     expect(views?.candidates).toStrictEqual([])
-    expect(views?.facts.column).toBe('views')
+    expect(views?.facts['column']).toBe('views')
   })
 
   it('converts text to a number with the cast of each database, blanks read as NULL', () => {

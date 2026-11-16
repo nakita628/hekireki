@@ -10,7 +10,7 @@ import { requireOutput } from './output.js'
 export function seaOrm(options: GeneratorOptions) {
   return Effect.gen(function* () {
     const output = yield* requireOutput(options, 'Hekireki-SeaORM')
-    const renameAll = getString(options.generator.config?.renameAll)
+    const renameAll = getString(options.generator.config?.['renameAll'])
     const serde = { renameAll }
     const enums = options.dmmf.datamodel.enums
     const models = options.dmmf.datamodel.models

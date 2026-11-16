@@ -98,8 +98,8 @@ export function parseMapping(written: string) {
         /^\s*(?:"(?<quoted>(?:[^"]|"")*)"|(?<bare>[^="]*?))\s*=\s*(?<member>.*?)\s*$/u.exec(
           pair,
         )?.groups
-      const stored = groups?.quoted?.replaceAll('""', '"') ?? groups?.bare ?? ''
-      const member = groups?.member ?? ''
+      const stored = groups?.['quoted']?.replaceAll('""', '"') ?? groups?.['bare'] ?? ''
+      const member = groups?.['member'] ?? ''
       return stored === '' || member === '' ? [] : [[stored, member] as const]
     }),
   )

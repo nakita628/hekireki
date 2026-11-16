@@ -80,9 +80,9 @@ describe('loadSeedConfig', () => {
     if (!Exit.isSuccess(exit)) return
     expect(exit.value.seed).toBe(7)
     expect(exit.value.locale).toStrictEqual(['ja', 'en'])
-    expect(exit.value.models?.User?.count).toBe(3)
-    expect(exit.value.models?.User?.fields?.age).toStrictEqual({ min: 1, max: 2 })
-    expect(typeof exit.value.models?.User?.fields?.name).toBe('function')
+    expect(exit.value.models?.['User']?.count).toBe(3)
+    expect(exit.value.models?.['User']?.fields?.['age']).toStrictEqual({ min: 1, max: 2 })
+    expect(typeof exit.value.models?.['User']?.fields?.['name']).toBe('function')
   })
 
   it('accepts real data rows and rejects a value no column can hold', async () => {
@@ -102,7 +102,7 @@ describe('loadSeedConfig', () => {
     const exit = await run(loadSeedConfig(file))
     expect(Exit.isSuccess(exit)).toBe(true)
     if (!Exit.isSuccess(exit)) return
-    expect(exit.value.models?.User?.data?.[0]?.email).toBe('ann@example.com')
+    expect(exit.value.models?.['User']?.data?.[0]?.['email']).toBe('ann@example.com')
     // A second file: an ES module is imported once per path, so the first content would come back.
     const other = path.join(dir, 'bad.config.ts')
     writeFileSync(other, `export default { models: { User: { data: [{ id: () => 1 }] } } }\n`)
@@ -467,13 +467,16 @@ describe('loadSeedConfig, every option checked', () => {
     const exit = await run(loadSeedConfig(file))
     expect(Exit.isSuccess(exit)).toBe(true)
     if (!Exit.isSuccess(exit)) return
-    const row = exit.value.models?.Sample?.data?.[0]
-    expect(row?.big).toBe(10n)
-    expect(row?.bytes).toStrictEqual(new Uint8Array([1, 2]))
-    expect(row?.when).toStrictEqual(new Date('2025-01-01T00:00:00.000Z'))
-    expect(row?.json).toStrictEqual({ list: [1, 'two', { three: null }], nested: { deep: true } })
-    expect(row?.links).toStrictEqual([1, { label: 'x' }])
-    expect(exit.value.models?.Other?.fields?.d).toStrictEqual({
+    const row = exit.value.models?.['Sample']?.data?.[0]
+    expect(row?.['big']).toBe(10n)
+    expect(row?.['bytes']).toStrictEqual(new Uint8Array([1, 2]))
+    expect(row?.['when']).toStrictEqual(new Date('2025-01-01T00:00:00.000Z'))
+    expect(row?.['json']).toStrictEqual({
+      list: [1, 'two', { three: null }],
+      nested: { deep: true },
+    })
+    expect(row?.['links']).toStrictEqual([1, { label: 'x' }])
+    expect(exit.value.models?.['Other']?.fields?.['d']).toStrictEqual({
       from: new Date(0),
       to: '2025-01-01',
     })

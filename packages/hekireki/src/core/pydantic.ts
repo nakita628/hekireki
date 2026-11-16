@@ -13,7 +13,7 @@ export function pydantic(options: GeneratorOptions) {
     const code = pydanticCode(
       options.dmmf.datamodel.models,
       options.dmmf.datamodel.enums,
-      getBool(options.generator.config?.relation),
+      getBool(options.generator.config?.['relation']),
     )
     return yield* emitRaw(code, resolved.dir, resolved.file)
   })

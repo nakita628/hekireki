@@ -21,7 +21,7 @@ import { MigrateConfigError, MigrateDatabaseError } from './errors.js'
 
 /** The number a `COUNT(*)` came back as: a string from pg (it is a bigint), a number elsewhere. */
 function countOf(rows: readonly Readonly<Record<string, unknown>>[]) {
-  const value = Number(rows[0]?.count)
+  const value = Number(rows[0]?.['count'])
   return Number.isFinite(value) ? value : null
 }
 
@@ -225,7 +225,7 @@ export function checkOpened(input: {
             Effect.match({
               onFailure: () => [],
               onSuccess: (read) => [
-                [check.subject, read.rows.map((row) => String(row.value))] as const,
+                [check.subject, read.rows.map((row) => String(row['value']))] as const,
               ],
             }),
           )

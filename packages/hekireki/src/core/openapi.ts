@@ -22,9 +22,9 @@ export function openapi(options: GeneratorOptions) {
     }
     const config = options.generator.config ?? {}
     const content = openapiContent(options.dmmf.datamodel, {
-      title: getString(config.title) ?? 'Generated from schema.prisma',
-      version: getString(config.version) ?? '1.0.0',
-      paths: getBool(config.paths),
+      title: getString(config['title']) ?? 'Generated from schema.prisma',
+      version: getString(config['version']) ?? '1.0.0',
+      paths: getBool(config['paths']),
       format: extension === '.json' ? 'json' : 'yaml',
     })
     return yield* emitRaw(content, resolved.dir, resolved.file)

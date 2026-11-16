@@ -84,7 +84,7 @@ function readAppliedMigrations(driver: Driver) {
             startedAt: instantOf(row, 'started_at'),
             finishedAt: instantOf(row, 'finished_at'),
             rolledBackAt: instantOf(row, 'rolled_back_at'),
-            appliedStepsCount: Number(row.applied_steps_count ?? 0),
+            appliedStepsCount: Number(row['applied_steps_count'] ?? 0),
             checksum: textOf(row, 'checksum') ?? '',
           })),
         }),

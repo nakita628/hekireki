@@ -45,7 +45,7 @@ export function countTables(
         .pipe(
           Effect.map((result) => ({
             table: table.table,
-            rows: Number(result.rows[0]?.count ?? 0),
+            rows: Number(result.rows[0]?.['count'] ?? 0),
           })),
           Effect.orElseSucceed(() => ({ table: table.table, rows: null })),
         ),

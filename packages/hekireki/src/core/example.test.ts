@@ -225,7 +225,7 @@ describe('example/schema.prisma', () => {
     (_name, generator) => {
       const handler = HANDLERS[generator.provider.value]
       // A block without `output` names its files in `outputs`, all in one directory.
-      const output = generator.output?.value ?? [generator.config.outputs ?? ''].flat()[0] ?? ''
+      const output = generator.output?.value ?? [generator.config['outputs'] ?? ''].flat()[0] ?? ''
       // `generated/drizzle/schema.ts` names a file; the golden directory is the one that holds it.
       const goldenDir = path.join(
         EXAMPLE_DIR,

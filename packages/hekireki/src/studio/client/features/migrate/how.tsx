@@ -56,7 +56,7 @@ function Arrow({ label }: { readonly label: string }) {
  */
 function Sample({ check }: { readonly check: Check }) {
   const t = useMessages(HOW)
-  const column = check.facts.column ?? check.field
+  const column = check.facts['column'] ?? check.field
   const sample = useQuery({
     queryKey: ['migrate', 'sample', check.lost],
     enabled: check.lost !== null,
@@ -109,7 +109,7 @@ export function How({
   const t = useMessages(HOW)
   const n = check.count ?? 0
   const facts = check.facts
-  const source = `${check.modelName}.${facts.column ?? check.field}`
+  const source = `${check.modelName}.${facts['column'] ?? check.field}`
   const destination = check.destinations.find(
     (place) => place.choice === choice && place.value === value.trim(),
   )
@@ -129,7 +129,7 @@ export function How({
         )
       }
       if (check.kind === 'column-recreated' && choice === 'sql') {
-        return <p className="m-0 text-body">{t.convert(facts.to ?? '', value)}</p>
+        return <p className="m-0 text-body">{t.convert(facts['to'] ?? '', value)}</p>
       }
       if (destination === undefined) {
         return (
@@ -193,7 +193,10 @@ export function How({
             /^\s*(?:"(?<quoted>(?:[^"]|"")*)"|(?<bare>[^="]*?))\s*=\s*(?<member>.*?)\s*$/u.exec(
               pair,
             )?.groups
-          return [groups?.quoted?.replaceAll('""', '"') ?? groups?.bare ?? '', groups?.member ?? '']
+          return [
+            groups?.['quoted']?.replaceAll('""', '"') ?? groups?.['bare'] ?? '',
+            groups?.['member'] ?? '',
+          ]
         })
         .filter(([stored, member]) => stored !== '' && member !== '')
       return (
@@ -223,7 +226,7 @@ export function How({
       return (
         <p className="m-0 text-body">
           {t.keep(
-            facts.fields ?? check.field,
+            facts['fields'] ?? check.field,
             n,
             keep === 'first',
             value.trim() === '' ? t.primaryKey : value.trim(),
@@ -235,14 +238,14 @@ export function How({
     if (check.kind === 'foreign-key') {
       return (
         <p className="m-0 text-body">
-          {(choice === 'delete' ? t.orphansDelete : t.orphansNull)(n, facts.target ?? '')}
+          {(choice === 'delete' ? t.orphansDelete : t.orphansNull)(n, facts['target'] ?? '')}
         </p>
       )
     }
     if (check.kind === 'column-type') {
-      return <p className="m-0 text-body">{t.convert(facts.to ?? '', value)}</p>
+      return <p className="m-0 text-body">{t.convert(facts['to'] ?? '', value)}</p>
     }
-    const to = facts.to ?? ''
+    const to = facts['to'] ?? ''
     return (
       <p className="m-0 text-body">
         {choice === 'clamp'

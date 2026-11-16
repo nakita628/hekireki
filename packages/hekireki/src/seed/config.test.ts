@@ -167,7 +167,7 @@ describe('defineConfig', () => {
         Post: { fields: { authorId: { value: 1 } } },
       },
     })
-    expect(config.models?.User?.count).toBe(5)
+    expect(config.models?.['User']?.count).toBe(5)
   })
 
   it('accepts nested rows, unique-key parents and keyed links, with no id written', () => {
@@ -186,7 +186,7 @@ describe('defineConfig', () => {
         Post: { data: [{ author: { email: 'bob@example.com' } }, { author: { id: 1 } }] },
       },
     })
-    expect(config.models?.User?.data?.length).toBe(1)
+    expect(config.models?.['User']?.data?.length).toBe(1)
     defineConfig(schema, {
       models: {
         // @ts-expect-error -- a key must be one of the model's unique keys, not any field
@@ -215,7 +215,7 @@ describe('defineConfig', () => {
         Post: { count: 3 },
       },
     })
-    expect(config.models?.User?.data?.length).toBe(2)
+    expect(config.models?.['User']?.data?.length).toBe(2)
   })
 
   it('rejects what the schema does not have, at compile time', () => {
@@ -345,7 +345,7 @@ describe('defineData and Row', () => {
       cy,
     ])
     expect(users).toHaveLength(2)
-    expect(defineConfig(schema, { models: { User: { data: users } } }).models?.User?.data).toBe(
+    expect(defineConfig(schema, { models: { User: { data: users } } }).models?.['User']?.data).toBe(
       users,
     )
     defineData(schema, 'User', [

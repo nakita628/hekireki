@@ -246,7 +246,7 @@ describe('utils', () => {
         },
       ])
       expect(Object.keys(result)).toStrictEqual(['User', 'Post'])
-      expect(result.User).toStrictEqual([
+      expect(result['User']).toStrictEqual([
         {
           documentation: '',
           modelName: 'User',
@@ -262,7 +262,7 @@ describe('utils', () => {
           isRequired: true,
         },
       ])
-      expect(result.Post).toStrictEqual([
+      expect(result['Post']).toStrictEqual([
         {
           documentation: '@relation User.id Post.userId one-to-many',
           modelName: 'Post',

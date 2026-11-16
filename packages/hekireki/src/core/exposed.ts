@@ -17,13 +17,13 @@ export function exposed(options: GeneratorOptions) {
         message: `Unsupported provider for Hekireki-Exposed: ${provider}. Supported providers are postgresql.`,
       })
     }
-    const packageName = getString(options.generator.config?.package) ?? 'models'
+    const packageName = getString(options.generator.config?.['package']) ?? 'models'
     if (!packageName.split('.').every(isKotlinIdentifier)) {
       return yield* new GeneratorConfigError({
         message: `package for Hekireki-Exposed must be a Kotlin package such as "com.example.db": ${packageName}`,
       })
     }
-    const dao = getString(options.generator.config?.dao) ?? 'true'
+    const dao = getString(options.generator.config?.['dao']) ?? 'true'
     if (dao !== 'true' && dao !== 'false') {
       return yield* new GeneratorConfigError({
         message: `dao for Hekireki-Exposed must be true or false: ${dao}`,

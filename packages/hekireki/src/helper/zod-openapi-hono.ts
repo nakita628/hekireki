@@ -91,8 +91,8 @@ function makeFieldSchema(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]
   const description = stripAnnotations(field.documentation)
   // Json takes `null` already, as any JSON value.
   const nullable: OpenApiSchema =
-    !field.isList && !field.isRequired && typeof shape.type === 'string'
-      ? { type: [shape.type, 'null'] }
+    !field.isList && !field.isRequired && typeof shape['type'] === 'string'
+      ? { type: [shape['type'], 'null'] }
       : {}
   return { ...shape, ...nullable, ...(description === undefined ? {} : { description }) }
 }

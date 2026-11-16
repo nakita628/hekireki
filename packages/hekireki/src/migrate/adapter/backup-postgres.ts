@@ -139,11 +139,11 @@ function stateOf(driver: Driver) {
       params: [],
     })
     const history =
-      recorded.rows[0]?.there === true
+      recorded.rows[0]?.['there'] === true
         ? (yield* driver.query({
             sql: 'SELECT COUNT(*)::int AS "count" FROM "_prisma_migrations"',
             params: [],
-          })).rows[0]?.count
+          })).rows[0]?.['count']
         : null
     return JSON.stringify({ tables: introspected.tables, rows, history })
   })
@@ -162,7 +162,7 @@ export function createPostgresBackup(driver: Driver, name: string) {
       sql: 'SELECT current_schema() AS "name"',
       params: [],
     })).rows
-    const current = typeof schema[0]?.name === 'string' ? schema[0].name : 'public'
+    const current = typeof schema[0]?.['name'] === 'string' ? schema[0]['name'] : 'public'
     const columns = CatalogueColumns.safeParse(
       (yield* driver.query(POSTGRES_RESTORE_CATALOGUE.columns)).rows,
     )
@@ -203,9 +203,9 @@ export function createPostgresBackup(driver: Driver, name: string) {
         columns: columns.data.filter((one) => one.table === table).map((one) => one.column),
       })),
       enumColumns: enumColumns.map((row) => ({
-        table: String(row.table),
-        column: String(row.column),
-        array: row.array === true,
+        table: String(row['table']),
+        column: String(row['column']),
+        array: row['array'] === true,
       })),
     })
     const restore = postgresRestoreStatements({
@@ -301,16 +301,16 @@ export function restorePostgresBackup(driver: Driver, name: string) {
       })
     }
     const clear = postgresClearStatements({
-      schema: typeof schema[0]?.name === 'string' ? schema[0].name : 'public',
+      schema: typeof schema[0]?.['name'] === 'string' ? schema[0]['name'] : 'public',
       tables: tables.data.map((one) => one.name),
       foreignKeys: foreignKeys.data.map((one) => ({ table: one.table ?? '', name: one.name })),
       enums: enums.data.map((one) => one.name),
     })
     yield* driver.executeScript(
-      ['BEGIN', ...clear, ...stored.rows.map((row) => String(row.statement))].join(';\n'),
+      ['BEGIN', ...clear, ...stored.rows.map((row) => String(row['statement']))].join(';\n'),
     )
     const state = yield* stateOf(driver)
-    if (state !== kept[0]?.state) {
+    if (state !== kept[0]?.['state']) {
       return yield* new MigrateConfigError({
         message: `The backup could not be restored: the database ${name} makes again is not the one it was taken of, so nothing was changed. Its rows are in the schema of that name.`,
       })

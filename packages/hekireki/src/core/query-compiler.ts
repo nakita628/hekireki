@@ -130,7 +130,7 @@ function loadCompiler(schemaPath: string, dialect: Dialect) {
         )
         const instance = new WebAssembly.Instance(module, imports)
         // oxlint-disable-next-line eslint/no-underscore-dangle -- wasm-bindgen names its two hooks
-        const start = WasmStart.safeParse(instance.exports.__wbindgen_start)
+        const start = WasmStart.safeParse(instance.exports['__wbindgen_start'])
         if (!start.success) throw new TypeError('The compiler module exports no __wbindgen_start.')
         // oxlint-disable-next-line eslint/no-underscore-dangle -- wasm-bindgen names its two hooks
         runtime.data.__wbg_set_wasm(instance.exports)

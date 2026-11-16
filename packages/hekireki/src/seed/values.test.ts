@@ -347,7 +347,7 @@ describe('makeFieldValue', () => {
         faker: faker(),
         field: field('name'),
         enumValues: null,
-        rule: (_faker, context) => `${JSON.stringify(context.row.email)}#${context.index}`,
+        rule: (_faker, context) => `${JSON.stringify(context.row['email'])}#${context.index}`,
         bounds: BOUNDS,
         index: 4,
         row: { email: 'a@b.c' },

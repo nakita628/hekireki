@@ -92,9 +92,9 @@ describe('autoLayout', () => {
       schema(models, [relation('User', 'Post'), relation('Post', 'Tag')]),
     )
     expect(Object.keys(positions).toSorted()).toStrictEqual(['Post', 'Tag', 'User'])
-    const user = positions.User
-    const post = positions.Post
-    const tag = positions.Tag
+    const user = positions['User']
+    const post = positions['Post']
+    const tag = positions['Tag']
     if (!(user && post && tag)) throw new Error('positions')
     expect(post.x - user.x).toBeGreaterThanOrEqual(NODE_WIDTH)
     expect(tag.x - post.x).toBeGreaterThanOrEqual(NODE_WIDTH)
@@ -132,7 +132,7 @@ describe('positionsFor', () => {
     const computed = autoLayout(canvas)
     expect(positionsFor(canvas, { User: { x: 1, y: 2 } })).toStrictEqual({
       User: { x: 1, y: 2 },
-      Post: computed.Post,
+      Post: computed['Post'],
     })
   })
 

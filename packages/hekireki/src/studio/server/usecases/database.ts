@@ -105,7 +105,7 @@ export function readCounts() {
       models.flatMap((model, index) => {
         const count = counted[index]
         return count !== undefined && Option.isSome(count)
-          ? [[model.name, Number(count.value.rows[0]?.count ?? 0) || 0] as const]
+          ? [[model.name, Number(count.value.rows[0]?.['count'] ?? 0) || 0] as const]
           : []
       }),
     )
@@ -231,7 +231,7 @@ export function readRows(input: z.infer<typeof ReadRowsInput>) {
     )
     const rows = {
       rows: selected.rows.map((row) => ValuesDomain.makeRow({ row, columnToField, columnToEnum })),
-      total: Number(counted.rows[0]?.count ?? 0) || 0,
+      total: Number(counted.rows[0]?.['count'] ?? 0) || 0,
       skip: page.skip,
       take: page.take,
       key,

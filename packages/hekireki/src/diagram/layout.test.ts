@@ -196,9 +196,9 @@ describe('autoLayout', () => {
 
   it('lays the relation out left to right: the referencing model, then the referenced one, then its enum', () => {
     const positions = autoLayout(schema)
-    const post = positions.Post
-    const user = positions.User
-    const role = positions.Role
+    const post = positions['Post']
+    const user = positions['User']
+    const role = positions['Role']
     if (!post || !user || !role) throw new Error('every block is positioned')
     expect(post.x + NODE_WIDTH).toBeLessThanOrEqual(user.x)
     expect(user.x + NODE_WIDTH).toBeLessThanOrEqual(role.x)
@@ -244,7 +244,7 @@ describe('autoLayout', () => {
       relations: [{ from: { model: 'Post' }, to: { model: 'User' } }],
       enums: [{ name: 'Status', values: ['DRAFT', 'PUBLISHED'] }],
     })
-    expect(positions.Status?.x).toBe(positions.User?.x)
+    expect(positions['Status']?.x).toBe(positions['User']?.x)
   })
 
   it('ignores self relations, unknown models and repeated edges', () => {

@@ -589,7 +589,7 @@ export function openMysqlCopy(input: {
   return Effect.gen(function* () {
     const { driver } = input
     const found = yield* driver.query({ sql: 'SELECT DATABASE() AS `name`', params: [] })
-    const source = found.rows[0]?.name
+    const source = found.rows[0]?.['name']
     const name = `hk_rehearsal_${globalThis.crypto.randomUUID().replaceAll('-', '')}`
     const quoted = quoteIdentifier('mysql', name)
     yield* driver.executeScript(`CREATE DATABASE ${quoted}`)
@@ -639,7 +639,7 @@ function fillMysqlCopy(input: {
     })
     yield* copy.executeRaw({ sql: 'SET FOREIGN_KEY_CHECKS = 0', params: [] })
     yield* Effect.forEach(
-      tables.rows.flatMap((row) => (typeof row.table === 'string' ? [row.table] : [])),
+      tables.rows.flatMap((row) => (typeof row['table'] === 'string' ? [row['table']] : [])),
       (table) => copyMysqlTable({ ...input, table }),
       { concurrency: 1, discard: true },
     )
@@ -649,7 +649,7 @@ function fillMysqlCopy(input: {
       params: [],
     })
     yield* Effect.forEach(
-      triggers.rows.flatMap((row) => (typeof row.name === 'string' ? [row.name] : [])),
+      triggers.rows.flatMap((row) => (typeof row['name'] === 'string' ? [row['name']] : [])),
       (trigger) => copyMysqlTrigger({ driver, copy, trigger }),
       { concurrency: 1, discard: true },
     )
@@ -700,7 +700,7 @@ function copyMysqlTable(input: {
     })
     const names = columns.rows
       .flatMap((row) =>
-        typeof row.column === 'string' ? [quoteIdentifier('mysql', row.column)] : [],
+        typeof row['column'] === 'string' ? [quoteIdentifier('mysql', row['column'])] : [],
       )
       .join(', ')
     yield* input.copy.executeRaw({

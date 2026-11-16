@@ -286,12 +286,12 @@ describe('data routes over sqlite', () => {
     })
     const listed = await call('/api/db/rows/Session', 'GET')
     const row = (listed.json as { rows: Record<string, string>[] }).rows[0]
-    expect(row?.id).toMatch(
+    expect(row?.['id']).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
     )
-    expect(row?.token).toMatch(/^c[0-9a-z]{24}$/u)
-    expect(row?.startedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/u)
-    expect(row?.updatedAt).toBe(row?.startedAt)
+    expect(row?.['token']).toMatch(/^c[0-9a-z]{24}$/u)
+    expect(row?.['startedAt']).toMatch(/^\d{4}-\d{2}-\d{2}T/u)
+    expect(row?.['updatedAt']).toBe(row?.['startedAt'])
   })
 
   it('explains a missing table and a missing value', async () => {

@@ -91,6 +91,16 @@ export function documentedOptions(readme, provider) {
 // Read from options.generator, not from its config: every generator block has it.
 const STANDARD_OPTIONS = new Set(['output'])
 
+// The option a member expression reads: `config.title` and, the config being an index signature
+// (noPropertyAccessFromIndexSignature), `config['title']`.
+function optionName(node) {
+  if (!node.computed && node.property.type === 'Identifier') return node.property.name
+  if (node.computed && node.property.type === 'Literal' && typeof node.property.value === 'string') {
+    return node.property.value
+  }
+  return null
+}
+
 export const codegenRules = {
   // Why: a `///` comment holds the prose a person wrote and the annotation lines a generator reads
   //      (`@z.uuid()`, `@ar.length(...)`, `@relation ...`). Written out raw, the annotations land
@@ -177,7 +187,7 @@ export const codegenRules = {
           }
         },
         MemberExpression(node) {
-          if (node.computed || node.property.type !== 'Identifier') return
+          if (optionName(node) === null) return
           const object = node.object
           const isConfig =
             isGeneratorConfig(object) ||
@@ -190,17 +200,17 @@ export const codegenRules = {
             for (const node of read) {
               context.report({
                 node,
-                message: `${provider} reads \`${node.property.name}\`, and the README has no table row for ${provider}: add one that lists its options.`,
+                message: `${provider} reads \`${optionName(node)}\`, and the README has no table row for ${provider}: add one that lists its options.`,
               })
             }
             return
           }
-          const names = new Set([...read].map((node) => node.property.name))
+          const names = new Set([...read].map((node) => optionName(node)))
           for (const node of read) {
-            if (documented.includes(node.property.name)) continue
+            if (documented.includes(optionName(node))) continue
             context.report({
               node,
-              message: `${provider} reads \`${node.property.name}\`, which its row of the README's options table does not list. Add it to the row.`,
+              message: `${provider} reads \`${optionName(node)}\`, which its row of the README's options table does not list. Add it to the row.`,
             })
           }
           for (const name of documented) {

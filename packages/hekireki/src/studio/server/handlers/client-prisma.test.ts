@@ -86,7 +86,7 @@ function generate(schemaPath: string) {
 function countOf(table: string) {
   const db = new DatabaseSync(path.join(project.dir, 'dev.db'))
   try {
-    return Number(db.prepare(`SELECT count(*) AS n FROM "${table}"`).get()?.n)
+    return Number(db.prepare(`SELECT count(*) AS n FROM "${table}"`).get()?.['n'])
   } finally {
     db.close()
   }

@@ -41,7 +41,7 @@ export function activerecord(options: GeneratorOptions) {
     // reads config/locales down through its subdirectories.
     const localeFiles = activeRecordLocaleFiles(options.dmmf.datamodel.models)
     if (localeFiles.length > 0) {
-      const locales = getString(options.generator.config?.locales)
+      const locales = getString(options.generator.config?.['locales'])
       const localesDir =
         locales !== undefined && locales !== ''
           ? path.resolve(output, locales)

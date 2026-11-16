@@ -141,10 +141,10 @@ describe('runSeed', () => {
     expect(exit.value.configPath).toBe(path.join(dir, 'hekireki.config.ts'))
     const [users, posts] = operations(dir)
     expect(users?.op).toBe('createMany')
-    expect(users?.rows?.map((row) => row.role)).toStrictEqual(['ADMIN', 'ADMIN', 'ADMIN'])
-    expect(users?.rows?.map((row) => row.id)).toStrictEqual([1, 2, 3])
+    expect(users?.rows?.map((row) => row['role'])).toStrictEqual(['ADMIN', 'ADMIN', 'ADMIN'])
+    expect(users?.rows?.map((row) => row['id'])).toStrictEqual([1, 2, 3])
     expect(posts?.op).toBe('createMany')
-    expect(posts?.rows?.every((row) => [1, 2, 3].includes(Number(row.authorId)))).toBe(true)
+    expect(posts?.rows?.every((row) => [1, 2, 3].includes(Number(row['authorId'])))).toBe(true)
     expect(posts?.rows).toHaveLength(4)
   })
 

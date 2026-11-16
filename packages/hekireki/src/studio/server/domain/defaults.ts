@@ -73,21 +73,21 @@ export function makeGeneratedFields(input: z.infer<typeof MakeGeneratedFieldsInp
     const generated = /^(?<name>uuid|cuid|nanoid|ulid|now)\((?<argument>[^)]*)\)$/u.exec(
       field.default ?? '',
     )?.groups
-    const argument = generated?.argument?.trim() ?? ''
+    const argument = generated?.['argument']?.trim() ?? ''
     const length = Number(argument)
     const generator =
-      generated?.name === 'uuid'
+      generated?.['name'] === 'uuid'
         ? ({ kind: 'uuid', version: argument === '7' ? 7 : 4 } as const)
-        : generated?.name === 'cuid'
+        : generated?.['name'] === 'cuid'
           ? ({ kind: 'cuid', version: argument === '2' ? 2 : 1 } as const)
-          : generated?.name === 'nanoid'
+          : generated?.['name'] === 'nanoid'
             ? ({
                 kind: 'nanoid',
                 length: Number.isInteger(length) && length > 0 ? length : null,
               } as const)
-            : generated?.name === 'ulid'
+            : generated?.['name'] === 'ulid'
               ? ({ kind: 'ulid' } as const)
-              : generated?.name === 'now' || field.isUpdatedAt
+              : generated?.['name'] === 'now' || field.isUpdatedAt
                 ? ({ kind: 'now' } as const)
                 : field.isList && field.isRequired && field.default === null
                   ? ({ kind: 'literal', value: '[]' } as const)

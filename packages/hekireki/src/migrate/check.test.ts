@@ -745,7 +745,7 @@ INSERT INTO "Post" VALUES (1, 'Hello', NULL, 1), (2, 'Again', 'Zed', 1), (3, 'On
         .map((row) => structuredClone(row))
     // What the check says the rows will be, read before anything is written.
     const preview = result.previews.find((one) => one.model === 'User')
-    const previewed = rows(preview?.sql ?? '').map((row) => [row.id, row.authorName])
+    const previewed = rows(preview?.sql ?? '').map((row) => [row['id'], row['authorName']])
     expect(previewed).toStrictEqual([
       [1, 'Zed'],
       [2, 'Bob'],
@@ -754,8 +754,8 @@ INSERT INTO "Post" VALUES (1, 'Hello', NULL, 1), (2, 'Again', 'Zed', 1), (3, 'On
     db.exec(planSql(result, { path: 'migration.sql', sql: MIGRATION }).sql)
     expect(
       rows('SELECT "id", "authorName" FROM "User" ORDER BY "id"').map((row) => [
-        row.id,
-        row.authorName,
+        row['id'],
+        row['authorName'],
       ]),
     ).toStrictEqual(previewed)
     db.close()

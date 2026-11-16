@@ -8,6 +8,8 @@
     "jsx": "react-jsx",
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noPropertyAccessFromIndexSignature": true,
     // A case falls through, a method overrides without `override`, a parameter goes unused (name
     // it `_x` to say so), a side-effect import names a file that is not there, a line can never
     // run, a label is never used: each is an error.

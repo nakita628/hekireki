@@ -17,7 +17,7 @@ export function ecto(options: GeneratorOptions) {
         message: `Hekireki-Ecto cannot read this schema:\n${problems.map((p) => `  - ${p}`).join('\n')}`,
       })
     }
-    const app = options.generator.config?.app ?? 'MyApp'
+    const app = options.generator.config?.['app'] ?? 'MyApp'
     const enums = options.dmmf.datamodel.enums
     // DMMF drops the name `@relation(map: ...)` gives a foreign key, and the relation mode: both
     // are read off the schema's text, parsed into its blocks once.

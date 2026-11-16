@@ -82,9 +82,9 @@ describe('autoLayout', () => {
   it('positions every node, sources on the left and the result on the right', () => {
     const positions = autoLayout(nodes, edges)
     expect(Object.keys(positions).toSorted()).toStrictEqual(['out', 'users', 'where'])
-    const users = positions.users
-    const where = positions.where
-    const out = positions.out
+    const users = positions['users']
+    const where = positions['where']
+    const out = positions['out']
     if (!users || !where || !out) throw new Error('every node is positioned')
     expect(users.x + NODE_WIDTH).toBeLessThanOrEqual(where.x)
     expect(where.x + NODE_WIDTH).toBeLessThanOrEqual(out.x)
