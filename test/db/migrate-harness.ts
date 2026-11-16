@@ -22,6 +22,17 @@ export const prisma = join(pkg, 'node_modules', '.bin', 'prisma')
  * beside it: the CLI loads `pg` and `mysql2` from the directory it is run in, as it does in a
  * user's project, and under the system's temporary directory it would find neither.
  */
+/** Runs each statement after the one before it has finished: a migration is an order. */
+export async function inSequence(
+  statements: readonly string[],
+  exec: (sql: string) => Promise<unknown>,
+) {
+  for (const sql of statements) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential by definition
+    await exec(sql)
+  }
+}
+
 export function workspace(prefix: string) {
   const dir = mkdtempSync(join(tmpdir(), prefix))
   symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir')

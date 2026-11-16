@@ -6,10 +6,13 @@ import { beforeAll, describe, expect, it } from 'vite-plus/test'
 const harness = resolve(import.meta.dirname, '..', 'harness', 'ecto')
 const hasMix = spawnSync('mix', ['--version'], { stdio: 'ignore' }).status === 0
 
+// A CI leg has every toolchain; a local run may not.
+const ON_CI = (process.env.CI ?? '') !== ''
+
 describe('ecto', () => {
   // Skipping keeps `vp test` runnable without Elixir installed; a CI leg that
   // silently skipped would be a false green.
-  it.runIf(!!process.env.CI)('the Elixir toolchain is installed', () => {
+  it.runIf(ON_CI)('the Elixir toolchain is installed', () => {
     expect(hasMix).toBe(true)
   })
 

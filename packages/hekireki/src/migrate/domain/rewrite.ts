@@ -642,7 +642,7 @@ function castWithMappedValues(
 }
 
 /** A string matched as it is inside a regular expression. */
-export function escape(value: string) {
+function escape(value: string) {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&')
 }
 

@@ -34,10 +34,15 @@ function harnessRun(args: readonly string[]) {
   }).status
 }
 
+const canRun = hasGradle && hasPostgres
+
+// A CI leg has every toolchain; a local run may not.
+const ON_CI = (process.env.CI ?? '') !== ''
+
 describe('exposed', () => {
   // Skipping keeps `vp test` runnable without Gradle or PostgreSQL; a CI leg that silently skipped
   // would be a false green.
-  it.runIf(!!process.env.CI)('Gradle and a PostgreSQL server are available', () => {
+  it.runIf(ON_CI)('Gradle and a PostgreSQL server are available', () => {
     expect({ gradle: hasGradle, postgres: hasPostgres }).toStrictEqual({
       gradle: true,
       postgres: true,
@@ -91,16 +96,13 @@ describe('exposed', () => {
   // the schema, fact by fact from PostgreSQL's catalog: tables, column types, nullability, defaults,
   // keys, foreign keys with their actions, indexes, sequences and enum labels in order. Only the
   // differences Main.kt lists — each one documented — may remain.
-  it.skipIf(!(hasGradle && hasPostgres)).each(SCHEMAS)(
-    '%s: creates the schema Prisma Migrate creates',
-    (name) => {
-      expect(harnessRun(['compare', name, `${name}.sql`])).toBe(0)
-    },
-  )
+  it.skipIf(!canRun).each(SCHEMAS)('%s: creates the schema Prisma Migrate creates', (name) => {
+    expect(harnessRun(['compare', name, `${name}.sql`])).toBe(0)
+  })
 
   // Each statement MigrationUtils asks for on Prisma's database is run on a copy of it: those that
   // change anything are the ways Exposed misreads the catalog, each one documented in Main.kt.
-  it.skipIf(!(hasGradle && hasPostgres)).each(SCHEMAS)(
+  it.skipIf(!canRun).each(SCHEMAS)(
     '%s: what MigrationUtils asks for is a no-op or documented',
     (name) => {
       expect(harnessRun(['migrate', name, `${name}.sql`])).toBe(0)
@@ -110,7 +112,7 @@ describe('exposed', () => {
   // Reads and writes through the tables and the entities on the database Prisma Migrate creates,
   // checking the raw columns: defaults, generated ids, @updatedAt, enums, lists, native types, time
   // zones, referential actions and the join tables' A/B columns.
-  it.skipIf(!(hasGradle && hasPostgres)).each(SCHEMAS)(
+  it.skipIf(!canRun).each(SCHEMAS)(
     '%s: reads and writes the database Prisma Migrate creates',
     (name) => {
       expect(harnessRun(['smoke', name, `${name}.sql`])).toBe(0)

@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite-plus'
 
+import { BASE_RULES, JEST_RULES, LINT_CATEGORIES, LINT_OPTIONS } from '../../lint/oxlint.ts'
+
 export default defineConfig({
   pack: {
     entry: {
@@ -95,24 +97,8 @@ export default defineConfig({
     // The repository conventions that a glob cannot express (Effect.gen shape, schema
     // documentation, naming); see lint/custom.js for the rule list.
     jsPlugins: ['./lint/custom.js'],
-    options: {
-      typeAware: true,
-      typeCheck: true,
-      // A rule that stops firing must have its `oxlint-disable` comment deleted
-      // with it, otherwise the suppression silently outlives its reason.
-      reportUnusedDisableDirectives: 'deny',
-      // Nothing here is configured as a warning; this keeps a rule that defaults
-      // to `warn` from slipping through `vp check` unnoticed.
-      denyWarnings: true,
-    },
-    categories: {
-      correctness: 'error',
-      suspicious: 'error',
-      perf: 'error',
-    },
-    // Rules in the correctness / suspicious / perf categories are already errors via
-    // `categories` above and are not restated; this list only adds rules from the
-    // pedantic / style / restriction / nursery categories, which no category enables.
+    options: LINT_OPTIONS,
+    categories: LINT_CATEGORIES,
     rules: {
       'custom/effect-gen-return': 'error',
       'custom/no-effect-fn': 'error',
@@ -177,150 +163,29 @@ export default defineConfig({
       'jsdoc/require-property-description': 'error',
       'jsdoc/require-property-name': 'error',
       'jsdoc/require-returns-description': 'error',
-      // Code a reader should not have to trace: a block nested four deep, a function with more
-      // than fifteen paths through it, a callback in a callback in a callback, a ternary inside a
-      // ternary. Each is a function or a name waiting to be written.
-      'max-depth': ['error', { max: 3 }],
-      complexity: ['error', { max: 15 }],
-      'max-nested-callbacks': ['error', { max: 3 }],
-      'no-nested-ternary': 'error',
-      // A condition is a boolean: `x !== undefined`, `s !== ''`, `n > 0`, never a string, a number
-      // or an object that JavaScript coerces.
-      'typescript/strict-boolean-expressions': 'error',
+      // The rules every workspace holds (lint/oxlint.ts at the root); what follows is this
+      // package's own.
+      ...BASE_RULES,
+      ...JEST_RULES,
       // Work repeated where it need not be, in the generators and the CLI as in the Studio server
       // (lint/performance.js): a linear lookup inside a loop, a literal RegExp / Set / Map built on
       // every call, an Effect.forEach / Effect.all that does not say how many run at once.
       'custom/no-lookup-in-loop': 'error',
       'custom/hoist-constant': 'error',
       'custom/effect-explicit-concurrency': 'error',
-      // Old or risky APIs, and spellings that read as mistakes.
-      'no-alert': 'error',
-      'no-constructor-return': 'error',
-      'no-promise-executor-return': 'error',
-      'prefer-spread': 'error',
-      'symbol-description': 'error',
-      'import/no-amd': 'error',
-      'unicorn/no-instanceof-array': 'error',
-      'unicorn/prefer-date-now': 'error',
-      'unicorn/prefer-response-static-json': 'error',
-      'unicorn/text-encoding-identifier-case': 'error',
-      'unicorn/throw-new-error': 'error',
-      'typescript/adjacent-overload-signatures': 'error',
-      'typescript/ban-tslint-comment': 'error',
-      'typescript/unified-signatures': 'error',
-      // A promise is returned as it is; `return await` belongs only inside try / catch.
-      'typescript/return-await': 'error',
-      'typescript/use-unknown-in-catch-callback-variable': 'error',
-      // `unicorn/number-literal-case` stays off: it asks for `0xFF`, and oxfmt writes `0xff`.
-      // `unicorn/no-array-method-this-argument` stays off: it reads `Effect.forEach(xs, f, options)`
-      // and `Stream.map` as an array method given a `thisArg`.
-      eqeqeq: 'error',
-      'no-var': 'error',
-      'prefer-const': 'error',
-      'no-param-reassign': ['error', { props: true }],
-      'no-console': 'error',
-      'no-plusplus': 'error',
       'no-undef': 'error',
-      // The tests (jest plugin). Codegen tests own a byte-for-byte contract: equality is strict,
-      // a primitive is compared with toBe, and nothing is a snapshot — the expected text is in the
-      // test, where a reviewer reads it. A test runs, is named once, and asserts unconditionally.
-      'jest/valid-expect': ['error', { maxArgs: 2 }],
-      'jest/no-identical-title': 'error',
-      'jest/no-disabled-tests': 'error',
-      'jest/no-focused-tests': 'error',
-      'jest/no-duplicate-hooks': 'error',
-      'jest/no-test-return-statement': 'error',
-      // A hook that sets up a toolchain or a database asserts that it did.
-      'jest/no-standalone-expect': [
-        'error',
-        { additionalTestBlockFunctions: ['beforeAll', 'beforeEach', 'afterAll', 'afterEach'] },
-      ],
-      'jest/no-done-callback': 'error',
-      'jest/no-export': 'error',
-      'jest/no-alias-methods': 'error',
-      'jest/prefer-to-be': 'error',
-      'jest/prefer-strict-equal': 'error',
-      'jest/prefer-to-have-length': 'error',
-      'jest/prefer-equality-matcher': 'error',
-      'jest/prefer-comparison-matcher': 'error',
-      'jest/prefer-to-contain': 'error',
-      'jest/max-nested-describe': 'error',
-      // A test asserts unconditionally: a case that branches is two cases (it.each, or two its).
-      'jest/no-conditional-in-test': 'error',
-      'jest/prefer-todo': 'error',
-      'jest/no-restricted-matchers': [
-        'error',
-        {
-          toMatchSnapshot: 'Write the expected value out with toBe / toStrictEqual.',
-          toMatchInlineSnapshot: 'Write the expected value out with toBe / toStrictEqual.',
-          toThrowErrorMatchingSnapshot: 'Name the error the call throws.',
-          toThrowErrorMatchingInlineSnapshot: 'Name the error the call throws.',
-          toEqual: 'Use toStrictEqual: toEqual passes on undefined properties and other classes.',
-        },
-      ],
-      'typescript/no-explicit-any': 'error',
-      'typescript/no-non-null-assertion': 'error',
-      'typescript/consistent-type-imports': 'error',
-      'typescript/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
-      'typescript/no-misused-promises': 'error',
-      'typescript/require-await': 'error',
-      'typescript/prefer-readonly': 'error',
-      'typescript/prefer-nullish-coalescing': 'error',
       // The default options allow number + string; a codegen library concatenates on purpose
       // through template literals only.
       'typescript/restrict-plus-operands': [
         'error',
         { allowNumberAndString: false, allowBoolean: false, allowNullish: false },
       ],
-      'typescript/switch-exhaustiveness-check': 'error',
-      'typescript/no-unsafe-argument': 'error',
-      'typescript/no-unsafe-assignment': 'error',
-      'typescript/no-unsafe-member-access': 'error',
-      'typescript/no-unsafe-call': 'error',
-      'typescript/no-unsafe-return': 'error',
-      'unicorn/no-array-for-each': 'error',
-      'unicorn/prefer-array-some': 'error',
-      'unicorn/prefer-spread': 'error',
-      'unicorn/prefer-string-replace-all': 'error',
-      // Pedantic-category picks that fit a codegen library; the rest of that
-      // category (max-lines, strict-boolean-expressions, …) is not adopted.
-      'typescript/strict-void-return': 'error',
-      'unicorn/prefer-string-slice': 'error',
-      'unicorn/prefer-native-coercion-functions': 'error',
-      'unicorn/prefer-import-meta-properties': 'error',
-      'unicorn/no-lonely-if': 'error',
-      'require-unicode-regexp': 'error',
-      'import/no-cycle': 'error',
       // `custom/layer-namespace-import` has a usecases/services/domain module imported as a
       // namespace through its layer barrel, so a file that uses several modules of one layer
       // imports that barrel once per namespace (`import * as SqlDomain from '../domain/index.js'`
       // beside `import * as ModelDomain from '../domain/index.js'`). Merging those is what the
       // convention rejects, so this rule cannot apply.
       'import/no-duplicates': 'off',
-      // promise / node rules sit outside the enabled categories, so the ones
-      // that matter for an async Node CLI are named explicitly.
-      'promise/param-names': 'error',
-      'promise/valid-params': 'error',
-      'promise/spec-only': 'error',
-      'promise/no-new-statics': 'error',
-      'promise/no-multiple-resolved': 'error',
-      'promise/no-return-wrap': 'error',
-      'promise/no-return-in-finally': 'error',
-      'promise/no-nesting': 'error',
-      'promise/no-promise-in-callback': 'error',
-      'promise/no-callback-in-promise': 'error',
-      'promise/catch-or-return': 'error',
-      'promise/always-return': 'error',
-      'promise/prefer-catch': 'error',
-      'promise/prefer-await-to-then': 'error',
-      'node/no-exports-assign': 'error',
-      'node/no-new-require': 'error',
-      'node/no-mixed-requires': 'error',
-      'node/global-require': 'error',
-      'node/no-path-concat': 'error',
-      'node/no-top-level-await': 'error',
-      'node/handle-callback-err': 'error',
-      'node/callback-return': 'error',
       // --- Hardening beyond the enabled categories -------------------------
       // Everything below sits in `pedantic` / `style` / `restriction` /
       // `nursery`, which oxlint leaves off by default. Only rules reachable

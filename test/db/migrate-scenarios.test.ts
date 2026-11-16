@@ -24,17 +24,19 @@ const SQL = {
   toInt: (dialect: Dialect, column: string) =>
     `CAST(NULLIF(${column}, '') AS ${{ sqlite: 'INTEGER', postgresql: 'INTEGER', mysql: 'SIGNED', cockroachdb: 'INT4' }[dialect]})`,
   prefixed: (dialect: Dialect, prefix: string, column: string) =>
-    dialect === 'mysql'
-      ? `CONCAT('${prefix}', ${column})`
-      : dialect === 'cockroachdb'
-        ? `'${prefix}' || ${column}::STRING`
-        : `'${prefix}' || ${column}`,
+    ({
+      mysql: `CONCAT('${prefix}', ${column})`,
+      cockroachdb: `'${prefix}' || ${column}::STRING`,
+      postgresql: `'${prefix}' || ${column}`,
+      sqlite: `'${prefix}' || ${column}`,
+    })[dialect],
   beforeAt: (dialect: Dialect, column: string) =>
-    dialect === 'sqlite'
-      ? `substr(${column}, 1, instr(${column}, '@') - 1)`
-      : dialect === 'mysql'
-        ? `SUBSTRING_INDEX(${column}, '@', 1)`
-        : `split_part(${column}, '@', 1)`,
+    ({
+      sqlite: `substr(${column}, 1, instr(${column}, '@') - 1)`,
+      mysql: `SUBSTRING_INDEX(${column}, '@', 1)`,
+      postgresql: `split_part(${column}, '@', 1)`,
+      cockroachdb: `split_part(${column}, '@', 1)`,
+    })[dialect],
 }
 
 type Quote = (name: string) => string

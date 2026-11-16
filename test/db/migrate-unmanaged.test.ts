@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 
-import { cli, decide, prisma, run, TARGETS, workspace } from './migrate-harness.ts'
+import { cli, decide, inSequence, prisma, run, TARGETS, workspace } from './migrate-harness.ts'
 
 // What Prisma's schema does not describe, read from the catalogue of every database there is: a
 // CHECK constraint a fix has to pass, and a trigger its write sets off. The check has to find both
@@ -80,10 +80,7 @@ for (const target of TARGETS) {
           throw new Error(`prisma db push failed:\n${pushed.out}`)
         }
         // One at a time: a trigger's body is not a statement to split a script at.
-        await (guards ?? []).reduce(
-          (done, sql) => done.then(() => target.exec(state.url, RUN, sql)),
-          Promise.resolve(),
-        )
+        await inSequence(guards ?? [], (sql) => target.exec(state.url, RUN, sql))
         await target.exec(
           state.url,
           RUN,
@@ -104,12 +101,12 @@ for (const target of TARGETS) {
       })
 
       /** How the text becomes a number, as each database writes it. */
-      const converted =
-        target.dialect === 'mysql'
-          ? 'CAST(`score` AS SIGNED)'
-          : target.dialect === 'postgresql'
-            ? 'CAST(CAST("score" AS NUMERIC) AS INTEGER)'
-            : 'CAST("score" AS INTEGER)'
+      const converted = {
+        mysql: 'CAST(`score` AS SIGNED)',
+        postgresql: 'CAST(CAST("score" AS NUMERIC) AS INTEGER)',
+        sqlite: 'CAST("score" AS INTEGER)',
+        cockroachdb: 'CAST("score" AS INTEGER)',
+      }[target.dialect]
 
       function checked(value: string) {
         decide(state.dir, [

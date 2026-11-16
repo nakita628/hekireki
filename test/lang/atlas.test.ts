@@ -7,11 +7,15 @@ import { describe, expect, it } from 'vite-plus/test'
 const harness = resolve(import.meta.dirname, '..', 'harness', 'atlas')
 const hasAtlas = spawnSync('atlas', ['version'], { stdio: 'ignore' }).status === 0
 const hasDocker = spawnSync('docker', ['info'], { stdio: 'ignore' }).status === 0
+const canApply = hasAtlas && hasDocker
+
+// A CI leg has every toolchain; a local run may not.
+const ON_CI = (process.env.CI ?? '') !== ''
 
 describe('atlas', () => {
   // Skipping keeps `vp test` runnable without the Atlas CLI installed; a CI
   // leg that silently skipped would be a false green.
-  it.runIf(!!process.env.CI)('the Atlas CLI and Docker are installed', () => {
+  it.runIf(ON_CI)('the Atlas CLI and Docker are installed', () => {
     expect(hasAtlas).toBe(true)
     expect(hasDocker).toBe(true)
   })
@@ -34,7 +38,7 @@ describe('atlas', () => {
   // Replays the HCL against Atlas's migration engine on a disposable dev
   // database: unknown column types, dangling column/table references, and
   // invalid default expressions all fail here, not just syntax.
-  it.skipIf(!(hasAtlas && hasDocker))('applies to a real PostgreSQL dev database', () => {
+  it.skipIf(!canApply)('applies to a real PostgreSQL dev database', () => {
     const result = spawnSync(
       'atlas',
       [

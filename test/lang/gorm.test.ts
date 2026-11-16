@@ -7,10 +7,13 @@ const harness = resolve(import.meta.dirname, '..', 'harness', 'gorm')
 const hasGo = spawnSync('go', ['version'], { stdio: 'ignore' }).status === 0
 const env = { ...process.env, CGO_ENABLED: '0' }
 
+// A CI leg has every toolchain; a local run may not.
+const ON_CI = (process.env.CI ?? '') !== ''
+
 describe('gorm', () => {
   // Skipping keeps `vp test` runnable without Go installed; a CI leg that
   // silently skipped would be a false green.
-  it.runIf(!!process.env.CI)('the Go toolchain is installed', () => {
+  it.runIf(ON_CI)('the Go toolchain is installed', () => {
     expect(hasGo).toBe(true)
   })
 
