@@ -411,11 +411,12 @@ export default defineConfig({
     },
     overrides: [
       {
-        // Vite's config contract is a default export; the ban stays on for src.
+        // The config contract of each of these tools is a default export; the ban stays on for src.
         files: [
           'vite.config.ts',
           'vite.studio.config.ts',
           'hono-takibi.config.ts',
+          'typespeclint.config.ts',
           'playwright.config.ts',
         ],
         rules: {

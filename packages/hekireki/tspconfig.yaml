@@ -1,0 +1,3 @@
+linter:
+  extends:
+    - typespeclint/recommended

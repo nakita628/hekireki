@@ -48,9 +48,14 @@ const config: KnipConfig = {
     },
     'packages/hekireki': {
       // index.ts, the bins and the tests come from package.json and vite.config.ts. The rest is
-      // the Studio client, which Vite reaches through index.html, the config hono-takibi reads
-      // and the schemas the end-to-end tests copy into their workspace.
-      entry: ['src/studio/client/main.tsx', 'hono-takibi.config.ts', 'e2e/fixtures/**/*.prisma'],
+      // the Studio client, which Vite reaches through index.html, the configs hono-takibi and
+      // typespeclint read and the schemas the end-to-end tests copy into their workspace.
+      entry: [
+        'src/studio/client/main.tsx',
+        'hono-takibi.config.ts',
+        'typespeclint.config.ts',
+        'e2e/fixtures/**/*.prisma',
+      ],
       // lint/*.d.ts are the declarations of the lint plugins beside them, read by the type
       // checker and imported by nothing.
       project: ['src/**/*.{ts,tsx,css}', 'e2e/**/*.{ts,prisma}', 'lint/**/*.{js,test.ts}'],
@@ -68,10 +73,9 @@ const config: KnipConfig = {
         'prisma',
         // main.tsx augments its `Register` interface (`declare module`), which is not an import.
         '@tanstack/router-core',
-        // main.tsp imports these, and hono-takibi compiles it with the compiler; Knip does not
-        // read TypeSpec. lint/typespec.mjs holds the four to one version.
-        '@typespec/compiler',
-        '@typespec/http',
+        // main.tsp imports these, and Knip does not read TypeSpec. The other two of the four
+        // lint/typespec.mjs holds to one version it does see: the `lint:tsp` script runs the
+        // `tsp` of @typespec/compiler, and typespeclint names @typespec/http as a peer.
         '@typespec/openapi',
         '@typespec/openapi3',
       ],

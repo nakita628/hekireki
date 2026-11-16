@@ -15,7 +15,7 @@
     "lint:links": "node lint/links.mjs",
     "lint:actions": "node lint/actionlint.mjs && pnpm lint:actions:security",
     "lint:actions:security": "sh -c 'if command -v zizmor >/dev/null; then zizmor .github/workflows; else echo \"zizmor is not installed (pipx install zizmor); CI runs it\"; fi'",
-    "lint:typespec": "node lint/typespec.mjs",
+    "lint:typespec": "node lint/typespec.mjs && vp run hekireki#lint:tsp",
     "lint:knip": "knip --treat-config-hints-as-errors",
     "test": "vp run --filter ./packages/hekireki test",
     "coverage": "vp run --filter ./packages/hekireki coverage",

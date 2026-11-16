@@ -396,6 +396,7 @@ model Field {
   isUnique: boolean;
 
   /** Whether the field is `@updatedAt` */
+  #suppress "typespeclint/property-type" "A flag named after the `@updatedAt` attribute, not a time"
   isUpdatedAt: boolean;
 
   /** Whether the field holds the foreign key of a relation on this model */
@@ -1035,6 +1036,19 @@ model SqlDiagnostic {
 }
 
 /** The analysis of one statement. */
+@example(#{
+  kind: "select",
+  text: "SELECT id FROM users",
+  range: #{ start: 0, end: 20 },
+  nodes: #[],
+  edges: #[],
+  tables: #[],
+  columns: #[],
+  parameters: #[],
+  diagnostics: #[],
+  rowType: "{ id: number }",
+  paramsType: "[]",
+})
 model StatementAnalysis {
   /** What kind of statement it is */
   kind: StatementKind;
@@ -1071,6 +1085,7 @@ model StatementAnalysis {
 }
 
 /** The analysis of every statement in the text. */
+@example(#{ statements: #[] })
 @extension("x-brand", "Analysis")
 model Analysis {
   /** One entry per statement, in order */
@@ -2213,12 +2228,15 @@ model MigrationRecord {
   name: string;
 
   /** When it started, as the database recorded it */
+  #suppress "typespeclint/property-type" "An ISO 8601 string where the driver gives a date or a number, else the text as the database stored it, which `utcDateTime` would reject"
   startedAt: string | null;
 
   /** When it finished; null while it is running or if it failed */
+  #suppress "typespeclint/property-type" "An ISO 8601 string where the driver gives a date or a number, else the text as the database stored it, which `utcDateTime` would reject"
   finishedAt: string | null;
 
   /** When it was marked rolled back, if it was */
+  #suppress "typespeclint/property-type" "An ISO 8601 string where the driver gives a date or a number, else the text as the database stored it, which `utcDateTime` would reject"
   rolledBackAt: string | null;
 
   /** How many statements of it ran */
@@ -2791,6 +2809,7 @@ model DecisionsBody {
 
 /** The name to propose for a migration, and the decisions made for it on the page. */
 @example(#{ name: "profile", decisions: #[] })
+#suppress "typespeclint/property-required" "Both parts have a default: the name is proposed and the kept decisions are used"
 model PlanBody {
   /** What to call it; the timestamp is put in front */
   name?: string;
@@ -2834,6 +2853,7 @@ model ApplyResult {
   results: StatementResult[];
 
   /** The index of the statement that failed, null when none did */
+  #suppress "typespeclint/property-type" "An index into `results`, not a time"
   failedAt: int32 | null;
 
   /** Whether every statement ran */
@@ -2912,6 +2932,8 @@ namespace SchemaRoutes {
   @get
   @route("/events")
   @operationId("readSchemaEvents")
+  @returnsDoc("The event stream, open until the client closes it")
+  #suppress "typespeclint/operation-responses" "The stream is opened without reading anything that can fail, and once open a failure cannot change the status"
   op events(): {
     @statusCode statusCode: 200;
     @header contentType: "text/event-stream";
@@ -2937,7 +2959,11 @@ namespace DbRoutes {
   @get
   @route("/rows/{modelName}")
   @operationId("readRows")
-  op rows(@path modelName: modelName, ...RowsQuery):
+  op rows(
+    /** The model whose table is read or written, as the schema declares it */
+    @path modelName: modelName,
+    ...RowsQuery,
+  ):
     | Rows
     | NotFoundProblemResponse
     | ValidationProblemResponse
@@ -2948,7 +2974,11 @@ namespace DbRoutes {
   @post
   @route("/rows/{modelName}")
   @operationId("createRow")
-  op insert(@path modelName: modelName, @body body: InsertBody):
+  op insert(
+    /** The model whose table is read or written, as the schema declares it */
+    @path modelName: modelName,
+    @body body: InsertBody,
+  ):
     | Affected
     | NotFoundProblemResponse
     | ValidationProblemResponse
@@ -2959,7 +2989,11 @@ namespace DbRoutes {
   @patch
   @route("/rows/{modelName}")
   @operationId("updateRow")
-  op update(@path modelName: modelName, @body body: UpdateBody):
+  op update(
+    /** The model whose table is read or written, as the schema declares it */
+    @path modelName: modelName,
+    @body body: UpdateBody,
+  ):
     | Affected
     | NotFoundProblemResponse
     | ValidationProblemResponse
@@ -2970,7 +3004,13 @@ namespace DbRoutes {
   @delete
   @route("/rows/{modelName}")
   @operationId("deleteRow")
-  op remove(@path modelName: modelName, @body body: DeleteBody):
+  op remove(
+    /** The model whose table is read or written, as the schema declares it */
+    @path modelName: modelName,
+
+    #suppress "typespeclint/parameter-location" "A row is identified by its key fields, which can be several and of any type: they do not fit a path or a query string"
+    @body body: DeleteBody,
+  ):
     | Affected
     | NotFoundProblemResponse
     | ValidationProblemResponse
@@ -3248,6 +3288,7 @@ namespace MigrateRoutes {
   @post
   @route("/plan")
   @operationId("planMigration")
+  #suppress "typespeclint/parameter-required" "An empty body plans with the proposed name and the kept decisions"
   op plan(@body body: PlanBody):
     | MigratePlan
     | ValidationProblemResponse
@@ -3315,7 +3356,10 @@ namespace MigrateRoutes {
   @get
   @route("/migrations/{migrationName}")
   @operationId("readMigrationFile")
-  op file(@path migrationName: string):
+  op file(
+    /** The directory name of the migration, as `MigrationRecord.name` gives it */
+    @path migrationName: string,
+  ):
     | MigrationFile
     | NotFoundProblemResponse
     | ServiceUnavailableProblemResponse

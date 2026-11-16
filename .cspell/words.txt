@@ -236,6 +236,7 @@ timespec
 tinys
 treeify
 triggerdef
+tspconfig
 turso
 tursodatabase
 typcategory
@@ -243,6 +244,7 @@ typcollation
 typebot
 typebox
 typelem
+typespeclint
 typname
 typnamespace
 typtype
