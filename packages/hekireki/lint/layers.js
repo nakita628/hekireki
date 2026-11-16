@@ -312,7 +312,9 @@ export const layerRules = {
   //   NG: domain/plan.ts with no domain/plan.test.ts
   //   OK: domain/plan.ts and domain/plan.test.ts; a barrel (index.ts) needs none
   'domain-require-test': {
-    meta: { docs: { description: 'every domain module has a .test.ts of the same name beside it' } },
+    meta: {
+      docs: { description: 'every domain module has a .test.ts of the same name beside it' },
+    },
     create(context) {
       const filename = filenameOf(context)
       if (TEST_FILE.test(filename) || INDEX_FILE.test(filename) || filename.endsWith('.d.ts')) {
