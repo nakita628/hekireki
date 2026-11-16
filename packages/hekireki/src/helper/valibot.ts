@@ -1,5 +1,9 @@
-import { makeValidationExtractor, schemaFromFields } from '../utils/index.js'
-import { makePropertiesGenerator, validationSchemas } from '../utils/validation-schema.js'
+import { makeValidationExtractor } from '../annotation/index.js'
+import {
+  makePropertiesGenerator,
+  schemaFromFields,
+  validationSchemas,
+} from './validation-schema.js'
 
 export function makeValibotInfer(modelName: string) {
   return `export type ${modelName} = v.InferOutput<typeof ${modelName}Schema>`

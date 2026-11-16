@@ -2,7 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { prismaBlocks, relationMaps } from '../utils/prisma-schema-text.js'
+import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import {
   entityFile,
   enumEntryName,

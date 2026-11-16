@@ -1,5 +1,5 @@
-import { docBlockLines, makeValidationExtractor } from '../utils/index.js'
-import { validationSchemas } from '../utils/validation-schema.js'
+import { docBlockLines, makeValidationExtractor } from '../annotation/index.js'
+import { validationSchemas } from './validation-schema.js'
 
 export function makeAjvInfer(modelName: string) {
   return `export type ${modelName} = FromSchema<typeof ${modelName}Schema>`

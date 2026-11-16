@@ -4,7 +4,7 @@ import { Effect } from 'effect'
 import { emitMany } from '../emit/index.js'
 import { ectoSchemaFiles } from '../generator/ecto.js'
 import { ectoProblems } from '../helper/ecto.js'
-import { prismaBlocks, relationMaps, relationMode } from '../utils/prisma-schema-text.js'
+import { prismaBlocks, relationMaps, relationMode } from '../prisma/schema-text.js'
 import { GeneratorConfigError } from './errors.js'
 import { requireOutput } from './output.js'
 

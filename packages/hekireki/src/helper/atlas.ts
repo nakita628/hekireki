@@ -1,8 +1,9 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { indexPrefix, stripAnnotations } from '../utils/index.js'
-import { implicitJoinTables, isFunctionDefault, referentialActions } from '../utils/prisma-model.js'
-import { sqlString } from '../utils/prisma-postgres.js'
+import { stripAnnotations } from '../annotation/index.js'
+import { indexPrefix } from '../naming/case.js'
+import { implicitJoinTables, isFunctionDefault, referentialActions } from '../prisma/model.js'
+import { sqlString } from '../prisma/postgres.js'
 
 type AtlasDialect = 'postgresql' | 'mysql' | 'sqlite'
 

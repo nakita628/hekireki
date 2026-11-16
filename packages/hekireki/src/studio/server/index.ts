@@ -1,7 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { Effect } from 'effect'
 
-import { isLoopbackHostname } from '../../utils/index.js'
+import { isLoopbackHostname } from '../../network/index.js'
 import { FORBIDDEN_HOST_MESSAGE } from './constants/index.js'
 import {
   deleteDbRowsModelNameRouteHandler,

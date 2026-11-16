@@ -612,7 +612,7 @@ tester.run('domain-import-allowlist', rule('domain-import-allowlist'), {
     tsCase(`import { parse } from 'acorn'`, DOMAIN_FILE),
     tsCase(`import { makeCell } from './values.js'`, DOMAIN_FILE),
     tsCase(`import { quoteIdentifier } from '../../../sql/index.js'`, DOMAIN_FILE),
-    tsCase(`import { erKey } from '../../../utils/relation.js'`, DOMAIN_FILE),
+    tsCase(`import { erKey } from '../../../prisma/relation.js'`, DOMAIN_FILE),
     tsCase(`import type { DMMF } from '@prisma/generator-helper'`, DOMAIN_FILE),
   ],
   invalid: [
@@ -995,7 +995,7 @@ tester.run('generator-pure', rule('generator-pure'), {
 
 tester.run('helper-no-generator-import', rule('helper-no-generator-import'), {
   valid: [
-    generatorCase(`import { stripAnnotations } from '../utils/index.js'`),
+    generatorCase(`import { stripAnnotations } from '../annotation/index.js'`),
     generatorCase(`import { makeZodSchema } from './zod.js'`),
     {
       code: `import { djangoCode } from '../generator/django.js'`,
@@ -1005,7 +1005,28 @@ tester.run('helper-no-generator-import', rule('helper-no-generator-import'), {
   invalid: [
     {
       ...generatorCase(`import { djangoCode } from '../generator/django.js'`),
-      errors: [{ message: /utils -> helper -> generator/u }],
+      errors: [{ message: /leaves -> helper -> generator/u }],
     },
+  ],
+})
+
+tester.run('no-utils-module', rule('no-utils-module'), {
+  valid: [
+    tsCase('export const x = 1', fromPackage('src/naming/case.ts')),
+    tsCase('export const x = 1', fromPackage('src/list/index.test.ts')),
+    tsCase('export const x = 1', fromPackage('src/studio/client/lib/date-utils.ts')),
+    tsCase('export const x = 1', fromPackage('src/utilities/index.ts')),
+  ],
+  invalid: [
+    {
+      ...tsCase('export const x = 1', fromPackage('src/utils/index.ts')),
+      errors: [{ message: /named `utils`/u }],
+    },
+    {
+      ...tsCase('export const x = 1', fromPackage('src/studio/server/utils/format.test.ts')),
+      errors: 1,
+    },
+    { ...tsCase('export const x = 1', fromPackage('src/studio/client/lib/utils.ts')), errors: 1 },
+    { ...tsCase('export const x = 1', fromPackage('src/studio/client/lib/utils.tsx')), errors: 1 },
   ],
 })

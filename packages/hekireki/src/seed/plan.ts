@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
-import { backRelation, isJoinSideA } from '../utils/prisma-model.js'
+import { backRelation, isJoinSideA } from '../prisma/model.js'
 import type { SeedRow } from './config.js'
 import { SeedGenerationError } from './errors.js'
 

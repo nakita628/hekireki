@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { operatorClassName, parseDateTimeDefault, prismaConstraintName } from './prisma-postgres.js'
+import { operatorClassName, parseDateTimeDefault, prismaConstraintName } from './postgres.js'
 
 // Every expected name is the one Prisma Migrate writes for the same table and columns.
 describe('prismaConstraintName', () => {

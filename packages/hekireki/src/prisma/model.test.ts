@@ -12,7 +12,7 @@ import {
   primaryKeyFields,
   relationEnds,
   uuidDefaultVersion,
-} from './prisma-model.js'
+} from './model.js'
 
 function fieldWith(type: string, def: DMMF.Field['default']): DMMF.Field {
   return {

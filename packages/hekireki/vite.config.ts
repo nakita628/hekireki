@@ -515,6 +515,11 @@ export default defineConfig({
           'vitest/no-large-snapshots': 'error',
         },
       },
+      {
+        // A module is named for what it holds, never `utils` (lint/codegen.js).
+        files: ['src/**'],
+        rules: { 'custom/no-utils-module': 'error' },
+      },
       // Architecture rules for src: each directory may import only the siblings
       // listed in its message. Regexes match relative specifiers only, so external
       // packages never collide with a banned directory name.
@@ -523,10 +528,51 @@ export default defineConfig({
       // `src/file` (the Result-wrapping I/O layer) and `src/cli`, so a throwing
       // `readFileSync` cannot reappear mid-pipeline. `no-restricted-imports` is
       // replaced wholesale — not merged — when two overrides both name it, which
-      // is why the leaf directories are split into two blocks below instead of
+      // is why the leaf directories are split into blocks below instead of
       // sharing one.
       {
-        files: ['src/utils/**', 'src/format/**'],
+        // The modules the generators are built from, each named for what it holds: annotation
+        // (`///` comments), naming (cases and names), prisma (DMMF and the schema text), literal
+        // (other languages' literals), list and network. They read each other, and of the rest of
+        // the project only the shared types.
+        files: [
+          'src/annotation/**',
+          'src/naming/**',
+          'src/prisma/**',
+          'src/literal/**',
+          'src/list/**',
+          'src/network/**',
+        ],
+        rules: {
+          'no-restricted-imports': [
+            'error',
+            {
+              paths: [
+                { name: 'node:fs', message: 'file I/O belongs in src/file' },
+                { name: 'node:fs/promises', message: 'file I/O belongs in src/file' },
+              ],
+              patterns: [
+                {
+                  group: [
+                    '../**',
+                    '!../types/**',
+                    '!../annotation/**',
+                    '!../naming/**',
+                    '!../prisma/**',
+                    '!../literal/**',
+                    '!../list/**',
+                    '!../network/**',
+                  ],
+                  message:
+                    'leaf module: it imports nothing of the project but the shared types and the other leaves',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        files: ['src/format/**'],
         rules: {
           'no-restricted-imports': [
             'error',
@@ -593,7 +639,8 @@ export default defineConfig({
             {
               patterns: [
                 {
-                  regex: '^(\\.\\./)+(bin|core|emit|format|generator|helper|utils)(/.*)?$',
+                  regex:
+                    '^(\\.\\./)+(bin|core|emit|format|generator|helper|annotation|naming|prisma|literal|list|network)(/.*)?$',
                   message: 'cli may only import file and studio/server',
                 },
               ],
@@ -616,7 +663,8 @@ export default defineConfig({
               patterns: [
                 {
                   regex: '^(\\.\\./)+(bin|cli|core|emit)(/.*)?$',
-                  message: 'studio/server may only import format, file, generator, helper, utils',
+                  message:
+                    'studio/server may only import format, file, generator, helper and the leaves (annotation, naming, prisma, literal, list, network)',
                 },
               ],
             },
@@ -633,7 +681,17 @@ export default defineConfig({
       },
       {
         // The generators return the same text for the same schema (lint/codegen.js).
-        files: ['src/helper/**', 'src/generator/**', 'src/utils/**', 'src/diagram/**'],
+        files: [
+          'src/helper/**',
+          'src/generator/**',
+          'src/annotation/**',
+          'src/naming/**',
+          'src/prisma/**',
+          'src/literal/**',
+          'src/list/**',
+          'src/network/**',
+          'src/diagram/**',
+        ],
         rules: { 'custom/generator-pure': 'error' },
       },
       {
@@ -649,6 +707,13 @@ export default defineConfig({
         // hekireki-docs reads the schema as Studio does, where `documentation` is already the prose
         // (studio/server/domain/schema.ts parts it from the annotations), so it is written as is.
         files: ['src/generator/docs.ts'],
+        rules: { 'custom/documentation-read': 'off' },
+      },
+      {
+        // The validation generators' shared composition carries a model's and a field's
+        // `documentation` along to the annotation readers each generator hands it
+        // (`extractValidation`, `extractObjectType`) and writes only `stripAnnotations`'s prose.
+        files: ['src/helper/validation-schema.ts'],
         rules: { 'custom/documentation-read': 'off' },
       },
       {
@@ -823,7 +888,7 @@ export default defineConfig({
               patterns: [
                 {
                   regex:
-                    '^(\\.\\./)+(bin|cli|core|emit|format|file|generator|helper|utils|server|studio/server)(/.*)?$',
+                    '^(\\.\\./)+(bin|cli|core|emit|format|file|generator|helper|annotation|naming|prisma|literal|list|network|server|studio/server)(/.*)?$',
                   message:
                     'browser code may only take types from the server (type-only imports of routes are allowed)',
                   allowTypeImports: true,
@@ -848,7 +913,7 @@ export default defineConfig({
               patterns: [
                 {
                   regex:
-                    '^(\\.\\./)+(bin|cli|core|emit|format|file|generator|helper|utils|studio/client|studio/server)(/.*)?$',
+                    '^(\\.\\./)+(bin|cli|core|emit|format|file|generator|helper|annotation|naming|prisma|literal|list|network|studio/client|studio/server)(/.*)?$',
                   message:
                     'diagram is pure: it only takes the contract types from studio/server/routes',
                   allowTypeImports: true,
@@ -890,7 +955,8 @@ export default defineConfig({
               ],
               patterns: [
                 {
-                  regex: '^(\\.\\./)+(bin|cli|core|generator|helper|utils)(/.*)?$',
+                  regex:
+                    '^(\\.\\./)+(bin|cli|core|generator|helper|annotation|naming|prisma|literal|list|network)(/.*)?$',
                   message: 'emit may only import format, file',
                 },
               ],
@@ -911,7 +977,8 @@ export default defineConfig({
               patterns: [
                 {
                   regex: '^(\\.\\./)+(bin|cli|core|emit|format|file)(/.*)?$',
-                  message: 'generator and helper may only import utils and each other',
+                  message:
+                    'generator and helper may only import the leaves (annotation, naming, prisma, literal, list, network) and each other',
                 },
               ],
             },
@@ -931,7 +998,8 @@ export default defineConfig({
               patterns: [
                 {
                   regex: '^(\\.\\./)+(bin|cli)(/.*)?$',
-                  message: 'core may only import utils, generator, helper, emit, format, file',
+                  message:
+                    'core may only import the leaves (annotation, naming, prisma, literal, list, network), generator, helper, emit, format, file',
                 },
               ],
             },
@@ -950,7 +1018,8 @@ export default defineConfig({
               ],
               patterns: [
                 {
-                  regex: '^(\\.\\./)+(diagram|emit|format|generator|helper|utils)(/.*)?$',
+                  regex:
+                    '^(\\.\\./)+(diagram|emit|format|generator|helper|annotation|naming|prisma|literal|list|network)(/.*)?$',
                   message: 'bin may only import core, cli and file (the layer the entry provides)',
                 },
               ],
@@ -977,7 +1046,12 @@ export default defineConfig({
           'src/generator/**',
           'src/core/**',
           'src/bin/**',
-          'src/utils/**',
+          'src/annotation/**',
+          'src/naming/**',
+          'src/prisma/**',
+          'src/literal/**',
+          'src/list/**',
+          'src/network/**',
           'src/sql/**',
           'src/studio/client/**',
         ],

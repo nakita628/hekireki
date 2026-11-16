@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { erRelationLine, modelInfo } from '../helper/mermaid-er.js'
-import { erRelations } from '../utils/relation.js'
+import { erRelations } from '../prisma/relation.js'
 
 const ER_HEADER = ['```mermaid', 'erDiagram'] as const
 const ER_FOOTER = ['```'] as const

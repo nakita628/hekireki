@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { makeValibotRelations, valibotSchemaCode } from '../helper/valibot.js'
-import { makeRelationsOnly } from '../utils/extract-relations.js'
+import { makeRelationsOnly } from '../prisma/extract-relations.js'
 
 export function valibotCode(dmmf: DMMF.Document, type: boolean, relation: boolean) {
   const base = valibotSchemaCode(dmmf.datamodel.models, type, dmmf.datamodel.enums)

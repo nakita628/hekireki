@@ -3,7 +3,7 @@ import { Effect } from 'effect'
 
 import { emitRaw } from '../emit/index.js'
 import { pydanticCode } from '../generator/pydantic.js'
-import { getBool } from '../utils/index.js'
+import { getBool } from '../prisma/config.js'
 import { outputFile, requireOutput } from './output.js'
 
 export function pydantic(options: GeneratorOptions) {

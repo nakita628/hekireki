@@ -1,20 +1,16 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import {
-  isAnnotationLine,
-  makePascalCase,
-  makeSnakeCase,
-  stripAnnotations,
-} from '../utils/index.js'
-import type { RelationEnd } from '../utils/prisma-model.js'
+import { isAnnotationLine, stripAnnotations } from '../annotation/index.js'
+import { makePascalCase, makeSnakeCase } from '../naming/case.js'
+import type { RelationEnd } from '../prisma/model.js'
 import {
   backRelation,
   fieldColumn,
   primaryKeyFields,
   referentialActions,
   relationEnds,
-} from '../utils/prisma-model.js'
-import { prismaConstraintName } from '../utils/prisma-postgres.js'
+} from '../prisma/model.js'
+import { prismaConstraintName } from '../prisma/postgres.js'
 
 /**
  * The Ecto type of a scalar Prisma type. A DateTime is not one of Ecto's own: it is kept in one of

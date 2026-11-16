@@ -1,9 +1,9 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { docBlockLines, stripAnnotations } from '../utils/index.js'
-import { allocate, pascalCase } from '../utils/naming.js'
-import { exprRef, REF, typeRef } from '../utils/placeholder.js'
-import type { ManyToMany } from '../utils/prisma-model.js'
+import { docBlockLines, stripAnnotations } from '../annotation/index.js'
+import { exprRef, REF, typeRef } from '../literal/placeholder.js'
+import { allocate, pascalCase } from '../naming/index.js'
+import type { ManyToMany } from '../prisma/model.js'
 import {
   backRelation,
   columnName,
@@ -13,7 +13,7 @@ import {
   manyToManyRelations,
   scalarFields,
   tableName,
-} from '../utils/prisma-model.js'
+} from '../prisma/model.js'
 import {
   entityKey,
   fieldNames,
@@ -28,16 +28,16 @@ import {
   sqlArray,
   sqlString,
   sqlTimestamp,
-} from '../utils/prisma-postgres.js'
-import type { IndexInfo } from '../utils/prisma-postgres.js'
+} from '../prisma/postgres.js'
+import type { IndexInfo } from '../prisma/postgres.js'
 import {
   PRISMA_STRING,
   prismaBlocks,
   prismaString,
   relationMaps,
   relationMode,
-} from '../utils/prisma-schema-text.js'
-import type { PrismaBlock } from '../utils/prisma-schema-text.js'
+} from '../prisma/schema-text.js'
+import type { PrismaBlock } from '../prisma/schema-text.js'
 
 // Generated Kotlin names a class through a placeholder: `\0T|java.time.Instant\0` where a type is
 // expected, `\0E|...\0` where a class is the receiver of a call (`Instant.now()`), `\0F|...\0` for a

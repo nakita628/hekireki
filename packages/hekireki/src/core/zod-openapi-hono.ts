@@ -16,8 +16,8 @@ import {
   routeOperations,
   zodOpenapiHonoYaml,
 } from '../generator/zod-openapi-hono.js'
+import { getString } from '../prisma/config.js'
 import type { AuthKind } from '../types/index.js'
-import { getString } from '../utils/index.js'
 import { GeneratorConfigError, HonoTakibiError } from './errors.js'
 import { requireOutput } from './output.js'
 

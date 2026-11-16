@@ -3,7 +3,7 @@ import { Effect } from 'effect'
 
 import { emitRaw } from '../emit/index.js'
 import { atlasSchema } from '../generator/atlas.js'
-import { getString } from '../utils/index.js'
+import { getString } from '../prisma/config.js'
 import { GeneratorConfigError } from './errors.js'
 import { outputFile, requireOutput } from './output.js'
 

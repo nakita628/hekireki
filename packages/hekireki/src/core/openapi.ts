@@ -5,7 +5,7 @@ import { Effect } from 'effect'
 
 import { emitRaw } from '../emit/index.js'
 import { openapiContent } from '../generator/openapi.js'
-import { getBool, getString } from '../utils/index.js'
+import { getBool, getString } from '../prisma/config.js'
 import { GeneratorConfigError } from './errors.js'
 import { outputFile, requireOutput } from './output.js'
 

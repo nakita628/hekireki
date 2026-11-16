@@ -1,8 +1,9 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { docBlockLines, makePascalCase, stripAnnotations } from '../utils/index.js'
-import type { RelationEnd } from '../utils/prisma-model.js'
-import { fieldColumn, relationEnds } from '../utils/prisma-model.js'
+import { docBlockLines, stripAnnotations } from '../annotation/index.js'
+import { makePascalCase } from '../naming/case.js'
+import type { RelationEnd } from '../prisma/model.js'
+import { fieldColumn, relationEnds } from '../prisma/model.js'
 import { ELOQUENT_MODEL_METHODS } from './eloquent-model-methods.js'
 
 export function prismaTypeToEloquentCast(type: string) {

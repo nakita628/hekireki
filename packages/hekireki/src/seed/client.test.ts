@@ -4,7 +4,7 @@ import type { GetDMMFError } from '@prisma/get-dmmf'
 import { Effect, Exit } from 'effect'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { lowerFirst } from '../utils/index.js'
+import { lowerFirst } from '../naming/case.js'
 import { isSeedClient, seedWithClient } from './client.js'
 import { makeSeedPlan } from './plan.js'
 import type { SeedTableRows } from './plan.js'

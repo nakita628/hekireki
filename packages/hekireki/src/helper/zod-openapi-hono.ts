@@ -1,13 +1,14 @@
 import type { DMMF } from '@prisma/generator-helper'
 
+import { stripAnnotations } from '../annotation/index.js'
 import {
   API_ACCESS_ANNOTATIONS,
   GENERATED_DEFAULTS,
   LIST_LIMIT,
   TOTAL_COUNT_HEADER,
 } from '../constants/index.js'
-import { pluralize } from '../utils/humanizer.js'
-import { makeSnakeCase, stripAnnotations } from '../utils/index.js'
+import { makeSnakeCase } from '../naming/case.js'
+import { pluralize } from '../naming/humanizer.js'
 import type { OpenApiSchema } from './openapi.js'
 
 /** The schema of one value a field holds, as Prisma Client reads it and the JSON answer carries it. */

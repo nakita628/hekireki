@@ -1,6 +1,13 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
+import { stripAnnotations } from '../annotation/index.js'
+import {
+  jsonToPythonLiteral,
+  PYTHON_KEYWORDS,
+  pythonDocstringLines,
+  toPythonString,
+} from '../literal/python.js'
+import { makePascalCase, makeSnakeCase } from '../naming/case.js'
 import {
   backRelation,
   isAutoincrement,
@@ -9,13 +16,7 @@ import {
   isUlidDefault,
   primaryKeyFields,
   uuidDefaultVersion,
-} from '../utils/prisma-model.js'
-import {
-  jsonToPythonLiteral,
-  PYTHON_KEYWORDS,
-  pythonDocstringLines,
-  toPythonString,
-} from '../utils/python.js'
+} from '../prisma/model.js'
 
 const PRISMA_TO_DJANGO: { [k: string]: string } = {
   String: 'TextField',

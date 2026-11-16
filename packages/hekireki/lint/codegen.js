@@ -1,6 +1,7 @@
 // Rules for the code generators: what they read from a `///` comment and how they write it back
 // out (src/helper, src/generator), that they return the same text for the same schema, that a
 // helper does not import a generator, and the options each reads against the README (src/core).
+// And one for the modules they are built from: none of them is named `utils`.
 
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -58,6 +59,9 @@ function isGeneratorConfig(node) {
 }
 
 const READMES = new Map()
+
+// A `utils` directory anywhere on the path, or a module of that name.
+const UTILS_MODULE = /(^|[\\/])utils([\\/]|\.tsx?$)/u
 
 // The package README beside the `src` the file sits in, read once.
 function readmeOf(filename) {
@@ -168,7 +172,7 @@ export const codegenRules = {
         context.report({
           node,
           message:
-            'Write a generated `/** */` comment with `docBlockLines(prose, indent)` from src/utils: it escapes a `*/` in the prose and keeps one line on one line.',
+            'Write a generated `/** */` comment with `docBlockLines(prose, indent)` from src/annotation: it escapes a `*/` in the prose and keeps one line on one line.',
         })
       }
       return { Literal: check, TemplateLiteral: check }
@@ -304,7 +308,7 @@ export const codegenRules = {
     },
   },
 
-  // Why: the generators are built in one direction, utils -> helper -> generator -> core: helper
+  // Why: the generators are built in one direction, leaves -> helper -> generator -> core: helper
   //      holds the per-target logic, and generator assembles helper's output into files. A helper
   //      that imports a generator turns that around and ties the pieces into a cycle. A test may
   //      run a generator to check a helper through it.
@@ -319,7 +323,31 @@ export const codegenRules = {
           context.report({
             node,
             message:
-              'A helper imports nothing of src/generator: the generators are built from the helpers (utils -> helper -> generator -> core). Move what both need into the helper, or into src/utils.',
+              'A helper imports nothing of src/generator: the generators are built from the helpers (leaves -> helper -> generator -> core). Move what both need into the helper, or into the leaf module it belongs to.',
+          })
+        },
+      }
+    },
+  },
+  // Why: `utils` names no subject, so anything can go in it, and it grows into the module
+  //      everything imports and nobody can describe. A module named for what it holds (annotation, naming,
+  //      prisma, literal, list) keeps one subject, and its name says what does not belong in it.
+  //   NG: src/utils/index.ts
+  //   NG: src/studio/client/lib/utils.ts
+  //   OK: src/naming/case.ts
+  //   OK: src/list/index.ts
+  'no-utils-module': {
+    meta: { docs: { description: 'no module or directory is named utils' } },
+    create(context) {
+      // Relative to where lint runs, so a `utils` folder above the checkout is not counted.
+      const filename = path.relative(process.cwd(), filenameOf(context))
+      if (!UTILS_MODULE.test(filename)) return {}
+      return {
+        Program(node) {
+          context.report({
+            node,
+            message:
+              'A module named `utils` holds whatever has no other home. Name the module for what it holds (src/annotation, src/naming, src/list, ...) and move each function to the module of its subject.',
           })
         },
       }

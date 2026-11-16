@@ -1,8 +1,9 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { docBlockLines, makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
-import { implicitJoinTables, isFunctionDefault } from '../utils/prisma-model.js'
-import { tsString } from '../utils/typescript.js'
+import { docBlockLines, stripAnnotations } from '../annotation/index.js'
+import { tsString } from '../literal/typescript.js'
+import { makePascalCase, makeSnakeCase } from '../naming/case.js'
+import { implicitJoinTables, isFunctionDefault } from '../prisma/model.js'
 
 export const SCALAR_TYPE_MAP: { readonly [k: string]: string } = {
   String: 'string',

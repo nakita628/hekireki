@@ -92,9 +92,14 @@ The screenshot baselines in `e2e/__screenshots__` were taken in this repository'
 
 ```text
 packages/hekireki/src/
-├── utils/       # single-responsibility pure functions (no project-internal imports)
+├── annotation/  # what a `///` comment holds: the prose, the annotation lines (`@z.`, `@relation`, …) and the doc block written from it
+├── naming/      # names: cases, plurals, Prisma's names for keys and indexes, the identifiers a generated file allocates
+├── prisma/      # what the generators read of a Prisma schema: DMMF models and relations, PostgreSQL's details, the schema text DMMF drops, the generator block's config
+├── literal/     # values written as another language's literals: Python, TypeScript, YAML, and the placeholders a file resolves last
+├── list/        # lists: batches of a fixed size, and whether two hold the same items
+├── network/     # whether a hostname is this machine (Studio answers only those)
 ├── sql/         # SQL text: the console's parser and analyzer, statement splitting, and the identifier quoting and placeholders every dialect needs
-├── helper/      # composition of utils — the per-target codegen logic lives here
+├── helper/      # composition of the modules above — the per-target codegen logic lives here, with what the validation generators share
 ├── generator/   # assembles helper output into files
 ├── core/        # Prisma generator entrypoints (options → generate → emit)
 ├── bin/         # CLI shims registered as prisma generator providers
@@ -116,7 +121,7 @@ test/
 └── harness/         # per-language host projects (go.mod, Cargo.toml, mix.exs, …)
 ```
 
-Dependencies flow one way: `utils → helper → generator → core/bin`.
+Dependencies flow one way: `annotation`, `naming`, `prisma`, `literal`, `list`, `network` → `helper → generator → core/bin`. Those six are the leaves: they import each other and the shared types, and nothing else of the project.
 
 ## Studio's UI
 
@@ -142,7 +147,7 @@ Most of these are enforced by `pnpm exec vp lint` (the oxlint plugin in `package
 - **Let inference work.** Don't annotate return types; write argument types inline instead of declaring one-off named types.
 - **No pass-through functions.** A function that returns its own argument, hands its arguments to another call unchanged, or renames a built-in check (`typeof x === 'function'`) is written at its call sites instead. `custom/no-pass-through` enforces it; a type guard and a generic identity are exempt, because they carry a type the call site cannot write. Helpers that hold logic used in several places (escaping, quoting, pluralising) stay.
 - **Schemas are PascalCase.** A value that names a shape — zod, valibot, or Effect's `Schema.*` — is `PascalCase` (`SeedConfig`, `FieldRule`), and everything else in application logic is `camelCase`. `custom/schema-pascal-case` and `custom/logic-camel-case` enforce both. The verbs of the `Schema` namespace make a function, not a shape, so `decodeConfig` stays camelCase.
-- **`utils/` stays single-responsibility.** Don't add functions that merely compose or alias other exported utils — composition belongs in `helper/` or the call site. `utils/index.ts` must not import project-internal modules.
+- **A module is named for what it holds.** A function goes into the leaf of its subject (`annotation/`, `naming/`, `prisma/`, `literal/`, `list/`, `network/`), or a new leaf named for a new subject; there is no `utils` to put it in, and `custom/no-utils-module` reports a module or directory of that name. Don't add functions that merely compose or alias other exported functions — composition belongs in `helper/` or the call site. A leaf imports only the other leaves and `types/`.
 - **Descriptive names in generated code.** No new one-letter variables in emitted templates (`result`, not `r`).
 - **Comments are rare.** Write one only when the _why_ is not obvious from the code; never restate the _what_, and never reference PR numbers, dates, or discussions.
 - **Commands go through pnpm** (`pnpm <script>`, `pnpm exec <tool>`), never `npx` or a bare `vp`: a tool resolved outside the workspace can be another version of it. Lint the directories you touched (`pnpm exec vp lint src/<directory>`); the client has its own type check, `pnpm exec tsgo -p src/studio/client/tsconfig.json --noEmit`.
@@ -150,7 +155,7 @@ Most of these are enforced by `pnpm exec vp lint` (the oxlint plugin in `package
 - **A helper earns its place by holding logic** used in several places. Don't lift a value into a function to save repeating it (a handler's problem response, an options object), and don't name a few lines used once; write them where they are used.
 - **A function that builds SQL shows the SQL**: its TSDoc carries an `@example` with a fenced `sql` block for a small named case, per dialect where they differ, taken from running the function or from a test's expectation.
 - **A generator reads a `///` comment through `stripAnnotations` or an annotation reader.** The prose goes into the generated code as that language's comment, the annotation lines never do; a comment writer takes the prose (`goCommentLines(stripAnnotations(field.documentation))`), and a JSDoc / KDoc / PHPDoc comment around text is built by `docBlockLines`. `lint/codegen.js` holds both (`custom/documentation-read`, `custom/doc-block-helper`).
-- **A generator returns the same text for the same schema.** Nothing in `src/helper`, `src/generator`, `src/utils` or `src/diagram` reads the clock, draws a random value, reads `process`, logs, waits or is `async` (`custom/generator-pure`); and a helper imports nothing of `src/generator` (`custom/helper-no-generator-import`). The values a generator needs are read in `src/core` and passed in.
+- **A generator returns the same text for the same schema.** Nothing in `src/helper`, `src/generator`, the leaves (`src/annotation`, `src/naming`, `src/prisma`, `src/literal`, `src/list`, `src/network`) or `src/diagram` reads the clock, draws a random value, reads `process`, logs, waits or is `async` (`custom/generator-pure`); and a helper imports nothing of `src/generator` (`custom/helper-no-generator-import`). The values a generator needs are read in `src/core` and passed in.
 - **A test asserts what it means, unconditionally.** The jest plugin's rules hold the tests (oxlint reads `describe` / `it` / `expect` by name): no `.only` or `.skip` left behind, no title twice, an `expect` outside a branch (only `test/db`, where a scenario runs on four servers, branches on the server), `toStrictEqual` and never `toEqual`, `toBe` for a primitive, and no snapshot — the expected text is written in the test.
 - **A generator's options are its README row.** An option `src/core/<target>.ts` reads from `options.generator.config` is listed in the row of `hekireki-<target>` in the README's tables, and the row lists none it does not read (`custom/generator-option-documented`). `src/bin/index.test.ts` holds every provider to a shim, a `bin` entry, a row of the README's tables and a block of `example/schema.prisma`, so the golden files cover it.
 - **Generated SQL carries no comment of ours.** `hekireki migrate plan` writes statements and one marker line, `-- hekireki migrate plan`; what a person needs to know goes to the CLI's notes.

@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { backRelation, isJoinSideA } from '../../utils/prisma-model.js'
+import { backRelation, isJoinSideA } from '../../prisma/model.js'
 
 /** The `@default(...)` functions Prisma Client fills in: the column itself has no default. */
 const CLIENT_DEFAULTS = new Set(['uuid', 'cuid', 'nanoid', 'ulid'])

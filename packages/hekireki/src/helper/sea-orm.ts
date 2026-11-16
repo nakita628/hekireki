@@ -1,13 +1,14 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
-import { allocate } from '../utils/naming.js'
+import { stripAnnotations } from '../annotation/index.js'
+import { makePascalCase, makeSnakeCase } from '../naming/case.js'
+import { allocate } from '../naming/index.js'
 import {
   isAutoincrement,
   isFunctionDefault,
   primaryKeyFields,
   relationEnds,
-} from '../utils/prisma-model.js'
+} from '../prisma/model.js'
 
 const PRISMA_TO_RUST: { [k: string]: string } = {
   String: 'String',

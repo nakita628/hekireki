@@ -60,7 +60,7 @@ const DOMAIN_ALLOWED = [
   /^zod(\/.*)?$/u,
   /^acorn$/u,
   /^\.\/[^/]+$/u,
-  /^(\.\.\/)+(types|utils|sql)(\/[\w-]+)?(\.js)?$/u,
+  /^(\.\.\/)+(types|annotation|naming|prisma|literal|list|network|sql)(\/[\w-]+)?(\.js)?$/u,
 ]
 
 // `import type` / `export type` carry no behaviour, so no layer rule counts them.
@@ -207,7 +207,7 @@ export const layerRules = {
           if (DOMAIN_ALLOWED.some((pattern) => pattern.test(source))) return
           context.report({
             node: node.source,
-            message: `Domain may import only zod, acorn, other domain modules and the package's pure modules (types, utils, sql), not \`${source}\`. Anything that talks to the outside world belongs in a service; the usecase passes the result in as a value. \`import type\` is fine.`,
+            message: `Domain may import only zod, acorn, other domain modules and the package's pure modules (types, annotation, naming, prisma, literal, list, network, sql), not \`${source}\`. Anything that talks to the outside world belongs in a service; the usecase passes the result in as a value. \`import type\` is fine.`,
           })
         }),
         ImportExpression(node) {

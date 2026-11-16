@@ -1,5 +1,9 @@
-import { makeValidationExtractor, schemaFromFields } from '../utils/index.js'
-import { makePropertiesGenerator, validationSchemas } from '../utils/validation-schema.js'
+import { makeValidationExtractor } from '../annotation/index.js'
+import {
+  makePropertiesGenerator,
+  schemaFromFields,
+  validationSchemas,
+} from './validation-schema.js'
 
 export function makeZodInfer(modelName: string) {
   return `export type ${modelName} = z.infer<typeof ${modelName}Schema>`

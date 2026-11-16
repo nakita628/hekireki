@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import * as z from 'zod'
 
-import { lowerFirst } from '../../../utils/index.js'
+import { lowerFirst } from '../../../naming/case.js'
 
 const MakeDocsInput = z
   .object({

@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { fieldColumn, tableName } from './prisma-model.js'
+import { fieldColumn, tableName } from './model.js'
 
 // What a Prisma schema means on PostgreSQL, whichever language the model is written in: the names
 // Prisma Migrate gives tables, constraints and indexes, the keys and join tables it creates, and

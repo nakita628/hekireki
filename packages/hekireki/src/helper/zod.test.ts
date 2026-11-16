@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { makeValidationExtractor } from '../utils/index.js'
-import { validationSchemas } from '../utils/validation-schema.js'
+import { makeValidationExtractor } from '../annotation/index.js'
+import { validationSchemas } from './validation-schema.js'
 import {
   makeZodEnumExpression,
   makeZodInfer,

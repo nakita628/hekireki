@@ -1,5 +1,5 @@
-import { docBlockLines, makeValidationExtractor, schemaFromFields } from '../utils/index.js'
-import { validationSchemas } from '../utils/validation-schema.js'
+import { docBlockLines, makeValidationExtractor } from '../annotation/index.js'
+import { schemaFromFields, validationSchemas } from './validation-schema.js'
 
 export function makeTypeBoxInfer(modelName: string) {
   return `export type ${modelName} = Static<typeof ${modelName}Schema>`

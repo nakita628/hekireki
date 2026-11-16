@@ -3,7 +3,7 @@ import { Effect } from 'effect'
 
 import { emit } from '../emit/index.js'
 import { zodCode } from '../generator/zod.js'
-import { getBool, getString } from '../utils/index.js'
+import { getBool, getString } from '../prisma/config.js'
 import { outputFile, requireOutput } from './output.js'
 
 export function zod(options: GeneratorOptions) {

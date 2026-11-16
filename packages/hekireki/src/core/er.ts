@@ -6,7 +6,7 @@ import { Effect } from 'effect'
 import { emitRaw } from '../emit/index.js'
 import { dbmlContent, erDiagramPng, erDiagramSvg } from '../generator/dbml.js'
 import { erContent } from '../generator/mermaid-er.js'
-import { getString, getStrings } from '../utils/index.js'
+import { getString, getStrings } from '../prisma/config.js'
 import { GeneratorConfigError } from './errors.js'
 
 function themeOf(options: GeneratorOptions) {

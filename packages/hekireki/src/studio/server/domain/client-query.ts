@@ -13,7 +13,7 @@ import type {
 } from 'acorn'
 import * as z from 'zod'
 
-import { lowerFirst } from '../../../utils/index.js'
+import { lowerFirst } from '../../../naming/case.js'
 
 /** The model operations that only read, in the order the Prisma docs list them. */
 const READ_OPERATIONS = [

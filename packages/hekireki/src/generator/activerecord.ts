@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { activeRecordClassNames, activeRecordModels } from '../helper/activerecord.js'
-import { makeSnakeCase } from '../utils/index.js'
+import { makeSnakeCase } from '../naming/case.js'
 
 /**
  * Rails' own app/models/application_record.rb, so app/models can be generated whole.

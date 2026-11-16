@@ -3,7 +3,7 @@ import { Effect } from 'effect'
 
 import { emitMany } from '../emit/index.js'
 import { seaOrmFiles } from '../generator/sea-orm.js'
-import { getString } from '../utils/index.js'
+import { getString } from '../prisma/config.js'
 import { GeneratorConfigError } from './errors.js'
 import { requireOutput } from './output.js'
 

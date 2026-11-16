@@ -1,9 +1,9 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { pluralize } from '../utils/humanizer.js'
-import { stripAnnotations } from '../utils/index.js'
-import { allocate, pascalCase } from '../utils/naming.js'
-import { exprRef, typeRef } from '../utils/placeholder.js'
+import { stripAnnotations } from '../annotation/index.js'
+import { exprRef, typeRef } from '../literal/placeholder.js'
+import { pluralize } from '../naming/humanizer.js'
+import { allocate, pascalCase } from '../naming/index.js'
 import {
   backRelation,
   columnName,
@@ -13,8 +13,8 @@ import {
   manyToManyRelations,
   scalarFields,
   tableName,
-} from '../utils/prisma-model.js'
-import type { ManyToMany } from '../utils/prisma-model.js'
+} from '../prisma/model.js'
+import type { ManyToMany } from '../prisma/model.js'
 import {
   entityKey,
   fieldNames,
@@ -29,8 +29,8 @@ import {
   sqlArray,
   sqlString,
   sqlTimestamp,
-} from '../utils/prisma-postgres.js'
-import type { IndexInfo } from '../utils/prisma-postgres.js'
+} from '../prisma/postgres.js'
+import type { IndexInfo } from '../prisma/postgres.js'
 
 // Generated C# names a framework type through a placeholder, `\0T|System.DateTime\0` in a type
 // position or `\0E|...\0` in an expression. Only once a whole file is assembled is it known which

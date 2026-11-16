@@ -1,14 +1,14 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { stripAnnotations } from '../utils/index.js'
-import { allocate } from '../utils/naming.js'
+import { stripAnnotations } from '../annotation/index.js'
+import { allocate } from '../naming/index.js'
 import {
   implicitJoinTables,
   isAutoincrement,
   isFunctionDefault,
   primaryKeyFields,
   relationEnds,
-} from '../utils/prisma-model.js'
+} from '../prisma/model.js'
 
 const PRISMA_TO_GO: { [k: string]: string } = {
   String: 'string',

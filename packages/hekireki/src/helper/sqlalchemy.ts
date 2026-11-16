@@ -1,7 +1,14 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { constraintName, makePascalCase, makeSnakeCase, stripAnnotations } from '../utils/index.js'
-import { allocate } from '../utils/naming.js'
+import { stripAnnotations } from '../annotation/index.js'
+import {
+  jsonToPythonLiteral,
+  PYTHON_KEYWORDS,
+  pythonDocstringLines,
+  toPythonString,
+} from '../literal/python.js'
+import { constraintName, makePascalCase, makeSnakeCase } from '../naming/case.js'
+import { allocate } from '../naming/index.js'
 import {
   backRelation,
   fieldColumn,
@@ -13,14 +20,8 @@ import {
   referentialActions,
   relationEnds,
   uuidDefaultVersion,
-} from '../utils/prisma-model.js'
-import { sqlString } from '../utils/prisma-postgres.js'
-import {
-  jsonToPythonLiteral,
-  PYTHON_KEYWORDS,
-  pythonDocstringLines,
-  toPythonString,
-} from '../utils/python.js'
+} from '../prisma/model.js'
+import { sqlString } from '../prisma/postgres.js'
 
 const PRISMA_TO_PYTHON: { [k: string]: string } = {
   String: 'str',

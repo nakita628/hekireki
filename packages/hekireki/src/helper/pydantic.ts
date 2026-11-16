@@ -1,7 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { makePascalCase, makeValidationExtractor, stripAnnotations } from '../utils/index.js'
-import { PYTHON_KEYWORDS, pythonDocstringLines } from '../utils/python.js'
+import { makeValidationExtractor, stripAnnotations } from '../annotation/index.js'
+import { PYTHON_KEYWORDS, pythonDocstringLines } from '../literal/python.js'
+import { makePascalCase } from '../naming/case.js'
 
 const PRISMA_TO_PYDANTIC: { [k: string]: string } = {
   String: 'str',

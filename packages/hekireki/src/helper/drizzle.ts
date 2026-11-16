@@ -1,12 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import {
-  constraintName,
-  docBlockLines,
-  indexPrefix,
-  makeSnakeCase,
-  stripAnnotations,
-} from '../utils/index.js'
+import { docBlockLines, stripAnnotations } from '../annotation/index.js'
+import { tsString } from '../literal/typescript.js'
+import { constraintName, indexPrefix, makeSnakeCase } from '../naming/case.js'
 import {
   backRelation,
   fieldColumn,
@@ -15,8 +11,7 @@ import {
   isImplicitManyToMany,
   isJoinSideA,
   referentialActions,
-} from '../utils/prisma-model.js'
-import { tsString } from '../utils/typescript.js'
+} from '../prisma/model.js'
 
 type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
 

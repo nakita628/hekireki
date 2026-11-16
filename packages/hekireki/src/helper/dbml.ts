@@ -1,14 +1,14 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import type { Cardinality } from '../types/index.js'
-import { stripAnnotations } from '../utils/index.js'
+import { stripAnnotations } from '../annotation/index.js'
 import {
   backRelation,
   fieldColumn,
   implicitJoinTables,
   isFunctionDefault,
-} from '../utils/prisma-model.js'
-import { annotatedERRelations, erKey, inferredERRelations } from '../utils/relation.js'
+} from '../prisma/model.js'
+import { annotatedERRelations, erKey, inferredERRelations } from '../prisma/relation.js'
+import type { Cardinality } from '../types/index.js'
 
 export function escapeNote(str: string) {
   return str.replaceAll("'", "\\'")

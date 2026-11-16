@@ -1,9 +1,10 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { pluralize } from '../utils/humanizer.js'
-import { makeSnakeCase, stripAnnotations } from '../utils/index.js'
-import { implicitJoinTables, isFunctionDefault } from '../utils/prisma-model.js'
-import type { YamlValue } from '../utils/yaml.js'
+import { stripAnnotations } from '../annotation/index.js'
+import type { YamlValue } from '../literal/yaml.js'
+import { makeSnakeCase } from '../naming/case.js'
+import { pluralize } from '../naming/humanizer.js'
+import { implicitJoinTables, isFunctionDefault } from '../prisma/model.js'
 
 /** A JSON Schema object as OpenAPI 3.1 holds it: a map of keywords to JSON values. */
 export type OpenApiSchema = { readonly [keyword: string]: YamlValue }

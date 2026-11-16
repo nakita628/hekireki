@@ -10,7 +10,7 @@ import {
   prismaDateTimeFiles,
 } from '../generator/activerecord.js'
 import { activeRecordLocaleFiles, activeRecordProblems } from '../helper/activerecord.js'
-import { getString } from '../utils/index.js'
+import { getString } from '../prisma/config.js'
 import { GeneratorConfigError } from './errors.js'
 import { requireOutput } from './output.js'
 

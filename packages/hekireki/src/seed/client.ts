@@ -1,7 +1,8 @@
 import { Effect } from 'effect'
 
 import type { Dialect } from '../database/url.js'
-import { chunks, lowerFirst } from '../utils/index.js'
+import { chunks } from '../list/index.js'
+import { lowerFirst } from '../naming/case.js'
 import type { SeedRow, SeedValue } from './config.js'
 import { SeedDatabaseError } from './errors.js'
 import type { JoinTable, ModelTable, SeedTableRows } from './plan.js'

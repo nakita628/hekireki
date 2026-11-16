@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { tsString } from '../utils/typescript.js'
+import { tsString } from '../literal/typescript.js'
 
 /** One field as a value (`kind: 'scalar'`) or as a type (`readonly kind: 'scalar'`). */
 function fieldEntry(field: DMMF.Field, declaration: boolean) {

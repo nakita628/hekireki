@@ -1,16 +1,12 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { camelize, pluralize, singularize, underscore } from '../utils/active-support.js'
-import {
-  isAnnotationLine,
-  isSameList,
-  makePascalCase,
-  makeSnakeCase,
-  stripAnnotations,
-} from '../utils/index.js'
-import { allocate } from '../utils/naming.js'
-import type { RelationEnd } from '../utils/prisma-model.js'
-import { fieldColumn, referentialActions, relationEnds } from '../utils/prisma-model.js'
+import { isAnnotationLine, stripAnnotations } from '../annotation/index.js'
+import { isSameList } from '../list/index.js'
+import { camelize, pluralize, singularize, underscore } from '../naming/active-support.js'
+import { makePascalCase, makeSnakeCase } from '../naming/case.js'
+import { allocate } from '../naming/index.js'
+import type { RelationEnd } from '../prisma/model.js'
+import { fieldColumn, referentialActions, relationEnds } from '../prisma/model.js'
 import { ACTIVE_RECORD_INSTANCE_METHODS, RUBY_TOP_LEVEL_CONSTANTS } from './activerecord-names.js'
 
 // cspell:disable

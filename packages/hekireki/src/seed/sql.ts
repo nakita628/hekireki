@@ -1,6 +1,6 @@
 import type { Dialect } from '../database/url.js'
+import { chunks } from '../list/index.js'
 import { qualifiedName, quoteIdentifier, stringLiteral } from '../sql/index.js'
-import { chunks } from '../utils/index.js'
 import type { SeedValue } from './config.js'
 import type { EnumMember, SeedTable, SeedTableRows } from './plan.js'
 

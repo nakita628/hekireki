@@ -1,8 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
 
+import { parseRelation } from '../annotation/index.js'
 import type { Cardinality, RelationOrigin } from '../types/index.js'
-import { parseRelation } from './index.js'
-import { backRelation } from './prisma-model.js'
+import { backRelation } from './model.js'
 
 type ERRelation = {
   /** The `@relation` name the relation carries, when it has one. */

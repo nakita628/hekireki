@@ -1,10 +1,4 @@
-import {
-  docBlockLines,
-  extractObjectType,
-  groupByModel,
-  isFields,
-  stripAnnotations,
-} from './index.js'
+import { docBlockLines, extractObjectType, stripAnnotations } from '../annotation/index.js'
 
 export function makePropertiesGenerator(
   libraryPrefix: string,
@@ -150,4 +144,70 @@ export function validationSchemas(
     .join('\n\n')
 
   return config.importStatement ? [config.importStatement, '', schemas].join('\n') : schemas
+}
+
+export function groupByModel(
+  validFields: readonly {
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+  }[],
+) {
+  const raw = Object.groupBy(validFields, (f) => f.modelName)
+  return Object.fromEntries(
+    Object.entries(raw).filter(
+      (entry): entry is [string, (typeof validFields)[number][]] => entry[1] !== undefined,
+    ),
+  )
+}
+
+export function isFields(
+  modelFields: {
+    readonly documentation: string | undefined
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+  }[][],
+) {
+  return modelFields.flat().filter(
+    (
+      field,
+    ): field is Required<{
+      documentation: string
+      modelName: string
+      fieldName: string
+      validation: string | null
+      isRequired: boolean
+    }> => field.validation !== null,
+  )
+}
+
+export function schemaFromFields(
+  modelFields: readonly {
+    readonly documentation: string
+    readonly modelName: string
+    readonly fieldName: string
+    readonly validation: string | null
+    readonly isRequired: boolean
+    readonly comment?: string
+  }[],
+  schemaBuilder: (modelName: string, fields: string, objectType?: 'strict' | 'loose') => string,
+  propertiesGenerator: (
+    fields: readonly {
+      readonly documentation: string
+      readonly modelName: string
+      readonly fieldName: string
+      readonly validation: string | null
+      readonly isRequired: boolean
+      readonly comment?: string
+    }[],
+  ) => string,
+  objectType?: 'strict' | 'loose',
+) {
+  const modelName = modelFields[0]?.modelName ?? ''
+  const fields = propertiesGenerator(modelFields)
+  return schemaBuilder(modelName, fields, objectType)
 }
