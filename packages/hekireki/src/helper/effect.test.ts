@@ -300,4 +300,32 @@ export const UserSchema = Schema.Struct({
   name: Schema.String,
 })`)
   })
+
+  describe('list fields', () => {
+    const listEnums = [{ name: 'Role', values: [{ name: 'USER' }, { name: 'ADMIN' }] }]
+    const listModels = [
+      {
+        name: 'Post',
+        fields: [
+          { name: 'id', type: 'Int', kind: 'scalar', isRequired: true, isList: false },
+          { name: 'tags', type: 'String', kind: 'scalar', isRequired: true, isList: true },
+          { name: 'roles', type: 'Role', kind: 'enum', isRequired: true, isList: true },
+          {
+            name: 'scores',
+            type: 'Int',
+            kind: 'scalar',
+            isRequired: true,
+            isList: true,
+            documentation: '@e.Schema.Array(Schema.Int)',
+          },
+        ],
+      },
+    ]
+
+    it('wraps a scalar or enum list in an array, and leaves an annotation as written', () => {
+      expect(effectSchemaCode(listModels, false, listEnums)).toBe(
+        "import { Schema } from 'effect'\n\nexport const PostSchema = Schema.Struct({\n  id: Schema.Number,\n  tags: Schema.Array(Schema.String),\n  roles: Schema.Array(Schema.Literal('USER', 'ADMIN')),\n  scores: Schema.Array(Schema.Int),\n})",
+      )
+    })
+  })
 })

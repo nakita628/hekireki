@@ -13,7 +13,7 @@ export const UserSchema = Schema.Struct({
   /** Display name */
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(50)),
   role: Schema.Literal('ADMIN', 'EDITOR', 'VIEWER'),
-  interests: Schema.String,
+  interests: Schema.Array(Schema.String),
   createdAt: Schema.Date,
   updatedAt: Schema.Date,
 })

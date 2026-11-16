@@ -19,6 +19,10 @@ export function makeValibotEnumExpression(values: readonly string[]) {
   return `picklist([${values.map((v) => `'${v}'`).join(', ')}])`
 }
 
+function makeValibotListExpression(element: string) {
+  return `array(v.${element})`
+}
+
 export const PRISMA_TO_VALIBOT: { [k: string]: string } = {
   String: 'string()',
   Int: 'number()',
@@ -103,5 +107,6 @@ export function valibotSchemaCode(
     typeMapping: PRISMA_TO_VALIBOT,
     enums,
     formatEnum: makeValibotEnumExpression,
+    wrapList: makeValibotListExpression,
   })
 }

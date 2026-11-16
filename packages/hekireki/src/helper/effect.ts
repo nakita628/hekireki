@@ -33,6 +33,10 @@ export function makeEffectEnumExpression(values: readonly string[]) {
   return `Schema.Literal(${values.map((v) => `'${v}'`).join(', ')})`
 }
 
+function makeEffectListExpression(element: string) {
+  return `Schema.Array(${element})`
+}
+
 export const PRISMA_TO_EFFECT: { [k: string]: string } = {
   String: 'Schema.String',
   Int: 'Schema.Number',
@@ -109,5 +113,6 @@ export function effectSchemaCode(
     typeMapping: PRISMA_TO_EFFECT,
     enums,
     formatEnum: makeEffectEnumExpression,
+    wrapList: makeEffectListExpression,
   })
 }

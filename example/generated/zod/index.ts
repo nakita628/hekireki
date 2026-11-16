@@ -13,7 +13,7 @@ export const UserSchema = z.object({
   /** Display name */
   name: z.string().min(1).max(50),
   role: z.enum(['ADMIN', 'EDITOR', 'VIEWER']),
-  interests: z.string(),
+  interests: z.array(z.string()),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 })

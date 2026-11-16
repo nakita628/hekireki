@@ -9,6 +9,10 @@ export function makeAjvEnumExpression(values: readonly string[]) {
   return `{ enum: [${values.map((v) => `'${v}'`).join(', ')}] as const }`
 }
 
+function makeAjvListExpression(element: string) {
+  return `{ type: 'array' as const, items: ${element} }`
+}
+
 export const PRISMA_TO_AJV: { [k: string]: string } = {
   String: "{ type: 'string' as const }",
   Int: "{ type: 'integer' as const }",
@@ -101,5 +105,6 @@ export function ajvSchemaCode(
     typeMapping: PRISMA_TO_AJV,
     enums,
     formatEnum: makeAjvEnumExpression,
+    wrapList: makeAjvListExpression,
   })
 }

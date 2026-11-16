@@ -5,6 +5,7 @@ import { validationSchemas } from '../utils/validation-schema.js'
 import {
   makeZodEnumExpression,
   makeZodInfer,
+  makeZodListExpression,
   makeZodRelations,
   makeZodSchema,
   makeZodSchemas,
@@ -364,6 +365,7 @@ describe('validationSchemas', () => {
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
       typeMapping: PRISMA_TO_ZOD,
+      wrapList: makeZodListExpression,
     })
 
     expect(result).toBe(
@@ -395,6 +397,7 @@ describe('validationSchemas', () => {
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
       typeMapping: PRISMA_TO_ZOD,
+      wrapList: makeZodListExpression,
     })
 
     expect(result).toBe(
@@ -417,6 +420,7 @@ describe('validationSchemas', () => {
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
       typeMapping: PRISMA_TO_ZOD,
+      wrapList: makeZodListExpression,
     })
 
     expect(result).toBe(
@@ -449,6 +453,7 @@ describe('validationSchemas', () => {
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
       typeMapping: PRISMA_TO_ZOD,
+      wrapList: makeZodListExpression,
       enums,
       formatEnum: (values) => `enum([${values.map((v) => `'${v}'`).join(', ')}])`,
     })
@@ -481,6 +486,7 @@ describe('validationSchemas', () => {
       extractValidation: makeValidationExtractor('@z.'),
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
+      wrapList: makeZodListExpression,
       onWarning: (msg) => {
         warnings.push(msg)
       },
@@ -515,11 +521,40 @@ describe('validationSchemas', () => {
       extractValidation: makeValidationExtractor('@z.'),
       inferType: makeZodInfer,
       schemas: makeZodSchemas,
+      wrapList: makeZodListExpression,
       onWarning: (msg) => {
         warnings.push(msg)
       },
     })
 
     expect(warnings).toStrictEqual([])
+  })
+
+  describe('list fields', () => {
+    const listEnums = [{ name: 'Role', values: [{ name: 'USER' }, { name: 'ADMIN' }] }]
+    const listModels = [
+      {
+        name: 'Post',
+        fields: [
+          { name: 'id', type: 'Int', kind: 'scalar', isRequired: true, isList: false },
+          { name: 'tags', type: 'String', kind: 'scalar', isRequired: true, isList: true },
+          { name: 'roles', type: 'Role', kind: 'enum', isRequired: true, isList: true },
+          {
+            name: 'scores',
+            type: 'Int',
+            kind: 'scalar',
+            isRequired: true,
+            isList: true,
+            documentation: '@z.array(z.number().int())',
+          },
+        ],
+      },
+    ]
+
+    it('wraps a scalar or enum list in an array, and leaves an annotation as written', () => {
+      expect(zodSchemaCode(listModels, false, undefined, listEnums)).toBe(
+        "import * as z from 'zod'\n\nexport const PostSchema = z.object({\n  id: z.number(),\n  tags: z.array(z.string()),\n  roles: z.array(z.enum(['USER', 'ADMIN'])),\n  scores: z.array(z.number().int())\n})",
+      )
+    })
   })
 })

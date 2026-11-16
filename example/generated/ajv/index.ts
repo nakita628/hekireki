@@ -15,7 +15,7 @@ export const UserSchema = {
     /** Display name */
     name: { type: 'string' as const, minLength: 1, maxLength: 50 },
     role: { enum: ['ADMIN', 'EDITOR', 'VIEWER'] as const },
-    interests: { type: 'string' as const },
+    interests: { type: 'array' as const, items: { type: 'string' as const } },
     createdAt: { type: 'string' as const, format: 'date-time' as const },
     updatedAt: { type: 'string' as const, format: 'date-time' as const },
   },

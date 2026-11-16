@@ -393,4 +393,32 @@ export const UserSchema = type({
   name: "string",
 })`)
   })
+
+  describe('list fields', () => {
+    const listEnums = [{ name: 'Role', values: [{ name: 'USER' }, { name: 'ADMIN' }] }]
+    const listModels = [
+      {
+        name: 'Post',
+        fields: [
+          { name: 'id', type: 'Int', kind: 'scalar', isRequired: true, isList: false },
+          { name: 'tags', type: 'String', kind: 'scalar', isRequired: true, isList: true },
+          { name: 'roles', type: 'Role', kind: 'enum', isRequired: true, isList: true },
+          {
+            name: 'scores',
+            type: 'Int',
+            kind: 'scalar',
+            isRequired: true,
+            isList: true,
+            documentation: '@a."number[]"',
+          },
+        ],
+      },
+    ]
+
+    it('wraps a scalar or enum list in an array, and leaves an annotation as written', () => {
+      expect(arktypeSchemaCode(listModels, false, listEnums)).toBe(
+        'import { type } from \'arktype\'\n\nexport const PostSchema = type({\n  id: "number",\n  tags: "string[]",\n  roles: "(\'USER\' | \'ADMIN\')[]",\n  scores: "number[]",\n})',
+      )
+    })
+  })
 })

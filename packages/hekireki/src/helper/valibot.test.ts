@@ -311,4 +311,32 @@ export const UserSchema = v.object({
   name: v.string()
 })`)
   })
+
+  describe('list fields', () => {
+    const listEnums = [{ name: 'Role', values: [{ name: 'USER' }, { name: 'ADMIN' }] }]
+    const listModels = [
+      {
+        name: 'Post',
+        fields: [
+          { name: 'id', type: 'Int', kind: 'scalar', isRequired: true, isList: false },
+          { name: 'tags', type: 'String', kind: 'scalar', isRequired: true, isList: true },
+          { name: 'roles', type: 'Role', kind: 'enum', isRequired: true, isList: true },
+          {
+            name: 'scores',
+            type: 'Int',
+            kind: 'scalar',
+            isRequired: true,
+            isList: true,
+            documentation: '@v.array(v.number())',
+          },
+        ],
+      },
+    ]
+
+    it('wraps a scalar or enum list in an array, and leaves an annotation as written', () => {
+      expect(valibotSchemaCode(listModels, false, listEnums)).toBe(
+        "import * as v from 'valibot'\n\nexport const PostSchema = v.object({\n  id: v.number(),\n  tags: v.array(v.string()),\n  roles: v.array(v.picklist(['USER', 'ADMIN'])),\n  scores: v.array(v.number())\n})",
+      )
+    })
+  })
 })
