@@ -203,7 +203,7 @@ export function kotlinString(value: string) {
       if (char === '\r') return '\\r'
       if (char === '\t') return '\\t'
       if (char === '\b') return '\\b'
-      if (code < 0x20 || (code >= 0x7F && code <= 0x9F) || code === 0x20_28 || code === 0x20_29) {
+      if (code < 0x20 || (code >= 0x7f && code <= 0x9f) || code === 0x20_28 || code === 0x20_29) {
         return `\\u${code.toString(16).toUpperCase().padStart(4, '0')}`
       }
       return char

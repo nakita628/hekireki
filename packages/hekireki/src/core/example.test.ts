@@ -211,7 +211,7 @@ function optionsFor(generator: (typeof parsed.config.generators)[number]): Gener
   } as unknown as GeneratorOptions
 }
 
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 describe('example/schema.prisma', () => {
   it('declares every generator the package ships, once each', () => {
