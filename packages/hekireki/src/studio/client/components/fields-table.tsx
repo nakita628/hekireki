@@ -58,6 +58,12 @@ function TypeLink({ field, schema }: { readonly field: Field; readonly schema: S
   return <span className="font-mono text-code">{label}</span>
 }
 
+/** The tint of a field's row: the highlighted field, then the relation fields. */
+function rowTintOf(field: Field, highlight: string | null) {
+  if (field.name === highlight) return '[&>.table__cell]:bg-accent-soft'
+  return field.kind === 'object' ? '[&>.table__cell]:bg-surface-2' : ''
+}
+
 export function FieldsTable({
   schema,
   model,
@@ -114,13 +120,7 @@ export function FieldsTable({
                 id={field.name}
                 ref={field.name === highlight ? highlighted : null}
                 // The variant paints the cells, not the row, so a whole-row tint is asked of them.
-                className={
-                  field.name === highlight
-                    ? '[&>.table__cell]:bg-accent-soft'
-                    : field.kind === 'object'
-                      ? '[&>.table__cell]:bg-surface-2'
-                      : ''
-                }
+                className={rowTintOf(field, highlight)}
               >
                 <Table.Cell className="w-9 py-2.5 pr-0 pl-3.5">
                   <FieldIcon
@@ -136,7 +136,7 @@ export function FieldsTable({
                   className="py-2.5 font-mono text-code font-semibold whitespace-nowrap"
                 >
                   <MarkedText text={field.name} query={query} />
-                  {field.dbName ? (
+                  {(field.dbName ?? '') !== '' ? (
                     <span className="mt-0.5 block text-meta font-normal text-faint">
                       {field.dbName}
                     </span>

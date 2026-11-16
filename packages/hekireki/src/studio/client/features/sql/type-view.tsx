@@ -18,6 +18,16 @@ function formatType(type: string) {
 }
 
 /** The row and parameter types as TypeScript: what `sql('...')` would carry through inferql. */
+/** What Row means for the statement: rows read, rows a write returns, or none. */
+function rowNoteOf(statement: { readonly kind: string; readonly columns: readonly unknown[] }) {
+  if (statement.kind === 'select') {
+    return 'Row is what a driver hands back for each row; a column that may be NULL carries | null. Params is the tuple (or the object, for named placeholders) the statement binds.'
+  }
+  return statement.columns.length === 0
+    ? 'A write without RETURNING yields no rows, so Row is never; the driver reports the affected count instead.'
+    : 'Row is what RETURNING hands back for each written row.'
+}
+
 export function TypeView({
   statement,
 }: {
@@ -51,13 +61,7 @@ export function TypeView({
           {params}
         </code>
       </pre>
-      <p className="mt-3 text-code text-muted">
-        {statement.kind === 'select'
-          ? 'Row is what a driver hands back for each row; a column that may be NULL carries | null. Params is the tuple (or the object, for named placeholders) the statement binds.'
-          : statement.columns.length === 0
-            ? 'A write without RETURNING yields no rows, so Row is never; the driver reports the affected count instead.'
-            : 'Row is what RETURNING hands back for each written row.'}
-      </p>
+      <p className="mt-3 text-code text-muted">{rowNoteOf(statement)}</p>
     </div>
   )
 }

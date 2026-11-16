@@ -66,6 +66,15 @@ function compile(
   )
 }
 
+/** Fails the test with the cause unless the effect succeeded, and narrows the exit to its value. */
+function assertSuccess<A, E>(exit: Exit.Exit<A, E>): asserts exit is Exit.Success<A, E> {
+  if (Exit.isFailure(exit)) throw new Error(`expected a success, got ${String(exit.cause)}`)
+}
+
+function assertFailure<A, E>(exit: Exit.Exit<A, E>): asserts exit is Exit.Failure<A, E> {
+  if (Exit.isSuccess(exit)) throw new Error('expected a failure')
+}
+
 describe('compileQueries', () => {
   it.each([
     ['postgresql', 'SELECT "public"."User"."id", "public"."User"."email" FROM "public"."User"'],
@@ -73,7 +82,7 @@ describe('compileQueries', () => {
     ['sqlite', 'SELECT `main`.`User`.`id`, `main`.`User`.`email` FROM `main`.`User`'],
   ] as const)('compiles every query on %s, with no database', async (provider, select) => {
     const exit = await compile(provider)
-    if (!Exit.isSuccess(exit)) throw new Error(String(exit.cause))
+    assertSuccess(exit)
     const compiled = exit.value
     expect(compiled.every((query) => query.error === null)).toBe(true)
     const findMany = compiled.find((query) => query.example.code === 'await prisma.user.findMany()')
@@ -82,7 +91,7 @@ describe('compileQueries', () => {
 
   it('reads a relation with a query of its own, bound to the rows before', async () => {
     const exit = await compile('postgresql')
-    if (!Exit.isSuccess(exit)) throw new Error(String(exit.cause))
+    assertSuccess(exit)
     const include = exit.value.find(
       (query) => query.example.code === 'await prisma.user.findMany({ include: { posts: true } })',
     )
@@ -108,7 +117,7 @@ describe('compileQueries', () => {
         },
       },
     ])
-    if (!Exit.isSuccess(exit)) throw new Error(String(exit.cause))
+    assertSuccess(exit)
     expect(exit.value.map((query) => query.error)).toStrictEqual([
       "Operation 'deleteOne' for model 'Status' does not match any query.",
     ])
@@ -116,6 +125,7 @@ describe('compileQueries', () => {
 
   it('fails where the schema has no @prisma/client to compile with', async () => {
     const exit = await compile('postgresql', path.join(outside, 'schema.prisma'))
-    expect(Exit.isFailure(exit) && String(exit.cause)).toContain('@prisma/client is not installed')
+    assertFailure(exit)
+    expect(String(exit.cause)).toContain('@prisma/client is not installed')
   })
 })

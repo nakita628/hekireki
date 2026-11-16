@@ -90,11 +90,14 @@ function enumValues(schema: Schema, field: Field) {
 }
 
 function optionsFor(schema: Schema, field: Field) {
-  return field.kind === 'enum'
-    ? enumValues(schema, field)
-    : field.type === 'Boolean' && !field.isList
-      ? ['true', 'false']
-      : null
+  if (field.kind === 'enum') return enumValues(schema, field)
+  return field.type === 'Boolean' && !field.isList ? ['true', 'false'] : null
+}
+
+/** What an empty input stands for: the column's default, or whether it may be left NULL. */
+function placeholderOf(field: Field) {
+  if (field.default !== null) return `default: ${field.default}`
+  return field.isRequired ? 'required' : 'NULL'
 }
 
 function CellEditor({
@@ -201,13 +204,7 @@ function NewRowCells({
           <input
             className="cell-input"
             aria-label={field.name}
-            placeholder={
-              field.default === null
-                ? field.isRequired
-                  ? 'required'
-                  : 'NULL'
-                : `default: ${field.default}`
-            }
+            placeholder={placeholderOf(field)}
             value={draft[field.name] ?? ''}
             onChange={(event) => {
               onDraftChange({ ...draft, [field.name]: event.target.value })

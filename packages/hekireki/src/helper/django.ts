@@ -135,6 +135,38 @@ function enumMemberName(valueName: string) {
     : valueName
 }
 
+// The Django field of a native type that takes no arguments of its own.
+const NATIVE_DJANGO_FIELDS: { readonly [nativeType: string]: string } = {
+  Text: 'TextField',
+  TinyText: 'TextField',
+  MediumText: 'TextField',
+  LongText: 'TextField',
+  Citext: 'TextField',
+  Xml: 'TextField',
+  Bit: 'TextField',
+  VarBit: 'TextField',
+  SmallInt: 'SmallIntegerField',
+  TinyInt: 'SmallIntegerField',
+  MediumInt: 'IntegerField',
+  Integer: 'IntegerField',
+  Oid: 'IntegerField',
+  BigInt: 'BigIntegerField',
+  Real: 'FloatField',
+  DoublePrecision: 'FloatField',
+  Double: 'FloatField',
+  Uuid: 'UUIDField',
+  Date: 'DateField',
+  Time: 'TimeField',
+  Timetz: 'TimeField',
+  Timestamp: 'DateTimeField',
+  Timestamptz: 'DateTimeField',
+  Json: 'JSONField',
+  JsonB: 'JSONField',
+  ByteA: 'BinaryField',
+  Inet: 'GenericIPAddressField',
+  Boolean: 'BooleanField',
+}
+
 function resolveDjangoField(field: DMMF.Field) {
   const base = prismaTypeToDjangoField(field.type)
   // Django's DecimalField requires both arguments; (65, 30) is the precision
@@ -148,61 +180,18 @@ function resolveDjangoField(field: DMMF.Field) {
   const [nativeName, nativeArgs] = field.nativeType
   const args = nativeArgs ?? []
 
-  switch (nativeName) {
-    case 'VarChar':
-    case 'Char':
-      return args.length > 0
-        ? { ctor: 'CharField', typeArgs: [`max_length=${args[0]}`] }
-        : { ctor: 'TextField', typeArgs: [] }
-    case 'Text':
-    case 'TinyText':
-    case 'MediumText':
-    case 'LongText':
-    case 'Citext':
-    case 'Xml':
-    case 'Bit':
-    case 'VarBit':
-      return { ctor: 'TextField', typeArgs: [] }
-    case 'SmallInt':
-    case 'TinyInt':
-      return { ctor: 'SmallIntegerField', typeArgs: [] }
-    case 'MediumInt':
-    case 'Integer':
-    case 'Oid':
-      return { ctor: 'IntegerField', typeArgs: [] }
-    case 'BigInt':
-      return { ctor: 'BigIntegerField', typeArgs: [] }
-    case 'Real':
-    case 'DoublePrecision':
-    case 'Double':
-      return { ctor: 'FloatField', typeArgs: [] }
-    case 'Decimal':
-    case 'Money':
-      return args.length >= 2
-        ? { ctor: 'DecimalField', typeArgs: [`max_digits=${args[0]}`, `decimal_places=${args[1]}`] }
-        : { ctor: 'DecimalField', typeArgs: ['max_digits=65', 'decimal_places=30'] }
-    case 'Uuid':
-      return { ctor: 'UUIDField', typeArgs: [] }
-    case 'Date':
-      return { ctor: 'DateField', typeArgs: [] }
-    case 'Time':
-    case 'Timetz':
-      return { ctor: 'TimeField', typeArgs: [] }
-    case 'Timestamp':
-    case 'Timestamptz':
-      return { ctor: 'DateTimeField', typeArgs: [] }
-    case 'Json':
-    case 'JsonB':
-      return { ctor: 'JSONField', typeArgs: [] }
-    case 'ByteA':
-      return { ctor: 'BinaryField', typeArgs: [] }
-    case 'Inet':
-      return { ctor: 'GenericIPAddressField', typeArgs: [] }
-    case 'Boolean':
-      return { ctor: 'BooleanField', typeArgs: [] }
-    default:
-      return baseResolved
+  if (nativeName === 'VarChar' || nativeName === 'Char') {
+    return args.length > 0
+      ? { ctor: 'CharField', typeArgs: [`max_length=${args[0]}`] }
+      : { ctor: 'TextField', typeArgs: [] }
   }
+  if (nativeName === 'Decimal' || nativeName === 'Money') {
+    return args.length >= 2
+      ? { ctor: 'DecimalField', typeArgs: [`max_digits=${args[0]}`, `decimal_places=${args[1]}`] }
+      : { ctor: 'DecimalField', typeArgs: ['max_digits=65', 'decimal_places=30'] }
+  }
+  const ctor = NATIVE_DJANGO_FIELDS[nativeName]
+  return ctor === undefined ? baseResolved : { ctor, typeArgs: [] }
 }
 
 function dbGeneratedExpr(field: DMMF.Field) {
@@ -217,7 +206,8 @@ function dbGeneratedExpr(field: DMMF.Field) {
 // just that.
 function dateTimeKind(field: DMMF.Field) {
   const { ctor } = resolveDjangoField(field)
-  return ctor === 'DateField' ? 'date' : ctor === 'TimeField' ? 'time' : 'datetime'
+  if (ctor === 'DateField') return 'date'
+  return ctor === 'TimeField' ? 'time' : 'datetime'
 }
 
 // A literal on a date or time column is the date or the time Prisma writes, the
@@ -322,6 +312,9 @@ const MODULE_NAMES = new Set([
 // whose default is `timezone.now` would read the field. Such a field takes
 // inspectdb's `<name>_field`, as a reserved name does, and keeps its column
 // through db_column.
+// `pk` belongs to Django, whether or not this model declares a composite one.
+const DJANGO_OWN_ATTRS: readonly string[] = ['pk']
+
 function modelAttrNames(
   model: DMMF.Model,
   m2mTables: readonly { relationName: string; leftModel: string; rightModel: string }[],
@@ -329,7 +322,7 @@ function modelAttrNames(
   const belongsTo = singleColumnBelongsTo(model)
   const fkByScalarName = new Map(belongsTo.map((f) => [f.relationFromFields?.[0], f]))
   // `pk` belongs to Django, whether or not this model declares a composite one.
-  const taken = new Set(['pk'])
+  const taken = new Set(DJANGO_OWN_ATTRS)
   const names = new Map<string, string>()
   // What each field's line reads, at the field's place in the body. A foreign
   // key is written where its scalar column sits, so its defaults are read
@@ -421,6 +414,12 @@ function helperNameOf(names: Names, model: DMMF.Model, field: DMMF.Field) {
 // A JSON object/array or populated scalar-list default needs a module-level
 // function: a shared mutable literal is the classic pitfall, and Django
 // migrations cannot serialize a lambda.
+// The Python type of a list default's elements.
+function listElementPythonType(field: DMMF.Field) {
+  if (field.kind === 'enum') return 'str'
+  return field.type === 'DateTime' ? dateTimeKind(field) : (PRISMA_TO_PYTHON[field.type] ?? 'str')
+}
+
 function fieldDefaultHelper(
   model: DMMF.Model,
   field: DMMF.Field,
@@ -432,12 +431,7 @@ function fieldDefaultHelper(
     // An enum list default arrives as Prisma-level value names; the column
     // stores the mapped ones, which the TextChoices members carry.
     const enumDef = field.kind === 'enum' ? enumMap.get(field.type) : undefined
-    const pythonType =
-      field.kind === 'enum'
-        ? 'str'
-        : field.type === 'DateTime'
-          ? dateTimeKind(field)
-          : (PRISMA_TO_PYTHON[field.type] ?? 'str')
+    const pythonType = listElementPythonType(field)
     const items = field.default
       .map((v) =>
         enumDef && typeof v === 'string'
@@ -508,7 +502,7 @@ export function collectDefaultHelpers(
   // time of day, as Prisma Client writes them.
   const nowKinds = new Set(
     models.flatMap((m) =>
-      m.fields.filter((f) => isNowDefault(f) || f.isUpdatedAt).map((f) => dateTimeKind(f)),
+      m.fields.filter((f) => isNowDefault(f) || f.isUpdatedAt === true).map((f) => dateTimeKind(f)),
     ),
   )
   const nowHelpers = [
@@ -580,9 +574,10 @@ function utcStampedField(kind: 'date' | 'time') {
 
 // The class an @updatedAt date or time column is declared with, if it is one.
 function stampedFieldClass(field: DMMF.Field) {
-  if (!field.isUpdatedAt) return null
+  if (field.isUpdatedAt !== true) return null
   const kind = dateTimeKind(field)
-  return kind === 'date' ? 'UtcDateField' : kind === 'time' ? 'UtcTimeField' : null
+  if (kind === 'date') return 'UtcDateField'
+  return kind === 'time' ? 'UtcTimeField' : null
 }
 
 // The field every zoneless DateTime column is declared with, those of an
@@ -595,7 +590,7 @@ export function collectFieldClasses(models: readonly DMMF.Model[], provider: str
     scalarFields.some((f) => holdsUtc(f, provider)) ? UTC_DATETIME_FIELD : null,
     stamped.has('UtcDateField') ? utcStampedField('date') : null,
     stamped.has('UtcTimeField') ? utcStampedField('time') : null,
-    scalarFields.some((f) => f.isUpdatedAt) ? AUTO_NOW_QUERY_SET : null,
+    scalarFields.some((f) => f.isUpdatedAt === true) ? AUTO_NOW_QUERY_SET : null,
   ].filter((c) => c !== null)
 }
 
@@ -609,12 +604,21 @@ function isEmptyObject(value: unknown) {
   )
 }
 
-function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, isPk: boolean, names: Names) {
+// What now() stamps, by the kind of value the column holds.
+const NOW_DEFAULTS: { readonly [kind in 'date' | 'time' | 'datetime']: string } = {
+  date: 'default=utc_today',
+  time: 'default=utc_time',
+  datetime: 'default=timezone.now',
+}
+
+// The default of a field the server or a generator fills, or null for one
+// whose default is a literal or nothing.
+function generatedDefaultArgs(field: DMMF.Field) {
   // Prisma's @updatedAt also sets the value on create, as auto_now does on every
   // save(). A bulk UPDATE is the model's AutoNowQuerySet's to stamp: auto_now
   // alone never fires there. auto_now is mutually exclusive with
   // default/db_default.
-  if (field.isUpdatedAt) return ['auto_now=True']
+  if (field.isUpdatedAt === true) return ['auto_now=True']
 
   const generated = dbGeneratedExpr(field)
   // dbgenerated() is a raw DDL expression no client library can evaluate.
@@ -623,16 +627,7 @@ function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, isPk: boolean, 
   // Prisma Client fills now() itself, in UTC. A db_default would be evaluated in
   // the session's zone and, on MySQL, which has no RETURNING, would leave the
   // expression on the instance for the next save() to write back.
-  if (isNowDefault(field)) {
-    const kind = dateTimeKind(field)
-    return [
-      kind === 'date'
-        ? 'default=utc_today'
-        : kind === 'time'
-          ? 'default=utc_time'
-          : 'default=timezone.now',
-    ]
-  }
+  if (isNowDefault(field)) return [NOW_DEFAULTS[dateTimeKind(field)]]
 
   const uuidVersion = uuidDefaultVersion(field)
   if (uuidVersion !== null) {
@@ -641,6 +636,30 @@ function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, isPk: boolean, 
     return [uuidVersion === 7 ? 'default=uuid7_str' : 'default=uuid4_str']
   }
   if (isUlidDefault(field)) return ['default=ulid_str']
+  return null
+}
+
+// DMMF carries BigInt defaults as digit strings, DateTime literals as ISO
+// strings, and Json defaults as JSON text; each needs its Python shape,
+// not a bare quoted string.
+function stringDefaultArgs(model: DMMF.Model, field: DMMF.Field, def: string, names: Names) {
+  if (field.type === 'BigInt') return [`default=${def}`]
+  if (field.type === 'Decimal') return [`default=Decimal("${def}")`]
+  if (field.type === 'DateTime') return [`default=${dateTimeLiteral(field, def)}`]
+  // A Bytes default is base64 text; the column holds the bytes it encodes.
+  if (field.type === 'Bytes') return [`default=${pythonBytesLiteral(def)}`]
+  if (field.type === 'Json') {
+    const parsed: unknown = JSON.parse(def)
+    if (Array.isArray(parsed) && parsed.length === 0) return ['default=list']
+    if (isEmptyObject(parsed)) return ['default=dict']
+    return [`default=${helperNameOf(names, model, field)}`]
+  }
+  return [`default=${toPythonString(def)}`]
+}
+
+function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, isPk: boolean, names: Names) {
+  const generated = generatedDefaultArgs(field)
+  if (generated !== null) return generated
 
   const def = field.default
   if (def === undefined || def === null) return []
@@ -663,29 +682,18 @@ function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, isPk: boolean, 
   if (typeof def === 'number') {
     return field.type === 'Decimal' ? [`default=Decimal("${def}")`] : [`default=${def}`]
   }
-  if (typeof def === 'string') {
-    // DMMF carries BigInt defaults as digit strings, DateTime literals as ISO
-    // strings, and Json defaults as JSON text; each needs its Python shape,
-    // not a bare quoted string.
-    if (field.type === 'BigInt') return [`default=${def}`]
-    if (field.type === 'Decimal') return [`default=Decimal("${def}")`]
-    if (field.type === 'DateTime') return [`default=${dateTimeLiteral(field, def)}`]
-    // A Bytes default is base64 text; the column holds the bytes it encodes.
-    if (field.type === 'Bytes') return [`default=${pythonBytesLiteral(def)}`]
-    if (field.type === 'Json') {
-      const parsed: unknown = JSON.parse(def)
-      if (Array.isArray(parsed) && parsed.length === 0) return ['default=list']
-      if (isEmptyObject(parsed)) return ['default=dict']
-      return [`default=${helperNameOf(names, model, field)}`]
-    }
-    return [`default=${toPythonString(def)}`]
-  }
+  if (typeof def === 'string') return stringDefaultArgs(model, field, def, names)
   return []
 }
 
 function autoFieldCtor(field: DMMF.Field) {
   if (field.nativeType?.[0] === 'SmallInt') return 'SmallAutoField'
   return field.type === 'BigInt' ? 'BigAutoField' : 'AutoField'
+}
+
+function scalarFieldClass(field: DMMF.Field, provider: string, ctor: string) {
+  if (holdsUtc(field, provider)) return 'UtcDateTimeField'
+  return stampedFieldClass(field) ?? `models.${ctor}`
 }
 
 function generateScalarField(
@@ -730,9 +738,7 @@ function generateScalarField(
     emptyStringPk ? 'default=None' : null,
   ].filter((a) => a !== null)
 
-  const fieldClass = holdsUtc(field, provider)
-    ? 'UtcDateTimeField'
-    : (stampedFieldClass(field) ?? `models.${ctorResolved.ctor}`)
+  const fieldClass = scalarFieldClass(field, provider, ctorResolved.ctor)
   if (field.isList) {
     const inner = `${fieldClass}(${ctorResolved.typeArgs.join(', ')})`
     return `    ${attrName} = ArrayField(${[inner, ...outerArgs].join(', ')})`
@@ -749,13 +755,27 @@ const ON_DELETE: { [k: string]: string } = {
 }
 
 function onDeleteFor(relationField: DMMF.Field, scalarField: DMMF.Field) {
-  if (relationField.relationOnDelete && ON_DELETE[relationField.relationOnDelete]) {
-    return ON_DELETE[relationField.relationOnDelete]
-  }
+  const action = ON_DELETE[relationField.relationOnDelete ?? '']
+  if (action !== undefined) return action
   // Prisma's implicit referential actions: SetNull where the key can be null,
   // Restrict where it cannot. Prisma reads that from the key, not from the `?`
   // on the relation, which can be optional over a required column.
   return scalarField.isRequired ? 'models.RESTRICT' : 'models.SET_NULL'
+}
+
+// to_field names a Django field on the target, so it uses the attribute that
+// model resolved for it. The target's primary key is what a ForeignKey
+// points at without one.
+function toFieldArg(relationField: DMMF.Field, allModels: readonly DMMF.Model[], names: Names) {
+  const targetModel = allModels.find((m) => m.name === relationField.type)
+  const referencedName = relationField.relationToFields?.[0]
+  const referencedField = targetModel?.fields.find((f) => f.name === referencedName)
+  const targetPk = targetModel ? primaryKeyFields(targetModel) : []
+  return referencedField &&
+    targetModel &&
+    !(targetPk.length === 1 && targetPk[0] === referencedName)
+    ? `to_field=${toPythonString(attrNameOf(names, targetModel, referencedField))}`
+    : null
 }
 
 function generateForeignKeyField(
@@ -778,23 +798,11 @@ function generateForeignKeyField(
     ? toPythonString(djangoAttrName(makeSnakeCase(backField.name)))
     : '"+"'
 
-  const targetModel = allModels.find((m) => m.name === relationField.type)
-  const referencedName = relationField.relationToFields?.[0]
-  const referencedField = targetModel?.fields.find((f) => f.name === referencedName)
-  // to_field names a Django field on the target, so it uses the attribute that
-  // model resolved for it. The target's primary key is what a ForeignKey
-  // points at without one.
-  const targetPk = targetModel ? primaryKeyFields(targetModel) : []
-  const toField =
-    referencedField && targetModel && !(targetPk.length === 1 && targetPk[0] === referencedName)
-      ? `to_field=${toPythonString(attrNameOf(names, targetModel, referencedField))}`
-      : null
-
   const args = [
     target,
     `on_delete=${onDeleteFor(relationField, scalarField)}`,
     `related_name=${relatedName}`,
-    toField,
+    toFieldArg(relationField, allModels, names),
     isPk ? 'primary_key=True' : null,
     columnName !== `${attrName}_id` ? `db_column=${toPythonString(columnName)}` : null,
     // The column is nullable as its scalar field is: a relation can be optional
@@ -834,7 +842,7 @@ export function collectManyToManyTables(
     model.fields.flatMap((field) => {
       if (field.kind !== 'object' || !field.isList) return []
       const otherSide = backRelation(field, model, allModels)
-      if (!otherSide?.isList) return []
+      if (otherSide?.isList !== true) return []
 
       const [leftName, rightName] =
         model.name < field.type ? [model.name, field.type] : [field.type, model.name]
@@ -974,8 +982,20 @@ function postgresIndexClass(algorithm: string | undefined) {
 
 function singleColumnBelongsTo(model: DMMF.Model) {
   return model.fields.filter(
-    (f) => f.kind === 'object' && f.relationFromFields?.length === 1 && f.relationToFields,
+    (f) =>
+      f.kind === 'object' && f.relationFromFields?.length === 1 && f.relationToFields !== undefined,
   )
+}
+
+// The name each @@unique was given, keyed by its fields; the first of two over
+// the same fields wins.
+function declaredUniqueNames(uniqueIndexes: readonly DMMF.Index[]) {
+  const names = new Map<string, string | undefined>()
+  for (const idx of uniqueIndexes) {
+    const key = idx.fields.map((f) => f.name).join(',')
+    if (!names.has(key)) names.set(key, idx.dbName)
+  }
+  return names
 }
 
 function generateMetaLines(model: DMMF.Model, indexes: readonly DMMF.Index[], names: Names) {
@@ -993,17 +1013,16 @@ function generateMetaLines(model: DMMF.Model, indexes: readonly DMMF.Index[], na
 
   // A @@unique carries its own name only when it was given one with map:;
   // otherwise the database name Prisma derives is reproduced.
-  const uniqueIndexes = indexes.filter(
-    (idx) => idx.model === model.name && idx.type === 'unique' && !idx.isDefinedOnField,
+  const declaredNames = declaredUniqueNames(
+    indexes.filter(
+      (idx) => idx.model === model.name && idx.type === 'unique' && !idx.isDefinedOnField,
+    ),
   )
   const constraints = model.uniqueFields
     .filter((fields) => coversWrittenFields(model, fields))
     .map((fields) => {
       const fieldNames = fields.map((f) => toPythonString(fieldRef(f))).join(', ')
-      const declared = uniqueIndexes.find(
-        (idx) =>
-          idx.fields.length === fields.length && idx.fields.every((f, i) => f.name === fields[i]),
-      )?.dbName
+      const declared = declaredNames.get(fields.join(','))
       const name = declared ?? `${tableName}_${fields.map((f) => columnRef(f)).join('_')}_key`
       return `models.UniqueConstraint(fields=[${fieldNames}], name=${toPythonString(name)})`
     })
@@ -1073,12 +1092,12 @@ function generateMetaLines(model: DMMF.Model, indexes: readonly DMMF.Index[], na
 function compositePkLine(model: DMMF.Model, names: Names) {
   const pkFields = primaryKeyFields(model)
   if (pkFields.length < 2) return null
-  const belongsTo = singleColumnBelongsTo(model)
+  const foreignKeys = new Set(singleColumnBelongsTo(model).map((f) => f.relationFromFields?.[0]))
   const attnames = pkFields.map((prismaFieldName) => {
     const attr = names.attr.get(nameKey(model.name, prismaFieldName)) ?? prismaFieldName
     // CompositePrimaryKey takes attnames: a ForeignKey contributes
     // `<attr>_id`, a scalar contributes its own attribute name.
-    const isForeignKey = belongsTo.some((f) => f.relationFromFields?.[0] === prismaFieldName)
+    const isForeignKey = foreignKeys.has(prismaFieldName)
     return toPythonString(isForeignKey ? `${attr}_id` : attr)
   })
   return `    pk = models.CompositePrimaryKey(${attnames.join(', ')})`
@@ -1110,7 +1129,8 @@ export function findNameConflicts(enums?: readonly DMMF.DatamodelEnum[]) {
 // An @@index or @@unique that lists an @ignore field is left out: the field is
 // not in the DMMF model, so there is no attribute for the entry to name.
 function coversWrittenFields(model: DMMF.Model, fieldNames: readonly string[]) {
-  return fieldNames.every((name) => model.fields.some((f) => f.name === name))
+  const written = new Set(model.fields.map((f) => f.name))
+  return fieldNames.every((name) => written.has(name))
 }
 
 /** A class's docstring, with the blank line that parts it from the body. */
@@ -1176,7 +1196,7 @@ export function generateModelBody(
     ...classDocstring(stripAnnotations(model.documentation)),
     ...(compositePk === null ? [] : [compositePk]),
     ...fieldLines,
-    ...(model.fields.some((f) => f.isUpdatedAt)
+    ...(model.fields.some((f) => f.isUpdatedAt === true)
       ? ['    objects = AutoNowQuerySet.as_manager()']
       : []),
     ...generateMetaLines(model, indexes, names),
@@ -1195,14 +1215,10 @@ export function generateEnumClass(enumDef: DMMF.DatamodelEnum) {
   ].join('\n')
 }
 
-export function collectGlobalImports(
-  models: readonly DMMF.Model[],
-  indexes: readonly DMMF.Index[],
-  provider: string,
-) {
-  const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
+// The django.contrib.postgres index classes the written indexes are declared with.
+function indexClassesOf(models: readonly DMMF.Model[], indexes: readonly DMMF.Index[]) {
   const modelsByName = new Map(models.map((m) => [m.name, m]))
-  const indexClasses = indexes
+  return indexes
     .filter((idx) => {
       const model = modelsByName.get(idx.model)
       return (
@@ -1216,14 +1232,85 @@ export function collectGlobalImports(
     })
     .map((idx) => postgresIndexClass(idx.algorithm))
     .filter((ctor) => ctor !== null)
+}
 
-  const needsUuid = scalarFields.some((f) => uuidDefaultVersion(f) === 4)
-  const needsUuid6 = scalarFields.some((f) => uuidDefaultVersion(f) === 7)
-  const needsUlid = scalarFields.some((f) => isUlidDefault(f))
-  const needsArray = scalarFields.some((f) => f.isList)
-  const needsRawSql = scalarFields.some((f) => dbGeneratedExpr(f) !== null)
+function needsDecimalImport(scalarFields: readonly DMMF.Field[]) {
+  return scalarFields.some(
+    (f) =>
+      f.type === 'Decimal' &&
+      (typeof f.default === 'number' ||
+        typeof f.default === 'string' ||
+        (Array.isArray(f.default) && f.default.length > 0)),
+  )
+}
+
+function needsAnyImport(scalarFields: readonly DMMF.Field[]) {
+  return scalarFields.some((f) => {
+    if (f.type !== 'Json') return false
+    // A Json list default is annotated list[Any] from the element type.
+    if (f.isList) return Array.isArray(f.default) && f.default.length > 0
+    if (typeof f.default !== 'string') return false
+    const parsed: unknown = JSON.parse(f.default)
+    if (typeof parsed !== 'object' || parsed === null) return false
+    return Array.isArray(parsed) ? parsed.length > 0 : Object.keys(parsed).length > 0
+  })
+}
+
+type ImportNeeds = {
+  readonly uuid: boolean
+  readonly uuid6: boolean
+  readonly ulid: boolean
+  readonly array: boolean
+  readonly rawSql: boolean
+  readonly utcField: boolean
+  readonly autoNow: boolean
+  readonly decimal: boolean
+  readonly any: boolean
+  readonly fromDatetime: readonly string[]
+  readonly nowHelpers: boolean
+  readonly nowDatetime: boolean
+  readonly indexClasses: readonly string[]
+}
+
+function stdlibImports(needs: ImportNeeds) {
+  const fromTyping = [
+    needs.any || needs.utcField || needs.autoNow ? 'Any' : null,
+    needs.autoNow ? 'TypeVar' : null,
+  ].filter((name) => name !== null)
+  return [
+    needs.uuid ? 'import uuid' : null,
+    needs.fromDatetime.length > 0 ? `from datetime import ${needs.fromDatetime.join(', ')}` : null,
+    needs.utcField || needs.nowHelpers ? 'from datetime import timezone as dt_timezone' : null,
+    needs.decimal ? 'from decimal import Decimal' : null,
+    fromTyping.length > 0 ? `from typing import ${fromTyping.join(', ')}` : null,
+  ].filter((l) => l !== null)
+}
+
+function thirdPartyImports(needs: ImportNeeds) {
+  return [
+    needs.uuid6 ? 'import uuid6' : null,
+    needs.utcField ? 'from django.conf import settings' : null,
+    needs.array ? 'from django.contrib.postgres.fields import ArrayField' : null,
+    needs.indexClasses.length > 0
+      ? `from django.contrib.postgres.indexes import ${needs.indexClasses.join(', ')}`
+      : null,
+    'from django.db import models',
+    needs.utcField ? 'from django.db.backends.base.base import BaseDatabaseWrapper' : null,
+    needs.rawSql ? 'from django.db.models.expressions import RawSQL' : null,
+    needs.utcField || needs.autoNow || needs.nowDatetime
+      ? 'from django.utils import timezone'
+      : null,
+    needs.ulid ? 'from ulid import ULID' : null,
+  ].filter((l) => l !== null)
+}
+
+export function collectGlobalImports(
+  models: readonly DMMF.Model[],
+  indexes: readonly DMMF.Index[],
+  provider: string,
+) {
+  const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
   const needsUtcField = scalarFields.some((f) => holdsUtc(f, provider))
-  const needsAutoNow = scalarFields.some((f) => f.isUpdatedAt)
   const literalKinds = scalarFields
     .filter(
       (f) =>
@@ -1233,7 +1320,7 @@ export function collectGlobalImports(
     )
     .map((f) => dateTimeKind(f))
   const nowKinds = scalarFields
-    .filter((f) => isNowDefault(f) || f.isUpdatedAt)
+    .filter((f) => isNowDefault(f) || f.isUpdatedAt === true)
     .map((f) => dateTimeKind(f))
   // utc_today() and utc_time() read the clock through datetime, as
   // UtcDateTimeField checks a value against it.
@@ -1243,56 +1330,22 @@ export function collectGlobalImports(
     ...nowHelperKinds,
     ...(needsUtcField || nowHelperKinds.length > 0 ? ['datetime'] : []),
   ])
-  const fromDatetime = ['date', 'datetime', 'time'].filter((kind) => kinds.has(kind))
-  const needsDecimal = scalarFields.some(
-    (f) =>
-      f.type === 'Decimal' &&
-      (typeof f.default === 'number' ||
-        typeof f.default === 'string' ||
-        (Array.isArray(f.default) && f.default.length > 0)),
-  )
-  const needsAny = scalarFields.some((f) => {
-    if (f.type !== 'Json') return false
-    // A Json list default is annotated list[Any] from the element type.
-    if (f.isList) return Array.isArray(f.default) && f.default.length > 0
-    if (typeof f.default !== 'string') return false
-    const parsed: unknown = JSON.parse(f.default)
-    if (typeof parsed !== 'object' || parsed === null) return false
-    return Array.isArray(parsed) ? parsed.length > 0 : Object.keys(parsed).length > 0
-  })
-
-  const fromTyping = [
-    needsAny || needsUtcField || needsAutoNow ? 'Any' : null,
-    needsAutoNow ? 'TypeVar' : null,
-  ].filter((name) => name !== null)
-
-  const stdlib = [
-    needsUuid ? 'import uuid' : null,
-    fromDatetime.length > 0 ? `from datetime import ${fromDatetime.join(', ')}` : null,
-    needsUtcField || nowHelperKinds.length > 0
-      ? 'from datetime import timezone as dt_timezone'
-      : null,
-    needsDecimal ? 'from decimal import Decimal' : null,
-    fromTyping.length > 0 ? `from typing import ${fromTyping.join(', ')}` : null,
-  ].filter((l) => l !== null)
-
-  const sortedIndexClasses = [...new Set(indexClasses)].toSorted()
-
-  const thirdParty = [
-    needsUuid6 ? 'import uuid6' : null,
-    needsUtcField ? 'from django.conf import settings' : null,
-    needsArray ? 'from django.contrib.postgres.fields import ArrayField' : null,
-    sortedIndexClasses.length > 0
-      ? `from django.contrib.postgres.indexes import ${sortedIndexClasses.join(', ')}`
-      : null,
-    'from django.db import models',
-    needsUtcField ? 'from django.db.backends.base.base import BaseDatabaseWrapper' : null,
-    needsRawSql ? 'from django.db.models.expressions import RawSQL' : null,
-    needsUtcField || needsAutoNow || nowKinds.includes('datetime')
-      ? 'from django.utils import timezone'
-      : null,
-    needsUlid ? 'from ulid import ULID' : null,
-  ].filter((l) => l !== null)
-
+  const needs: ImportNeeds = {
+    uuid: scalarFields.some((f) => uuidDefaultVersion(f) === 4),
+    uuid6: scalarFields.some((f) => uuidDefaultVersion(f) === 7),
+    ulid: scalarFields.some((f) => isUlidDefault(f)),
+    array: scalarFields.some((f) => f.isList),
+    rawSql: scalarFields.some((f) => dbGeneratedExpr(f) !== null),
+    utcField: needsUtcField,
+    autoNow: scalarFields.some((f) => f.isUpdatedAt === true),
+    decimal: needsDecimalImport(scalarFields),
+    any: needsAnyImport(scalarFields),
+    fromDatetime: ['date', 'datetime', 'time'].filter((kind) => kinds.has(kind)),
+    nowHelpers: nowHelperKinds.length > 0,
+    nowDatetime: nowKinds.includes('datetime'),
+    indexClasses: [...new Set(indexClassesOf(models, indexes))].toSorted(),
+  }
+  const stdlib = stdlibImports(needs)
+  const thirdParty = thirdPartyImports(needs)
   return stdlib.length > 0 ? [...stdlib, '', ...thirdParty] : thirdParty
 }

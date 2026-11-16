@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { exposedFiles } from './exposed.js'
 
+/** The datamodel `getDMMF` parsed, or its parse error thrown. */
+function datamodelOf(result: ReturnType<typeof getDMMF>) {
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel
+}
+
 const SCHEMA = `datasource db {
   provider = "postgresql"
 }
@@ -35,9 +41,8 @@ model Tag {
 describe('exposedFiles', () => {
   it('writes the tables, the entities, the join tables, the enums, the column types they use and PrismaSchema', () => {
     const result = getDMMF({ datamodel: [['schema.prisma', SCHEMA]] })
-    if ('type' in result) throw new Error(result.error.message)
     expect(
-      exposedFiles(result.datamodel, { package: 'com.example.db', dao: true, source: SCHEMA }),
+      exposedFiles(datamodelOf(result), { package: 'com.example.db', dao: true, source: SCHEMA }),
     ).toStrictEqual([
       {
         fileName: 'UserTable.kt',
@@ -245,9 +250,8 @@ object PrismaSchema {
 
   it('leaves the entities out when dao is off', () => {
     const result = getDMMF({ datamodel: [['schema.prisma', SCHEMA]] })
-    if ('type' in result) throw new Error(result.error.message)
     expect(
-      exposedFiles(result.datamodel, { package: 'models', dao: false, source: SCHEMA }).map(
+      exposedFiles(datamodelOf(result), { package: 'models', dao: false, source: SCHEMA }).map(
         (file) => file.fileName,
       ),
     ).toStrictEqual([
@@ -265,9 +269,8 @@ object PrismaSchema {
     const schema =
       'datasource db {\n  provider = "postgresql"\n}\n\nmodel Tag {\n  name String @id\n}\n'
     const result = getDMMF({ datamodel: [['schema.prisma', schema]] })
-    if ('type' in result) throw new Error(result.error.message)
     expect(
-      exposedFiles(result.datamodel, { package: 'models', dao: true, source: schema }).map(
+      exposedFiles(datamodelOf(result), { package: 'models', dao: true, source: schema }).map(
         (file) => file.fileName,
       ),
     ).toStrictEqual(['TagTable.kt', 'TagEntity.kt', 'PrismaSchema.kt'])

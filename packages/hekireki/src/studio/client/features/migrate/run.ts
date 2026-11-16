@@ -114,13 +114,20 @@ export function useMigrationRun(input: {
       .catch(() => null)
     const history = await queries.query(getMigrateQueryOptions()).catch(() => null)
     const names = [...new Set([...(before.tables ?? []), ...(after ?? [])].map((one) => one.table))]
+    // Reversed, so a table counted twice keeps its first count, as a search from the front would.
+    const countedBefore = new Map(
+      (before.tables ?? []).map((one) => [one.table, one.after] as const).toReversed(),
+    )
+    const countedAfter = new Map(
+      (after ?? []).map((one) => [one.table, one.after] as const).toReversed(),
+    )
     setFinished({
       name: recorded,
       matches: history === null ? false : !history.drift,
       tables: names.map((table) => ({
         table,
-        before: before.tables?.find((one) => one.table === table)?.after ?? null,
-        after: after?.find((one) => one.table === table)?.after ?? null,
+        before: countedBefore.get(table) ?? null,
+        after: countedAfter.get(table) ?? null,
       })),
       backup: before.backup,
     })

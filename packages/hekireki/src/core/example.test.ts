@@ -211,6 +211,20 @@ function optionsFor(generator: (typeof parsed.config.generators)[number]): Gener
   } as unknown as GeneratorOptions
 }
 
+function handlerFor(provider: string) {
+  const handler = HANDLERS[provider]
+  if (handler === undefined) throw new Error(`no handler for ${provider}`)
+  return handler
+}
+
+function isPng(file: string) {
+  return file.endsWith('.png')
+}
+
+function isText(file: string) {
+  return !isPng(file)
+}
+
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 describe('example/schema.prisma', () => {
@@ -223,7 +237,6 @@ describe('example/schema.prisma', () => {
   describe.each(parsed.config.generators.map((generator) => [generator.name, generator] as const))(
     '%s',
     (_name, generator) => {
-      const handler = HANDLERS[generator.provider.value]
       // A block without `output` names its files in `outputs`, all in one directory.
       const output = generator.output?.value ?? [generator.config['outputs'] ?? ''].flat()[0] ?? ''
       // `generated/drizzle/schema.ts` names a file; the golden directory is the one that holds it.
@@ -234,9 +247,11 @@ describe('example/schema.prisma', () => {
       const actualDir = path.join(outDir, path.relative(EXAMPLE_DIR, goldenDir))
 
       it('reproduces the committed output under example/generated', async () => {
-        if (handler === undefined) throw new Error(`no handler for ${generator.provider.value}`)
         await Effect.runPromise(
-          Effect.provide(handler(optionsFor(generator)), NodeFileSystem.layer),
+          Effect.provide(
+            handlerFor(generator.provider.value)(optionsFor(generator)),
+            NodeFileSystem.layer,
+          ),
         )
 
         const expected = listFiles(goldenDir)
@@ -244,14 +259,14 @@ describe('example/schema.prisma', () => {
         expect(listFiles(actualDir)).toStrictEqual(expected)
 
         // A raster depends on the fonts of the machine that drew it, so the PNG is checked for shape only.
-        for (const file of expected.filter((name) => name.endsWith('.png'))) {
+        for (const file of expected.filter(isPng)) {
           const actual = path.join(actualDir, file)
           const bytes = readFileSync(actual)
           expect(bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)).toBe(true)
           expect(statSync(actual).size).toBeGreaterThan(1024)
         }
         // The whole text is compared so a mismatch prints a unified diff, named by its file.
-        for (const file of expected.filter((name) => !name.endsWith('.png'))) {
+        for (const file of expected.filter(isText)) {
           expect({ file, content: readFileSync(path.join(actualDir, file), 'utf8') }).toStrictEqual(
             {
               file,

@@ -31,6 +31,7 @@ export function emitMany(
     yield* makeDirectory(dir)
     yield* Effect.forEach(files, (f) => writeFile(path.join(dir, f.fileName), f.code), {
       discard: true,
+      concurrency: 1,
     })
   })
 }

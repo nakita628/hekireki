@@ -19,9 +19,10 @@ export function mappedValues(
   },
   values: Readonly<Record<string, string>> | undefined,
 ) {
+  const dbNameOf = new Map((column.enumMembers ?? []).toReversed().map((m) => [m.name, m.dbName]))
   return Object.entries(values ?? {}).map(([stored, member]) => ({
     from: stored,
-    to: column.enumMembers?.find((m) => m.name === member)?.dbName ?? member,
+    to: dbNameOf.get(member) ?? member,
   }))
 }
 
@@ -102,8 +103,9 @@ export function identityColumns(
   fixing: readonly string[],
 ) {
   const names = new Set(actual.columns.map((c) => c.name))
+  const fixed = new Set(fixing)
   const sameAsFixed = (key: readonly string[]) =>
-    key.length === fixing.length && key.every((column) => fixing.includes(column))
+    key.length === fixing.length && key.every((column) => fixed.has(column))
   return (
     [expectedKey, ...actual.uniques].find(
       (key) => key.length > 0 && key.every((column) => names.has(column)) && !sameAsFixed(key),
@@ -129,6 +131,34 @@ export function anyOf(conditions: readonly string[]) {
     : conditions.map((c) => `(${c})`).join(' OR ')
 }
 
+/** A PostgreSQL type with the arguments of its native type, if it has any. */
+function sized(name: string, args: readonly string[]) {
+  return args.length === 0 ? name : `${name}(${args.join(', ')})`
+}
+
+/** The PostgreSQL type of each Prisma scalar, from the native type the field names. */
+const POSTGRES_TYPES = new Map<string, (native: string | null, args: readonly string[]) => string>([
+  [
+    'String',
+    (native, args) =>
+      native === null || native === 'Text' ? 'TEXT' : sized(native.toUpperCase(), args),
+  ],
+  ['Int', (native) => (native === 'SmallInt' ? 'SMALLINT' : 'INTEGER')],
+  ['BigInt', () => 'BIGINT'],
+  ['Float', (native) => (native === 'Real' ? 'REAL' : 'DOUBLE PRECISION')],
+  ['Decimal', (_, args) => (args.length === 0 ? 'DECIMAL(65, 30)' : sized('DECIMAL', args))],
+  ['Boolean', () => 'BOOLEAN'],
+  [
+    'DateTime',
+    (native, args) =>
+      native === 'Date'
+        ? 'DATE'
+        : sized(native === 'Timestamptz' ? 'TIMESTAMPTZ' : 'TIMESTAMP', args),
+  ],
+  ['Json', (native) => (native === 'Json' ? 'JSON' : 'JSONB')],
+  ['Bytes', () => 'BYTEA'],
+])
+
 /**
  * The PostgreSQL type a converted value is cast to in the check, as the migration's column will be.
  *
@@ -144,30 +174,6 @@ export function postgresType(
   column: ReturnType<typeof makeExpectedTables>[number]['columns'][number],
 ) {
   const [native, args] = column.nativeType ?? [null, []]
-  const sized = (name: string) => (args.length === 0 ? name : `${name}(${args.join(', ')})`)
   if (column.kind === 'enum') return 'TEXT'
-  switch (column.type) {
-    case 'String':
-      return native === null || native === 'Text' ? 'TEXT' : sized(native.toUpperCase())
-    case 'Int':
-      return native === 'SmallInt' ? 'SMALLINT' : 'INTEGER'
-    case 'BigInt':
-      return 'BIGINT'
-    case 'Float':
-      return native === 'Real' ? 'REAL' : 'DOUBLE PRECISION'
-    case 'Decimal':
-      return args.length === 0 ? 'DECIMAL(65, 30)' : sized('DECIMAL')
-    case 'Boolean':
-      return 'BOOLEAN'
-    case 'DateTime':
-      return native === 'Date'
-        ? 'DATE'
-        : sized(native === 'Timestamptz' ? 'TIMESTAMPTZ' : 'TIMESTAMP')
-    case 'Json':
-      return native === 'Json' ? 'JSON' : 'JSONB'
-    case 'Bytes':
-      return 'BYTEA'
-    default:
-      return null
-  }
+  return POSTGRES_TYPES.get(column.type)?.(native, args) ?? null
 }

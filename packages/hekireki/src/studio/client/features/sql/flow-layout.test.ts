@@ -30,6 +30,13 @@ function edge(source: string, target: string) {
   return { source, target }
 }
 
+/** Where the layout put a node; a node it left out fails the test. */
+function positionOf<T>(positions: { readonly [id: string]: T | undefined }, id: string): T {
+  const position = positions[id]
+  if (position === undefined) throw new Error(`${id} is not positioned`)
+  return position
+}
+
 describe('nodeLines', () => {
   it('lists the columns of a relation and the details of anything else', () => {
     expect(
@@ -82,10 +89,9 @@ describe('autoLayout', () => {
   it('positions every node, sources on the left and the result on the right', () => {
     const positions = autoLayout(nodes, edges)
     expect(Object.keys(positions).toSorted()).toStrictEqual(['out', 'users', 'where'])
-    const users = positions['users']
-    const where = positions['where']
-    const out = positions['out']
-    if (!users || !where || !out) throw new Error('every node is positioned')
+    const users = positionOf(positions, 'users')
+    const where = positionOf(positions, 'where')
+    const out = positionOf(positions, 'out')
     expect(users.x + NODE_WIDTH).toBeLessThanOrEqual(where.x)
     expect(where.x + NODE_WIDTH).toBeLessThanOrEqual(out.x)
     for (const position of Object.values(positions)) {

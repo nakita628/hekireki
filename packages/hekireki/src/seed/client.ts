@@ -102,8 +102,11 @@ export function seedWithClient(input: {
         entry.table.kind === 'join',
     )
     const delegates = new Map(
-      yield* Effect.forEach(models, (entry) =>
-        Effect.map(delegateOf(client, entry.table.name), (d) => [entry.table.name, d] as const),
+      yield* Effect.forEach(
+        models,
+        (entry) =>
+          Effect.map(delegateOf(client, entry.table.name), (d) => [entry.table.name, d] as const),
+        { concurrency: 1 },
       ),
     )
     // Implicit join tables empty themselves: their foreign keys cascade from both sides.

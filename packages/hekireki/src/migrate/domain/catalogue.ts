@@ -178,11 +178,10 @@ export function sqliteCheckClauses(definition: string) {
         // without reading all of the definition above for every parenthesis in it.
         const wordEnd = (at: number): number =>
           at > 0 && /\s/u.test(definition[at - 1] ?? '') ? wordEnd(at - 1) : at
-        return state.start === null
-          ? /\bCHECK\s*$/iu.test(definition.slice(Math.max(0, wordEnd(index) - 6), index))
-            ? { ...state, start: index + 1, depth: 1 }
-            : state
-          : { ...state, depth: state.depth + 1 }
+        if (state.start !== null) return { ...state, depth: state.depth + 1 }
+        return /\bCHECK\s*$/iu.test(definition.slice(Math.max(0, wordEnd(index) - 6), index))
+          ? { ...state, start: index + 1, depth: 1 }
+          : state
       }
       if (char !== ')' || state.start === null) return state
       return state.depth === 1

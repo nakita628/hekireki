@@ -128,6 +128,17 @@ function countOrphans(
   }
 }
 
+/** Whether a type change drops the column and adds it again. */
+function recreatesColumn(found: readonly { readonly kind: string }[]) {
+  return found.some((conversion) => conversion.kind === 'column-recreated')
+}
+
+/** Whether a key the database has covers the columns: a key over some makes every wider set unique. */
+function coveredByKey(keys: readonly (readonly string[])[], columns: readonly string[]) {
+  const wanted = new Set(columns)
+  return keys.some((key) => key.length > 0 && key.every((column) => wanted.has(column)))
+}
+
 function pairs(from: readonly string[], to: readonly string[]) {
   return from
     .map((column, index) => `${column}=${to[index] ?? ''}`)
@@ -393,32 +404,54 @@ export function makeChecks(input: {
     )
     // A column PostgreSQL drops and adds again keeps none of its values, so nothing is asked of them.
     const recreated = new Set(
-      [...conversions]
-        .filter(([, found]) => found.some((conversion) => conversion.kind === 'column-recreated'))
-        .map(([column]) => column),
+      [...conversions].filter(([, found]) => recreatesColumn(found)).map(([column]) => column),
     )
+    const addedColumnChecks = (column: (typeof wanted.columns)[number], subject: string) => {
+      if (!column.required || column.databaseDefault) return []
+      return [
+        {
+          kind: 'column-added',
+          severity: 'blocking',
+          model: wanted.model,
+          subject,
+          what: 'required column added without a database default',
+          unit: 'row',
+          hint:
+            dialect === 'mysql'
+              ? "MySQL fills the rows already there with '', 0, the first enum member or a zero date, not a value Prisma Client would write: give the field a @default the database fills (not uuid(), cuid(), nanoid(), ulid() or @updatedAt), or add it optional, fill it, then make it required; filling them on the Migrate page of hekireki studio does it in the migration."
+              : 'The database has no value for the rows already there: give the field a @default the database fills (not uuid(), cuid(), nanoid(), ulid() or @updatedAt), or add it optional, fill it, then make it required; filling them on the Migrate page of hekireki studio does it in the migration.',
+          guaranteed: false,
+          statement: withFixes(countRows(dialect, from)),
+        },
+      ]
+    }
+    const enumChecks = (
+      column: (typeof wanted.columns)[number],
+      existing: (typeof actual.columns)[number],
+      subject: string,
+    ) => {
+      const allowed = column.enumValues ?? []
+      if (column.kind !== 'enum' || column.isList || allowed.length === 0) return []
+      const members = new Set(allowed)
+      return [
+        {
+          kind: 'enum',
+          severity: 'blocking',
+          model: wanted.model,
+          subject,
+          what: `values outside enum ${column.type}`,
+          unit: 'row',
+          hint: 'Move the rows to a member that stays before the enum changes, or say what each stored value becomes on the Migrate page of hekireki studio.',
+          guaranteed:
+            trusted && (existing.enumValues?.every((value) => members.has(value)) ?? false),
+          statement: withFixes(countOutsideEnum(dialect, from, column.column, allowed)),
+        },
+      ]
+    }
     const columns = wanted.columns.flatMap((column) => {
       const subject = `${wanted.model}.${column.field}`
       const existing = find(column.column)
-      if (existing === undefined) {
-        if (!column.required || column.databaseDefault) return []
-        return [
-          {
-            kind: 'column-added',
-            severity: 'blocking',
-            model: wanted.model,
-            subject,
-            what: 'required column added without a database default',
-            unit: 'row',
-            hint:
-              dialect === 'mysql'
-                ? "MySQL fills the rows already there with '', 0, the first enum member or a zero date, not a value Prisma Client would write: give the field a @default the database fills (not uuid(), cuid(), nanoid(), ulid() or @updatedAt), or add it optional, fill it, then make it required; filling them on the Migrate page of hekireki studio does it in the migration."
-                : 'The database has no value for the rows already there: give the field a @default the database fills (not uuid(), cuid(), nanoid(), ulid() or @updatedAt), or add it optional, fill it, then make it required; filling them on the Migrate page of hekireki studio does it in the migration.',
-            guaranteed: false,
-            statement: withFixes(countRows(dialect, from)),
-          },
-        ]
-      }
+      if (existing === undefined) return addedColumnChecks(column, subject)
       const found = conversions.get(column.column) ?? []
       const conversionChecks = found.map((conversion) => ({
         kind: conversion.kind,
@@ -458,26 +491,7 @@ export function makeChecks(input: {
             },
           ]
         : []
-      const allowed = column.enumValues ?? []
-      const members =
-        column.kind === 'enum' && !column.isList && allowed.length > 0
-          ? [
-              {
-                kind: 'enum',
-                severity: 'blocking',
-                model: wanted.model,
-                subject,
-                what: `values outside enum ${column.type}`,
-                unit: 'row',
-                hint: 'Move the rows to a member that stays before the enum changes, or say what each stored value becomes on the Migrate page of hekireki studio.',
-                guaranteed:
-                  trusted &&
-                  (existing.enumValues?.every((value) => allowed.includes(value)) ?? false),
-                statement: withFixes(countOutsideEnum(dialect, from, column.column, allowed)),
-              },
-            ]
-          : []
-      return [...notNull, ...conversionChecks, ...members]
+      return [...notNull, ...conversionChecks, ...enumChecks(column, existing, subject)]
     })
     const uniques = wanted.uniques
       .filter(
@@ -493,24 +507,31 @@ export function makeChecks(input: {
         unit: 'duplicate group',
         hint: 'Merge or remove the duplicates before the constraint is created, or say which to keep on the Migrate page of hekireki studio.',
         // A unique key over some of the columns makes every wider set unique too.
-        guaranteed:
-          trusted &&
-          actual.uniques.some(
-            (existing) =>
-              existing.length > 0 && existing.every((column) => unique.columns.includes(column)),
-          ),
+        guaranteed: trusted && coveredByKey(actual.uniques, unique.columns),
         statement: withFixes(countDuplicates(dialect, from, unique.columns)),
       }))
+    // The foreign keys the database enforces now, by the table they point at and their columns.
+    const enforced = new Set(
+      actual.foreignKeys
+        .filter((existing) => existing.enforced)
+        .map((existing) =>
+          JSON.stringify([
+            keyOf({ schema: existing.refSchema, table: existing.refTable }),
+            pairs(existing.columns, existing.refColumns),
+          ]),
+        ),
+    )
     const foreignKeys = wanted.foreignKeys
       .filter((foreignKey) => {
         const target = actualByKey.get(
           keyOf({ schema: foreignKey.toSchema, table: foreignKey.toTable }),
         )
+        if (target === undefined) return false
+        const targetColumns = new Set(target.columns.map((c) => c.name))
         return (
-          target !== undefined &&
           foreignKey.fromColumns.every(has) &&
           !foreignKey.fromColumns.some((column) => recreated.has(column)) &&
-          foreignKey.toColumns.every((column) => target.columns.some((c) => c.name === column))
+          foreignKey.toColumns.every((column) => targetColumns.has(column))
         )
       })
       .map((foreignKey) => ({
@@ -524,13 +545,11 @@ export function makeChecks(input: {
         guaranteed:
           trusted &&
           !fixed({ schema: foreignKey.toSchema, table: foreignKey.toTable }) &&
-          actual.foreignKeys.some(
-            (existing) =>
-              existing.enforced &&
-              keyOf({ schema: existing.refSchema, table: existing.refTable }) ===
-                keyOf({ schema: foreignKey.toSchema, table: foreignKey.toTable }) &&
-              pairs(existing.columns, existing.refColumns) ===
-                pairs(foreignKey.fromColumns, foreignKey.toColumns),
+          enforced.has(
+            JSON.stringify([
+              keyOf({ schema: foreignKey.toSchema, table: foreignKey.toTable }),
+              pairs(foreignKey.fromColumns, foreignKey.toColumns),
+            ]),
           ),
         statement: withFixes(
           countOrphans(
@@ -542,12 +561,12 @@ export function makeChecks(input: {
         ),
       }))
     // A column whose values move to another table is not dropped with them, as a renamed one is not.
+    const wantedColumns = new Set(wanted.columns.map((c) => c.column))
+    const movedAway = new Set(
+      fixes.moved.filter((m) => m.key === keyOf(actual)).map((m) => m.column),
+    )
     const dropped = actual.columns
-      .filter(
-        (column) =>
-          !wanted.columns.some((c) => c.column === column.name) &&
-          !fixes.moved.some((m) => m.key === keyOf(actual) && m.column === column.name),
-      )
+      .filter((column) => !wantedColumns.has(column.name) && !movedAway.has(column.name))
       .map((column) => ({
         kind: 'column-dropped',
         severity: 'warning',

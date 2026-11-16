@@ -5,17 +5,17 @@ export function makeArktypeInfer(modelName: string) {
   return `export type ${modelName} = typeof ${modelName}Schema.infer`
 }
 
+const ARKTYPE_UNDECLARED_KEYS = {
+  strict: '\n  "+": "reject",\n',
+  loose: '\n  "+": "ignore",\n',
+} as const
+
 export function makeArktypeSchema(
   modelName: string,
   fields: string,
   objectType?: 'strict' | 'loose',
 ) {
-  const undeclared =
-    objectType === 'strict'
-      ? '\n  "+": "reject",\n'
-      : objectType === 'loose'
-        ? '\n  "+": "ignore",\n'
-        : '\n'
+  const undeclared = objectType === undefined ? '\n' : ARKTYPE_UNDECLARED_KEYS[objectType]
   return `export const ${modelName}Schema = type({${undeclared}${fields}\n})`
 }
 
@@ -91,9 +91,10 @@ export function makeArktypeRelations(
       (r) => `${r.key}:${r.isMany ? `${r.targetModel}Schema.array()` : `${r.targetModel}Schema`},`,
     )
     .join('')
-  const typeLine = options?.includeType
-    ? `\n\nexport type ${model.name}Relations = typeof ${model.name}RelationsSchema.infer`
-    : ''
+  const typeLine =
+    options?.includeType === true
+      ? `\n\nexport type ${model.name}Relations = typeof ${model.name}RelationsSchema.infer`
+      : ''
   return `export const ${model.name}RelationsSchema = type({${base}${rels}})${typeLine}`
 }
 
@@ -123,7 +124,7 @@ export function arktypeSchemaCode(
     inferType: makeArktypeInfer,
     schemas: makeArktypeSchemas,
     typeMapping: PRISMA_TO_ARKTYPE,
-    enums,
+    ...(enums === undefined ? {} : { enums }),
     formatEnum: makeArktypeEnumExpression,
     wrapList: makeArktypeListExpression,
   })

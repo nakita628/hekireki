@@ -661,13 +661,24 @@ const DATE_FUNCTIONS = new Set([
   'makedate',
 ])
 
+const DATE_TYPES: { readonly [dialect in Dialect]: string } = {
+  sqlite: 'TEXT',
+  mysql: 'datetime',
+  postgresql: 'timestamp',
+}
+
+const JSON_TYPES: { readonly [dialect in Dialect]: string } = {
+  sqlite: 'TEXT',
+  mysql: 'json',
+  postgresql: 'jsonb',
+}
+
 function dateType(
   ctx: Context,
   nullable: boolean | null,
   sources: readonly ColumnSource[],
 ): TypeInfo {
-  const dataType =
-    ctx.dialect === 'sqlite' ? 'TEXT' : ctx.dialect === 'mysql' ? 'datetime' : 'timestamp'
+  const dataType = DATE_TYPES[ctx.dialect]
   return { dataType, tsType: toTsType(ctx.dialect, dataType), nullable, sources }
 }
 
@@ -682,80 +693,75 @@ function hasAggregate(expr: Expr): boolean {
   return childExpressions(expr).some(hasAggregate)
 }
 
+type ExprOf<K extends Expr['type']> = Extract<Expr, { readonly type: K }>
+
+/** The expressions that hold no other expression of their own: a subquery's are its own. */
+const LEAF_TYPES = ['column', 'star', 'literal', 'param', 'exists', 'subquery', 'raw'] as const
+const LEAVES: ReadonlySet<string> = new Set(LEAF_TYPES)
+
+function isLeaf(expr: Expr): expr is ExprOf<(typeof LEAF_TYPES)[number]> {
+  return LEAVES.has(expr.type)
+}
+
+/** The predicates, which are booleans. */
+const PREDICATE_TYPES = ['in', 'between', 'like', 'is', 'exists'] as const
+const PREDICATES: ReadonlySet<string> = new Set(PREDICATE_TYPES)
+
+function isPredicate(expr: Expr): expr is ExprOf<(typeof PREDICATE_TYPES)[number]> {
+  return PREDICATES.has(expr.type)
+}
+
+/** What a type cannot be read from: a star, a placeholder, raw text. */
+const OPAQUE_TYPES = ['star', 'param', 'raw'] as const
+const OPAQUE: ReadonlySet<string> = new Set(OPAQUE_TYPES)
+
+function isOpaque(expr: Expr): expr is ExprOf<(typeof OPAQUE_TYPES)[number]> {
+  return OPAQUE.has(expr.type)
+}
+
 function childExpressions(expr: Expr): readonly Expr[] {
-  switch (expr.type) {
-    case 'binary':
-      return [expr.left, expr.right]
-    case 'unary':
-      return [expr.operand]
-    case 'call':
-      return [
-        ...expr.args,
-        ...(expr.over?.partitionBy ?? []),
-        ...(expr.over?.orderBy.map((item) => item.expr) ?? []),
-      ]
-    case 'cast':
-      return [expr.expr]
-    case 'case':
-      return [
-        ...(expr.operand === null ? [] : [expr.operand]),
-        ...expr.whens.flatMap((branch) => [branch.when, branch.result]),
-        ...(expr.otherwise === null ? [] : [expr.otherwise]),
-      ]
-    case 'in':
-      return [expr.expr, ...(expr.list ?? [])]
-    case 'between':
-      return [expr.expr, expr.low, expr.high]
-    case 'like':
-      return [expr.expr, expr.pattern]
-    case 'is':
-      return [expr.expr]
-    case 'list':
-      return expr.items
-    case 'column':
-    case 'star':
-    case 'literal':
-    case 'param':
-    case 'exists':
-    case 'subquery':
-    case 'raw':
-      return []
-    default:
-      return []
-  }
+  return isLeaf(expr) ? [] : branchChildren(expr)
+}
+
+function branchChildren(expr: Exclude<Expr, ExprOf<(typeof LEAF_TYPES)[number]>>): readonly Expr[] {
+  if (expr.type === 'binary') return [expr.left, expr.right]
+  if (expr.type === 'unary') return [expr.operand]
+  if (expr.type === 'call') return callChildren(expr)
+  if (expr.type === 'cast' || expr.type === 'is') return [expr.expr]
+  if (expr.type === 'case') return caseChildren(expr)
+  if (expr.type === 'in') return [expr.expr, ...(expr.list ?? [])]
+  if (expr.type === 'between') return [expr.expr, expr.low, expr.high]
+  if (expr.type === 'like') return [expr.expr, expr.pattern]
+  return expr.items
+}
+
+function callChildren(expr: Extract<Expr, { type: 'call' }>): readonly Expr[] {
+  return [
+    ...expr.args,
+    ...(expr.over?.partitionBy ?? []),
+    ...(expr.over?.orderBy.map((item) => item.expr) ?? []),
+  ]
+}
+
+function caseChildren(expr: Extract<Expr, { type: 'case' }>): readonly Expr[] {
+  return [
+    ...(expr.operand === null ? [] : [expr.operand]),
+    ...expr.whens.flatMap((branch) => [branch.when, branch.result]),
+    ...(expr.otherwise === null ? [] : [expr.otherwise]),
+  ]
 }
 
 /** The subqueries nested directly in an expression (not those inside deeper subqueries). */
 function subqueriesOf(expr: Expr): readonly Query[] {
-  switch (expr.type) {
-    case 'exists':
-      return [expr.query]
-    case 'subquery':
-      return [expr.query]
-    case 'in':
-      return [
-        ...(expr.subquery === null ? [] : [expr.subquery]),
-        ...(expr.expr.type === 'column' ? [] : subqueriesOf(expr.expr)),
-        ...(expr.list ?? []).flatMap(subqueriesOf),
-      ]
-    case 'column':
-    case 'star':
-    case 'literal':
-    case 'param':
-    case 'binary':
-    case 'unary':
-    case 'call':
-    case 'cast':
-    case 'case':
-    case 'between':
-    case 'like':
-    case 'is':
-    case 'list':
-    case 'raw':
-      return childExpressions(expr).flatMap(subqueriesOf)
-    default:
-      return []
+  if (expr.type === 'exists' || expr.type === 'subquery') return [expr.query]
+  if (expr.type === 'in') {
+    return [
+      ...(expr.subquery === null ? [] : [expr.subquery]),
+      ...(expr.expr.type === 'column' ? [] : subqueriesOf(expr.expr)),
+      ...(expr.list ?? []).flatMap(subqueriesOf),
+    ]
   }
+  return childExpressions(expr).flatMap(subqueriesOf)
 }
 
 type Typing = {
@@ -767,91 +773,45 @@ type Typing = {
 }
 
 function typeOf(t: Typing, expr: Expr): TypeInfo {
-  const { ctx } = t
+  if (isPredicate(expr)) return typeOfPredicate(t, expr)
+  if (isOpaque(expr)) return UNKNOWN
   switch (expr.type) {
     case 'column':
-      return resolveColumn(ctx, t.scope, expr.table, expr.name, expr.range, t.aliases)
-    case 'star':
-      return UNKNOWN
+      return resolveColumn(t.ctx, t.scope, expr.table, expr.name, expr.range, t.aliases)
     case 'literal':
-      if (expr.kind === 'null') {
-        return { dataType: null, tsType: 'null', nullable: true, sources: [] }
-      }
-      return {
-        dataType: literalDataType(ctx.dialect, expr.kind),
-        tsType:
-          expr.kind === 'boolean'
-            ? toTsType(ctx.dialect, literalDataType(ctx.dialect, 'boolean'))
-            : expr.kind,
-        nullable: false,
-        sources: [],
-      }
-    case 'param':
-      return UNKNOWN
-    case 'binary': {
-      const left = typeOf(t, expr.left)
-      const right = typeOf(t, expr.right)
-      const sources = sourcesOf(left, right)
-      const nullable = nullableOr(left, right)
-      if (expr.op === 'AND' || expr.op === 'OR' || expr.op.startsWith('IS ')) {
-        return booleanType(ctx, nullable, sources)
-      }
-      if (
-        ['=', '<>', '!=', '<', '>', '<=', '>=', '<=>', '~', '!~', '~*', '!~*', '@>', '<@'].includes(
-          expr.op,
-        )
-      ) {
-        return booleanType(ctx, nullable, sources)
-      }
-      if (expr.op === '||') return stringType(ctx, nullable, sources)
-      if (expr.op === '->' || expr.op === '#>') return { ...UNKNOWN, nullable: true, sources }
-      if (expr.op === '->>' || expr.op === '#>>') return stringType(ctx, true, sources)
-      if (expr.op === '[]') return { ...UNKNOWN, nullable: true, sources }
-      if (['+', '-', '*', '/', '%', '^', '**'].includes(expr.op)) {
-        // Date arithmetic keeps the date; everything else is a number.
-        const dated = [left, right].find((side) => side.tsType === 'Date')
-        return dated === undefined
-          ? numberType(ctx, nullable, sources)
-          : { ...dated, nullable, sources }
-      }
-      return { ...UNKNOWN, nullable, sources }
-    }
-    case 'unary': {
-      const operand = typeOf(t, expr.operand)
-      if (expr.op === 'NOT' || expr.op === '!') {
-        return booleanType(ctx, operand.nullable, operand.sources)
-      }
-      return { ...operand, tsType: operand.tsType === 'unknown' ? 'number' : operand.tsType }
-    }
+      return typeOfLiteral(t.ctx, expr)
+    case 'binary':
+      return typeOfBinary(t, expr)
+    case 'unary':
+      return typeOfUnary(t, expr)
     case 'call':
       return typeOfCall(t, expr)
     case 'cast': {
       const inner = typeOf(t, expr.expr)
       return {
         dataType: expr.to,
-        tsType: toTsType(ctx.dialect, expr.to),
+        tsType: toTsType(t.ctx.dialect, expr.to),
         nullable: inner.nullable,
         sources: inner.sources,
       }
     }
-    case 'case': {
-      const branches = expr.whens.map((branch) => typeOf(t, branch.result))
-      const otherwise = expr.otherwise === null ? null : typeOf(t, expr.otherwise)
-      const all = [...branches, ...(otherwise === null ? [] : [otherwise])]
-      const typed =
-        all.find((branch) => branch.tsType !== 'null' && branch.tsType !== 'unknown') ??
-        all[0] ??
-        UNKNOWN
-      const conditions = [
-        ...(expr.operand === null ? [] : [typeOf(t, expr.operand)]),
-        ...expr.whens.map((branch) => typeOf(t, branch.when)),
-      ]
-      return {
-        ...typed,
-        nullable: otherwise === null ? true : nullableOr(...all),
-        sources: sourcesOf(...all, ...conditions),
-      }
+    case 'case':
+      return typeOfCase(t, expr)
+    case 'subquery':
+      return typeOfSubquery(t, expr)
+    case 'list': {
+      const items = expr.items.map((item) => typeOf(t, item))
+      return { ...UNKNOWN, nullable: nullableOr(...items), sources: sourcesOf(...items) }
     }
+    default:
+      return UNKNOWN
+  }
+}
+
+/** IN, BETWEEN, LIKE, IS and EXISTS, which are booleans. */
+function typeOfPredicate(t: Typing, expr: ExprOf<(typeof PREDICATE_TYPES)[number]>): TypeInfo {
+  const { ctx } = t
+  switch (expr.type) {
     case 'in': {
       const left = typeOf(t, expr.expr)
       const items = (expr.list ?? []).map((item) => typeOf(t, item))
@@ -871,127 +831,259 @@ function typeOf(t: Typing, expr: Expr): TypeInfo {
     }
     case 'exists':
       return booleanType(ctx, false, [])
-    case 'subquery': {
-      const built = buildQuery(ctx, expr.query, t.scope, 'subquery')
-      const target = t.lookups.get(expr.query)
-      if (target !== undefined) addEdge(ctx, built.nodeId, target, 'scalar', 'lookup')
-      const first = built.columns[0]
-      return first === undefined ? UNKNOWN : { ...first, nullable: true }
-    }
-    case 'list': {
-      const items = expr.items.map((item) => typeOf(t, item))
-      return { ...UNKNOWN, nullable: nullableOr(...items), sources: sourcesOf(...items) }
-    }
-    case 'raw':
-      return UNKNOWN
     default:
       return UNKNOWN
   }
 }
 
-function typeOfCall(t: Typing, expr: Extract<Expr, { type: 'call' }>): TypeInfo {
+function typeOfLiteral(ctx: Context, expr: Extract<Expr, { type: 'literal' }>): TypeInfo {
+  if (expr.kind === 'null') {
+    return { dataType: null, tsType: 'null', nullable: true, sources: [] }
+  }
+  return {
+    dataType: literalDataType(ctx.dialect, expr.kind),
+    tsType:
+      expr.kind === 'boolean'
+        ? toTsType(ctx.dialect, literalDataType(ctx.dialect, 'boolean'))
+        : expr.kind,
+    nullable: false,
+    sources: [],
+  }
+}
+
+const COMPARISON_OPERATORS = new Set([
+  '=',
+  '<>',
+  '!=',
+  '<',
+  '>',
+  '<=',
+  '>=',
+  '<=>',
+  '~',
+  '!~',
+  '~*',
+  '!~*',
+  '@>',
+  '<@',
+])
+
+const ARITHMETIC_OPERATORS = new Set(['+', '-', '*', '/', '%', '^', '**'])
+
+function typeOfBinary(t: Typing, expr: Extract<Expr, { type: 'binary' }>): TypeInfo {
   const { ctx } = t
+  const left = typeOf(t, expr.left)
+  const right = typeOf(t, expr.right)
+  const sources = sourcesOf(left, right)
+  const nullable = nullableOr(left, right)
+  if (expr.op === 'AND' || expr.op === 'OR' || expr.op.startsWith('IS ')) {
+    return booleanType(ctx, nullable, sources)
+  }
+  if (COMPARISON_OPERATORS.has(expr.op)) return booleanType(ctx, nullable, sources)
+  if (expr.op === '||') return stringType(ctx, nullable, sources)
+  if (expr.op === '->' || expr.op === '#>') return { ...UNKNOWN, nullable: true, sources }
+  if (expr.op === '->>' || expr.op === '#>>') return stringType(ctx, true, sources)
+  if (expr.op === '[]') return { ...UNKNOWN, nullable: true, sources }
+  if (ARITHMETIC_OPERATORS.has(expr.op)) {
+    // Date arithmetic keeps the date; everything else is a number.
+    const dated = [left, right].find((side) => side.tsType === 'Date')
+    return dated === undefined
+      ? numberType(ctx, nullable, sources)
+      : { ...dated, nullable, sources }
+  }
+  return { ...UNKNOWN, nullable, sources }
+}
+
+function typeOfUnary(t: Typing, expr: Extract<Expr, { type: 'unary' }>): TypeInfo {
+  const operand = typeOf(t, expr.operand)
+  if (expr.op === 'NOT' || expr.op === '!') {
+    return booleanType(t.ctx, operand.nullable, operand.sources)
+  }
+  return { ...operand, tsType: operand.tsType === 'unknown' ? 'number' : operand.tsType }
+}
+
+function typeOfCase(t: Typing, expr: Extract<Expr, { type: 'case' }>): TypeInfo {
+  const branches = expr.whens.map((branch) => typeOf(t, branch.result))
+  const otherwise = expr.otherwise === null ? null : typeOf(t, expr.otherwise)
+  const all = [...branches, ...(otherwise === null ? [] : [otherwise])]
+  const typed =
+    all.find((branch) => branch.tsType !== 'null' && branch.tsType !== 'unknown') ??
+    all[0] ??
+    UNKNOWN
+  const conditions = [
+    ...(expr.operand === null ? [] : [typeOf(t, expr.operand)]),
+    ...expr.whens.map((branch) => typeOf(t, branch.when)),
+  ]
+  return {
+    ...typed,
+    nullable: otherwise === null ? true : nullableOr(...all),
+    sources: sourcesOf(...all, ...conditions),
+  }
+}
+
+function typeOfSubquery(t: Typing, expr: Extract<Expr, { type: 'subquery' }>): TypeInfo {
+  const built = buildQuery(t.ctx, expr.query, t.scope, 'subquery')
+  const target = t.lookups.get(expr.query)
+  if (target !== undefined) addEdge(t.ctx, built.nodeId, target, 'scalar', 'lookup')
+  const first = built.columns[0]
+  return first === undefined ? UNKNOWN : { ...first, nullable: true }
+}
+
+/** What a function call reads its type from. */
+type CallTyping = {
+  readonly ctx: Context
+  readonly name: string
+  readonly args: readonly TypeInfo[]
+  readonly sources: readonly ColumnSource[]
+  readonly argNullable: boolean | null
+  readonly windowed: boolean
+}
+
+function typeOfCall(t: Typing, expr: Extract<Expr, { type: 'call' }>): TypeInfo {
   const name = expr.name.toLowerCase().split('.').at(-1) ?? ''
   const args = expr.args.filter((arg) => arg.type !== 'star').map((arg) => typeOf(t, arg))
-  const sources = sourcesOf(...args)
-  const argNullable = nullableOr(...args)
+  const call: CallTyping = {
+    ctx: t.ctx,
+    name,
+    args,
+    sources: sourcesOf(...args),
+    argNullable: nullableOr(...args),
+    windowed: expr.over !== null,
+  }
+  return (
+    coalescedType(call) ??
+    conditionalType(call) ??
+    pickedType(call) ??
+    aggregatedType(call) ??
+    arrayType(call) ??
+    jsonType(call) ??
+    familyType(call)
+  )
+}
+
+const COALESCING = new Set(['coalesce', 'ifnull', 'nvl'])
+
+/** Whether some, all or none of the arguments may be NULL, for COALESCE: null when unknown. */
+function coalescedNullable(args: readonly TypeInfo[]) {
+  if (args.length === 0) return null
+  if (args.every((arg) => arg.nullable === true)) return true
+  return args.some((arg) => arg.nullable === false) ? false : null
+}
+
+/** COUNT, COALESCE and its kin, NULLIF. */
+function coalescedType(call: CallTyping): TypeInfo | null {
+  const { ctx, name, args, sources } = call
   if (name === 'count') return numberType(ctx, false, sources)
-  if (
-    name === 'coalesce' ||
-    name === 'ifnull' ||
-    name === 'nvl' ||
-    (name === 'isnull' && args.length === 2)
-  ) {
+  if (COALESCING.has(name) || (name === 'isnull' && args.length === 2)) {
     const typed =
       args.find((arg) => arg.tsType !== 'null' && arg.tsType !== 'unknown') ?? args[0] ?? UNKNOWN
-    const nullable =
-      args.length === 0
-        ? null
-        : args.every((arg) => arg.nullable === true)
-          ? true
-          : args.some((arg) => arg.nullable === false)
-            ? false
-            : null
-    return { ...typed, nullable, sources }
+    return { ...typed, nullable: coalescedNullable(args), sources }
   }
   if (name === 'nullif') return { ...(args[0] ?? UNKNOWN), nullable: true, sources }
-  if (name === 'iif' || name === 'if') {
-    const [, then, otherwise] = args
-    const typed =
-      [then, otherwise].find(
-        (arg) => arg !== undefined && arg.tsType !== 'null' && arg.tsType !== 'unknown',
-      ) ??
-      then ??
-      UNKNOWN
-    return {
-      ...typed,
-      nullable: nullableOr(...[then, otherwise].filter((arg) => arg !== undefined)),
-      sources,
-    }
+  return null
+}
+
+/** IIF and IF: the type of the branch that has one. */
+function conditionalType(call: CallTyping): TypeInfo | null {
+  const { name, args, sources } = call
+  if (name !== 'iif' && name !== 'if') return null
+  const [, then, otherwise] = args
+  const typed =
+    [then, otherwise].find(
+      (arg) => arg !== undefined && arg.tsType !== 'null' && arg.tsType !== 'unknown',
+    ) ??
+    then ??
+    UNKNOWN
+  return {
+    ...typed,
+    nullable: nullableOr(...[then, otherwise].filter((arg) => arg !== undefined)),
+    sources,
   }
-  if (
-    name === 'min' ||
-    name === 'max' ||
-    name === 'first_value' ||
-    name === 'last_value' ||
-    name === 'lag' ||
-    name === 'lead' ||
-    name === 'nth_value' ||
-    name === 'any_value'
-  ) {
-    const first = args[0] ?? UNKNOWN
-    return {
-      ...first,
-      nullable: expr.over === null || name === 'lag' || name === 'lead' ? true : first.nullable,
-      sources,
-    }
+}
+
+const PICKING = new Set([
+  'min',
+  'max',
+  'first_value',
+  'last_value',
+  'lag',
+  'lead',
+  'nth_value',
+  'any_value',
+])
+
+/** MIN, MAX and the window functions that pick one of the values: the type of the value. */
+function pickedType(call: CallTyping): TypeInfo | null {
+  const { name, args, sources, windowed } = call
+  if (!PICKING.has(name)) return null
+  const first = args[0] ?? UNKNOWN
+  return {
+    ...first,
+    nullable: !windowed || name === 'lag' || name === 'lead' ? true : first.nullable,
+    sources,
   }
-  if (name === 'sum' || name === 'avg' || name === 'stddev' || name === 'variance') {
+}
+
+const AVERAGING = new Set(['sum', 'avg', 'stddev', 'variance'])
+const RANKING = new Set(['row_number', 'rank', 'dense_rank', 'ntile'])
+
+/** SUM, AVG and the like, and the ranking window functions. */
+function aggregatedType(call: CallTyping): TypeInfo | null {
+  const { ctx, name, args, sources } = call
+  if (AVERAGING.has(name)) {
     const first = args[0] ?? UNKNOWN
     const kept =
       first.tsType === 'string' && ctx.dialect !== 'sqlite' ? first : numberType(ctx, true, sources)
     return { ...kept, nullable: true, sources }
   }
-  if (name === 'row_number' || name === 'rank' || name === 'dense_rank' || name === 'ntile') {
-    return numberType(ctx, false, sources)
+  return RANKING.has(name) ? numberType(ctx, false, sources) : null
+}
+
+function arrayType(call: CallTyping): TypeInfo | null {
+  const { name, args, sources } = call
+  if (name !== 'array_agg' && name !== 'array') return null
+  const first = args[0] ?? UNKNOWN
+  return {
+    dataType: first.dataType === null ? null : `${first.dataType}[]`,
+    tsType: `${first.tsType === 'unknown' ? 'unknown' : first.tsType}[]`,
+    nullable: name === 'array_agg',
+    sources,
   }
-  if (name === 'array_agg' || name === 'array') {
-    const first = args[0] ?? UNKNOWN
-    return {
-      dataType: first.dataType === null ? null : `${first.dataType}[]`,
-      tsType: `${first.tsType === 'unknown' ? 'unknown' : first.tsType}[]`,
-      nullable: name === 'array_agg',
-      sources,
-    }
+}
+
+const JSON_FUNCTIONS = new Set([
+  'json_agg',
+  'jsonb_agg',
+  'json_object',
+  'json_build_object',
+  'jsonb_build_object',
+  'to_json',
+  'to_jsonb',
+  'row_to_json',
+  'json_extract',
+  'json',
+])
+
+function jsonType(call: CallTyping): TypeInfo | null {
+  const { ctx, name, sources, argNullable } = call
+  if (!JSON_FUNCTIONS.has(name)) return null
+  return {
+    dataType: JSON_TYPES[ctx.dialect],
+    tsType: ctx.dialect === 'sqlite' ? 'string' : 'unknown',
+    nullable: argNullable,
+    sources,
   }
-  if (
-    name === 'json_agg' ||
-    name === 'jsonb_agg' ||
-    name === 'json_object' ||
-    name === 'json_build_object' ||
-    name === 'jsonb_build_object' ||
-    name === 'to_json' ||
-    name === 'to_jsonb' ||
-    name === 'row_to_json' ||
-    name === 'json_extract' ||
-    name === 'json'
-  ) {
-    const dataType = ctx.dialect === 'sqlite' ? 'TEXT' : ctx.dialect === 'mysql' ? 'json' : 'jsonb'
-    return {
-      dataType,
-      tsType: ctx.dialect === 'sqlite' ? 'string' : 'unknown',
-      nullable: argNullable,
-      sources,
-    }
-  }
+}
+
+/** A function of a known family: numbers, booleans, dates, strings; anything else is unknown. */
+function familyType(call: CallTyping): TypeInfo {
+  const { ctx, name, args, sources, argNullable } = call
   if (NUMBER_FUNCTIONS.has(name)) return numberType(ctx, argNullable, sources)
   if (BOOLEAN_FUNCTIONS.has(name)) return booleanType(ctx, argNullable, sources)
-  if (DATE_FUNCTIONS.has(name)) {
-    return dateType(ctx, args.length === 0 ? false : argNullable, sources)
-  }
-  if (STRING_FUNCTIONS.has(name)) {
-    return stringType(ctx, args.length === 0 ? false : argNullable, sources)
-  }
+  // Without arguments (`now()`) there is nothing to be NULL.
+  const nullable = args.length === 0 ? false : argNullable
+  if (DATE_FUNCTIONS.has(name)) return dateType(ctx, nullable, sources)
+  if (STRING_FUNCTIONS.has(name)) return stringType(ctx, nullable, sources)
   return { ...UNKNOWN, nullable: argNullable, sources }
 }
 
@@ -1000,66 +1092,22 @@ function typeOfCall(t: Typing, expr: Extract<Expr, { type: 'call' }>): TypeInfo 
 /** Records every placeholder with the type of what it stands beside. */
 function collectParams(t: Typing, expr: Expr, expected: TypeInfo | null, context: string) {
   const { ctx } = t
-  // Typing the other side of a placeholder draws nothing and records nothing: a subquery there
-  // is built again on the quiet context, and its own placeholders are collected where it stands.
-  const quietTyping: Typing = {
-    ...t,
-    ctx: { ...ctx, diagnostics: [], nodes: [], edges: [], refs: [], params: [] },
+  if (expr.type === 'param') {
+    recordParam(ctx, expr, expected, context)
+    return
   }
-  const typeQuietly = (candidate: Expr): TypeInfo | null =>
-    candidate.type === 'param' || candidate.type === 'subquery' || candidate.type === 'exists'
-      ? null
-      : typeOf(quietTyping, candidate)
+  if (isLeaf(expr)) return
+  const typeQuietly = quietTyper(t)
   switch (expr.type) {
-    case 'param':
-      ctx.params.push({
-        placeholder: expr.placeholder,
-        type: expected ?? UNKNOWN,
-        context,
-        range: expr.range,
-      })
+    case 'binary':
+      collectBinaryParams(t, expr, typeQuietly)
       return
-    case 'binary': {
-      const comparison = ['=', '<>', '!=', '<', '>', '<=', '>=', '<=>'].includes(expr.op)
-      const arithmetic = ['+', '-', '*', '/', '%', '^', '**'].includes(expr.op)
-      const leftType =
-        expr.right.type === 'param' || expr.left.type === 'param' ? typeQuietly(expr.left) : null
-      const rightType =
-        expr.left.type === 'param' || expr.right.type === 'param' ? typeQuietly(expr.right) : null
-      const text = snippet(ctx, expr.range)
-      const sideType = (other: TypeInfo | null): TypeInfo | null => {
-        if (comparison) {
-          return other === null
-            ? null
-            : withNullable(other, expr.op === '<=>' ? other.nullable : false)
-        }
-        if (arithmetic) {
-          return other === null || other.tsType === 'unknown' ? numberType(ctx, false, []) : other
-        }
-        if (expr.op === '||') return stringType(ctx, false, [])
-        return other
-      }
-      collectParams(t, expr.left, sideType(rightType), text)
-      collectParams(t, expr.right, sideType(leftType), text)
+    case 'in':
+      collectInParams(t, expr, typeQuietly)
       return
-    }
-    case 'in': {
-      const left = expr.expr.type === 'param' ? null : typeQuietly(expr.expr)
-      const text = snippet(ctx, expr.range)
-      collectParams(t, expr.expr, null, text)
-      for (const item of expr.list ?? []) {
-        collectParams(t, item, left === null ? null : withNullable(left, false), text)
-      }
+    case 'between':
+      collectBetweenParams(t, expr, typeQuietly)
       return
-    }
-    case 'between': {
-      const left = typeQuietly(expr.expr)
-      const text = snippet(ctx, expr.range)
-      collectParams(t, expr.expr, null, text)
-      collectParams(t, expr.low, left === null ? null : withNullable(left, false), text)
-      collectParams(t, expr.high, left === null ? null : withNullable(left, false), text)
-      return
-    }
     case 'like': {
       const text = snippet(ctx, expr.range)
       collectParams(t, expr.expr, stringType(ctx, false, []), text)
@@ -1079,46 +1127,118 @@ function collectParams(t: Typing, expr: Expr, expected: TypeInfo | null, context
         snippet(ctx, expr.range),
       )
       return
-    case 'case': {
-      const text = snippet(ctx, expr.range, 60)
-      const operand = expr.operand === null ? null : typeQuietly(expr.operand)
-      if (expr.operand !== null) collectParams(t, expr.operand, null, text)
-      for (const branch of expr.whens) {
-        collectParams(
-          t,
-          branch.when,
-          operand === null ? booleanType(ctx, false, []) : withNullable(operand, false),
-          text,
-        )
-        collectParams(t, branch.result, null, text)
-      }
-      if (expr.otherwise !== null) collectParams(t, expr.otherwise, null, text)
+    case 'case':
+      collectCaseParams(t, expr, typeQuietly)
       return
-    }
     case 'unary':
-      collectParams(
-        t,
-        expr.operand,
-        expr.op === 'NOT' ? booleanType(ctx, false, []) : numberType(ctx, false, []),
-        snippet(ctx, expr.range),
-      )
+      collectUnaryParams(t, expr)
       return
     case 'is':
       collectParams(t, expr.expr, null, snippet(ctx, expr.range))
       return
     case 'list':
       for (const item of expr.items) collectParams(t, item, null, context)
-      break
-    case 'column':
-    case 'star':
-    case 'literal':
-    case 'exists':
-    case 'subquery':
-    case 'raw':
-      break
-    default:
-      break
   }
+}
+
+function recordParam(
+  ctx: Context,
+  expr: ExprOf<'param'>,
+  expected: TypeInfo | null,
+  context: string,
+) {
+  ctx.params.push({
+    placeholder: expr.placeholder,
+    type: expected ?? UNKNOWN,
+    context,
+    range: expr.range,
+  })
+}
+
+function collectUnaryParams(t: Typing, expr: ExprOf<'unary'>) {
+  const { ctx } = t
+  collectParams(
+    t,
+    expr.operand,
+    expr.op === 'NOT' ? booleanType(ctx, false, []) : numberType(ctx, false, []),
+    snippet(ctx, expr.range),
+  )
+}
+
+/**
+ * Types the other side of a placeholder. Typing it draws nothing and records nothing: a subquery
+ * there is built again on the quiet context, and its own placeholders are collected where it stands.
+ */
+function quietTyper(t: Typing) {
+  const quietTyping: Typing = {
+    ...t,
+    ctx: { ...t.ctx, diagnostics: [], nodes: [], edges: [], refs: [], params: [] },
+  }
+  return (candidate: Expr): TypeInfo | null =>
+    candidate.type === 'param' || candidate.type === 'subquery' || candidate.type === 'exists'
+      ? null
+      : typeOf(quietTyping, candidate)
+}
+
+type QuietTyper = ReturnType<typeof quietTyper>
+
+const PARAM_COMPARISONS = new Set(['=', '<>', '!=', '<', '>', '<=', '>=', '<=>'])
+
+function collectBinaryParams(t: Typing, expr: ExprOf<'binary'>, typeQuietly: QuietTyper) {
+  const { ctx } = t
+  const placeholder = expr.left.type === 'param' || expr.right.type === 'param'
+  const leftType = placeholder ? typeQuietly(expr.left) : null
+  const rightType = placeholder ? typeQuietly(expr.right) : null
+  const text = snippet(ctx, expr.range)
+  collectParams(t, expr.left, besideType(ctx, expr.op, rightType), text)
+  collectParams(t, expr.right, besideType(ctx, expr.op, leftType), text)
+}
+
+/** The type a placeholder takes from the other side of an operator. */
+function besideType(ctx: Context, op: string, other: TypeInfo | null): TypeInfo | null {
+  if (PARAM_COMPARISONS.has(op)) {
+    return other === null ? null : withNullable(other, op === '<=>' ? other.nullable : false)
+  }
+  if (ARITHMETIC_OPERATORS.has(op)) {
+    return other === null || other.tsType === 'unknown' ? numberType(ctx, false, []) : other
+  }
+  if (op === '||') return stringType(ctx, false, [])
+  return other
+}
+
+function collectInParams(t: Typing, expr: ExprOf<'in'>, typeQuietly: QuietTyper) {
+  const left = expr.expr.type === 'param' ? null : typeQuietly(expr.expr)
+  const text = snippet(t.ctx, expr.range)
+  collectParams(t, expr.expr, null, text)
+  for (const item of expr.list ?? []) {
+    collectParams(t, item, left === null ? null : withNullable(left, false), text)
+  }
+}
+
+function collectBetweenParams(t: Typing, expr: ExprOf<'between'>, typeQuietly: QuietTyper) {
+  const left = typeQuietly(expr.expr)
+  const bound = left === null ? null : withNullable(left, false)
+  const text = snippet(t.ctx, expr.range)
+  collectParams(t, expr.expr, null, text)
+  collectParams(t, expr.low, bound, text)
+  collectParams(t, expr.high, bound, text)
+}
+
+function collectCaseParams(t: Typing, expr: ExprOf<'case'>, typeQuietly: QuietTyper) {
+  const { ctx } = t
+  const text = snippet(ctx, expr.range, 60)
+  const operand = expr.operand === null ? null : typeQuietly(expr.operand)
+  if (expr.operand !== null) collectParams(t, expr.operand, null, text)
+  for (const branch of expr.whens) {
+    collectParams(
+      t,
+      branch.when,
+      operand === null ? booleanType(ctx, false, []) : withNullable(operand, false),
+      text,
+    )
+    collectParams(t, branch.result, null, text)
+  }
+  if (expr.otherwise !== null) collectParams(t, expr.otherwise, null, text)
 }
 
 // --- FROM ---------------------------------------------------------------------------------------------
@@ -1162,13 +1282,15 @@ function tableRelation(
       ctx.tables.size === 0 ? 'info' : 'warning',
     )
   }
-  const columns: Resolved[] = (table?.columns ?? []).map((column) => ({
+  const tableName = table?.name ?? item.table.name
+  const schemaColumns = table?.columns ?? []
+  const columns: Resolved[] = schemaColumns.map((column) => ({
     dataType: column.dataType,
     tsType: toTsType(ctx.dialect, column.dataType),
     nullable: column.nullable,
     name: column.name,
     expression: column.name,
-    sources: [{ table: table?.name ?? item.table.name, column: column.name }],
+    sources: [{ table: tableName, column: column.name }],
   }))
   const nodeId = addNode(ctx, {
     kind: 'table',
@@ -1185,13 +1307,13 @@ function tableRelation(
   const used = new Set<string>()
   ctx.refs.push({
     nodeId,
-    name: table?.name ?? item.table.name,
+    name: tableName,
     alias: item.alias,
     scope: scopeName,
     known,
     range: item.table.range,
     used,
-    schemaColumns: table?.columns ?? [],
+    schemaColumns,
   })
   const relation: Relation = {
     key: alias.toLowerCase(),
@@ -1199,7 +1321,7 @@ function tableRelation(
     nodeId,
     columns,
     known,
-    tableName: table?.name ?? item.table.name,
+    tableName,
     outerNullable: false,
     used,
   }
@@ -1218,109 +1340,133 @@ function buildFromItem(ctx: Context, item: FromItem, scope: Scope, scopeName: st
   switch (item.type) {
     case 'table':
       return tableRelation(ctx, item, scope, scopeName)
-    case 'subquery': {
-      const alias = item.alias ?? 'subquery'
-      const built = buildQuery(
-        ctx,
-        item.query,
-        item.lateral ? scope : { relations: [], outer: scope, ctes: new Map() },
-        alias,
-      )
-      const nodeId = addNode(ctx, {
-        kind: 'subquery',
-        label: alias,
-        details: [],
-        range: item.range,
-        scope: scopeName,
-        columns: built.columns.map((column) => ({
-          name: column.name,
-          dataType: column.dataType,
-          used: false,
-        })),
-      })
-      addEdge(ctx, built.nodeId, nodeId)
-      const relation: Relation = {
-        key: alias.toLowerCase(),
-        display: alias,
-        nodeId,
-        columns: built.columns,
-        known: built.known,
-        tableName: null,
-        outerNullable: false,
-        used: new Set(),
-      }
-      return { nodeId, relations: [relation] }
-    }
-    case 'function': {
-      const alias = item.alias ?? (item.call.type === 'call' ? item.call.name : 'function')
-      const nodeId = addNode(ctx, {
-        kind: 'function',
-        label: snippet(ctx, item.call.range, 60),
-        details: [],
-        range: item.range,
-        scope: scopeName,
-        columns: [],
-      })
-      const relation: Relation = {
-        key: alias.toLowerCase(),
-        display: alias,
-        nodeId,
-        columns: [],
-        known: false,
-        tableName: null,
-        outerNullable: false,
-        used: new Set(),
-      }
-      return { nodeId, relations: [relation] }
-    }
-    case 'join': {
-      const left = buildFromItem(ctx, item.left, scope, scopeName)
-      const right = buildFromItem(
-        ctx,
-        item.right,
-        { relations: left.relations, outer: scope, ctes: new Map() },
-        scopeName,
-      )
-      const leftRelations =
-        item.joinType === 'RIGHT' || item.joinType === 'FULL'
-          ? left.relations.map((relation) => ({ ...relation, outerNullable: true }))
-          : left.relations
-      const rightRelations =
-        item.joinType === 'LEFT' || item.joinType === 'FULL'
-          ? right.relations.map((relation) => ({ ...relation, outerNullable: true }))
-          : right.relations
-      const relations = [...leftRelations, ...rightRelations]
-      const joinScope: Scope = { relations, outer: scope, ctes: new Map() }
-      const typing: Typing = { ctx, scope: joinScope, aliases: null, lookups: new Map() }
-      const label = `${item.natural ? 'NATURAL ' : ''}${item.joinType} JOIN`
-      const details =
-        item.on !== null
-          ? [`ON ${snippet(ctx, item.on.range)}`]
-          : item.using !== null
-            ? [`USING (${item.using.join(', ')})`]
-            : []
-      if (item.on !== null) {
-        typeOf(typing, item.on)
-        collectParams(typing, item.on, null, snippet(ctx, item.on.range))
-      }
-      for (const name of item.using ?? []) {
-        for (const relation of [...left.relations, ...right.relations]) relation.used.add(name)
-      }
-      const nodeId = addNode(ctx, {
-        kind: 'join',
-        label,
-        details,
-        range: item.on?.range ?? item.range,
-        scope: scopeName,
-        columns: [],
-      })
-      addEdge(ctx, left.nodeId, nodeId, item.joinType === 'RIGHT' ? 'optional' : null)
-      addEdge(ctx, right.nodeId, nodeId, item.joinType === 'LEFT' ? 'optional' : null)
-      return { nodeId, relations }
-    }
+    case 'subquery':
+      return subqueryRelation(ctx, item, scope, scopeName)
+    case 'function':
+      return functionRelation(ctx, item, scopeName)
+    case 'join':
+      return joinRelation(ctx, item, scope, scopeName)
     default:
       return { nodeId: '', relations: [] }
   }
+}
+
+function subqueryRelation(
+  ctx: Context,
+  item: Extract<FromItem, { type: 'subquery' }>,
+  scope: Scope,
+  scopeName: string,
+): FromResult {
+  const alias = item.alias ?? 'subquery'
+  const built = buildQuery(
+    ctx,
+    item.query,
+    item.lateral ? scope : { relations: [], outer: scope, ctes: new Map() },
+    alias,
+  )
+  const nodeId = addNode(ctx, {
+    kind: 'subquery',
+    label: alias,
+    details: [],
+    range: item.range,
+    scope: scopeName,
+    columns: built.columns.map((column) => ({
+      name: column.name,
+      dataType: column.dataType,
+      used: false,
+    })),
+  })
+  addEdge(ctx, built.nodeId, nodeId)
+  const relation: Relation = {
+    key: alias.toLowerCase(),
+    display: alias,
+    nodeId,
+    columns: built.columns,
+    known: built.known,
+    tableName: null,
+    outerNullable: false,
+    used: new Set(),
+  }
+  return { nodeId, relations: [relation] }
+}
+
+function functionRelation(
+  ctx: Context,
+  item: Extract<FromItem, { type: 'function' }>,
+  scopeName: string,
+): FromResult {
+  const alias = item.alias ?? (item.call.type === 'call' ? item.call.name : 'function')
+  const nodeId = addNode(ctx, {
+    kind: 'function',
+    label: snippet(ctx, item.call.range, 60),
+    details: [],
+    range: item.range,
+    scope: scopeName,
+    columns: [],
+  })
+  const relation: Relation = {
+    key: alias.toLowerCase(),
+    display: alias,
+    nodeId,
+    columns: [],
+    known: false,
+    tableName: null,
+    outerNullable: false,
+    used: new Set(),
+  }
+  return { nodeId, relations: [relation] }
+}
+
+function joinRelation(
+  ctx: Context,
+  item: Extract<FromItem, { type: 'join' }>,
+  scope: Scope,
+  scopeName: string,
+): FromResult {
+  const left = buildFromItem(ctx, item.left, scope, scopeName)
+  const right = buildFromItem(
+    ctx,
+    item.right,
+    { relations: left.relations, outer: scope, ctes: new Map() },
+    scopeName,
+  )
+  const leftRelations =
+    item.joinType === 'RIGHT' || item.joinType === 'FULL'
+      ? left.relations.map((relation) => ({ ...relation, outerNullable: true }))
+      : left.relations
+  const rightRelations =
+    item.joinType === 'LEFT' || item.joinType === 'FULL'
+      ? right.relations.map((relation) => ({ ...relation, outerNullable: true }))
+      : right.relations
+  const relations = [...leftRelations, ...rightRelations]
+  const joinScope: Scope = { relations, outer: scope, ctes: new Map() }
+  const typing: Typing = { ctx, scope: joinScope, aliases: null, lookups: new Map() }
+  const label = `${item.natural ? 'NATURAL ' : ''}${item.joinType} JOIN`
+  const details = joinDetails(ctx, item)
+  if (item.on !== null) {
+    typeOf(typing, item.on)
+    collectParams(typing, item.on, null, snippet(ctx, item.on.range))
+  }
+  for (const name of item.using ?? []) {
+    for (const relation of [...left.relations, ...right.relations]) relation.used.add(name)
+  }
+  const nodeId = addNode(ctx, {
+    kind: 'join',
+    label,
+    details,
+    range: item.on?.range ?? item.range,
+    scope: scopeName,
+    columns: [],
+  })
+  addEdge(ctx, left.nodeId, nodeId, item.joinType === 'RIGHT' ? 'optional' : null)
+  addEdge(ctx, right.nodeId, nodeId, item.joinType === 'LEFT' ? 'optional' : null)
+  return { nodeId, relations }
+}
+
+/** What a join is on, for its node: `ON ...`, `USING (...)`, or nothing. */
+function joinDetails(ctx: Context, item: Extract<FromItem, { type: 'join' }>) {
+  if (item.on !== null) return [`ON ${snippet(ctx, item.on.range)}`]
+  return item.using === null ? [] : [`USING (${item.using.join(', ')})`]
 }
 
 function buildFrom(
@@ -1505,69 +1651,9 @@ function buildSelect(
     chain.current = nodeId
   }
 
-  if (core.where !== null) {
-    const nodeId = nextId(ctx)
-    const typing: Typing = {
-      ctx,
-      scope,
-      aliases: null,
-      lookups: new Map(subqueriesOf(core.where).map((query) => [query, nodeId])),
-    }
-    const condition = typeOf(typing, core.where)
-    collectParams(typing, core.where, null, snippet(ctx, core.where.range))
-    ctx.nodes.push({
-      id: nodeId,
-      kind: 'filter',
-      label: 'WHERE',
-      details: [snippet(ctx, core.where.range)],
-      range: core.where.range,
-      scope: scopeName,
-      columns: [],
-    })
-    if (
-      condition.tsType !== 'unknown' &&
-      condition.tsType !== 'boolean' &&
-      condition.tsType !== 'number' &&
-      ctx.dialect === 'postgresql'
-    ) {
-      warn(ctx, `WHERE expects a boolean, this condition is ${condition.tsType}`, core.where.range)
-    }
-    link(nodeId)
-  }
+  if (core.where !== null) link(filterNode(ctx, scope, core.where, scopeName))
 
-  const aggregated =
-    core.groupBy.length > 0 ||
-    core.having !== null ||
-    core.columns.some((item) => hasAggregate(item.expr))
-  if (aggregated) {
-    const typing: Typing = { ctx, scope, aliases: null, lookups: new Map() }
-    for (const key of core.groupBy) {
-      typeOf(typing, key)
-      collectParams(typing, key, null, snippet(ctx, key.range))
-    }
-    const aggregates = core.columns
-      .flatMap((item) => aggregateCalls(item.expr))
-      .map((call) => snippet(ctx, call.range, 60))
-    const details = [
-      ...(core.groupBy.length === 0
-        ? ['whole result as one group']
-        : [`BY ${core.groupBy.map((key) => snippet(ctx, key.range, 60)).join(', ')}`]),
-      ...aggregates,
-    ]
-    const range =
-      core.groupBy.length === 0
-        ? null
-        : { start: core.groupBy[0]?.range.start ?? 0, end: core.groupBy.at(-1)?.range.end ?? 0 }
-    const nodeId = addNode(ctx, {
-      kind: 'aggregate',
-      label: 'GROUP BY',
-      details,
-      range,
-      scope: scopeName,
-      columns: [],
-    })
-    link(nodeId)
-  }
+  if (isAggregated(core)) link(aggregateNode(ctx, scope, core, scopeName))
 
   // Select aliases are visible to ORDER BY (and, in SQLite / MySQL, to HAVING); they are typed
   // before HAVING so that both can read them.
@@ -1606,35 +1692,14 @@ function buildSelect(
   )
 
   if (core.having !== null) {
-    const havingId = nextId(ctx)
-    const havingTyping: Typing = {
-      ctx,
-      scope,
-      aliases,
-      lookups: new Map(subqueriesOf(core.having).map((query) => [query, havingId])),
-    }
-    typeOf(havingTyping, core.having)
-    collectParams(havingTyping, core.having, null, snippet(ctx, core.having.range))
-    ctx.nodes.push({
-      id: havingId,
-      kind: 'having',
-      label: 'HAVING',
-      details: [snippet(ctx, core.having.range)],
-      range: core.having.range,
-      scope: scopeName,
-      columns: [],
-    })
-    link(havingId)
+    link(havingNode(ctx, scope, aliases, core.having, scopeName))
   }
 
   ctx.nodes.push({
     id: projectId,
     kind: 'project',
     label: core.distinct ? 'SELECT DISTINCT' : 'SELECT',
-    details:
-      columns.length > 12
-        ? [...columns.slice(0, 12).map((column) => column.name), `… ${columns.length - 12} more`]
-        : columns.map((column) => column.name),
+    details: projectDetails(columns),
     range: selectRange(core.columns),
     scope: scopeName,
     columns: columns.map((column) => ({
@@ -1649,6 +1714,108 @@ function buildSelect(
     scope,
     aliases,
   }
+}
+
+function filterNode(ctx: Context, scope: Scope, where: Expr, scopeName: string) {
+  const nodeId = nextId(ctx)
+  const typing: Typing = {
+    ctx,
+    scope,
+    aliases: null,
+    lookups: new Map(subqueriesOf(where).map((query) => [query, nodeId])),
+  }
+  const condition = typeOf(typing, where)
+  collectParams(typing, where, null, snippet(ctx, where.range))
+  ctx.nodes.push({
+    id: nodeId,
+    kind: 'filter',
+    label: 'WHERE',
+    details: [snippet(ctx, where.range)],
+    range: where.range,
+    scope: scopeName,
+    columns: [],
+  })
+  if (
+    condition.tsType !== 'unknown' &&
+    condition.tsType !== 'boolean' &&
+    condition.tsType !== 'number' &&
+    ctx.dialect === 'postgresql'
+  ) {
+    warn(ctx, `WHERE expects a boolean, this condition is ${condition.tsType}`, where.range)
+  }
+  return nodeId
+}
+
+function isAggregated(core: SelectCore) {
+  return (
+    core.groupBy.length > 0 ||
+    core.having !== null ||
+    core.columns.some((item) => hasAggregate(item.expr))
+  )
+}
+
+function aggregateNode(ctx: Context, scope: Scope, core: SelectCore, scopeName: string) {
+  const typing: Typing = { ctx, scope, aliases: null, lookups: new Map() }
+  for (const key of core.groupBy) {
+    typeOf(typing, key)
+    collectParams(typing, key, null, snippet(ctx, key.range))
+  }
+  const aggregates = core.columns
+    .flatMap((item) => aggregateCalls(item.expr))
+    .map((call) => snippet(ctx, call.range, 60))
+  const details = [
+    ...(core.groupBy.length === 0
+      ? ['whole result as one group']
+      : [`BY ${core.groupBy.map((key) => snippet(ctx, key.range, 60)).join(', ')}`]),
+    ...aggregates,
+  ]
+  const range =
+    core.groupBy.length === 0
+      ? null
+      : { start: core.groupBy[0]?.range.start ?? 0, end: core.groupBy.at(-1)?.range.end ?? 0 }
+  return addNode(ctx, {
+    kind: 'aggregate',
+    label: 'GROUP BY',
+    details,
+    range,
+    scope: scopeName,
+    columns: [],
+  })
+}
+
+function havingNode(
+  ctx: Context,
+  scope: Scope,
+  aliases: ReadonlyMap<string, TypeInfo>,
+  having: Expr,
+  scopeName: string,
+) {
+  const havingId = nextId(ctx)
+  const havingTyping: Typing = {
+    ctx,
+    scope,
+    aliases,
+    lookups: new Map(subqueriesOf(having).map((query) => [query, havingId])),
+  }
+  typeOf(havingTyping, having)
+  collectParams(havingTyping, having, null, snippet(ctx, having.range))
+  ctx.nodes.push({
+    id: havingId,
+    kind: 'having',
+    label: 'HAVING',
+    details: [snippet(ctx, having.range)],
+    range: having.range,
+    scope: scopeName,
+    columns: [],
+  })
+  return havingId
+}
+
+/** The output columns, for the node: the first twelve and how many more. */
+function projectDetails(columns: readonly Resolved[]) {
+  return columns.length > 12
+    ? [...columns.slice(0, 12).map((column) => column.name), `… ${columns.length - 12} more`]
+    : columns.map((column) => column.name)
 }
 
 function aggregateCalls(expr: Expr): readonly Extract<Expr, { type: 'call' }>[] {
@@ -1855,12 +2022,16 @@ function buildInsert(
   const root: Scope = { relations: [], outer: null, ctes: new Map() }
   const scope = statement.ctes.length === 0 ? root : buildCtes(ctx, statement.ctes, false, root)
   const table = lookupTable(ctx, statement.table)
+  // The table's columns by name, case aside; the first of a name where two share one.
+  const columnByName = new Map(
+    (table?.columns ?? []).toReversed().map((column) => [column.name.toLowerCase(), column]),
+  )
   const targetColumns: readonly SchemaColumn[] =
     statement.columns === null
       ? (table?.columns ?? [])
       : statement.columns.map(
           (name) =>
-            table?.columns.find((column) => column.name.toLowerCase() === name.toLowerCase()) ?? {
+            columnByName.get(name.toLowerCase()) ?? {
               name,
               dataType: '',
               nullable: true,
@@ -1868,7 +2039,7 @@ function buildInsert(
         )
   if (table !== null && statement.columns !== null) {
     for (const name of statement.columns) {
-      if (!table.columns.some((column) => column.name.toLowerCase() === name.toLowerCase())) {
+      if (!columnByName.has(name.toLowerCase())) {
         warn(ctx, `"${table.name}" has no column "${name}"`, statement.range)
       }
     }
@@ -2045,7 +2216,7 @@ function buildUpdate(
   const targetTable = target.relations[0]
   for (const item of statement.set) {
     const column = targetTable === undefined ? null : columnOf(targetTable, item.column)
-    if (targetTable?.known && column === null) {
+    if (targetTable?.known === true && column === null) {
       warn(ctx, `"${targetTable.display}" has no column "${item.column}"`, item.range)
     }
     targetTable?.used.add(item.column)
@@ -2239,8 +2410,9 @@ function finish(
   columns: readonly Resolved[],
 ): StatementAnalysis {
   const parameters = orderParams(ctx)
+  const refByNode = new Map(ctx.refs.toReversed().map((ref) => [ref.nodeId, ref]))
   const nodes = ctx.nodes.map((node) => {
-    const ref = ctx.refs.find((candidate) => candidate.nodeId === node.id)
+    const ref = refByNode.get(node.id)
     if (ref === undefined) return node
     const used = new Set([...ref.used].map((name) => name.toLowerCase()))
     return {

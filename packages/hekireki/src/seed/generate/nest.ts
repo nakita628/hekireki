@@ -61,6 +61,6 @@ export function nestChildren(context: Context, table: ModelTable, given: SeedRow
       (field) => field.kind === 'object' && (field.relationFromFields ?? []).length === 0,
     ),
     (field) => nestField(context, table, field, given, row),
-    { discard: true },
+    { discard: true, concurrency: 1 },
   )
 }

@@ -15,6 +15,31 @@ import {
   sqliteStatements,
 } from '../domain/catalogue.js'
 
+type Driver<E> = {
+  readonly query: (statement: {
+    readonly sql: string
+    readonly params: readonly unknown[]
+  }) => Effect.Effect<{ readonly rows: readonly Readonly<Record<string, unknown>>[] }, E>
+}
+
+/** The rows of a catalogue query that a server too old to answer it is read as having none of. */
+function rowsOrNone<E>(
+  driver: Driver<E>,
+  statement: { readonly sql: string; readonly params: readonly unknown[] },
+) {
+  return driver.query(statement).pipe(
+    Effect.map((result) => result.rows),
+    Effect.orElseSucceed((): readonly Readonly<Record<string, unknown>>[] => []),
+  )
+}
+
+/** The columns of one SQLite index, in order. */
+function indexColumns<E>(driver: Driver<E>, index: string) {
+  return driver
+    .query(sqliteIndexStatement(index))
+    .pipe(Effect.map((result) => result.rows.map((column) => catalogueText(column, 'name'))))
+}
+
 /** One SQLite table: its columns, then the columns of each unique index that covers every row. */
 function introspectSqliteTable<E>(
   driver: {
@@ -39,10 +64,8 @@ function introspectSqliteTable<E>(
       indexes.rows.filter(
         (row) => catalogueText(row, 'unique') === '1' && catalogueText(row, 'partial') !== '1',
       ),
-      (row) =>
-        driver
-          .query(sqliteIndexStatement(catalogueText(row, 'name')))
-          .pipe(Effect.map((result) => result.rows.map((column) => catalogueText(column, 'name')))),
+      (row) => indexColumns(driver, catalogueText(row, 'name')),
+      { concurrency: 1 },
     )
     return makeSqliteTable({
       table,
@@ -80,86 +103,99 @@ export function introspectDatabase<E>(input: {
 }) {
   const { driver } = input
   return Effect.gen(function* () {
-    if (input.dialect === 'postgresql') {
-      const statements = postgresStatements(input.schemas)
-      const current = yield* driver.query(statements.current)
-      const [columns, enums, uniques, foreignKeys] = yield* Effect.forEach(
-        [statements.columns, statements.enums, statements.uniques, statements.foreignKeys],
-        (statement) => driver.query(statement).pipe(Effect.map((result) => result.rows)),
-      )
-      // What Prisma's schema does not describe. A server that does not answer these (an older
-      // CockroachDB has no triggers to list) is read as having none, rather than failing the check.
-      const [triggers, checks] = yield* Effect.forEach(
-        [statements.triggers, statements.checks],
-        (statement) =>
-          driver.query(statement).pipe(
-            Effect.map((result) => result.rows),
-            Effect.orElseSucceed((): readonly Readonly<Record<string, unknown>>[] => []),
-          ),
-      )
-      return {
-        defaultSchema: catalogueText(current.rows[0] ?? {}, 'schema') || 'public',
-        mariadb: false,
-        tables: makePostgresTables({
-          columns: columns ?? [],
-          enums: enums ?? [],
-          uniques: uniques ?? [],
-          foreignKeys: foreignKeys ?? [],
-          triggers: triggers ?? [],
-          checks: checks ?? [],
-        }),
-      }
+    if (input.dialect === 'postgresql') return yield* introspectPostgres(driver, input.schemas)
+    if (input.dialect === 'mysql') return yield* introspectMysql(driver)
+    return yield* introspectSqlite(driver)
+  })
+}
+
+function introspectPostgres<E>(driver: Driver<E>, schemas: readonly string[]) {
+  return Effect.gen(function* () {
+    const statements = postgresStatements(schemas)
+    const current = yield* driver.query(statements.current)
+    const [columns, enums, uniques, foreignKeys] = yield* Effect.forEach(
+      [statements.columns, statements.enums, statements.uniques, statements.foreignKeys],
+      (statement) => driver.query(statement).pipe(Effect.map((result) => result.rows)),
+      { concurrency: 1 },
+    )
+    // What Prisma's schema does not describe. A server that does not answer these (an older
+    // CockroachDB has no triggers to list) is read as having none, rather than failing the check.
+    const [triggers, checks] = yield* Effect.forEach(
+      [statements.triggers, statements.checks],
+      (statement) => rowsOrNone(driver, statement),
+      { concurrency: 1 },
+    )
+    return {
+      defaultSchema: catalogueText(current.rows[0] ?? {}, 'schema') || 'public',
+      mariadb: false,
+      tables: makePostgresTables({
+        columns: columns ?? [],
+        enums: enums ?? [],
+        uniques: uniques ?? [],
+        foreignKeys: foreignKeys ?? [],
+        triggers: triggers ?? [],
+        checks: checks ?? [],
+      }),
     }
-    if (input.dialect === 'mysql') {
-      const version = yield* driver.query(MYSQL_STATEMENTS.version)
-      const [columns, uniques, foreignKeys] = yield* Effect.forEach(
-        [MYSQL_STATEMENTS.columns, MYSQL_STATEMENTS.uniques, MYSQL_STATEMENTS.foreignKeys],
-        (statement) => driver.query(statement).pipe(Effect.map((result) => result.rows)),
-      )
-      // MariaDB speaks the mysql:// protocol, and converts text to numbers more strictly.
-      const mariadb = /mariadb/iu.test(catalogueText(version.rows[0] ?? {}, 'version'))
-      // A server too old to list CHECK constraints (MySQL before 8.0.16) enforces none.
-      const [triggers, checks] = yield* Effect.forEach(
-        [
-          MYSQL_STATEMENTS.triggers,
-          mariadb ? MYSQL_STATEMENTS.mariadbChecks : MYSQL_STATEMENTS.checks,
-        ],
-        (statement) =>
-          driver.query(statement).pipe(
-            Effect.map((result) => result.rows),
-            Effect.orElseSucceed((): readonly Readonly<Record<string, unknown>>[] => []),
-          ),
-      )
-      return {
-        defaultSchema: null,
-        mariadb,
-        tables: makeMysqlTables({
-          columns: columns ?? [],
-          uniques: uniques ?? [],
-          foreignKeys: foreignKeys ?? [],
-          triggers: triggers ?? [],
-          checks: checks ?? [],
-          escapedChecks: !mariadb,
-        }),
-      }
+  })
+}
+
+function introspectMysql<E>(driver: Driver<E>) {
+  return Effect.gen(function* () {
+    const version = yield* driver.query(MYSQL_STATEMENTS.version)
+    const [columns, uniques, foreignKeys] = yield* Effect.forEach(
+      [MYSQL_STATEMENTS.columns, MYSQL_STATEMENTS.uniques, MYSQL_STATEMENTS.foreignKeys],
+      (statement) => driver.query(statement).pipe(Effect.map((result) => result.rows)),
+      { concurrency: 1 },
+    )
+    // MariaDB speaks the mysql:// protocol, and converts text to numbers more strictly.
+    const mariadb = /mariadb/iu.test(catalogueText(version.rows[0] ?? {}, 'version'))
+    // A server too old to list CHECK constraints (MySQL before 8.0.16) enforces none.
+    const [triggers, checks] = yield* Effect.forEach(
+      [
+        MYSQL_STATEMENTS.triggers,
+        mariadb ? MYSQL_STATEMENTS.mariadbChecks : MYSQL_STATEMENTS.checks,
+      ],
+      (statement) => rowsOrNone(driver, statement),
+      { concurrency: 1 },
+    )
+    return {
+      defaultSchema: null,
+      mariadb,
+      tables: makeMysqlTables({
+        columns: columns ?? [],
+        uniques: uniques ?? [],
+        foreignKeys: foreignKeys ?? [],
+        triggers: triggers ?? [],
+        checks: checks ?? [],
+        escapedChecks: !mariadb,
+      }),
     }
+  })
+}
+
+function introspectSqlite<E>(driver: Driver<E>) {
+  return Effect.gen(function* () {
     const listed = yield* driver.query(SQLITE_TABLES)
     const names = listed.rows
       .map((row) => catalogueText(row, 'table'))
       .filter((name) => !INTERNAL_TABLES.has(name))
     const triggers = yield* driver.query(SQLITE_EXTRAS.triggers)
     const definitions = yield* driver.query(SQLITE_EXTRAS.definitions)
-    const tables = yield* Effect.forEach(names, (table) =>
-      introspectSqliteTable(driver, {
-        table,
-        triggers: triggers.rows
-          .filter((row) => catalogueText(row, 'table') === table)
-          .map((row) => catalogueText(row, 'name')),
-        definition: catalogueText(
-          definitions.rows.find((row) => catalogueText(row, 'table') === table) ?? {},
-          'sql',
-        ),
-      }),
+    const tables = yield* Effect.forEach(
+      names,
+      (table) =>
+        introspectSqliteTable(driver, {
+          table,
+          triggers: triggers.rows
+            .filter((row) => catalogueText(row, 'table') === table)
+            .map((row) => catalogueText(row, 'name')),
+          definition: catalogueText(
+            definitions.rows.find((row) => catalogueText(row, 'table') === table) ?? {},
+            'sql',
+          ),
+        }),
+      { concurrency: 1 },
     )
     return { defaultSchema: null, mariadb: false, tables }
   })

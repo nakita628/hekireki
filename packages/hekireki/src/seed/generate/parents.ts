@@ -1,10 +1,16 @@
 import { Effect } from 'effect'
 
-import type { SeedRow } from '../config.js'
+import type { SeedRow, SeedValue } from '../config.js'
 import { SeedGenerationError } from '../errors.js'
 import type { ForeignKey, ModelTable } from '../plan.js'
 import type { Context, RowInput } from './context.js'
 import { describeValue, isKeyObject, keyOf, modelTable, specifies, uniqueKey } from './context.js'
+
+/** Whether a row holds every value of a unique key, each compared as a key. */
+function matchesKey(wanted: readonly (readonly [string, SeedValue])[]) {
+  const keys = wanted.map(([field, value]) => [field, keyOf(value)] as const)
+  return (row: SeedRow) => keys.every(([field, key]) => keyOf(row[field] ?? null) === key)
+}
 
 /** The parent the given key values name; fails when no such row exists. */
 function findParent(input: RowInput, fk: ForeignKey, given: SeedRow) {
@@ -35,9 +41,7 @@ function findParentByKey(input: RowInput, fk: ForeignKey, key: SeedRow) {
     const { context, table, index, own } = input
     const parents = fk.self ? own : (context.rowsByModel.get(fk.toModel) ?? [])
     const wanted = Object.entries(key)
-    const matches = parents.filter((row) =>
-      wanted.every(([field, value]) => keyOf(row[field] ?? null) === keyOf(value)),
-    )
+    const matches = parents.filter(matchesKey(wanted))
     const shown = wanted.map(([field, value]) => `${field} = ${describeValue(value)}`).join(', ')
     if (matches.length === 1) return matches[0] ?? null
     return yield* new SeedGenerationError({
@@ -62,7 +66,7 @@ function findParentByKey(input: RowInput, fk: ForeignKey, key: SeedRow) {
  */
 export function pickParent(input: RowInput, fk: ForeignKey, self: SeedRow) {
   return Effect.gen(function* () {
-    const { context, table, own, pools, slots } = input
+    const { context, own } = input
     if (input.given !== null) {
       const reference = input.given[fk.field]
       if (isKeyObject(reference)) return yield* findParentByKey(input, fk, reference)
@@ -70,26 +74,50 @@ export function pickParent(input: RowInput, fk: ForeignKey, self: SeedRow) {
       if (!fk.required) return null
     }
     const parents = fk.self ? own : (context.rowsByModel.get(fk.toModel) ?? [])
-    if (fk.oneToOne && !fk.self) {
-      const parent = pools.get(fk.field)?.[slots.get(fk.field) ?? 0]
-      if (parent !== undefined) return parent
-      if (!fk.required) return null
-      return yield* new SeedGenerationError({
-        message: `${table.name}.${fk.field} is a one-to-one relation to ${fk.toModel}, so at most ${parents.length} ${table.name} rows can be seeded (${fk.toModel} has ${parents.length}).`,
-      })
-    }
-    const bound = parentBound(context, table, fk)
-    const counts = context.linkCounts.get(`${table.name}.${fk.field}`)
-    const counted = (parent: SeedRow) => counts?.get(uniqueKey(parent, fk.toFields)) ?? 0
-    // Parents still under the rule's `min` come first, so every one of them is served; none above
-    // its `max` is offered at all. With no rule there is nothing to count: every parent is open,
-    // and none is behind.
-    const { min, max } = bound
-    const open = max === null ? parents : parents.filter((parent) => counted(parent) < max)
-    const behind = min === null ? [] : open.filter((parent) => counted(parent) < min)
-    // The parents furthest from their `min` come first, so the rows are spread before any is spent.
-    const fewest = Math.min(...behind.map(counted))
-    const short = behind.filter((parent) => counted(parent) === fewest)
+    if (fk.oneToOne && !fk.self) return yield* pickOneToOne(input, fk, parents)
+    return yield* pickCounted(input, fk, self, parents)
+  })
+}
+
+/** The next parent of the pool dealt out to a one-to-one key, which no other row takes. */
+function pickOneToOne(input: RowInput, fk: ForeignKey, parents: readonly SeedRow[]) {
+  return Effect.gen(function* () {
+    const { table, pools, slots } = input
+    const parent = pools.get(fk.field)?.[slots.get(fk.field) ?? 0]
+    if (parent !== undefined) return parent
+    if (!fk.required) return null
+    return yield* new SeedGenerationError({
+      message: `${table.name}.${fk.field} is a one-to-one relation to ${fk.toModel}, so at most ${parents.length} ${table.name} rows can be seeded (${fk.toModel} has ${parents.length}).`,
+    })
+  })
+}
+
+/**
+ * The parents a row may point at under the parent model's relation rule: `open` (none above its
+ * `max`) and, of those, `short` (the ones furthest below its `min`).
+ */
+function candidates(input: RowInput, fk: ForeignKey, parents: readonly SeedRow[]) {
+  const { context, table } = input
+  const bound = parentBound(context, table, fk)
+  const counts = context.linkCounts.get(`${table.name}.${fk.field}`)
+  const counted = (parent: SeedRow) => counts?.get(uniqueKey(parent, fk.toFields)) ?? 0
+  // Parents still under the rule's `min` come first, so every one of them is served; none above
+  // its `max` is offered at all. With no rule there is nothing to count: every parent is open,
+  // and none is behind.
+  const { min, max } = bound
+  const open = max === null ? parents : parents.filter((parent) => counted(parent) < max)
+  const behind = min === null ? [] : open.filter((parent) => counted(parent) < min)
+  // The parents furthest from their `min` come first, so the rows are spread before any is spent.
+  const fewest = Math.min(...behind.map(counted))
+  const short = behind.filter((parent) => counted(parent) === fewest)
+  return { bound, open, short }
+}
+
+/** A parent for a many-to-one key, spread over the parents as the relation rule asks. */
+function pickCounted(input: RowInput, fk: ForeignKey, self: SeedRow, parents: readonly SeedRow[]) {
+  return Effect.gen(function* () {
+    const { context, table } = input
+    const { bound, open, short } = candidates(input, fk, parents)
     const nullRate = context.config.nullRate ?? 0
     if (
       !fk.required &&
@@ -142,10 +170,7 @@ function parentBound(context: Context, table: ModelTable, fk: ForeignKey) {
 export function claimOf(fk: ForeignKey, given: SeedRow, parents: readonly SeedRow[]) {
   const reference = given[fk.field]
   if (isKeyObject(reference)) {
-    const wanted = Object.entries(reference)
-    const parent = parents.find((row) =>
-      wanted.every(([field, value]) => keyOf(row[field] ?? null) === keyOf(value)),
-    )
+    const parent = parents.find(matchesKey(Object.entries(reference)))
     return parent === undefined ? null : uniqueKey(parent, fk.toFields)
   }
   return specifies(given, fk)

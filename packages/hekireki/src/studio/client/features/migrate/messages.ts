@@ -950,12 +950,14 @@ export const HOW = defineMessages({
         ? `After the migration creates it, the rows of ${target.split('.')[0] ?? target} are made from them.`
         : `As the migration adds ${target}, it is filled from them.`,
     dropStep: 'The table they were kept in is dropped.',
-    unknown: (value: string, move: boolean) =>
-      value === ''
-        ? move
+    unknown: (value: string, move: boolean) => {
+      if (value === '') {
+        return move
           ? 'Name the model and field the column moved to.'
           : 'Name the field the column is called now.'
-        : `${value} is not a column this migration adds ${move ? 'to a related model' : 'to this table'}: the plan will refuse it.`,
+      }
+      return `${value} is not a column this migration adds ${move ? 'to a related model' : 'to this table'}: the plan will refuse it.`
+    },
     misfit: (type: string) => `${type} may not take these values: check they read back as one.`,
     drop: (n: number) =>
       `${n === 1 ? 'The value is' : `The ${n} values are`} lost with the column. Only the backup taken before the run keeps ${n === 1 ? 'it' : 'them'}.`,
@@ -1013,12 +1015,14 @@ export const HOW = defineMessages({
         ? `マイグレーションで ${target.split('.')[0] ?? target} が作られた後、退避した値から行を作ります。`
         : `マイグレーションで ${target} が追加されるときに、退避した値で埋めます。`,
     dropStep: '退避に使ったテーブルを削除します。',
-    unknown: (value: string, move: boolean) =>
-      value === ''
-        ? move
+    unknown: (value: string, move: boolean) => {
+      if (value === '') {
+        return move
           ? '移動先のモデルとフィールドを入力してください。'
           : '新しいフィールド名を入力してください。'
-        : `${value} は、このマイグレーションで${move ? '関連するモデル' : 'このテーブル'}に追加される列ではありません。このままではプランが作れません。`,
+      }
+      return `${value} は、このマイグレーションで${move ? '関連するモデル' : 'このテーブル'}に追加される列ではありません。このままではプランが作れません。`
+    },
     misfit: (type: string) =>
       `${type} にはこの値が入らない可能性があります。変換して読めるか確認してください。`,
     drop: (n: number) =>

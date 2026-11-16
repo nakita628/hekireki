@@ -68,7 +68,7 @@ describe('schemaSql', () => {
     const binary = await Effect.runPromise(
       findSchemaEngineBinary(process.cwd()).pipe(Effect.provide(NodeServices.layer)),
     )
-    if (binary === null) context.skip()
+    context.skip(binary === null, 'no native schema engine installed')
     const statements = await run('mysql', 'mysql')
     expect(statements[0]).toMatch(/^CREATE TABLE `User` \(/u)
     expect(statements.at(-1)).toMatch(/^ALTER TABLE `Post` ADD CONSTRAINT `Post_authorId_fkey`/u)

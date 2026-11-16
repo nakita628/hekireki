@@ -22,8 +22,9 @@ export function ecto(options: GeneratorOptions) {
     // DMMF drops the name `@relation(map: ...)` gives a foreign key, and the relation mode: both
     // are read off the schema's text, parsed into its blocks once.
     const blocks = prismaBlocks(options.datamodel)
+    const provider = options.datasources[0]?.activeProvider
     const files = ectoSchemaFiles(options.dmmf.datamodel.models, app, enums, {
-      provider: options.datasources[0]?.activeProvider,
+      ...(provider === undefined ? {} : { provider }),
       indexes: options.dmmf.datamodel.indexes,
       foreignKeyNames: relationMaps(blocks),
       relationMode: relationMode(blocks),

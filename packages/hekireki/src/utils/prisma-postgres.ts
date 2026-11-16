@@ -63,7 +63,8 @@ export function modelIndexes(
 }
 
 export function isSameFieldSet(left: readonly string[], right: readonly string[]) {
-  return left.length === right.length && left.every((name) => right.includes(name))
+  const rightNames = new Set(right)
+  return left.length === right.length && left.every((name) => rightNames.has(name))
 }
 
 export function fieldNames(index: IndexInfo) {
@@ -73,21 +74,18 @@ export function fieldNames(index: IndexInfo) {
 // The key an entity is tracked by: the primary key or, for a model Prisma identifies by a unique
 // criterion alone, the first unique criterion whose fields are all required.
 export function entityKey(model: DMMF.Model, indexes: readonly IndexInfo[]) {
+  const required = new Set(model.fields.filter((f) => f.isRequired).map((f) => f.name))
   return (
     indexes.find((index) => index.type === 'id') ??
     indexes.find(
-      (index) =>
-        index.type === 'unique' &&
-        index.fields.every(
-          (f) => model.fields.find((mf) => mf.name === f.name)?.isRequired === true,
-        ),
+      (index) => index.type === 'unique' && index.fields.every((f) => required.has(f.name)),
     ) ??
     null
   )
 }
 
 export function indexName(model: DMMF.Model, index: IndexInfo) {
-  if (index.dbName) return index.dbName
+  if (index.dbName !== undefined && index.dbName !== '') return index.dbName
   const table = tableName(model)
   if (index.type === 'id') return prismaConstraintName(table, '_pkey')
   const columns = index.fields.map((f) => fieldColumn(model, f.name))
@@ -184,6 +182,12 @@ export function sqlString(value: string) {
   return `'${value.replaceAll("'", "''")}'`
 }
 
+// The fraction of a second, in milliseconds where that loses nothing, else in microseconds.
+function secondFraction(microsecond: number) {
+  if (microsecond === 0) return ''
+  return microsecond % 1000 === 0 ? `.${pad(microsecond / 1000, 3)}` : `.${pad(microsecond, 6)}`
+}
+
 function pad(value: number, width = 2) {
   return String(value).padStart(width, '0')
 }
@@ -195,12 +199,7 @@ export function sqlTimestamp(value: string | number | boolean) {
   const parsed = typeof value === 'string' ? parseDateTimeDefault(value) : null
   if (!parsed) return String(value)
   const clock = shift(parsed, 0)
-  const fraction =
-    clock.microsecond === 0
-      ? ''
-      : clock.microsecond % 1000 === 0
-        ? `.${pad(clock.microsecond / 1000, 3)}`
-        : `.${pad(clock.microsecond, 6)}`
+  const fraction = secondFraction(clock.microsecond)
   const offset = Math.abs(parsed.offsetMinutes)
   const sign = parsed.offsetMinutes < 0 ? '-' : '+'
   return `${pad(clock.year, 4)}-${pad(clock.month)}-${pad(clock.day)} ${pad(clock.hour)}:${pad(clock.minute)}:${pad(clock.second)}${fraction} ${sign}${pad(Math.trunc(offset / 60))}:${pad(offset % 60)}`

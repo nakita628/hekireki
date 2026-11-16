@@ -15,13 +15,7 @@ export function displayCell(value: Row[string]) {
 }
 
 export function editableText(value: Row[string]) {
-  return value === null
-    ? ''
-    : typeof value === 'boolean'
-      ? value
-        ? 'true'
-        : 'false'
-      : String(value)
+  return value === null ? '' : String(value)
 }
 
 // Turns what the user typed into the JSON value the data API expects for the field.

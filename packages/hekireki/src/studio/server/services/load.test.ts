@@ -17,6 +17,14 @@ afterEach(() => {
   }
 })
 
+/** What a run that has to succeed gave, or the failure thrown. */
+function loadedValue<A>(
+  result: { readonly ok: true; readonly value: A } | { readonly ok: false; readonly error: string },
+): A {
+  if (!result.ok) throw new Error(`expected the schema to load: ${JSON.stringify(result)}`)
+  return result.value
+}
+
 function run<A, E extends { readonly message: string }>(
   effect: Effect.Effect<A, E, FileSystem.FileSystem>,
 ) {
@@ -131,9 +139,9 @@ describe('parseSchemaFiles', () => {
         diagnostics: [],
       }),
     )
-    if (!result.ok) throw new Error(`expected the schema to load: ${JSON.stringify(result)}`)
-    expect(result.value.dmmf.datamodel.models.map((m) => m.name)).toStrictEqual(['Post', 'User'])
-    expect(result.value.provider).toBe('mysql')
+    const loaded = loadedValue(result)
+    expect(loaded.dmmf.datamodel.models.map((m) => m.name)).toStrictEqual(['Post', 'User'])
+    expect(loaded.provider).toBe('mysql')
   })
 
   it('fails with the Prisma validation message without ANSI colors', async () => {

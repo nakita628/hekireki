@@ -122,7 +122,8 @@ describe('importFromProject', () => {
 
   it('loads a package as the project resolves it', async () => {
     const zod: unknown = await Effect.runPromise(importFromProject('zod', project))
-    expect(typeof zod === 'object' && zod !== null && 'object' in zod).toBe(true)
+    expect(zod).toBeTypeOf('object')
+    expect(zod).toHaveProperty('object')
   })
 
   it('says which package the project could not load, and from where', async () => {

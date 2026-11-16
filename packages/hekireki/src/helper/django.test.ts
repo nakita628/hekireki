@@ -101,6 +101,12 @@ class AutoNowQuerySet(models.QuerySet[_M]):
                 kwargs.setdefault(field.name, getattr(field, "stamp", timezone.now)())
         return super().update(**kwargs)`
 
+/** The datamodel `getDMMF` parsed, or its parse error thrown. */
+function datamodelOf(result: ReturnType<typeof getDMMF>) {
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel
+}
+
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
   return {
     kind: 'scalar',
@@ -2982,8 +2988,7 @@ describe('djangoCode on what Django refuses', () => {
     const result = getDMMF({
       datamodel: [['schema.prisma', `datasource db {\n  provider = "postgresql"\n}\n${schema}`]],
     })
-    if ('type' in result) throw new Error(result.error.message)
-    const { models, enums, indexes } = result.datamodel
+    const { models, enums, indexes } = datamodelOf(result)
     return djangoCode(models, enums, indexes)
   }
 
@@ -3113,8 +3118,7 @@ enum Tone {
         ],
       ],
     })
-    if ('type' in dmmf) throw new Error(dmmf.error.message)
-    const { models, enums, indexes } = dmmf.datamodel
+    const { models, enums, indexes } = datamodelOf(dmmf)
     expect(djangoCode(models, enums, indexes)).toBe(`from django.db import models
 
 

@@ -30,20 +30,21 @@ export function resolveDatabaseUrl(options: {
 }) {
   return Effect.gen(function* () {
     // Both .env files, the schema's first: the working directory's entries overwrite it below.
-    const variables = yield* Effect.forEach([...new Set([options.schemaDir, options.cwd])], (dir) =>
-      readFile(path.join(dir, '.env')).pipe(
-        Effect.map((text) =>
-          Object.entries(parseEnv(text)).flatMap(([name, value]) =>
-            value === undefined ? [] : [[name, value] as const],
-          ),
+    const variables = yield* Effect.forEach(
+      [...new Set([options.schemaDir, options.cwd])],
+      (dir) =>
+        readFile(path.join(dir, '.env')).pipe(
+          Effect.map(envEntries),
+          Effect.orElseSucceed(() => []),
         ),
-        Effect.orElseSucceed(() => []),
-      ),
+      { concurrency: 1 },
     )
     // The Prisma config where Prisma reads it (the working directory), else beside the schema,
     // under any of the names Prisma looks for.
-    const configs = yield* Effect.forEach([...new Set([options.cwd, options.schemaDir])], (dir) =>
-      readPrismaConfig(dir),
+    const configs = yield* Effect.forEach(
+      [...new Set([options.cwd, options.schemaDir])],
+      (dir) => readPrismaConfig(dir),
+      { concurrency: 1 },
     )
     const config = configs.find((found) => found !== null) ?? null
     // A config that could not be read may have held the URL, so that is the reason to give.
@@ -52,12 +53,7 @@ export function resolveDatabaseUrl(options: {
       configUrl: options.configUrl,
       configText: config?.text ?? null,
       // Named as the person sees it: from the working directory, or as found outside it.
-      configName:
-        config === null
-          ? null
-          : path.relative(options.cwd, config.file).startsWith('..')
-            ? config.file
-            : path.relative(options.cwd, config.file),
+      configName: config === null ? null : shownPath(options.cwd, config.file),
       schemaText: options.schemaText,
     }).pipe(
       // The .env files stand behind the environment the caller runs with, as they do for Prisma.
@@ -73,4 +69,16 @@ export function resolveDatabaseUrl(options: {
       ),
     )
   })
+}
+
+function envEntries(text: string) {
+  return Object.entries(parseEnv(text)).flatMap(([name, value]) =>
+    value === undefined ? [] : [[name, value] as const],
+  )
+}
+
+// From the working directory, or as found when it lies outside it.
+function shownPath(cwd: string, file: string) {
+  const relative = path.relative(cwd, file)
+  return relative.startsWith('..') ? file : relative
 }

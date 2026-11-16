@@ -40,11 +40,12 @@ export function normalizeValue(field: DMMF.Field, value: SeedValue) {
 export function normalizeGiven(input: RowInput) {
   const { given, table } = input
   if (given === null) return {}
+  const fields = new Map(table.model.fields.map((f) => [f.name, f]))
   const fitted: SeedRow = Object.fromEntries(
     table.columns
       .filter((column) => column.field in given)
       .map((column) => {
-        const field = table.model.fields.find((f) => f.name === column.field)
+        const field = fields.get(column.field)
         const value = given[column.field] ?? null
         return [column.field, field === undefined ? value : normalizeValue(field, value)]
       }),

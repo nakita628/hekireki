@@ -229,6 +229,43 @@ function value(
   })
 }
 
+function asNumber(drawn: unknown) {
+  if (typeof drawn !== 'number') throw new TypeError(`expected a number, got ${String(drawn)}`)
+  return drawn
+}
+
+function asBigInt(drawn: unknown) {
+  if (typeof drawn !== 'bigint') throw new TypeError(`expected a bigint, got ${String(drawn)}`)
+  return drawn
+}
+
+function asString(drawn: unknown) {
+  if (typeof drawn !== 'string') throw new TypeError(`expected a string, got ${String(drawn)}`)
+  return drawn
+}
+
+function asDate(drawn: unknown) {
+  if (!(drawn instanceof Date)) throw new TypeError(`expected a Date, got ${String(drawn)}`)
+  return drawn
+}
+
+function asArray(drawn: unknown): readonly unknown[] {
+  if (!Array.isArray(drawn)) throw new TypeError(`expected a list, got ${String(drawn)}`)
+  return drawn
+}
+
+type Edge = number | bigint | Date | string
+
+function edgeValue(edge: Edge) {
+  return typeof edge === 'string' || edge instanceof Date ? new Date(edge).getTime() : edge
+}
+
+/** A predicate for `toSatisfy`: the value (a number, a bigint or a date) lies in [min, max]. */
+function between(min: Edge, max: Edge) {
+  return (actual: number | bigint | Date) =>
+    edgeValue(actual) >= edgeValue(min) && edgeValue(actual) <= edgeValue(max)
+}
+
 describe('makeFieldValue', () => {
   it('is deterministic for a seed and differs across seeds, generated ids included', () => {
     expect(value('name', { seed: 3 })).toBe(value('name', { seed: 3 }))
@@ -266,20 +303,20 @@ describe('makeFieldValue', () => {
 
   it("cuts a String with no @db type to the length the database gives it, MySQL's 191", () => {
     const mysql = { nullRate: null, dates: null, stringLength: 191 }
-    const lengths = Array.from({ length: 200 }, (_, seed) => {
-      const body = namedValue('body', { seed, bounds: mysql })
-      return typeof body === 'string' ? body.length : -1
-    })
+    const lengths = Array.from(
+      { length: 200 },
+      (_, seed) => asString(namedValue('body', { seed, bounds: mysql })).length,
+    )
     expect(Math.max(...lengths)).toBe(191)
     expect(Math.min(...lengths)).toBeGreaterThan(0)
     // With no limit, faker's paragraph runs past it; a rule's length still narrows.
-    const unbounded = Array.from({ length: 200 }, (_, seed) => {
-      const body = namedValue('body', { seed })
-      return typeof body === 'string' ? body.length : -1
-    })
+    const unbounded = Array.from(
+      { length: 200 },
+      (_, seed) => asString(namedValue('body', { seed })).length,
+    )
     expect(Math.max(...unbounded)).toBeGreaterThan(191)
     const ruled = namedValue('body', { bounds: mysql, rule: { length: 10 } })
-    expect(typeof ruled === 'string' && ruled.length <= 10).toBe(true)
+    expect(asString(ruled).length).toBeLessThanOrEqual(10)
   })
 
   it('cuts strings to the native length and lets a rule cut further', () => {
@@ -288,12 +325,9 @@ describe('makeFieldValue', () => {
   })
 
   it('keeps integers in the native range, the name range and the rule range', () => {
-    const age = value('age')
-    expect(typeof age === 'number' && age >= 18 && age <= 90).toBe(true)
-    const qty = value('qty')
-    expect(typeof qty === 'number' && qty >= 1 && qty <= 20).toBe(true)
-    const ruled = value('qty', { rule: { min: 100, max: 101 } })
-    expect(typeof ruled === 'number' && ruled >= 100 && ruled <= 101).toBe(true)
+    expect(asNumber(value('age'))).toSatisfy(between(18, 90))
+    expect(asNumber(value('qty'))).toSatisfy(between(1, 20))
+    expect(asNumber(value('qty', { rule: { min: 100, max: 101 } }))).toSatisfy(between(100, 101))
   })
 
   it('renders a Decimal with the declared scale and within its precision', () => {
@@ -308,34 +342,25 @@ describe('makeFieldValue', () => {
   })
 
   it('fills a list with 0 to 3 elements by default and as many as the rule says', () => {
-    const tags = value('tags')
-    expect(Array.isArray(tags) && tags.length <= 3).toBe(true)
-    const ruled = value('tags', { rule: { length: 2 } })
-    expect(Array.isArray(ruled) ? ruled.length : -1).toBe(2)
-    const chosen = value('tags', { rule: { values: ['x', 'y', 'z'], length: 2 } })
-    expect(
-      Array.isArray(chosen) &&
-        chosen.every((tag) => typeof tag === 'string' && ['x', 'y', 'z'].includes(tag)),
-    ).toBe(true)
-    expect(Array.isArray(chosen) ? chosen.length : -1).toBe(2)
+    expect(asArray(value('tags')).length).toBeLessThanOrEqual(3)
+    expect(asArray(value('tags', { rule: { length: 2 } }))).toHaveLength(2)
+    const chosen = asArray(value('tags', { rule: { values: ['x', 'y', 'z'], length: 2 } }))
+    for (const tag of chosen) expect(['x', 'y', 'z']).toContain(tag)
+    expect(chosen).toHaveLength(2)
   })
 
   it('keeps every DateTime inside the window, and a @db.Date at midnight', () => {
     const created = value('createdAt', { rule: { from: '2025-03-01', to: '2025-03-31' } })
-    expect(
-      created instanceof Date &&
-        created >= new Date('2025-03-01') &&
-        created <= new Date('2025-03-31'),
-    ).toBe(true)
-    const born = value('born')
-    expect(born instanceof Date && born.toISOString().endsWith('T00:00:00.000Z')).toBe(true)
+    expect(asDate(created)).toSatisfy(between('2025-03-01', '2025-03-31'))
+    expect(asDate(value('born')).toISOString().endsWith('T00:00:00.000Z')).toBe(true)
   })
 
   it('makes JSON, bytes and booleans of the right shape', () => {
     const meta = value('meta')
-    expect(
-      typeof meta === 'object' && meta !== null && !Array.isArray(meta) && 'note' in meta,
-    ).toBe(true)
+    expect(meta).toBeTypeOf('object')
+    expect(meta).not.toBeNull()
+    expect(Array.isArray(meta)).toBe(false)
+    expect(meta).toHaveProperty('note')
     expect(value('blob')).toBeInstanceOf(Uint8Array)
     expect(value('flags')).toBeTypeOf('boolean')
   })
@@ -431,16 +456,15 @@ describe('makeFieldValue, what a field name means', () => {
   ])('%s is an integer between %d and %d', (name, min, max) => {
     for (const drawn of draws(name)) {
       expect(Number.isInteger(drawn)).toBe(true)
-      expect(typeof drawn === 'number' && drawn >= min && drawn <= max).toBe(true)
+      expect(asNumber(drawn)).toSatisfy(between(min, max))
     }
   })
 
   it('keeps a MySQL TinyInt between 0 and 127', () => {
     for (let seed = 0; seed < 200; seed += 1) {
       const drawn = namedValue('level', { seed, from: NARROW })
-      expect(
-        typeof drawn === 'number' && Number.isInteger(drawn) && drawn >= 0 && drawn <= 127,
-      ).toBe(true)
+      expect(Number.isInteger(drawn)).toBe(true)
+      expect(asNumber(drawn)).toSatisfy(between(0, 127))
     }
   })
 
@@ -451,27 +475,27 @@ describe('makeFieldValue, what a field name means', () => {
     ['weight', 0, 1000],
   ])('%s is a float between %d and %d with two decimals', (name, min, max) => {
     for (const drawn of draws(name)) {
-      expect(typeof drawn === 'number' && drawn >= min && drawn <= max).toBe(true)
-      expect(typeof drawn === 'number' && Number(drawn.toFixed(2)) === drawn).toBe(true)
+      expect(asNumber(drawn)).toSatisfy(between(min, max))
+      expect(Number(asNumber(drawn).toFixed(2))).toBe(drawn)
     }
   })
 
   it('lets a rule move the bounds of any number, below and above the natural ones', () => {
     for (const drawn of draws('rating', 100, { rule: { min: 10, max: 12 } })) {
-      expect(typeof drawn === 'number' && drawn >= 10 && drawn <= 12).toBe(true)
+      expect(asNumber(drawn)).toSatisfy(between(10, 12))
     }
     for (const drawn of draws('lat', 100, { rule: { min: -1, max: 0 } })) {
-      expect(typeof drawn === 'number' && drawn >= -1 && drawn <= 0).toBe(true)
+      expect(asNumber(drawn)).toSatisfy(between(-1, 0))
     }
     for (const drawn of draws('big', 100, { rule: { min: 5, max: 6 } })) {
-      expect(drawn === 5n || drawn === 6n).toBe(true)
+      expect([5n, 6n]).toContain(drawn)
     }
     expect(namedValue('year', { rule: { min: 2000, max: 2000 } })).toBe(2000)
   })
 
   it('makes a BigInt a bigint in the Int range of its name', () => {
     for (const drawn of draws('big', 50)) {
-      expect(typeof drawn === 'bigint' && drawn >= 0n && drawn <= 1000n).toBe(true)
+      expect(asBigInt(drawn)).toSatisfy(between(0n, 1000n))
     }
   })
 })
@@ -493,20 +517,18 @@ describe('makeFieldValue, decimals and dates', () => {
 
   it('keeps a @db.Time on the epoch day and a DateTime in the window, with now() drawn the same way', () => {
     for (const drawn of draws('at', 50)) {
-      expect(drawn instanceof Date && drawn.toISOString().startsWith('1970-01-01T')).toBe(true)
+      expect(asDate(drawn).toISOString().startsWith('1970-01-01T')).toBe(true)
     }
     for (const drawn of draws('stamp', 50)) {
-      expect(drawn instanceof Date && drawn >= BOUNDS.dates.from && drawn <= BOUNDS.dates.to).toBe(
-        true,
-      )
+      expect(asDate(drawn)).toSatisfy(between(BOUNDS.dates.from, BOUNDS.dates.to))
     }
   })
 
   it('draws a date from the rule window first, the config window next, and the past year last', () => {
     const rule = dateBetween(faker(), { from: '2020-01-01', to: '2020-01-31' }, BOUNDS)
-    expect(rule >= new Date('2020-01-01') && rule <= new Date('2020-01-31')).toBe(true)
+    expect(asDate(rule)).toSatisfy(between('2020-01-01', '2020-01-31'))
     const config = dateBetween(faker(), {}, BOUNDS)
-    expect(config >= BOUNDS.dates.from && config <= BOUNDS.dates.to).toBe(true)
+    expect(asDate(config)).toSatisfy(between(BOUNDS.dates.from, BOUNDS.dates.to))
     const instance = faker()
     const reference = new Date(instance.defaultRefDate())
     const none = dateBetween(instance, {}, { nullRate: null, dates: null })
@@ -516,29 +538,29 @@ describe('makeFieldValue, decimals and dates', () => {
 
   it('completes a rule with one edge from the config window, and swaps edges given backwards', () => {
     const late = dateBetween(faker(), { from: '2025-12-01' }, BOUNDS)
-    expect(late >= new Date('2025-12-01') && late <= BOUNDS.dates.to).toBe(true)
+    expect(asDate(late)).toSatisfy(between('2025-12-01', BOUNDS.dates.to))
     const early = dateBetween(faker(), { to: '2025-01-31' }, BOUNDS)
-    expect(early >= BOUNDS.dates.from && early <= new Date('2025-01-31')).toBe(true)
+    expect(asDate(early)).toSatisfy(between(BOUNDS.dates.from, '2025-01-31'))
     const swapped = dateBetween(faker(), { from: '2025-06-30', to: '2025-06-01' }, BOUNDS)
-    expect(swapped >= new Date('2025-06-01') && swapped <= new Date('2025-06-30')).toBe(true)
+    expect(asDate(swapped)).toSatisfy(between('2025-06-01', '2025-06-30'))
     // A window given only by config edges narrows the same way as a rule.
     const onlyFrom = dateBetween(
       faker(),
       {},
       { nullRate: null, dates: { from: new Date('2030-01-01'), to: new Date('2030-01-02') } },
     )
-    expect(onlyFrom >= new Date('2030-01-01') && onlyFrom <= new Date('2030-01-02')).toBe(true)
+    expect(asDate(onlyFrom)).toSatisfy(between('2030-01-01', '2030-01-02'))
   })
 })
 
 describe('makeFieldValue, lists, nulls and fixed values', () => {
   it('sizes a list by min and max, by length, and never returns null for one', () => {
     for (const drawn of draws('nums', 50, { rule: { min: 2, max: 4 } })) {
-      expect(Array.isArray(drawn) && drawn.length >= 2 && drawn.length <= 4).toBe(true)
+      expect(asArray(drawn).length).toSatisfy(between(2, 4))
     }
     for (const drawn of draws('roles', 50, { rule: { length: { min: 1, max: 1 } } })) {
       expect(drawn).toHaveLength(1)
-      expect(['ADMIN', 'VIEWER']).toContain(Array.isArray(drawn) ? drawn[0] : null)
+      expect(['ADMIN', 'VIEWER']).toContain(asArray(drawn)[0])
     }
     expect(namedValue('nums', { rule: { min: 0, max: 0 } })).toStrictEqual([])
     for (const drawn of draws('maybeList', 50, { bounds: { nullRate: 1, dates: null } } as never)) {
@@ -548,9 +570,7 @@ describe('makeFieldValue, lists, nulls and fixed values', () => {
 
   it('keeps list elements inside their own bounds, not the list length bounds', () => {
     for (const drawn of draws('nums', 50, { rule: { min: 3, max: 3 } })) {
-      expect(
-        Array.isArray(drawn) && drawn.every((n) => typeof n === 'number' && n >= 0 && n <= 1000),
-      ).toBe(true)
+      for (const n of asArray(drawn)) expect(asNumber(n)).toSatisfy(between(0, 1000))
     }
   })
 

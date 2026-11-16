@@ -75,9 +75,15 @@ export function seaOrmFiles(
     .map((e) => e.moduleName)
     .toSorted((a, b) => {
       const [x, y] = [a.replace(/^r#/u, ''), b.replace(/^r#/u, '')]
-      return x < y ? -1 : x > y ? 1 : 0
+      return byCodeUnit(x, y)
     })
   const modEntry = { fileName: 'mod.rs', code: generateModRs(moduleNames) }
 
   return [...allEntries.map(({ fileName, code }) => ({ fileName, code })), modEntry]
+}
+
+// Orders two strings by their UTF-16 code units, as rustfmt does.
+function byCodeUnit(a: string, b: string) {
+  if (a < b) return -1
+  return a > b ? 1 : 0
 }

@@ -19,12 +19,7 @@ export function resolveSeedConfig(config: SeedConfig) {
   return {
     schema: config.schema ?? null,
     seed: config.seed ?? null,
-    locale:
-      config.locale === undefined
-        ? null
-        : typeof config.locale === 'string'
-          ? [config.locale]
-          : config.locale,
+    locale: locales(config.locale),
     count: config.count ?? null,
     nullRate: config.nullRate ?? null,
     dates: window(config.dates),
@@ -37,3 +32,8 @@ export function resolveSeedConfig(config: SeedConfig) {
 }
 
 export type ResolvedSeedConfig = ReturnType<typeof resolveSeedConfig>
+
+function locales(locale: SeedConfig['locale']) {
+  if (locale === undefined) return null
+  return typeof locale === 'string' ? [locale] : locale
+}

@@ -127,10 +127,11 @@ export function fieldSchema(field: DMMF.Field, enumValues: readonly EnumMember[]
 
 /** The zod schema a whole row of the table must pass, one field per insertable column. */
 function rowSchema(table: ModelTable) {
+  const fields = new Map(table.model.fields.map((f) => [f.name, f]))
   return z.object(
     Object.fromEntries(
       table.columns.flatMap((column) => {
-        const field = table.model.fields.find((f) => f.name === column.field)
+        const field = fields.get(column.field)
         return field === undefined ? [] : [[column.field, fieldSchema(field, column.enumValues)]]
       }),
     ),

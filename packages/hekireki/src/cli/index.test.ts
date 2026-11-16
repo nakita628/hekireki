@@ -65,6 +65,11 @@ async function cli(args: readonly string[]) {
   }
 }
 
+function portOf(server: ReturnType<typeof createServer>) {
+  const address = server.address()
+  return address !== null && typeof address === 'object' ? address.port : 0
+}
+
 describe('hekireki --help', () => {
   it('lists the studio subcommand', async () => {
     const { exit, out } = await cli(['--help'])
@@ -211,8 +216,7 @@ describe('hekireki studio', () => {
     await new Promise<void>((resolve) => {
       taken.listen(0, '127.0.0.1', resolve)
     })
-    const address = taken.address()
-    const port = address !== null && typeof address === 'object' ? address.port : 0
+    const port = portOf(taken)
     try {
       const { exit, printed } = await cli(['studio', '-p', String(port)])
       expect(Exit.isFailure(exit)).toBe(true)

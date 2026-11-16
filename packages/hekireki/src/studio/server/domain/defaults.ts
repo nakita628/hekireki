@@ -70,28 +70,47 @@ export function makeGeneratedFields(input: z.infer<typeof MakeGeneratedFieldsInp
   return input.model.fields.flatMap((field) => {
     if (field.kind === 'object' || field.kind === 'unsupported') return []
     if (field.name in input.row) return []
-    const generated = /^(?<name>uuid|cuid|nanoid|ulid|now)\((?<argument>[^)]*)\)$/u.exec(
-      field.default ?? '',
-    )?.groups
-    const argument = generated?.['argument']?.trim() ?? ''
-    const length = Number(argument)
-    const generator =
-      generated?.['name'] === 'uuid'
-        ? ({ kind: 'uuid', version: argument === '7' ? 7 : 4 } as const)
-        : generated?.['name'] === 'cuid'
-          ? ({ kind: 'cuid', version: argument === '2' ? 2 : 1 } as const)
-          : generated?.['name'] === 'nanoid'
-            ? ({
-                kind: 'nanoid',
-                length: Number.isInteger(length) && length > 0 ? length : null,
-              } as const)
-            : generated?.['name'] === 'ulid'
-              ? ({ kind: 'ulid' } as const)
-              : generated?.['name'] === 'now' || field.isUpdatedAt
-                ? ({ kind: 'now' } as const)
-                : field.isList && field.isRequired && field.default === null
-                  ? ({ kind: 'literal', value: '[]' } as const)
-                  : null
+    const generator = generatorOf(field)
     return generator === null ? [] : [{ name: field.name, generator }]
   })
+}
+
+type DefaultedField = z.infer<typeof MakeGeneratedFieldsInput>['model']['fields'][number]
+
+const GENERATED_DEFAULT = /^(?<name>uuid|cuid|nanoid|ulid|now)\((?<argument>[^)]*)\)$/u
+
+// What the client fills a left-out field with: the function of its `@default(...)`, the time for
+// `@updatedAt`, an empty list for a required list with no default, or null for nothing.
+function generatorOf(field: DefaultedField) {
+  const generated = GENERATED_DEFAULT.exec(field.default ?? '')?.groups
+  if (generated !== undefined) {
+    return generatorCalled(generated['name'] ?? '', generated['argument']?.trim() ?? '')
+  }
+  if (field.isUpdatedAt) return { kind: 'now' } as const
+  if (field.isList && field.isRequired && field.default === null) {
+    return { kind: 'literal', value: '[]' } as const
+  }
+  return null
+}
+
+// The generator of a `@default` function, by its name and its argument.
+function generatorCalled(name: string, argument: string) {
+  switch (name) {
+    case 'uuid':
+      return { kind: 'uuid', version: argument === '7' ? 7 : 4 } as const
+    case 'cuid':
+      return { kind: 'cuid', version: argument === '2' ? 2 : 1 } as const
+    case 'nanoid': {
+      const length = Number(argument)
+      return {
+        kind: 'nanoid',
+        length: Number.isInteger(length) && length > 0 ? length : null,
+      } as const
+    }
+    case 'ulid':
+      return { kind: 'ulid' } as const
+    // The pattern leaves `now()` alone.
+    default:
+      return { kind: 'now' } as const
+  }
 }

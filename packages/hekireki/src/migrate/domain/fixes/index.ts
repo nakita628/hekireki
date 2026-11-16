@@ -8,7 +8,7 @@ import { onlyMoves, resolveTable } from './resolve-table.js'
 import { columnStep, duplicateStep, migrationStep, orphanStep } from './steps.js'
 import { mappedValues, valueSql } from './values.js'
 import { makeFixContext } from './versions.js'
-import type { FixState } from './versions.js'
+import type { FixedTable, FixState } from './versions.js'
 
 /**
  * The fixes the decisions of the Migrate page make, made twice from one description.
@@ -55,10 +55,9 @@ export function resolveFixes(input: {
   const context = makeFixContext(input)
   const { dialect, keyOf, q, actualByKey, versioned, current, empty } = context
   const configured = Object.entries(input.models ?? {})
+  const modelNames = new Set(input.expected.map((table) => table.model))
   const unknownModels = configured.flatMap(([model]) =>
-    input.expected.some((table) => table.model === model)
-      ? []
-      : [`${model}: the schema has no model ${model}.`],
+    modelNames.has(model) ? [] : [`${model}: the schema has no model ${model}.`],
   )
   const missing = input.expected.flatMap((table) => {
     const config = input.models?.[table.model]
@@ -81,6 +80,10 @@ export function resolveFixes(input: {
 
   const moves = resolveMoves(context, input.models)
   const { moved } = moves
+  const movedIntoExisting = Map.groupBy(
+    moved.filter((m) => !m.created),
+    (m) => m.target,
+  )
 
   const errors = [
     ...unknownModels,
@@ -224,34 +227,44 @@ export function resolveFixes(input: {
       converts: entry.resolved.columns.flatMap(({ column, fix, added }) =>
         added || fix.convert === undefined ? [] : [{ column: column.column, sql: fix.convert.sql }],
       ),
-      enumMaps: entry.resolved.columns.flatMap(({ column, fix, added }) => {
-        if (added || column.kind !== 'enum' || dialect === 'sqlite') return []
-        const existing =
-          entry.actual.columns.find((c) => c.name === column.column)?.enumValues ?? null
-        if (existing === null) return []
-        const mapping = mappedValues(column, fix.values).filter((m) => !existing.includes(m.to))
-        return mapping.length === 0
-          ? []
-          : [
-              {
-                column: column.column,
-                type: column.enumType ?? column.type,
-                mapping,
-                existing,
-                members: (column.enumMembers ?? []).map((m) => m.dbName),
-              },
-            ]
-      }),
+      enumMaps: enumMapsOf(dialect, entry),
       fills: [
         ...entry.resolved.columns.flatMap(({ column, fix, added }) =>
           added && fix.nulls !== undefined
             ? [{ column: column.column, sql: valueSql(dialect, column, fix.nulls) }]
             : [],
         ),
-        ...moved
-          .filter((m) => !m.created && m.target === entry.table)
-          .map((m) => ({ column: m.column.column, sql: m.valueFrom(m.holding) })),
+        ...(movedIntoExisting.get(entry.table) ?? []).map((m) => ({
+          column: m.column.column,
+          sql: m.valueFrom(m.holding),
+        })),
       ],
     })),
   }
+}
+
+/**
+ * The enum values of a table mapped to a member the old type does not have, which the migration
+ * maps in its cast (PostgreSQL) or over a widened ENUM (MySQL).
+ */
+function enumMapsOf(dialect: Dialect, entry: FixedTable) {
+  const enumValuesOf = new Map(entry.actual.columns.toReversed().map((c) => [c.name, c.enumValues]))
+  return entry.resolved.columns.flatMap(({ column, fix, added }) => {
+    if (added || column.kind !== 'enum' || dialect === 'sqlite') return []
+    const existing = enumValuesOf.get(column.column) ?? null
+    if (existing === null) return []
+    const members = new Set(existing)
+    const mapping = mappedValues(column, fix.values).filter((m) => !members.has(m.to))
+    return mapping.length === 0
+      ? []
+      : [
+          {
+            column: column.column,
+            type: column.enumType ?? column.type,
+            mapping,
+            existing,
+            members: (column.enumMembers ?? []).map((m) => m.dbName),
+          },
+        ]
+  })
 }

@@ -95,6 +95,7 @@ function fillDefaults(input: RowInput, skip: ReadonlySet<string>, row: SeedRow) 
     const entries = yield* Effect.forEach(
       input.table.columns.filter((column) => !skip.has(column.field)),
       (column) => defaultEntry(input, column),
+      { concurrency: 1 },
     )
     const filled: SeedRow = { ...row, ...Object.fromEntries(entries) }
     return filled
@@ -118,7 +119,9 @@ function makeRow(input: RowInput) {
       given === null
         ? fillScalars(input, table.columns, skip, fitted)
         : yield* fillDefaults(input, skip, fitted)
-    const parents = yield* Effect.forEach(keys, (fk) => pickParent(input, fk, scalars))
+    const parents = yield* Effect.forEach(keys, (fk) => pickParent(input, fk, scalars), {
+      concurrency: 1,
+    })
     const linked: SeedRow = {
       ...scalars,
       ...Object.fromEntries(
@@ -132,7 +135,9 @@ function makeRow(input: RowInput) {
     }
     // A row is updated at or after it was created: @updatedAt follows the latest now() default.
     const created = table.model.fields
-      .filter((f) => f.type === 'DateTime' && !f.isUpdatedAt && fieldDefault(f)?.name === 'now')
+      .filter(
+        (f) => f.type === 'DateTime' && f.isUpdatedAt !== true && fieldDefault(f)?.name === 'now',
+      )
       .map((f) => linked[f.name])
       .filter((v): v is Date => v instanceof Date)
       .toSorted((a, b) => b.getTime() - a.getTime())[0]
@@ -155,7 +160,9 @@ function makeRow(input: RowInput) {
 }
 
 function violated(row: SeedRow, table: ModelTable, seen: ReadonlyMap<string, ReadonlySet<string>>) {
-  return table.uniques.filter((fields) => seen.get(fields.join(' '))?.has(uniqueKey(row, fields)))
+  return table.uniques.filter(
+    (fields) => seen.get(fields.join(' '))?.has(uniqueKey(row, fields)) === true,
+  )
 }
 
 /**
@@ -165,10 +172,10 @@ function violated(row: SeedRow, table: ModelTable, seen: ReadonlyMap<string, Rea
  */
 function disambiguate(row: SeedRow, fields: readonly string[], table: ModelTable, index: number) {
   const keys = new Set(table.foreignKeys.flatMap((fk) => fk.fromFields))
+  const types = new Map(table.model.fields.map((f) => [f.name, f.type]))
   return fields.flatMap((field): readonly (readonly [string, string])[] => {
     const value = row[field]
-    const declared = table.model.fields.find((f) => f.name === field)
-    if (keys.has(field) || typeof value !== 'string' || declared?.type !== 'String') return []
+    if (keys.has(field) || typeof value !== 'string' || types.get(field) !== 'String') return []
     const at = value.indexOf('@')
     const suffix = String(index + 1)
     return [

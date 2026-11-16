@@ -41,25 +41,34 @@ export function activerecord(options: GeneratorOptions) {
     // reads config/locales down through its subdirectories.
     const localeFiles = activeRecordLocaleFiles(options.dmmf.datamodel.models)
     if (localeFiles.length > 0) {
-      const locales = getString(options.generator.config?.['locales'])
-      const localesDir =
-        locales !== undefined && locales !== ''
-          ? path.resolve(output, locales)
-          : path.basename(output) === 'models'
-            ? path.resolve(output, '..', '..', 'config', 'locales')
-            : yield* new GeneratorConfigError({
-                message:
-                  'locales is required for Hekireki-ActiveRecord when a `@ar.` message names a locale: the directory config/locales is written to, relative to output.',
-              })
+      const localesDir = yield* localesDirectory(
+        output,
+        getString(options.generator.config?.['locales']),
+      )
       yield* Effect.forEach(
         localeFiles,
         (f) => {
           const file = path.join(localesDir, f.fileName)
           return emitRaw(f.code, path.dirname(file), file)
         },
-        { discard: true },
+        { discard: true, concurrency: 1 },
       )
     }
     return yield* emitMany(withBase, output)
+  })
+}
+
+// Where the locale files go: the `locales` option relative to output, or config/locales when
+// output is app/models.
+function localesDirectory(output: string, locales: string | undefined) {
+  return Effect.gen(function* () {
+    if (locales !== undefined && locales !== '') return path.resolve(output, locales)
+    if (path.basename(output) === 'models') {
+      return path.resolve(output, '..', '..', 'config', 'locales')
+    }
+    return yield* new GeneratorConfigError({
+      message:
+        'locales is required for Hekireki-ActiveRecord when a `@ar.` message names a locale: the directory config/locales is written to, relative to output.',
+    })
   })
 }

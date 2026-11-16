@@ -5,6 +5,12 @@ import { describe, expect, it } from 'vite-plus/test'
 import { generateGormModels } from '../generator/gorm.js'
 import { buildGormTags, goFieldName, prismaTypeToGoType } from './gorm.js'
 
+/** The datamodel of a schema the test expects Prisma to parse. */
+function datamodelOf(result: ReturnType<typeof getDMMF>) {
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel
+}
+
 describe('prismaTypeToGoType', () => {
   it('maps String to string', () => {
     expect(prismaTypeToGoType('String', true)).toBe('string')
@@ -1153,8 +1159,7 @@ enum Tone {
         ],
       ],
     })
-    if ('type' in dmmf) throw new Error(dmmf.error.message)
-    const { models, enums, indexes } = dmmf.datamodel
+    const { models, enums, indexes } = datamodelOf(dmmf)
     expect(generateGormModels(models, enums, indexes)).toBe(`package model
 
 import (

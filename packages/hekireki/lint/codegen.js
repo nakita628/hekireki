@@ -90,12 +90,24 @@ export function documentedOptions(readme, provider) {
 
 // Read from options.generator, not from its config: every generator block has it.
 const STANDARD_OPTIONS = new Set(['output'])
+const GENERATOR_EFFECTS = new Set([
+  'fetch',
+  'setTimeout',
+  'setInterval',
+  'setImmediate',
+  'queueMicrotask',
+])
+const GENERATOR_AMBIENT = new Set(['console', 'process'])
 
 // The option a member expression reads: `config.title` and, the config being an index signature
 // (noPropertyAccessFromIndexSignature), `config['title']`.
 function optionName(node) {
   if (!node.computed && node.property.type === 'Identifier') return node.property.name
-  if (node.computed && node.property.type === 'Literal' && typeof node.property.value === 'string') {
+  if (
+    node.computed &&
+    node.property.type === 'Literal' &&
+    typeof node.property.value === 'string'
+  ) {
     return node.property.value
   }
   return null
@@ -206,8 +218,9 @@ export const codegenRules = {
             return
           }
           const names = new Set([...read].map((node) => optionName(node)))
+          const listed = new Set(documented)
           for (const node of read) {
-            if (documented.includes(optionName(node))) continue
+            if (listed.has(optionName(node))) continue
             context.report({
               node,
               message: `${provider} reads \`${optionName(node)}\`, which its row of the README's options table does not list. Add it to the row.`,
@@ -244,14 +257,6 @@ export const codegenRules = {
         crypto: ['randomUUID', 'getRandomValues', 'randomBytes'],
         performance: ['now'],
       }
-      const effects = new Set([
-        'fetch',
-        'setTimeout',
-        'setInterval',
-        'setImmediate',
-        'queueMicrotask',
-      ])
-      const ambient = new Set(['console', 'process'])
       function reportAsync(node) {
         if (!node.async) return
         context.report({ node, message: `An async function in a generator. ${tail}` })
@@ -273,7 +278,7 @@ export const codegenRules = {
           }
           if (
             callee.type === 'Identifier' &&
-            (callee.name === 'Date' || effects.has(callee.name))
+            (callee.name === 'Date' || GENERATOR_EFFECTS.has(callee.name))
           ) {
             context.report({ node, message: `\`${callee.name}()\` in a generator. ${tail}` })
           }
@@ -288,7 +293,7 @@ export const codegenRules = {
           }
         },
         MemberExpression(node) {
-          if (node.object.type === 'Identifier' && ambient.has(node.object.name)) {
+          if (node.object.type === 'Identifier' && GENERATOR_AMBIENT.has(node.object.name)) {
             context.report({ node, message: `\`${node.object.name}\` in a generator. ${tail}` })
           }
         },

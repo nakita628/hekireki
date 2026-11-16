@@ -279,9 +279,10 @@ function renderCard(
   )
   const nameWidth = textUnits(name) * HEADER_FONT_SIZE * MONO_BOLD_ADVANCE
   const dbNameLeft = nameLeft + nameWidth + HEADER_GAP
-  const dbName = header.dbName
-    ? truncateLabel(header.dbName, pillX - HEADER_GAP - dbNameLeft, TYPE_FONT_SIZE * MONO_ADVANCE)
-    : ''
+  const dbName =
+    header.dbName !== null && header.dbName !== ''
+      ? truncateLabel(header.dbName, pillX - HEADER_GAP - dbNameLeft, TYPE_FONT_SIZE * MONO_ADVANCE)
+      : ''
   const headerCenter = card.y + NODE_HEADER_HEIGHT / 2
   return [
     `<clipPath id="${id}"><rect x="${round(card.x)}" y="${round(card.y)}" width="${round(card.width)}" height="${round(card.height)}" rx="${NODE_RADIUS}"/></clipPath>`,
@@ -357,9 +358,14 @@ export function renderEnum(card: PlacedEnum, index: number, palette: Palette) {
       const centerY = top + position * NODE_ROW_HEIGHT + NODE_ROW_HEIGHT / 2
       // Both are cut, and the member name takes only what the stored name leaves: each is drawn
       // from its own edge, so an uncut one runs over the other and out of the card.
-      const dbName = member.dbName
-        ? truncateLabel(member.dbName, (right - left) * STORED_SHARE, TYPE_FONT_SIZE * MONO_ADVANCE)
-        : ''
+      const dbName =
+        member.dbName !== null && member.dbName !== ''
+          ? truncateLabel(
+              member.dbName,
+              (right - left) * STORED_SHARE,
+              TYPE_FONT_SIZE * MONO_ADVANCE,
+            )
+          : ''
       const stored =
         dbName === ''
           ? ''

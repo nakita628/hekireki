@@ -194,13 +194,13 @@ export function createPostgresBackup(driver: Driver, name: string) {
         message: 'The backup could not be taken: the catalogue of the database did not read.',
       })
     }
-    const tables = [...new Set(columns.data.map((column) => column.table))]
+    const columnsOf = Map.groupBy(columns.data, (column) => column.table)
     const copies = postgresBackupStatements({
       name,
       schema: current,
-      tables: tables.map((table) => ({
+      tables: [...columnsOf].map(([table, ofTable]) => ({
         table,
-        columns: columns.data.filter((one) => one.table === table).map((one) => one.column),
+        columns: ofTable.map((one) => one.column),
       })),
       enumColumns: enumColumns.map((row) => ({
         table: String(row['table']),
@@ -228,11 +228,14 @@ export function createPostgresBackup(driver: Driver, name: string) {
         `CREATE TABLE ${quoted}."${STATE_TABLE}" ("state" text NOT NULL)`,
       ].join(';\n'),
     )
-    yield* Effect.forEach(restore, (statement, position) =>
-      driver.executeRaw({
-        sql: `INSERT INTO ${quoted}."${RESTORE_TABLE}" ("position", "statement") VALUES ($1, $2)`,
-        params: [position, statement],
-      }),
+    yield* Effect.forEach(
+      restore,
+      (statement, position) =>
+        driver.executeRaw({
+          sql: `INSERT INTO ${quoted}."${RESTORE_TABLE}" ("position", "statement") VALUES ($1, $2)`,
+          params: [position, statement],
+        }),
+      { concurrency: 1 },
     )
     yield* driver.executeRaw({
       sql: `INSERT INTO ${quoted}."${STATE_TABLE}" ("state") VALUES ($1)`,

@@ -11,7 +11,7 @@ export function seaOrm(options: GeneratorOptions) {
   return Effect.gen(function* () {
     const output = yield* requireOutput(options, 'Hekireki-SeaORM')
     const renameAll = getString(options.generator.config?.['renameAll'])
-    const serde = { renameAll }
+    const serde = renameAll === undefined ? {} : { renameAll }
     const enums = options.dmmf.datamodel.enums
     const models = options.dmmf.datamodel.models
     // sqlx has no chrono type for TIMETZ and SeaORM no column type, so no entity could read it.

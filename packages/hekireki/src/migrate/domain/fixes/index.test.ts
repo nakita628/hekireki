@@ -83,6 +83,17 @@ const ACTUAL = [
   },
 ] as const
 
+type Planned = ReturnType<typeof makeChecks>
+type Check = Planned['checks'][number]
+
+function checkOf(planned: Planned, subject: string, kind: string) {
+  return planned.checks.find((check) => check.subject === subject && check.kind === kind)
+}
+
+function isBlockingValueCheck(check: Check) {
+  return check.severity === 'blocking' && check.kind.startsWith('value-')
+}
+
 function checks(
   fixes: Parameters<typeof makeChecks>[0]['fixes'],
   actual: Parameters<typeof makeChecks>[0]['actual'] = ACTUAL,
@@ -94,7 +105,7 @@ function checks(
     actual,
     defaultSchema: 'public',
     mariadb: false,
-    fixes,
+    ...(fixes === undefined ? {} : { fixes }),
   })
 }
 
@@ -149,9 +160,7 @@ describe('fixes in the check', () => {
   })
 
   it('reads every fixed table through the CTEs of its fixes, one column after another, parents settled before their orphans', () => {
-    const notNull = planned.checks.find(
-      (check) => check.subject === 'User.name' && check.kind === 'not-null',
-    )
+    const notNull = checkOf(planned, 'User.name', 'not-null')
     expect(notNull?.guaranteed).toBe(false)
     expect(notNull?.statement.sql).toBe(
       [
@@ -239,7 +248,7 @@ model Metric {
     ])
     expect(
       planned.checks
-        .filter((check) => check.severity === 'blocking' && check.kind.startsWith('value-'))
+        .filter(isBlockingValueCheck)
         .map((check) => check.statement.sql.startsWith('WITH "hk_fix_0" AS (')),
     ).toStrictEqual([true, true, true, true])
   })
@@ -384,21 +393,18 @@ model User {
   })
 
   it('maps a value to a member the column cannot hold yet in the migration, not before it', () => {
-    const planned = checks(
-      { User: { fields: { role: { values: { EDITOR: 'VIEWER' } } } } },
-      [
-        {
-          ...ACTUAL[0],
-          columns: [
-            column('id', { dataType: 'integer' }),
-            column('email'),
-            column('name'),
-            column('role', { dataType: 'USER-DEFINED', enumValues: ['ADMIN', 'EDITOR'] }),
-          ],
-        },
-        ACTUAL[1],
-      ].flatMap((table) => (table === undefined ? [] : [table])),
-    )
+    const planned = checks({ User: { fields: { role: { values: { EDITOR: 'VIEWER' } } } } }, [
+      {
+        ...ACTUAL[0],
+        columns: [
+          column('id', { dataType: 'integer' }),
+          column('email'),
+          column('name'),
+          column('role', { dataType: 'USER-DEFINED', enumValues: ['ADMIN', 'EDITOR'] }),
+        ],
+      },
+      ACTUAL[1],
+    ])
     expect(planned.errors).toStrictEqual([])
     expect(planned.fixes.map((fix) => [fix.kind, fix.inMigration, fix.statements])).toStrictEqual([
       ['values', true, []],
@@ -432,7 +438,7 @@ describe('renamedFrom', () => {
     // The NULLs are counted in the column as it is now, and nothing of it is dropped.
     expect(
       planned.checks
-        .filter((check) => check.subject === 'User.fullName' || check.subject === 'User.name')
+        .filter((check) => ['User.fullName', 'User.name'].includes(check.subject))
         .map((check) => [check.kind, check.subject, check.statement.sql]),
     ).toStrictEqual([
       [
@@ -455,19 +461,13 @@ describe('renamedFrom', () => {
       checks({ User: { fields: { fullName: { renamedFrom: 'nickname' } } } }, ACTUAL, RENAMED)
         .errors,
     ).toStrictEqual([`${where}: User has no column nickname.`])
-    const both = [
-      { ...ACTUAL[0], columns: [...(ACTUAL[0]?.columns ?? []), column('fullName')] },
-      ACTUAL[1],
-    ].flatMap((table) => (table === undefined ? [] : [table]))
+    const both = [{ ...ACTUAL[0], columns: [...ACTUAL[0].columns, column('fullName')] }, ACTUAL[1]]
     expect(
       checks({ User: { fields: { fullName: { renamedFrom: 'name' } } } }, both, RENAMED).errors,
     ).toStrictEqual([`${where}: User already has a column fullName; there is nothing to rename.`])
     expect(
-      checks(
-        { User: { fields: { fullName: { renamedFrom: 'name' } } } },
-        [ACTUAL[1]].flatMap((t) => (t === undefined ? [] : [t])),
-        RENAMED,
-      ).errors,
+      checks({ User: { fields: { fullName: { renamedFrom: 'name' } } } }, [ACTUAL[1]], RENAMED)
+        .errors,
     ).toStrictEqual([
       `${where}: the migration creates User; there is no column to rename.`,
       'User: the migration creates User, so there are no rows of it to fix.',
@@ -752,7 +752,7 @@ describe('what the schema does not describe', () => {
     expect(planned.errors).toStrictEqual([])
     expect(
       planned.checks
-        .filter((check) => check.kind === 'check-constraint' || check.kind === 'trigger-unfollowed')
+        .filter((check) => ['check-constraint', 'trigger-unfollowed'].includes(check.kind))
         .map((check) => [check.kind, check.severity, check.subject, check.statement.sql]),
     ).toStrictEqual([
       [

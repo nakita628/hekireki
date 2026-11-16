@@ -49,9 +49,15 @@ function components<T>(
 ): readonly (readonly T[])[] {
   return items.reduce<readonly (readonly T[])[]>((groups, item) => {
     const joined = groups.filter((group) => group.some((other) => linked(item, other)))
-    const apart = groups.filter((group) => !joined.includes(group))
+    const isJoined = new Set(joined)
+    const apart = groups.filter((group) => !isJoined.has(group))
     return [...apart, [...joined.flat(), item]]
   }, [])
+}
+
+// Whether a wire at height `y` passes through one of the stretches of a bundle.
+function passesThrough(y: number, bundle: readonly Stretch[]) {
+  return bundle.some((stretch) => stretch.from < y && y < stretch.to)
 }
 
 /**
@@ -67,7 +73,7 @@ function crossings(left: readonly Stretch[], right: readonly Stretch[]) {
       ),
     )
   const passes = (ys: readonly number[], bundle: readonly Stretch[]) =>
-    ys.filter((y) => bundle.some((stretch) => stretch.from < y && y < stretch.to)).length
+    ys.filter((y) => passesThrough(y, bundle)).length
   return passes(leaving(left, 1), right) + passes(leaving(right, -1), left)
 }
 
@@ -115,6 +121,22 @@ function shiftCost(stretch: Stretch, x: number, near: readonly Box[]) {
     return Math.sign(end.x - x) === Math.sign(end.x - stretch.x) && Math.abs(end.x - x) >= room
   })
   return keeps ? routeCost(turned(stretch, x), near).hidden : Infinity
+}
+
+type Obstacle = { readonly route: number | null; readonly box: Box }
+
+/**
+ * What each route of a group keeps its distance from: every obstacle within reach but its own
+ * stretches, read once per route rather than for every stretch of every layout.
+ */
+function othersNear(group: readonly Stretch[], obstacles: readonly Obstacle[], reach: Box) {
+  const near = obstacles.filter((obstacle) => meets(reach, obstacle.box))
+  return new Map(group.map((stretch) => [stretch.route, boxesApartFrom(near, stretch.route)]))
+}
+
+// The boxes of the obstacles that are not stretches of `route`.
+function boxesApartFrom(obstacles: readonly Obstacle[], route: number) {
+  return obstacles.filter((obstacle) => obstacle.route !== route).map(({ box }) => box)
 }
 
 /**
@@ -178,15 +200,7 @@ function spreadVertical(routes: readonly Route[], cards: readonly Box[]): readon
       width: Math.max(...spanX) - Math.min(...spanX) + TRACK * 2,
       height: Math.max(...spanY) - Math.min(...spanY) + TRACK * 2,
     }
-    const near = obstacles.filter((obstacle) => meets(reach, obstacle.box))
-    // What each route keeps its distance from: everything near but its own stretches, read once
-    // per route rather than for every stretch of every layout.
-    const nearOthers = new Map(
-      group.map((stretch) => [
-        stretch.route,
-        near.filter((obstacle) => obstacle.route !== stretch.route).map(({ box }) => box),
-      ]),
-    )
+    const nearOthers = othersNear(group, obstacles, reach)
     const cost = (bundle: readonly Stretch[], x: number) =>
       bundle.reduce(
         (sum, stretch) => sum + shiftCost(stretch, x, nearOthers.get(stretch.route) ?? []),

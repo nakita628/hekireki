@@ -94,15 +94,18 @@ export function listBackups(input: { readonly driver: Driver; readonly schemaDir
         .filter((one) => /^backup_\d+\.db$/u.test(one))
         .toSorted()
         .toReversed()
-      return yield* Effect.forEach(files, (file) =>
-        fileStamp(path.join(directory, file)).pipe(
-          Effect.map((stamp) => ({
-            name: file.replace(/\.db$/u, ''),
-            location: path.join(directory, file),
-            size: Number(stamp?.split(':')[1] ?? 0),
-            restorable: true,
-          })),
-        ),
+      return yield* Effect.forEach(
+        files,
+        (file) =>
+          fileStamp(path.join(directory, file)).pipe(
+            Effect.map((stamp) => ({
+              name: file.replace(/\.db$/u, ''),
+              location: path.join(directory, file),
+              size: Number(stamp?.split(':')[1] ?? 0),
+              restorable: true,
+            })),
+          ),
+        { concurrency: 1 },
       )
     }
     // A backup that keeps the statements of its restore can be restored; one taken before Studio

@@ -1703,10 +1703,11 @@ describe('keys, indexes and foreign keys as Prisma Migrate makes them', () => {
       ],
     })
     const join = (provider: 'postgresql' | 'mysql' | 'sqlite') => {
-      const line =
+      const line = String(
         drizzleSchema(makeDatamodel([post, tag]), provider, [])
           .split('\n')
-          .find((text) => text.includes("'_PostToTag'")) ?? ''
+          .find((text) => text.includes("'_PostToTag'")),
+      )
       return line.slice(line.indexOf('(table) =>'))
     }
     const rest =

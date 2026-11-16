@@ -795,6 +795,13 @@ export function openShadowDatabase(input: {
  * @param input.schemaDir - where relative sqlite files resolve from
  * @returns the status, the driver, the URL as found and how to close it
  */
+function openDriver(dialect: Dialect, url: string, cwd: string, schemaDir: string) {
+  if (dialect === 'sqlite') {
+    return isLibsqlUrl({ url }) ? openLibsql(url, cwd) : openSqlite(url, schemaDir)
+  }
+  return dialect === 'postgresql' ? openPostgres(url, cwd) : openMysql(url, cwd)
+}
+
 export function connectDatabase(input: z.infer<typeof ConnectDatabaseInput>) {
   return Effect.gen(function* () {
     const found = yield* resolveDatabaseUrl(input).pipe(
@@ -810,14 +817,7 @@ export function connectDatabase(input: z.infer<typeof ConnectDatabaseInput>) {
         reason: `Cannot tell which database "${url}" points at.\n   Use a postgresql://, mysql:// or file: URL.`,
       })
     }
-    const driver =
-      dialect === 'sqlite'
-        ? isLibsqlUrl({ url: found.url })
-          ? yield* openLibsql(found.url, input.cwd)
-          : yield* openSqlite(found.url, input.schemaDir)
-        : dialect === 'postgresql'
-          ? yield* openPostgres(found.url, input.cwd)
-          : yield* openMysql(found.url, input.cwd)
+    const driver = yield* openDriver(dialect, found.url, input.cwd, input.schemaDir)
     return {
       status: { connected: true, dialect, url, source: found.source, error: null },
       driver: Effect.succeed(driver),

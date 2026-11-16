@@ -92,7 +92,7 @@ export function rewriteMigration(input: {
    * What runs once Prisma's statements are done: the rows of a table the migration creates made
    * from values moved into it, and the table those values were kept in dropped.
    */
-  readonly after?: readonly string[]
+  readonly after?: readonly string[] | undefined
   /** The provider is CockroachDB. */
   readonly cockroach?: boolean
   /** Whether the column is nullable now, for the ENUM MySQL is widened to for a moment. */
@@ -114,16 +114,19 @@ export function rewriteMigration(input: {
       .map((t) => t.table),
   ]
   const names = [...new Set(targets.map((table) => qualifiedName(dialect, table)))]
+  const changesByName = Map.groupBy(input.tables, (t) => qualifiedName(dialect, t.table))
+  const targetsByName = Map.groupBy(targets, (table) => qualifiedName(dialect, table))
+  const renamesByName = Map.groupBy(input.renames, (r) => qualifiedName(dialect, r.table))
   const plans = names.map((name) => {
-    const changes = input.tables.find((t) => qualifiedName(dialect, t.table) === name)
+    const changes = changesByName.get(name)?.[0]
     // What the rewrite does to one table, found by the name the migration gives it.
     return {
       name,
-      table: targets.find((table) => qualifiedName(dialect, table) === name) ?? {
+      table: targetsByName.get(name)?.[0] ?? {
         schema: null,
         table: name,
       },
-      renames: input.renames.filter((r) => qualifiedName(dialect, r.table) === name),
+      renames: renamesByName.get(name) ?? [],
       converts: changes?.converts ?? [],
       enumMaps: changes?.enumMaps ?? [],
       fills: changes?.fills ?? [],
@@ -173,7 +176,7 @@ export function rewriteMigration(input: {
     // Prisma's layout: a block of statements under its comment, an empty line before the next.
     sql: `${kept
       .map((statement, index) => {
-        const gap = index === 0 ? '' : commentOf(statement).comment === '' ? '\n' : '\n\n'
+        const gap = gapBefore(statement, index)
         // A comment with no statement under it (an empty migration's) stays as Prisma wrote it.
         return `${gap}${statement}${commentOf(statement).body === '' ? '' : ';'}`
       })
@@ -181,6 +184,12 @@ export function rewriteMigration(input: {
     errors: rewritten.errors,
     transaction,
   }
+}
+
+/** Prisma's layout: nothing before the first statement, an empty line before one under a comment. */
+function gapBefore(statement: string, index: number) {
+  if (index === 0) return ''
+  return commentOf(statement).comment === '' ? '\n' : '\n\n'
 }
 
 const COCKROACH_ALTER = /^ALTER TABLE ((?:"(?:[^"]|"")+"\.)?"(?:[^"]|"")+")\s+([\s\S]+)$/u
@@ -277,6 +286,59 @@ function definition(def: string) {
 
 const NONE: readonly string[] = []
 
+/** What the rewrite does to one table, found by the name the migration gives it. */
+type TablePlan = {
+  readonly name: string
+  readonly table: { readonly schema: string | null; readonly table: string }
+  readonly renames: readonly { readonly from: string; readonly to: string }[]
+  readonly converts: readonly { readonly column: string; readonly sql: string }[]
+  readonly enumMaps: readonly {
+    readonly column: string
+    readonly type: string
+    readonly mapping: readonly { readonly from: string; readonly to: string }[]
+    readonly existing: readonly string[]
+    readonly members: readonly string[]
+  }[]
+  readonly fills: readonly { readonly column: string; readonly sql: string }[]
+}
+
+const COCKROACH_DROP_VALUE =
+  /^ALTER TYPE (?:"(?:[^"]|"")+"\.)?"((?:[^"]|"")+)"\s*DROP VALUE '((?:[^']|'')*)'$/u
+
+/**
+ * CockroachDB drops an enum value in place: the rows holding it go to their new member first,
+ * which the ADD VALUE before it has made.
+ *
+ * @example
+ * ```sql
+ * UPDATE "User" SET "role" = CASE "role"::STRING WHEN 'EDITOR' THEN 'WRITER' ELSE "role"::STRING END::"Role" WHERE "role"::STRING IN ('EDITOR');
+ * ```
+ */
+function updatesBeforeDroppedValue(
+  plans: readonly TablePlan[],
+  type: string,
+  value: string,
+  found: ReadonlySet<string>,
+  mark: (key: string) => void,
+  q: (name: string) => string,
+  text: (value: string) => string,
+) {
+  return plans.flatMap((plan) =>
+    plan.enumMaps
+      .filter(
+        (map) =>
+          map.type === type &&
+          map.mapping.some((m) => m.from === value) &&
+          !found.has(`enum ${plan.name}.${map.column}`),
+      )
+      .map((map) => {
+        mark(`enum ${plan.name}.${map.column}`)
+        const pairs = map.mapping.map((m) => ({ from: text(m.from), to: text(m.to) }))
+        return `UPDATE ${plan.name} SET ${q(map.column)} = ${caseMap(`${q(map.column)}::STRING`, pairs)}::${q(type)} WHERE ${q(map.column)}::STRING IN (${map.mapping.map((m) => text(m.from)).join(', ')})`
+      }),
+  )
+}
+
 /**
  * PostgreSQL and MySQL: Prisma changes a table with one ALTER TABLE of clauses, which the rewrite edits.
  *
@@ -297,20 +359,7 @@ const NONE: readonly string[] = []
 function rewriteAlters(
   dialect: Dialect,
   statements: readonly string[],
-  plans: readonly {
-    readonly name: string
-    readonly table: { readonly schema: string | null; readonly table: string }
-    readonly renames: readonly { readonly from: string; readonly to: string }[]
-    readonly converts: readonly { readonly column: string; readonly sql: string }[]
-    readonly enumMaps: readonly {
-      readonly column: string
-      readonly type: string
-      readonly mapping: readonly { readonly from: string; readonly to: string }[]
-      readonly existing: readonly string[]
-      readonly members: readonly string[]
-    }[]
-    readonly fills: readonly { readonly column: string; readonly sql: string }[]
-  }[],
+  plans: readonly TablePlan[],
   q: (name: string) => string,
   text: (value: string) => string,
   nullable: (
@@ -325,33 +374,19 @@ function rewriteAlters(
   const mark = (key: string) => {
     found.add(key)
   }
+  const planByName = Map.groupBy(plans, (p) => p.name)
+  const separator = dialect === 'mysql' ? ',\n    ' : ',\n'
   const out = statements.flatMap((statement) => {
     const { comment, body } = commentOf(statement)
-    // CockroachDB drops an enum value in place: the rows holding it go to their new member first,
-    // which the ADD VALUE before it has made.
-    const dropped =
-      /^ALTER TYPE (?:"(?:[^"]|"")+"\.)?"((?:[^"]|"")+)"\s*DROP VALUE '((?:[^']|'')*)'$/u.exec(body)
+    const dropped = COCKROACH_DROP_VALUE.exec(body)
     if (dialect === 'postgresql' && dropped !== null) {
       const type = (dropped[1] ?? '').replaceAll('""', '"')
       const value = (dropped[2] ?? '').replaceAll("''", "'")
-      const updates = plans.flatMap((plan) =>
-        plan.enumMaps
-          .filter(
-            (map) =>
-              map.type === type &&
-              map.mapping.some((m) => m.from === value) &&
-              !found.has(`enum ${plan.name}.${map.column}`),
-          )
-          .map((map) => {
-            mark(`enum ${plan.name}.${map.column}`)
-            const pairs = map.mapping.map((m) => ({ from: text(m.from), to: text(m.to) }))
-            return `UPDATE ${plan.name} SET ${q(map.column)} = ${caseMap(`${q(map.column)}::STRING`, pairs)}::${q(type)} WHERE ${q(map.column)}::STRING IN (${map.mapping.map((m) => text(m.from)).join(', ')})`
-          }),
-      )
+      const updates = updatesBeforeDroppedValue(plans, type, value, found, mark, q, text)
       return underComment(comment, [...updates, body])
     }
     const alter = alterPattern.exec(body)
-    const plan = alter === null ? undefined : plans.find((p) => p.name === alter[1])
+    const plan = alter === null ? undefined : planByName.get(alter[1] ?? '')?.[0]
     if (alter === null || plan === undefined) return [statement]
     const rest = alter[2] ?? ''
     // PostgreSQL's cast of an enum column to the new type: the mapped values go in there.
@@ -360,16 +395,7 @@ function rewriteAlters(
       'u',
     ).exec(rest.trim())
     if (dialect === 'postgresql' && cast !== null) {
-      const map = plan.enumMaps.find((m) => q(m.column) === cast[1])
-      if (map === undefined) return [statement]
-      mark(`enum ${plan.name}.${map.column}`)
-      const mapped = caseMap(
-        `${q(map.column)}::text`,
-        map.mapping.map((m) => ({ from: text(m.from), to: text(m.to) })),
-      )
-      return [
-        `${comment ? `${comment}\n` : ''}ALTER TABLE ${plan.name} ALTER COLUMN ${cast[1]} TYPE ${cast[2]} USING (${mapped})::${cast[4]}`,
-      ]
+      return castWithMappedValues(statement, plan, cast, mark, q, text)
     }
     const clauses = splitTopLevel(rest)
     // Each pattern is made once per column, not once per clause it is tried on.
@@ -381,6 +407,23 @@ function rewriteAlters(
       const pattern = new RegExp(`^ADD COLUMN\\s+${escape(q(column))}\\s`, 'u')
       return clauses.findIndex((c) => pattern.test(c))
     }
+    const enumModify = (column: string) => {
+      const changed = new RegExp(
+        `^(?:MODIFY|CHANGE COLUMN ${escape(q(column))}) ${escape(q(column))} ENUM\\(`,
+        'u',
+      )
+      const modified = new RegExp(`^MODIFY ${escape(q(column))} ENUM\\(`, 'u')
+      return clauses.find((c) => changed.test(c) || modified.test(c))
+    }
+    const modifies = (column: string) => {
+      const modified = new RegExp(`^MODIFY ${escape(q(column))}\\s`, 'u')
+      return clauses.some((c) => modified.test(c))
+    }
+    const typedAt = (column: string) => {
+      const typed = new RegExp(`^ALTER COLUMN ${escape(q(column))} SET DATA TYPE `, 'u')
+      return clauses.findIndex((c) => typed.test(c))
+    }
+    const convertOf = new Map(plan.converts.toReversed().map((c) => [c.column, c]))
     const defOf = (index: number, column: string) =>
       (clauses[index] ?? '').replace(new RegExp(`^ADD COLUMN\\s+${escape(q(column))}\\s+`, 'u'), '')
     const sourceOfRename = new Set(plan.renames.map((r) => r.from))
@@ -415,12 +458,7 @@ function rewriteAlters(
     const widened =
       dialect === 'mysql'
         ? plan.enumMaps.flatMap((map) => {
-            const changed = new RegExp(
-              `^(?:MODIFY|CHANGE COLUMN ${escape(q(map.column))}) ${escape(q(map.column))} ENUM\\(`,
-              'u',
-            )
-            const modified = new RegExp(`^MODIFY ${escape(q(map.column))} ENUM\\(`, 'u')
-            const modify = clauses.find((c) => changed.test(c) || modified.test(c))
+            const modify = enumModify(map.column)
             if (modify === undefined) return []
             mark(`enum ${plan.name}.${map.column}`)
             const values = [...new Set([...map.existing, ...map.members])]
@@ -447,9 +485,7 @@ function rewriteAlters(
       .filter((convert) => !sourceOfRename.has(convert.column))
       .flatMap((convert) => {
         if (dialect === 'mysql') {
-          const modified = new RegExp(`^MODIFY ${escape(q(convert.column))}\\s`, 'u')
-          const touched = clauses.some((c) => modified.test(c))
-          if (!touched) return []
+          if (!modifies(convert.column)) return []
           mark(`convert ${plan.name}.${convert.column}`)
           return [
             {
@@ -477,8 +513,7 @@ function rewriteAlters(
             },
           ]
         }
-        const typed = new RegExp(`^ALTER COLUMN ${escape(q(convert.column))} SET DATA TYPE `, 'u')
-        const castAt = clauses.findIndex((c) => typed.test(c))
+        const castAt = typedAt(convert.column)
         if (castAt === -1) return []
         mark(`convert ${plan.name}.${convert.column}`)
         return [
@@ -500,7 +535,7 @@ function rewriteAlters(
       const def = defOf(addAt, rename.to)
       if (dialect === 'mysql') {
         // The values converted in the column as it is, and CHANGE COLUMN carries them over.
-        const convert = plan.converts.find((c) => c.column === rename.from)
+        const convert = convertOf.get(rename.from)
         if (convert !== undefined) mark(`convert ${plan.name}.${convert.column}`)
         return [
           {
@@ -515,7 +550,7 @@ function rewriteAlters(
         ]
       }
       const parsed = definition(def)
-      const convert = plan.converts.find((c) => c.column === rename.from)
+      const convert = convertOf.get(rename.from)
       if (convert !== undefined) mark(`convert ${plan.name}.${convert.column}`)
       const old = `ALTER COLUMN ${q(rename.from)}`
       const now = `ALTER COLUMN ${q(rename.to)}`
@@ -543,7 +578,6 @@ function rewriteAlters(
       ...converts.flatMap((c) => c.keep),
       ...renames.flatMap((r) => r.keep),
     ]
-    const separator = dialect === 'mysql' ? ',\n    ' : ',\n'
     return underComment(comment, [
       ...fills.flatMap((f) => f.before),
       ...widened,
@@ -577,6 +611,36 @@ function rewriteAlters(
   }
 }
 
+/**
+ * PostgreSQL's cast of an enum column to the new type, with the mapped values in it.
+ *
+ * @example
+ * ```sql
+ * ALTER TABLE "User" ALTER COLUMN "role" TYPE "Role_new"
+ *   USING (CASE "role"::text WHEN 'EDITOR' THEN 'WRITER' ELSE "role"::text END)::"Role_new";
+ * ```
+ */
+function castWithMappedValues(
+  statement: string,
+  plan: TablePlan,
+  cast: RegExpExecArray,
+  mark: (key: string) => void,
+  q: (name: string) => string,
+  text: (value: string) => string,
+) {
+  const { comment } = commentOf(statement)
+  const map = plan.enumMaps.find((m) => q(m.column) === cast[1])
+  if (map === undefined) return [statement]
+  mark(`enum ${plan.name}.${map.column}`)
+  const mapped = caseMap(
+    `${q(map.column)}::text`,
+    map.mapping.map((m) => ({ from: text(m.from), to: text(m.to) })),
+  )
+  return [
+    `${comment ? `${comment}\n` : ''}ALTER TABLE ${plan.name} ALTER COLUMN ${cast[1]} TYPE ${cast[2]} USING (${mapped})::${cast[4]}`,
+  ]
+}
+
 /** A string matched as it is inside a regular expression. */
 export function escape(value: string) {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&')
@@ -597,23 +661,11 @@ export function escape(value: string) {
  */
 function rewriteSqlite(
   statements: readonly string[],
-  plans: readonly {
-    readonly name: string
-    readonly table: { readonly schema: string | null; readonly table: string }
-    readonly renames: readonly { readonly from: string; readonly to: string }[]
-    readonly converts: readonly { readonly column: string; readonly sql: string }[]
-    readonly enumMaps: readonly {
-      readonly column: string
-      readonly type: string
-      readonly mapping: readonly { readonly from: string; readonly to: string }[]
-      readonly existing: readonly string[]
-      readonly members: readonly string[]
-    }[]
-    readonly fills: readonly { readonly column: string; readonly sql: string }[]
-  }[],
+  plans: readonly TablePlan[],
   q: (name: string) => string,
 ) {
   const found = new Set<string>()
+  const planByName = Map.groupBy(plans, (p) => p.name)
   const out = statements.map((statement) => {
     const { comment, body } = commentOf(statement)
     const copy =
@@ -621,14 +673,15 @@ function rewriteSqlite(
         body,
       )
     if (copy !== null) {
-      const plan = plans.find((p) => p.name === copy[4])
+      const plan = planByName.get(copy[4] ?? '')?.[0]
       if (plan === undefined) return statement
       const into = splitTopLevel(copy[2] ?? '')
       const from = splitTopLevel(copy[3] ?? '')
       const converted = (column: string) => plan.converts.find((c) => c.column === column)
+      const convertBySource = new Map(plan.converts.toReversed().map((c) => [q(c.column), c]))
       const columns = into.map((column, index) => {
         const source = from[index] ?? column
-        const convert = plan.converts.find((c) => q(c.column) === source)
+        const convert = convertBySource.get(source)
         if (convert !== undefined) found.add(`convert ${plan.name}.${convert.column}`)
         return { into: column, from: convert === undefined ? source : `(${convert.sql})` }
       })
@@ -654,7 +707,7 @@ function rewriteSqlite(
   const withFills = out.flatMap((statement) => {
     const { body } = commentOf(statement)
     const added = /^ALTER TABLE ("(?:[^"]|"")+") ADD COLUMN ("(?:[^"]|"")+") /u.exec(body)
-    const plan = added === null ? undefined : plans.find((p) => p.name === added[1])
+    const plan = added === null ? undefined : planByName.get(added[1] ?? '')?.[0]
     const fill = plan?.fills.find((f) => q(f.column) === added?.[2])
     if (plan === undefined || fill === undefined || found.has(`fill ${plan.name}.${fill.column}`)) {
       return [statement]

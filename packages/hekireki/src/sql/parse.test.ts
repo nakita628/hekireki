@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import type { Expr, Statement } from './ast.js'
+import type { Expr, QueryBody, Statement } from './ast.js'
 import { parseStatements } from './parse.js'
 
 /** The first statement of the text as a SELECT query. */
@@ -9,17 +9,17 @@ function parseQueryText(text: string) {
   return first?.type === 'select' ? first.query : null
 }
 
+const LEAF_TYPES = ['column', 'star', 'literal', 'param', 'exists', 'subquery', 'raw'] as const
+const LEAVES: ReadonlySet<string> = new Set(LEAF_TYPES)
+
+function isLeaf(expr: Expr): expr is Extract<Expr, { type: (typeof LEAF_TYPES)[number] }> {
+  return LEAVES.has(expr.type)
+}
+
 /** The expression tree without ranges, for readable assertions. */
 function shape(expr: Expr): unknown {
+  if (isLeaf(expr)) return leafShape(expr)
   switch (expr.type) {
-    case 'column':
-      return expr.table === null ? expr.name : `${expr.table}.${expr.name}`
-    case 'star':
-      return expr.table === null ? '*' : `${expr.table}.*`
-    case 'literal':
-      return { [expr.kind]: expr.value }
-    case 'param':
-      return { param: expr.placeholder }
     case 'binary':
       return [shape(expr.left), expr.op, shape(expr.right)]
     case 'unary':
@@ -35,15 +35,15 @@ function shape(expr: Expr): unknown {
       return { cast: shape(expr.expr), to: expr.to }
     case 'case':
       return {
-        case: expr.operand === null ? null : shape(expr.operand),
+        case: shapeOf(expr.operand),
         whens: expr.whens.map((branch) => [shape(branch.when), shape(branch.result)]),
-        else: expr.otherwise === null ? null : shape(expr.otherwise),
+        else: shapeOf(expr.otherwise),
       }
     case 'in':
       return {
         in: shape(expr.expr),
         not: expr.not,
-        list: expr.list?.map(shape) ?? null,
+        list: expr.list === null ? null : expr.list.map(shape),
         subquery: expr.subquery !== null,
       }
     case 'between':
@@ -57,17 +57,79 @@ function shape(expr: Expr): unknown {
       return { like: shape(expr.expr), op: expr.op, not: expr.not, pattern: shape(expr.pattern) }
     case 'is':
       return { is: shape(expr.expr), not: expr.not, value: expr.value }
+    case 'list':
+      return { list: expr.items.map(shape) }
+    default:
+      return null
+  }
+}
+
+function leafShape(expr: Extract<Expr, { type: (typeof LEAF_TYPES)[number] }>): unknown {
+  switch (expr.type) {
+    case 'column':
+      return expr.table === null ? expr.name : `${expr.table}.${expr.name}`
+    case 'star':
+      return expr.table === null ? '*' : `${expr.table}.*`
+    case 'literal':
+      return { [expr.kind]: expr.value }
+    case 'param':
+      return { param: expr.placeholder }
     case 'exists':
       return { exists: true }
     case 'subquery':
       return { subquery: true }
-    case 'list':
-      return { list: expr.items.map(shape) }
     case 'raw':
       return { raw: expr.text }
     default:
       return null
   }
+}
+
+/** The shape of an expression that may be missing. */
+function shapeOf(expr: Expr | null) {
+  return expr === null ? null : shape(expr)
+}
+
+/** A statement read as a SELECT query with a plain SELECT body. */
+function selectOfStatement(statement: Statement) {
+  if (statement.type !== 'select' || statement.query.body.type !== 'select') {
+    throw new Error('expected a SELECT')
+  }
+  return { query: statement.query, body: statement.query.body }
+}
+
+/** The SELECT body of the first statement of the text. */
+function selectBodyOf(text: string) {
+  const query = parseQueryText(text)
+  if (query?.body.type !== 'select') throw new Error('expected a SELECT')
+  return query.body
+}
+
+/** The first FROM item as a join whose left side is a join too. */
+function nestedJoinOf(body: ReturnType<typeof selectBodyOf>) {
+  const [from] = body.from
+  if (from?.type !== 'join' || from.left.type !== 'join') throw new Error('expected nested joins')
+  return { from, left: from.left }
+}
+
+function queryOf(text: string) {
+  const query = parseQueryText(text)
+  if (query === null) throw new Error('expected a query')
+  return query
+}
+
+function setOperationOf(body: QueryBody | undefined) {
+  if (body?.type !== 'setop') throw new Error('expected a set operation')
+  return body
+}
+
+/** The statements as an INSERT, an UPDATE and a DELETE, in that order. */
+function writesOf(statements: readonly Statement[]) {
+  const [insert, update, remove] = statements
+  if (insert?.type !== 'insert' || update?.type !== 'update' || remove?.type !== 'delete') {
+    throw new Error('expected insert, update, delete')
+  }
+  return { insert, update, remove }
 }
 
 function whereOf(text: string) {
@@ -95,10 +157,8 @@ describe('parseStatements', () => {
     const text =
       'SELECT a, b AS bee FROM t WHERE a = 1 GROUP BY a HAVING count(*) > 1 ORDER BY b DESC LIMIT 10 OFFSET 5'
     const statement = only(parseStatements(text))
-    if (statement.type !== 'select' || statement.query.body.type !== 'select') {
-      throw new Error('expected a SELECT')
-    }
-    const { body, orderBy, limit, offset } = statement.query
+    const { query, body } = selectOfStatement(statement)
+    const { orderBy, limit, offset } = query
     expect(body.columns.map((item) => [shape(item.expr), item.alias])).toStrictEqual([
       ['a', null],
       ['b', 'bee'],
@@ -111,21 +171,17 @@ describe('parseStatements', () => {
         range: { start: 24, end: 25 },
       },
     ])
-    expect(body.where === null ? null : shape(body.where)).toStrictEqual([
-      'a',
-      '=',
-      { number: '1' },
-    ])
+    expect(shapeOf(body.where)).toStrictEqual(['a', '=', { number: '1' }])
     expect(body.where?.range).toStrictEqual({ start: 32, end: 37 })
     expect(body.groupBy.map(shape)).toStrictEqual(['a'])
-    expect(body.having === null ? null : shape(body.having)).toStrictEqual([
+    expect(shapeOf(body.having)).toStrictEqual([
       { call: 'count', args: ['*'], distinct: false, over: false },
       '>',
       { number: '1' },
     ])
     expect(orderBy.map((item) => [shape(item.expr), item.direction])).toStrictEqual([['b', 'DESC']])
-    expect(limit === null ? null : shape(limit)).toStrictEqual({ number: '10' })
-    expect(offset === null ? null : shape(offset)).toStrictEqual({ number: '5' })
+    expect(shapeOf(limit)).toStrictEqual({ number: '10' })
+    expect(shapeOf(offset)).toStrictEqual({ number: '5' })
     expect(statement.range).toStrictEqual({ start: 0, end: text.length })
   })
 
@@ -188,45 +244,36 @@ describe('parseStatements', () => {
   })
 
   it('reads joins with ON and USING, and a subquery in FROM', () => {
-    const query = parseQueryText(
-      'SELECT * FROM a LEFT JOIN b ON b.a_id = a.id JOIN (SELECT id FROM c) sub USING (id)',
+    const { from, left } = nestedJoinOf(
+      selectBodyOf(
+        'SELECT * FROM a LEFT JOIN b ON b.a_id = a.id JOIN (SELECT id FROM c) sub USING (id)',
+      ),
     )
-    if (query?.body.type !== 'select') throw new Error('expected a SELECT')
-    const [from] = query.body.from
-    if (from?.type !== 'join' || from.left.type !== 'join') throw new Error('expected nested joins')
     expect(from.joinType).toBe('INNER')
     expect(from.using).toStrictEqual(['id'])
     expect(from.right.type).toBe('subquery')
-    expect(from.left.joinType).toBe('LEFT')
-    expect(from.left.on === null ? null : shape(from.left.on)).toStrictEqual([
-      'b.a_id',
-      '=',
-      'a.id',
-    ])
+    expect(left.joinType).toBe('LEFT')
+    expect(shapeOf(left.on)).toStrictEqual(['b.a_id', '=', 'a.id'])
   })
 
   it('reads CTEs, set operations and VALUES', () => {
-    const query = parseQueryText(
+    const query = queryOf(
       'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 5) SELECT x FROM n',
     )
-    if (query === null) throw new Error('expected a query')
     expect(query.recursive).toBe(true)
     expect(query.ctes.map((cte) => [cte.name, cte.columns])).toStrictEqual([['n', ['x']]])
-    const inner = query.ctes[0]?.query.body
-    expect(inner?.type).toBe('setop')
-    if (inner?.type !== 'setop') throw new Error('expected a set operation')
+    const inner = setOperationOf(query.ctes[0]?.query.body)
     expect([inner.op, inner.all]).toStrictEqual(['UNION', true])
     const values = parseQueryText('VALUES (1, 2), (3, 4)')
     expect(values?.body.type).toBe('values')
   })
 
   it('reads INSERT, UPDATE and DELETE with RETURNING', () => {
-    const [insert, update, remove] = parseStatements(
-      'INSERT INTO t (a, b) VALUES (?, ?), (1, 2) ON CONFLICT (a) DO NOTHING RETURNING id; UPDATE t AS x SET a = ?, b = DEFAULT WHERE id = $1 RETURNING *; DELETE FROM t WHERE a IN (:ids)',
+    const { insert, update, remove } = writesOf(
+      parseStatements(
+        'INSERT INTO t (a, b) VALUES (?, ?), (1, 2) ON CONFLICT (a) DO NOTHING RETURNING id; UPDATE t AS x SET a = ?, b = DEFAULT WHERE id = $1 RETURNING *; DELETE FROM t WHERE a IN (:ids)',
+      ),
     )
-    if (insert?.type !== 'insert' || update?.type !== 'update' || remove?.type !== 'delete') {
-      throw new Error('expected insert, update, delete')
-    }
     expect(insert.columns).toStrictEqual(['a', 'b'])
     expect(insert.source.type).toBe('values')
     expect(insert.onConflict).not.toBeNull()
@@ -237,7 +284,7 @@ describe('parseStatements', () => {
       ['b', { raw: 'DEFAULT' }],
     ])
     expect(update.returning?.map((item) => shape(item.expr))).toStrictEqual(['*'])
-    expect(remove.where === null ? null : shape(remove.where)).toStrictEqual({
+    expect(shapeOf(remove.where)).toStrictEqual({
       in: 'a',
       not: false,
       list: [{ param: ':ids' }],

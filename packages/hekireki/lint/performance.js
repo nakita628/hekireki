@@ -18,11 +18,8 @@ const LOOPS = new Set(['ForOfStatement', 'ForInStatement', 'ForStatement', 'Whil
 
 // The innermost function a node sits in, or null at module level.
 function enclosingFunction(node) {
-  return node.parent === null || node.parent === undefined
-    ? null
-    : FUNCTIONS.has(node.parent.type)
-      ? node.parent
-      : enclosingFunction(node.parent)
+  if (node.parent === null || node.parent === undefined) return null
+  return FUNCTIONS.has(node.parent.type) ? node.parent : enclosingFunction(node.parent)
 }
 
 // Whether a node is the callback of `xs.map(...)` and the like, or the body of a loop.

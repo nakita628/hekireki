@@ -56,33 +56,40 @@ function makePropertyKey(name: string) {
 // and PostgreSQL refuses the full timestamp a bound Date is sent as.
 const TIME_OF_DAY = new Set(['Time', 'Timetz'])
 
+/** The TypeScript type of the column's value, before list and null wrap it. */
+function columnBaseType(field: DMMF.Field, scalarTypes: { readonly [k: string]: string }) {
+  if (field.kind === 'enum') return field.type
+  if (field.type === 'DateTime' && TIME_OF_DAY.has(field.nativeType?.[0] ?? '')) return 'string'
+  return scalarTypes[field.type] ?? 'unknown'
+}
+
+// A list of `Timestamp` would select as the ColumnType objects: the list is one ColumnType.
+function listedColumnType(field: DMMF.Field, base: string) {
+  if (!field.isList) return base
+  return base === 'Timestamp'
+    ? 'ColumnType<Date[], (Date | string)[], (Date | string)[]>'
+    : `${base}[]`
+}
+
+// Prisma sets an optional @updatedAt on create as well, so an insert is asked for it.
+// `unknown | null` collapses to `unknown`, so the union would be redundant.
+function nullableColumnType(field: DMMF.Field, listed: string) {
+  if (field.isRequired || listed === 'unknown') return listed
+  if (field.isUpdatedAt !== true) return `${listed} | null`
+  return listed === 'Timestamp'
+    ? 'ColumnType<Date | null, Date | string, Date | string | null>'
+    : `ColumnType<${listed} | null, ${listed}, ${listed} | null>`
+}
+
 export function makeColumnType(
   field: DMMF.Field,
   scalarTypes: { readonly [k: string]: string },
   provider = 'postgresql',
 ) {
-  const base =
-    field.kind === 'enum'
-      ? field.type
-      : field.type === 'DateTime' && TIME_OF_DAY.has(field.nativeType?.[0] ?? '')
-        ? 'string'
-        : (scalarTypes[field.type] ?? 'unknown')
-  // A list of `Timestamp` would select as the ColumnType objects: the list is one ColumnType.
-  const listed = !field.isList
-    ? base
-    : base === 'Timestamp'
-      ? 'ColumnType<Date[], (Date | string)[], (Date | string)[]>'
-      : `${base}[]`
-  // Prisma sets an optional @updatedAt on create as well, so an insert is asked for it.
-  // `unknown | null` collapses to `unknown`, so the union would be redundant.
-  const nullable =
-    field.isRequired || listed === 'unknown'
-      ? listed
-      : field.isUpdatedAt && listed === 'Timestamp'
-        ? 'ColumnType<Date | null, Date | string, Date | string | null>'
-        : field.isUpdatedAt
-          ? `ColumnType<${listed} | null, ${listed}, ${listed} | null>`
-          : `${listed} | null`
+  const nullable = nullableColumnType(
+    field,
+    listedColumnType(field, columnBaseType(field, scalarTypes)),
+  )
   return isDbGenerated(field, provider) ? `Generated<${nullable}>` : nullable
 }
 

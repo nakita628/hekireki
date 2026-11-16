@@ -156,7 +156,7 @@ describe('defineConfig', () => {
         User: {
           count: 5,
           fields: {
-            email: (faker, { row }) => `${String(row.id ?? 0)}-${faker.internet.email()}`,
+            email: (faker, { row }) => `${String(row.id)}-${faker.internet.email()}`,
             age: { min: 18, max: 65, nullRate: 0.2 },
             role: { values: ['ADMIN'] },
             joined: { from: '2024-01-01', to: new Date('2024-12-31') },
@@ -363,6 +363,11 @@ describe('defineData and Row', () => {
   })
 })
 
+function windowLength(dates: { readonly from: Date; readonly to: Date } | null) {
+  if (dates === null) throw new Error('expected a date window')
+  return dates.to.getTime() - dates.from.getTime()
+}
+
 describe('resolveSeedConfig', () => {
   it('leaves every omitted option unset: no value of its own', () => {
     expect(resolveSeedConfig({})).toStrictEqual({
@@ -386,9 +391,7 @@ describe('resolveSeedConfig', () => {
     expect(resolved.dates?.to).toBeInstanceOf(Date)
     const until = resolveSeedConfig({ dates: { to: '2025-01-01T00:00:00.000Z' } })
     expect(until.dates?.to).toStrictEqual(new Date('2025-01-01T00:00:00.000Z'))
-    expect((until.dates?.to.getTime() ?? 0) - (until.dates?.from.getTime() ?? 0)).toBe(
-      365 * 24 * 60 * 60 * 1000,
-    )
+    expect(windowLength(until.dates)).toBe(365 * 24 * 60 * 60 * 1000)
   })
 
   it('keeps what is given, turning one locale into a list and date strings into dates', () => {

@@ -175,6 +175,17 @@ const DefaultList = z
   .array(z.union([z.string(), z.number(), z.boolean()]))
   .meta({ description: 'A `@default([...])` list value as DMMF encodes it' })
 
+// A literal as `@default(...)` writes it: an enum member bare, any other string quoted.
+function scalarText(item: string | number | boolean, kind: string) {
+  if (typeof item !== 'string') return String(item)
+  return kind === 'enum' ? item : JSON.stringify(item)
+}
+
+// Whether an optional name or text is there and not empty.
+function isFilled(text: string | null | undefined): text is string {
+  return text !== null && text !== undefined && text !== ''
+}
+
 /**
  * Renders a field default the way it is written in a Prisma schema: `now()`, `"anonymous"`, `VIEWER`.
  *
@@ -188,8 +199,7 @@ const DefaultList = z
 export function makeDefaultText(input: z.infer<typeof MakeDefaultTextInput>) {
   const value = input.default
   if (value === undefined) return null
-  const scalar = (item: string | number | boolean) =>
-    typeof item === 'string' ? (input.kind === 'enum' ? item : JSON.stringify(item)) : String(item)
+  const scalar = (item: string | number | boolean) => scalarText(item, input.kind)
   const result = z.union([DefaultCall, DefaultList]).safeParse(value)
   if (!result.success) return typeof value === 'object' ? JSON.stringify(value) : scalar(value)
   if (Array.isArray(result.data)) return `[${result.data.map(scalar).join(', ')}]`
@@ -269,7 +279,8 @@ export function makeRelationAttribute(input: z.infer<typeof MakeRelationAttribut
   const { field, modelName } = input
   if (field.kind !== 'object') return null
   const customName =
-    field.relationName && field.relationName !== makeRelationName({ a: modelName, b: field.type })
+    isFilled(field.relationName) &&
+    field.relationName !== makeRelationName({ a: modelName, b: field.type })
       ? [JSON.stringify(field.relationName)]
       : []
   const fromFields = field.relationFromFields ?? []
@@ -279,8 +290,8 @@ export function makeRelationAttribute(input: z.infer<typeof MakeRelationAttribut
       ? [`fields: [${fromFields.join(', ')}]`, `references: [${toFields.join(', ')}]`]
       : []
   const actions = [
-    ...(field.relationOnDelete ? [`onDelete: ${field.relationOnDelete}`] : []),
-    ...(field.relationOnUpdate ? [`onUpdate: ${field.relationOnUpdate}`] : []),
+    ...(isFilled(field.relationOnDelete) ? [`onDelete: ${field.relationOnDelete}`] : []),
+    ...(isFilled(field.relationOnUpdate) ? [`onUpdate: ${field.relationOnUpdate}`] : []),
   ]
   const parts = [...customName, ...fk, ...actions]
   return parts.length > 0 ? `@relation(${parts.join(', ')})` : null
@@ -338,8 +349,8 @@ export function makeIndexAttribute(input: z.infer<typeof MakeIndexAttributeInput
   ]
   const parts = [
     `[${index.fields.map((f) => f.name).join(', ')}]`,
-    ...(index.name ? [`name: ${JSON.stringify(index.name)}`] : []),
-    ...(index.dbName ? [`map: ${JSON.stringify(index.dbName)}`] : []),
+    ...(isFilled(index.name) ? [`name: ${JSON.stringify(index.name)}`] : []),
+    ...(isFilled(index.dbName) ? [`map: ${JSON.stringify(index.dbName)}`] : []),
   ]
   return `${keyword}(${parts.join(', ')})`
 }
@@ -381,6 +392,18 @@ const MakeFieldInput = z
   .readonly()
   .meta({ description: 'A DMMF field with its model name and the model foreign-key field names' })
 
+// The relation a relation field takes part in, or null for any other field.
+function relationOf(field: z.infer<typeof MakeFieldInput>['field']) {
+  if (field.kind !== 'object' || !isFilled(field.relationName)) return null
+  return {
+    name: field.relationName,
+    fromFields: [...(field.relationFromFields ?? [])],
+    toFields: [...(field.relationToFields ?? [])],
+    onDelete: field.relationOnDelete ?? null,
+    onUpdate: field.relationOnUpdate ?? null,
+  }
+}
+
 /** Maps a DMMF field to the studio contract, rendering its attributes as Prisma writes them. */
 function makeField(input: z.infer<typeof MakeFieldInput>) {
   const { field, modelName, foreignKeys } = input
@@ -392,21 +415,12 @@ function makeField(input: z.infer<typeof MakeFieldInput>) {
     ...(field.isId ? ['@id'] : []),
     ...(field.isUnique ? ['@unique'] : []),
     ...(defaultValue === null ? [] : [`@default(${defaultValue})`]),
-    ...(field.isUpdatedAt ? ['@updatedAt'] : []),
-    ...(field.dbName ? [`@map(${JSON.stringify(field.dbName)})`] : []),
+    ...(field.isUpdatedAt === true ? ['@updatedAt'] : []),
+    ...(isFilled(field.dbName) ? [`@map(${JSON.stringify(field.dbName)})`] : []),
     ...(nativeType === null ? [] : [nativeType]),
     ...(relationAttribute === null ? [] : [relationAttribute]),
   ]
-  const relation =
-    field.kind === 'object' && field.relationName
-      ? {
-          name: field.relationName,
-          fromFields: [...(field.relationFromFields ?? [])],
-          toFields: [...(field.relationToFields ?? [])],
-          onDelete: field.relationOnDelete ?? null,
-          onUpdate: field.relationOnUpdate ?? null,
-        }
-      : null
+  const relation = relationOf(field)
   return {
     name: field.name,
     dbName: field.dbName ?? null,
@@ -532,8 +546,8 @@ function makeModel(input: z.infer<typeof MakeModelInput>) {
     indexes: blockIndexes,
     attributes: [
       ...blockIndexes.map((i) => i.attribute),
-      ...(model.dbName ? [`@@map(${JSON.stringify(model.dbName)})`] : []),
-      ...(model.schema ? [`@@schema(${JSON.stringify(model.schema)})`] : []),
+      ...(isFilled(model.dbName) ? [`@@map(${JSON.stringify(model.dbName)})`] : []),
+      ...(isFilled(model.schema) ? [`@@schema(${JSON.stringify(model.schema)})`] : []),
     ],
     location: makeLocation({ blocks, types: ['model', 'view'], name: model.name }),
   }

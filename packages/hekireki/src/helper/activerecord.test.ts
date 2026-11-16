@@ -9,6 +9,12 @@ import {
   activeRecordProblems,
 } from './activerecord.js'
 
+/** The datamodel `getDMMF` parsed, or its parse error thrown. */
+function datamodelOf(result: ReturnType<typeof getDMMF>) {
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel
+}
+
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
     dbName: null,
@@ -1598,7 +1604,7 @@ end`)
     // Two sets with one column that is not a foreign key: both are that
     // column's, the second on a line of its own, and an @ar.uniqueness on the
     // column replaces both.
-    const code = (documentation?: string) =>
+    const code = (doc: Pick<DMMF.Field, 'documentation'> = {}) =>
       makeModel({
         name: 'Code',
         dbName: 'codes',
@@ -1608,7 +1614,7 @@ end`)
         ],
         fields: [
           makeField({ name: 'id', type: 'Int', isId: true }),
-          makeField({ name: 'code', type: 'String', documentation }),
+          makeField({ name: 'code', type: 'String', ...doc }),
           makeField({ name: 'postId', type: 'Int', dbName: 'post_id' }),
           makeField({
             name: 'post',
@@ -1634,7 +1640,11 @@ end`)
   validates :code, uniqueness: { scope: :user_id }
 `)
     // The own uniqueness stands in for the set on the column's line; the other set is another constraint.
-    expect(activeRecordModels([code('@ar.uniqueness(scope: :post_id, case_sensitive: false)')]))
+    expect(
+      activeRecordModels([
+        code({ documentation: '@ar.uniqueness(scope: :post_id, case_sensitive: false)' }),
+      ]),
+    )
       .toContain(`  validates :code, presence: true, uniqueness: { scope: :post_id, case_sensitive: false }
   validates :code, uniqueness: { scope: :user_id }
 `)
@@ -3091,8 +3101,7 @@ enum Tone {
         ],
       ],
     })
-    if ('type' in dmmf) throw new Error(dmmf.error.message)
-    const { models, enums } = dmmf.datamodel
+    const { models, enums } = datamodelOf(dmmf)
     expect(activeRecordModels(models, models, enums)).toBe(`# A person.
 #
 # Second paragraph */ with \\\\ backslash.

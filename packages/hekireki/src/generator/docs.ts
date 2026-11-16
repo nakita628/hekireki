@@ -98,9 +98,9 @@ export function ddlBySubject(statements: readonly string[]) {
     return subject === undefined || subject === null ? [] : [[subject, statement] as const]
   })
   return new Map(
-    [...new Set(keyed.map(([key]) => key))].map((key) => [
+    [...Map.groupBy(keyed, ([key]) => key)].map(([key, entries]) => [
       key,
-      keyed.filter(([k]) => k === key).map(([, statement]) => statement),
+      entries.map(([, statement]) => statement),
     ]),
   )
 }
@@ -113,11 +113,11 @@ function typeOf(field: Field) {
 
 function constraintsOf(field: Field, model: Model) {
   // The relation this field holds the key of, and the field of the other model it points at.
-  const relation = model.fields.find((f) => f.relation?.fromFields.includes(field.name))
+  const relation = model.fields.find((f) => f.relation?.fromFields.includes(field.name) === true)
   const at = relation?.relation?.fromFields.indexOf(field.name) ?? -1
   const target = relation?.relation?.toFields[at]
   return [
-    ...(field.isId || model.primaryKey?.includes(field.name) ? ['PK'] : []),
+    ...(field.isId || model.primaryKey?.includes(field.name) === true ? ['PK'] : []),
     ...(field.isUnique ? ['UNIQUE'] : []),
     field.isRequired || field.isList ? 'NOT NULL' : 'NULL',
     ...(relation === undefined || target === undefined
@@ -194,24 +194,27 @@ function relationsOf(model: Model, relations: readonly Relation[]) {
   )
 }
 
+// The SQL a query sends as a fenced block, why the compiler refused it, or nothing.
+function sqlOf(statements: DocsQuery['statements'], error: DocsQuery['error']) {
+  if (statements === null) {
+    return error === null ? [] : [`> The query compiler refused it: ${error}`]
+  }
+  return [
+    `\`\`\`sql\n${statements
+      .map(({ sql: text, params }) =>
+        params.length === 0 ? text : `${text}\n-- params: ${JSON.stringify(params)}`,
+      )
+      .join('\n\n')}\n\`\`\``,
+  ]
+}
+
 // Each query in Prisma Client beside the SQL it sends, folded; the calls alone where no query
 // has SQL to show.
 function queriesOf(queries: readonly DocsQuery[]) {
   if (queries.length === 0) return []
   const withSql = queries.some((query) => query.statements !== null)
   const blocks = queries.map(({ example, statements, error }) => {
-    const sql =
-      statements === null
-        ? error === null
-          ? []
-          : [`> The query compiler refused it: ${error}`]
-        : [
-            `\`\`\`sql\n${statements
-              .map(({ sql: text, params }) =>
-                params.length === 0 ? text : `${text}\n-- params: ${JSON.stringify(params)}`,
-              )
-              .join('\n\n')}\n\`\`\``,
-          ]
+    const sql = sqlOf(statements, error)
     return [
       `**${example.name}**: ${example.description}`,
       `\`\`\`ts\n${example.code}\n\`\`\``,
@@ -290,6 +293,7 @@ export function docsMarkdown(input: {
     blocks: [],
   })
   const ddl = ddlBySubject(input.statements)
+  const queriesByModel = Map.groupBy(input.queries, (query) => query.example.model)
   const models = schema.models.map(
     (model) =>
       `| [${model.name}](#${anchor('model', model.name)}) | ${inline(model.dbName ?? model.name)} | ${cell(model.documentation ?? '')} |`,
@@ -317,12 +321,7 @@ export function docsMarkdown(input: {
         ]),
     '## Models',
     ...schema.models.map((model) =>
-      modelSection(
-        model,
-        schema.relations,
-        ddl,
-        input.queries.filter((query) => query.example.model === model.name),
-      ),
+      modelSection(model, schema.relations, ddl, queriesByModel.get(model.name) ?? []),
     ),
     ...(schema.enums.length === 0
       ? []

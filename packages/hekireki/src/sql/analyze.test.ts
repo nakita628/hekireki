@@ -44,6 +44,15 @@ function flows(statement: StatementAnalysis) {
   )
 }
 
+/** A column as TypeScript would declare it: `name: string | null`. */
+function signatureOf(column: {
+  readonly name: string
+  readonly tsType: string
+  readonly nullable: boolean | null
+}) {
+  return `${column.name}: ${column.tsType}${column.nullable === true ? ' | null' : ''}`
+}
+
 describe('analyze', () => {
   it('draws a SELECT as sources, join, filter, grouping, projection, sort and limit', () => {
     const statement = first(
@@ -307,11 +316,7 @@ describe('analyze', () => {
     const statement = first(
       "SELECT count(*) AS n, coalesce(email, 'none') AS mail, lower(name) AS lname, id * 2 AS twice, published = 1 AS flag, CASE WHEN id > 1 THEN 'x' END AS tag FROM users JOIN posts ON posts.user_id = users.id",
     )
-    expect(
-      statement.columns.map(
-        (column) => `${column.name}: ${column.tsType}${column.nullable === true ? ' | null' : ''}`,
-      ),
-    ).toStrictEqual([
+    expect(statement.columns.map(signatureOf)).toStrictEqual([
       'n: number',
       'mail: string',
       'lname: string',

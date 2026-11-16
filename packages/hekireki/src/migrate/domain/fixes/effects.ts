@@ -105,12 +105,13 @@ export function cascade(
       count,
     }
     if (rule === 'set null') {
+      const keyColumns = new Set(fk.columns)
       const next = version(
         acc.state,
         childKey,
         `SELECT ${table.columns
           .map((c) =>
-            fk.columns.includes(c)
+            keyColumns.has(c)
               ? `CASE WHEN ${pointing} THEN NULL ELSE ${ref}.${q(c)} END AS ${q(c)}`
               : `${ref}.${q(c)}`,
           )
@@ -228,7 +229,8 @@ export function updated(
   if (parent === null) return state
   // What the changed rows are now, before any cascade runs into the same table.
   const after = current(state, key)
-  const into = incoming(key).filter(({ references }) => references.some((c) => columns.includes(c)))
+  const changing = new Set(columns)
+  const into = incoming(key).filter((entry) => entry.references.some((c) => changing.has(c)))
   const step = (acc: FixState, { child, fk, references }: (typeof into)[number]): FixState => {
     const childKey = keyOf(child)
     const table = versioned(childKey)
@@ -279,7 +281,7 @@ export function updated(
         ],
       }
     }
-    const byPrimaryKey = parent.primaryKey.every((c) => !columns.includes(c))
+    const byPrimaryKey = parent.primaryKey.every((c) => !changing.has(c))
     if (
       !follows ||
       (rule === 'cascade' && !byPrimaryKey) ||
@@ -306,13 +308,14 @@ export function updated(
         : `(SELECT ${renewed}.${q(references[index] ?? '')} FROM (${changed}) AS ${gone} JOIN ${after} AS ${renewed} ON ${parent.primaryKey
             .map((c) => `${renewed}.${q(c)} = ${gone}.${q(c)}`)
             .join(' AND ')} WHERE ${match})`
+    const positionOf = new Map(fk.columns.map((c, i) => [c, i] as const).toReversed())
     const next = version(
       acc,
       childKey,
       `SELECT ${table.columns
         .map((c) => {
-          const index = fk.columns.indexOf(c)
-          return index === -1
+          const index = positionOf.get(c)
+          return index === undefined
             ? `${ref}.${q(c)}`
             : `CASE WHEN ${pointing} THEN ${valueOf(index)} ELSE ${ref}.${q(c)} END AS ${q(c)}`
         })

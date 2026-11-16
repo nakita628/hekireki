@@ -116,7 +116,7 @@ export function zodOpenapiHono(options: GeneratorOptions) {
       files,
       (name) =>
         fillHandlerFile(path.join(handlers, name), operations, bodies, fromHandlers(prismaImport)),
-      { discard: true },
+      { discard: true, concurrency: 1 },
     )
     if (auth !== undefined) yield* guardApp(output, auth, guardedPaths(datamodel))
     return undefined

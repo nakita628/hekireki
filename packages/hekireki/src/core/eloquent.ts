@@ -18,9 +18,13 @@ export function eloquent(options: GeneratorOptions) {
     }
     const namespace = options.generator.config?.['namespace'] ?? 'App\\Models'
     const enums = options.dmmf.datamodel.enums
-    const files = eloquentModelFiles(options.dmmf.datamodel.models, namespace, enums, {
-      provider: options.datasources[0]?.activeProvider,
-    })
+    const provider = options.datasources[0]?.activeProvider
+    const files = eloquentModelFiles(
+      options.dmmf.datamodel.models,
+      namespace,
+      enums,
+      provider === undefined ? {} : { provider },
+    )
     return yield* emitMany(files, output)
   })
 }

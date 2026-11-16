@@ -79,9 +79,10 @@ export function makeEffectRelations(
         `${r.key}:${r.isMany ? `Schema.Array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
     )
     .join('')
-  const typeLine = options?.includeType
-    ? `\n\nexport type ${model.name}Relations = typeof ${model.name}RelationsSchema.Type`
-    : ''
+  const typeLine =
+    options?.includeType === true
+      ? `\n\nexport type ${model.name}Relations = typeof ${model.name}RelationsSchema.Type`
+      : ''
   return `export const ${model.name}RelationsSchema = Schema.Struct({${base}${rels}})${typeLine}`
 }
 
@@ -111,7 +112,7 @@ export function effectSchemaCode(
     inferType: makeEffectInfer,
     schemas: makeEffectSchemas,
     typeMapping: PRISMA_TO_EFFECT,
-    enums,
+    ...(enums === undefined ? {} : { enums }),
     formatEnum: makeEffectEnumExpression,
     wrapList: makeEffectListExpression,
   })

@@ -23,12 +23,14 @@ export function signatureHelpProvider() {
         value: {
           signatures: help.signatures.map((signature) => ({
             label: signature.label,
-            documentation:
-              signature.documentation === null ? undefined : { value: signature.documentation },
+            ...(signature.documentation === null
+              ? {}
+              : { documentation: { value: signature.documentation } }),
             parameters: signature.parameters.map((parameter) => ({
               label: parameter.label,
-              documentation:
-                parameter.documentation === null ? undefined : { value: parameter.documentation },
+              ...(parameter.documentation === null
+                ? {}
+                : { documentation: { value: parameter.documentation } }),
             })),
           })),
           activeSignature: help.activeSignature,

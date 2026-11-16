@@ -61,21 +61,19 @@ describe('resolveTypeScript', () => {
   })
 
   it.each([
-    ['./users', 'users.ts'],
-    ['./users.js', 'users.ts'],
-    ['../data/users', 'data/users.ts'],
+    ['./users', 'config.ts', 'users.ts'],
+    ['./users.js', 'config.ts', 'users.ts'],
+    ['../data/users', 'nested/config.ts', 'data/users.ts'],
   ])(
     'answers %s with the TypeScript file itself, short-circuiting the default resolver',
-    (specifier, file) => {
+    (specifier, from, file) => {
       const dir = tmp()
       mkdirSync(path.join(dir, 'data'))
       mkdirSync(path.join(dir, 'nested'))
       writeFileSync(path.join(dir, 'users.ts'), 'export const users = []\n')
       writeFileSync(path.join(dir, 'data', 'users.ts'), 'export const users = []\n')
       const spy = recorder()
-      const parent = pathToFileURL(
-        path.join(dir, specifier.startsWith('../') ? 'nested/config.ts' : 'config.ts'),
-      ).href
+      const parent = pathToFileURL(path.join(dir, from)).href
       expect(resolveTypeScript(specifier, { parentURL: parent }, spy.next)).toStrictEqual({
         url: pathToFileURL(path.join(dir, file)).href,
         shortCircuit: true,

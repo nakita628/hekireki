@@ -23,7 +23,13 @@ import { useStepLines } from './text.js'
 type Plan = InferResponseType<typeof migrateClient.migrate.plan.$post, 200>
 type Step = Plan['steps'][number]
 
-function StepIcon({ step, outcome }: { readonly step: Step; readonly outcome?: StepOutcome }) {
+function StepIcon({
+  step,
+  outcome,
+}: {
+  readonly step: Step
+  readonly outcome: StepOutcome | undefined
+}) {
   const { ran, failed } = outcomeOf(outcome)
   if (failed) return <LuCircleAlert className="text-danger" size={16} />
   if (ran) return <LuCircleCheck className="text-ok" size={16} />
@@ -31,6 +37,43 @@ function StepIcon({ step, outcome }: { readonly step: Step; readonly outcome?: S
     <LuTable className="text-muted" size={16} />
   ) : (
     <LuDatabase className="text-muted" size={16} />
+  )
+}
+
+function runVariant(ran: boolean, destructive: boolean) {
+  if (ran) return 'ghost'
+  return destructive ? 'danger' : 'primary'
+}
+
+/** The rows a step is to change before it runs, and the rows it changed once it went through. */
+function RowsCount({
+  rows,
+  outcome,
+}: {
+  readonly rows: number | null
+  readonly outcome: StepOutcome | undefined
+}) {
+  const t = useMessages(STEPS)
+  const { ran, failed } = outcomeOf(outcome)
+  if (!ran) {
+    return rows === null ? null : (
+      <span className="text-code text-muted tabular-nums">{t.rowsToChange(rows)}</span>
+    )
+  }
+  if (failed) return null
+  const affected = outcome?.affected ?? null
+  return (
+    <span className="text-code text-muted tabular-nums">
+      {affected === null ? t.done : t.rowsChanged(affected)}
+    </span>
+  )
+}
+
+function StepError({ error }: { readonly error: string | null }) {
+  return (
+    <p className="mt-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-code text-danger">
+      {error}
+    </p>
   )
 }
 
@@ -71,20 +114,11 @@ function StepCard({
           </span>
         ) : null}
         <span className="ml-auto flex items-center gap-2.5">
-          {!ran && step.rows !== null ? (
-            <span className="text-code text-muted tabular-nums">{t.rowsToChange(step.rows)}</span>
-          ) : null}
-          {ran && !failed ? (
-            <span className="text-code text-muted tabular-nums">
-              {outcome?.affected === null || outcome?.affected === undefined
-                ? t.done
-                : t.rowsChanged(outcome.affected)}
-            </span>
-          ) : null}
+          <RowsCount rows={step.rows} outcome={outcome} />
           {onRun === null ? null : (
             <Button
               size="sm"
-              variant={ran ? 'ghost' : step.destructive ? 'danger' : 'primary'}
+              variant={runVariant(ran, step.destructive)}
               isDisabled={disabled}
               onPress={onRun}
             >
@@ -113,11 +147,7 @@ function StepCard({
         {showSql
           ? step.statements.map((sql) => <CodeBlock key={sql} code={sql} language="sql" />)
           : null}
-        {failed ? (
-          <p className="mt-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-code text-danger">
-            {outcome?.error}
-          </p>
-        ) : null}
+        {failed ? <StepError error={outcome?.error ?? null} /> : null}
       </div>
     </li>
   )

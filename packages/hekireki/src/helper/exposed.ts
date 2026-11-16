@@ -1,6 +1,6 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { docBlockLines, isSameList, stripAnnotations } from '../utils/index.js'
+import { docBlockLines, stripAnnotations } from '../utils/index.js'
 import { allocate, pascalCase } from '../utils/naming.js'
 import { exprRef, REF, typeRef } from '../utils/placeholder.js'
 import type { ManyToMany } from '../utils/prisma-model.js'
@@ -339,7 +339,7 @@ type IndexCondition =
     }
 
 function indexCondition(tokens: readonly string[]): IndexCondition | null {
-  if (tokens[0] === 'raw' && tokens[1] === '(' && tokens[2]?.startsWith('"')) {
+  if (tokens[0] === 'raw' && tokens[1] === '(' && tokens[2]?.startsWith('"') === true) {
     return { kind: 'raw', sql: prismaString(tokens[2]) }
   }
   if (tokens[0] !== '{') return null
@@ -361,6 +361,35 @@ function indexCondition(tokens: readonly string[]): IndexCondition | null {
  * @param blocks - The blocks of the Prisma schema as written (all of its files, merged).
  * @returns Each index that has a `where`.
  */
+// The fields an @@index or @@unique lists, named or as its first argument.
+function blockIndexFields(args: ReturnType<typeof attributeArguments>) {
+  const list = args.get('fields') ?? args.get('') ?? []
+  return commaSeparated(list[0] === '[' ? enclosed(list, 0) : list).flatMap((part) =>
+    part[0] === undefined ? [] : [part[0]],
+  )
+}
+
+function partialIndex(index: IndexInfo, where: string): PlannedIndex {
+  return {
+    type: index.type,
+    fields: index.fields,
+    ...(index.dbName === undefined ? {} : { dbName: index.dbName }),
+    ...(index.algorithm === undefined ? {} : { algorithm: index.algorithm }),
+    where,
+  }
+}
+
+// What tells a partial index apart, as one key: its model, whether it is unique, its map and its
+// fields in order.
+function conditionKey(
+  model: string,
+  unique: boolean,
+  dbName: string | undefined,
+  fields: readonly string[],
+) {
+  return JSON.stringify([model, unique, dbName ?? null, fields])
+}
+
 function indexConditions(blocks: readonly PrismaBlock[]) {
   return blocks
     .filter((block) => block.keyword === 'model')
@@ -377,12 +406,7 @@ function indexConditions(blocks: readonly PrismaBlock[]) {
         const where = args.get('where')
         const condition = where === undefined ? null : indexCondition(where)
         if (condition === null) return []
-        const list = args.get('fields') ?? args.get('') ?? []
-        const fields = blockLevel
-          ? commaSeparated(list[0] === '[' ? enclosed(list, 0) : list).flatMap((part) =>
-              part[0] === undefined ? [] : [part[0]],
-            )
-          : [tokens[0] ?? '']
+        const fields = blockLevel ? blockIndexFields(args) : [tokens[0] ?? '']
         const map = args.get('map')?.[0]
         return [
           {
@@ -437,12 +461,15 @@ function isFolded(name: string) {
 }
 
 function exposedTableName(model: DMMF.Model) {
-  const table = tableName(model)
-  if (!model.schema) return isFolded(table) ? sqlQuoted(table) : table
+  return qualifiedTableName(model.schema, tableName(model))
+}
+
+function qualifiedTableName(schema: string | null, table: string) {
+  if (schema === null || schema === '') return isFolded(table) ? sqlQuoted(table) : table
   // `schema."Table"` is lower-cased whole, so a schema-qualified name is quoted throughout or not at all.
-  return isFolded(model.schema) || isFolded(table)
-    ? `${sqlQuoted(model.schema)}.${sqlQuoted(table)}`
-    : `${model.schema}.${table}`
+  return isFolded(schema) || isFolded(table)
+    ? `${sqlQuoted(schema)}.${sqlQuoted(table)}`
+    : `${schema}.${table}`
 }
 
 // Exposed quotes a column name in mixed case itself, but reads one in capitals throughout as
@@ -482,6 +509,9 @@ const TABLE_MEMBERS = [
   'tableNameWithoutScheme',
   'tableNameWithoutSchemeSanitized',
 ]
+
+// A plain Table has no `id` or `idColumns` of its own for a column to clash with.
+const KEYLESS_TABLE_MEMBERS = TABLE_MEMBERS.filter((m) => m !== 'id' && m !== 'idColumns')
 
 // The classes nested in Table: inside a table object their simple names bind to these.
 const TABLE_NESTED_TYPES = [
@@ -547,7 +577,11 @@ type Key =
 function modelKey(model: DMMF.Model, indexes: readonly IndexInfo[]): Key {
   const index = entityKey(model, indexes)
   if (!index) return { kind: 'none' }
-  const fields = fieldNames(index).flatMap((name) => model.fields.filter((f) => f.name === name))
+  const byName = new Map(model.fields.map((f) => [f.name, f]))
+  const fields = fieldNames(index).flatMap((name) => {
+    const field = byName.get(name)
+    return field === undefined ? [] : [field]
+  })
   const [first] = fields
   if (fields.length !== index.fields.length || first === undefined) return { kind: 'none' }
   return fields.length === 1
@@ -641,31 +675,44 @@ function kotlinType(field: DMMF.Field | undefined) {
   return `${map.kotlin}:${field.isList}`
 }
 
+// Whether a foreign key references its principal's key (as one column or as the whole composite
+// key) or other columns.
+function foreignKeyKind(
+  from: readonly string[],
+  to: readonly string[],
+  principalKey: Key,
+): ForeignKeyKind {
+  if (from.length === 1) {
+    return principalKey.kind === 'single' && principalKey.field.name === to[0] ? 'id' : 'column'
+  }
+  return principalKey.kind === 'composite' && isSameFieldSet(keyFieldNames(principalKey), to)
+    ? 'composite-id'
+    : 'composite'
+}
+
 function foreignKeys(
   models: readonly DMMF.Model[],
   keyOf: (model: DMMF.Model) => Key,
   maps: ReadonlyMap<string, string>,
 ) {
+  const modelsByName = new Map(models.map((m) => [m.name, m]))
+  const fieldsByModel = new Map(
+    models.map((m) => [m.name, new Map(m.fields.map((f) => [f.name, f]))]),
+  )
+  const fieldOf = (model: DMMF.Model, name: string) => fieldsByModel.get(model.name)?.get(name)
   return models.flatMap((dependent) => {
     const relations = dependent.fields.filter(
       (f) => f.kind === 'object' && (f.relationFromFields ?? []).length > 0,
     )
     return relations.flatMap((navigation, position): ForeignKey[] => {
-      const principal = models.find((m) => m.name === navigation.type)
+      const principal = modelsByName.get(navigation.type)
       const from = navigation.relationFromFields ?? []
       const to = navigation.relationToFields ?? []
       if (!principal || from.length !== to.length) return []
       const principalKey = keyOf(principal)
-      const kind: ForeignKeyKind =
-        from.length === 1
-          ? principalKey.kind === 'single' && principalKey.field.name === to[0]
-            ? 'id'
-            : 'column'
-          : principalKey.kind === 'composite' && isSameFieldSet(keyFieldNames(principalKey), to)
-            ? 'composite-id'
-            : 'composite'
-      const fromFields = from.map((name) => dependent.fields.find((f) => f.name === name))
-      const toFields = to.map((name) => principal.fields.find((f) => f.name === name))
+      const kind = foreignKeyKind(from, to, principalKey)
+      const fromFields = from.map((name) => fieldOf(dependent, name))
+      const toFields = to.map((name) => fieldOf(principal, name))
       const sameType = fromFields.every(
         (field, index) => storedType(field) === storedType(toFields[index]),
       )
@@ -690,7 +737,7 @@ function foreignKeys(
           [
             tableName(dependent),
             ...from.map((field) => {
-              const found = dependent.fields.find((f) => f.name === field)
+              const found = fieldOf(dependent, field)
               return found ? columnName(found) : field
             }),
           ].join('_'),
@@ -766,8 +813,9 @@ type PlannedIndex = IndexInfo & { readonly where?: string }
 // string or a number for a field, or `{ not: ... }` of one.
 function conditionSql(model: DMMF.Model, condition: IndexCondition) {
   if (condition.kind === 'raw') return `(${condition.sql})`
+  const byName = new Map(model.fields.map((f) => [f.name, f]))
   const terms = condition.terms.map((term) => {
-    const field = model.fields.find((f) => f.name === term.field)
+    const field = byName.get(term.field)
     const column = sqlQuoted(field ? columnName(field) : term.field)
     if (term.value === 'null') return `${column} IS ${term.not ? 'NOT ' : ''}NULL`
     const value = term.value.startsWith('"') ? sqlString(prismaString(term.value)) : term.value
@@ -819,6 +867,14 @@ function navigationKind(
     return siblings.length === 1 ? 'table' : null
   }
   if (!fk.inline) return null
+  return columnNavigation(schema, fk)
+}
+
+// Whether the DAO can follow a foreign key of one column through that column.
+function columnNavigation(
+  schema: Pick<SchemaInfo, 'dao' | 'keyOf' | 'foreignKeys'>,
+  fk: ForeignKey,
+): 'column' | null {
   const principalField = fk.principal.fields.find((f) => f.name === fk.to[0])
   // A reference column copies the type of the key it references, which for a smallserial would be
   // another smallserial, and a column of another type cannot copy it: such a key is referenced by a
@@ -920,10 +976,7 @@ function planNames(schema: SchemaInfo, packageName: string) {
         const keyField = key.kind === 'single' ? key.field.name : null
         const reserved =
           key.kind === 'none'
-            ? [
-                ...TABLE_MEMBERS.filter((m) => m !== 'id' && m !== 'idColumns'),
-                ...TABLE_NESTED_TYPES,
-              ]
+            ? [...KEYLESS_TABLE_MEMBERS, ...TABLE_NESTED_TYPES]
             : [...TABLE_MEMBERS, ...TABLE_NESTED_TYPES]
         const allocated = allocate(
           scalarFields(model)
@@ -998,29 +1051,21 @@ export function planExposed(
   const blocks = prismaBlocks(options.source ?? '')
   const views = viewNames(blocks)
   const models = datamodel.models.filter((m) => !views.has(m.name))
-  const conditions = indexConditions(blocks)
+  const conditions = new Map<string, ReturnType<typeof indexConditions>[number]>()
+  for (const c of indexConditions(blocks)) {
+    const key = conditionKey(c.model, c.unique, c.dbName, c.fields)
+    if (!conditions.has(key)) conditions.set(key, c)
+  }
   // Computed once per model: the indexes are told apart by identity, and a DMMF without `indexes`
   // has them made up afresh from each model.
   const indexes = new Map(
     models.map((m) => [
       m.name,
       modelIndexes(m, datamodel.indexes ?? []).map((index): PlannedIndex => {
-        const condition = conditions.find(
-          (c) =>
-            c.model === m.name &&
-            c.unique === (index.type === 'unique') &&
-            c.dbName === index.dbName &&
-            isSameList(c.fields, fieldNames(index)),
+        const condition = conditions.get(
+          conditionKey(m.name, index.type === 'unique', index.dbName, fieldNames(index)),
         )
-        return condition
-          ? {
-              type: index.type,
-              fields: index.fields,
-              dbName: index.dbName,
-              algorithm: index.algorithm,
-              where: conditionSql(m, condition.condition),
-            }
-          : index
+        return condition ? partialIndex(index, conditionSql(m, condition.condition)) : index
       }),
     ]),
   )
@@ -1031,7 +1076,7 @@ export function planExposed(
       m.name,
       modelKey(
         m,
-        indexesOf(m).filter((index) => !index.where),
+        indexesOf(m).filter((index) => index.where === undefined),
       ),
     ]),
   )
@@ -1102,7 +1147,9 @@ function enumName(plan: ExposedPlan, name: string) {
 function enumSqlType(plan: Pick<ExposedPlan, 'enumSchemas'>, e: DMMF.DatamodelEnum) {
   const dbName = e.dbName ?? e.name
   const schema = plan.enumSchemas.get(e.name)
-  return schema ? `${sqlQuoted(schema)}.${sqlQuoted(dbName)}` : sqlQuoted(dbName)
+  return schema !== undefined && schema !== ''
+    ? `${sqlQuoted(schema)}.${sqlQuoted(dbName)}`
+    : sqlQuoted(dbName)
 }
 
 type TemporalKind = 'timestamp' | 'timestamptz' | 'date' | 'time' | 'timetz'
@@ -1283,105 +1330,90 @@ function postgresMapping(plan: ExposedPlan, field: DMMF.Field) {
   return (field.nativeType ? nativeMapping(...field.nativeType) : null) ?? scalarMapping(field.type)
 }
 
-function nativeMapping(nativeName: string, args: readonly string[]) {
-  const length = lengthArg(args)
-  switch (nativeName) {
-    case 'Text':
-      return exposedString('text', [], KT.TextColumnType)
-    case 'VarChar':
-      return length
-        ? exposedString('varchar', [length], KT.VarCharColumnType)
-        : pgString('pgVarchar', [], 'VARCHAR', 'varchar')
-    // Before 1.2, Exposed binds a list of char(n) as char[], which PostgreSQL cuts to one character
-    // an element; unsized, bpchar keeps them whole for the column to pad.
-    case 'Char': {
-      const size = length ?? '1'
-      return {
-        ...exposedString('char', [size], KT.CharColumnType),
-        element: callText(exprRef(local('PgStringColumnType')), [
-          kotlinString(`BPCHAR(${size})`),
-          kotlinString('bpchar'),
-        ]),
-      }
-    }
-    case 'Citext':
-      return pgString('pgCitext', [], 'CITEXT', 'citext')
-    case 'Xml':
-      return pgString('pgXml', [], 'XML', 'xml')
-    case 'Inet':
-      return pgString('pgInet', [], 'INET', 'inet')
-    // An explicit cast to bit(n) pads or cuts the string to n bits; the column's own type checks
-    // the length of a varbit assigned to it instead.
-    case 'Bit':
-      return pgString('pgBit', [length ?? '1'], `BIT(${length ?? '1'})`, 'varbit')
-    case 'VarBit':
-      return length
-        ? pgString('pgVarbit', [length], `VARBIT(${length})`, 'varbit')
-        : pgString('pgVarbit', [], 'VARBIT', 'varbit')
-    case 'Uuid':
-      return mapping(
-        typeRef(KT.UUID),
-        (name) => ({ name: funRef(KT.javaUUID), args: [name] }),
-        callText(exprRef(KT.UUIDColumnType), []),
-        'uuid',
-      )
-    case 'SmallInt':
-      return simple(KT.Short, 'short', KT.ShortColumnType, 'short')
-    case 'Integer':
-      return simple(KT.Int, 'integer', KT.IntegerColumnType, 'int')
-    case 'Oid':
-      return mapping(
-        typeRef(KT.Long),
-        supportColumn('pgOid', []),
-        callText(exprRef(local('PgOidColumnType')), []),
-        'long',
-      )
-    case 'BigInt':
-      return simple(KT.Long, 'long', KT.LongColumnType, 'long')
-    case 'Real':
-      return simple(KT.Float, 'float', KT.FloatColumnType, 'float')
-    case 'DoublePrecision':
-      return simple(KT.Double, 'double', KT.DoubleColumnType, 'double')
-    case 'Money':
-      return mapping(
-        typeRef(KT.BigDecimal),
-        supportColumn('pgMoney', []),
-        callText(exprRef(local('PgMoneyColumnType')), []),
-        'decimal',
-        { listReadAs: `${exprRef(KT.String)}::class.java` },
-      )
-    case 'Decimal': {
-      const [precision, scale] = args
-      return precision !== undefined && scale !== undefined
-        ? simple(KT.BigDecimal, 'decimal', KT.DecimalColumnType, 'decimal', [precision, scale])
-        : mapping(
-            typeRef(KT.BigDecimal),
-            supportColumn('pgNumeric', []),
-            callText(exprRef(local('PgNumericColumnType')), []),
-            'decimal',
-          )
-    }
-    case 'Timestamp':
-      return temporalMapping('timestamp', KT.Instant, length, KT.LocalDateTime)
-    case 'Timestamptz':
-      return temporalMapping('timestamptz', KT.Instant, length, KT.OffsetDateTime)
-    case 'Date':
-      return temporalMapping('date', KT.LocalDate, null, KT.LocalDate)
-    case 'Time':
-      return temporalMapping('time', KT.LocalTime, length, KT.LocalTime)
-    case 'Timetz':
-      return temporalMapping('timetz', KT.OffsetTime, length, KT.OffsetTime)
-    case 'Json':
-      return jsonMapping('json')
-    case 'JsonB':
-      return jsonMapping('jsonb')
-    case 'ByteA':
-      return simple(KT.ByteArray, 'binary', KT.BasicBinaryColumnType, 'bytes')
-    case 'Boolean':
-      return simple(KT.Boolean, 'bool', KT.BooleanColumnType, 'boolean')
-    default:
-      return null
+function charMapping(size: string): Mapping {
+  return {
+    ...exposedString('char', [size], KT.CharColumnType),
+    element: callText(exprRef(local('PgStringColumnType')), [
+      kotlinString(`BPCHAR(${size})`),
+      kotlinString('bpchar'),
+    ]),
   }
+}
+
+// The mapping of each PostgreSQL native type, from its length argument and all its arguments.
+const NATIVE_MAPPINGS: {
+  readonly [nativeName: string]: (length: string | null, args: readonly string[]) => Mapping
+} = {
+  Text: () => exposedString('text', [], KT.TextColumnType),
+  VarChar: (length) =>
+    length !== null
+      ? exposedString('varchar', [length], KT.VarCharColumnType)
+      : pgString('pgVarchar', [], 'VARCHAR', 'varchar'),
+  // Before 1.2, Exposed binds a list of char(n) as char[], which PostgreSQL cuts to one character
+  // an element; unsized, bpchar keeps them whole for the column to pad.
+  Char: (length) => charMapping(length ?? '1'),
+  Citext: () => pgString('pgCitext', [], 'CITEXT', 'citext'),
+  Xml: () => pgString('pgXml', [], 'XML', 'xml'),
+  Inet: () => pgString('pgInet', [], 'INET', 'inet'),
+  // An explicit cast to bit(n) pads or cuts the string to n bits; the column's own type checks
+  // the length of a varbit assigned to it instead.
+  Bit: (length) => pgString('pgBit', [length ?? '1'], `BIT(${length ?? '1'})`, 'varbit'),
+  VarBit: (length) =>
+    length !== null
+      ? pgString('pgVarbit', [length], `VARBIT(${length})`, 'varbit')
+      : pgString('pgVarbit', [], 'VARBIT', 'varbit'),
+  Uuid: () =>
+    mapping(
+      typeRef(KT.UUID),
+      (name) => ({ name: funRef(KT.javaUUID), args: [name] }),
+      callText(exprRef(KT.UUIDColumnType), []),
+      'uuid',
+    ),
+  SmallInt: () => simple(KT.Short, 'short', KT.ShortColumnType, 'short'),
+  Integer: () => simple(KT.Int, 'integer', KT.IntegerColumnType, 'int'),
+  Oid: () =>
+    mapping(
+      typeRef(KT.Long),
+      supportColumn('pgOid', []),
+      callText(exprRef(local('PgOidColumnType')), []),
+      'long',
+    ),
+  BigInt: () => simple(KT.Long, 'long', KT.LongColumnType, 'long'),
+  Real: () => simple(KT.Float, 'float', KT.FloatColumnType, 'float'),
+  DoublePrecision: () => simple(KT.Double, 'double', KT.DoubleColumnType, 'double'),
+  Money: () =>
+    mapping(
+      typeRef(KT.BigDecimal),
+      supportColumn('pgMoney', []),
+      callText(exprRef(local('PgMoneyColumnType')), []),
+      'decimal',
+      { listReadAs: `${exprRef(KT.String)}::class.java` },
+    ),
+  Decimal: (_length, args) => {
+    const [precision, scale] = args
+    return precision !== undefined && scale !== undefined
+      ? simple(KT.BigDecimal, 'decimal', KT.DecimalColumnType, 'decimal', [precision, scale])
+      : mapping(
+          typeRef(KT.BigDecimal),
+          supportColumn('pgNumeric', []),
+          callText(exprRef(local('PgNumericColumnType')), []),
+          'decimal',
+        )
+  },
+  Timestamp: (length) => temporalMapping('timestamp', KT.Instant, length, KT.LocalDateTime),
+  Timestamptz: (length) => temporalMapping('timestamptz', KT.Instant, length, KT.OffsetDateTime),
+  Date: () => temporalMapping('date', KT.LocalDate, null, KT.LocalDate),
+  Time: (length) => temporalMapping('time', KT.LocalTime, length, KT.LocalTime),
+  Timetz: (length) => temporalMapping('timetz', KT.OffsetTime, length, KT.OffsetTime),
+  Json: () => jsonMapping('json'),
+  JsonB: () => jsonMapping('jsonb'),
+  ByteA: () => simple(KT.ByteArray, 'binary', KT.BasicBinaryColumnType, 'bytes'),
+  Boolean: () => simple(KT.Boolean, 'bool', KT.BooleanColumnType, 'boolean'),
+}
+
+function nativeMapping(nativeName: string, args: readonly string[]) {
+  const make = NATIVE_MAPPINGS[nativeName]
+  return make === undefined ? null : make(lengthArg(args), args)
 }
 
 function scalarMapping(type: string) {
@@ -1458,55 +1490,59 @@ function temporalLiteral(value: string, kind: TemporalKind) {
 
 // A default as a Kotlin expression of the column's type, or null when the value has no spelling
 // here that is sure to mean what the column's default means.
+function enumLiteral(plan: ExposedPlan, value: string | number | boolean, field: DMMF.Field) {
+  const isKnown = plan.enums
+    .find((e) => e.name === field.type)
+    ?.values.some((v) => v.name === value)
+  const entry = plan.names.entries.get(field.type)?.get(String(value))
+  return isKnown === true && entry !== undefined
+    ? `${exprRef(local(enumName(plan, field.type)))}.${entry}`
+    : null
+}
+
+type LiteralWriter = (
+  value: string | number | boolean,
+  plan: ExposedPlan,
+  field: DMMF.Field,
+  map: Mapping,
+) => string | null
+
+// The Kotlin literal of a default, by the kind of literal the column's type takes.
+const KOTLIN_LITERALS: { readonly [kind in LiteralKind]: LiteralWriter } = {
+  enum: (value, plan, field) => enumLiteral(plan, value, field),
+  temporal: (value, _plan, _field, map) =>
+    typeof value === 'string' && map.temporal !== null
+      ? temporalLiteral(value, map.temporal)
+      : null,
+  string: (value) => (typeof value === 'string' ? kotlinString(value) : null),
+  boolean: (value) => (typeof value === 'boolean' ? String(value) : null),
+  int: (value) => integerLiteral(value, 2 ** 31),
+  short: (value) => integerLiteral(value, 2 ** 15),
+  // DMMF carries a BigInt default as a string of digits when it is past 2^53.
+  long: (value) => longLiteral(value),
+  float: (value) => (typeof value === 'number' && Number.isFinite(value) ? `${value}f` : null),
+  double: (value) =>
+    typeof value === 'number' && Number.isFinite(value) ? doubleText(value) : null,
+  decimal: (value) =>
+    /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/iu.test(String(value))
+      ? `${exprRef(KT.BigDecimal)}(${kotlinString(String(value))})`
+      : null,
+  uuid: (value) =>
+    typeof value === 'string' ? `${exprRef(KT.UUID)}.fromString(${kotlinString(value)})` : null,
+  // A Bytes default is the base64 of the bytes.
+  bytes: (value) =>
+    typeof value === 'string'
+      ? `${exprRef(KT.Base64)}.getDecoder().decode(${kotlinString(value)})`
+      : null,
+}
+
 function kotlinLiteral(
   plan: ExposedPlan,
   value: string | number | boolean,
   field: DMMF.Field,
   map: Mapping,
 ) {
-  switch (map.literal) {
-    case 'enum': {
-      const isKnown = plan.enums
-        .find((e) => e.name === field.type)
-        ?.values.some((v) => v.name === value)
-      const entry = plan.names.entries.get(field.type)?.get(String(value))
-      return isKnown && entry ? `${exprRef(local(enumName(plan, field.type)))}.${entry}` : null
-    }
-    case 'temporal':
-      return typeof value === 'string' && map.temporal !== null
-        ? temporalLiteral(value, map.temporal)
-        : null
-    case 'string':
-      return typeof value === 'string' ? kotlinString(value) : null
-    case 'boolean':
-      return typeof value === 'boolean' ? String(value) : null
-    case 'int':
-      return integerLiteral(value, 2 ** 31)
-    case 'short':
-      return integerLiteral(value, 2 ** 15)
-    // DMMF carries a BigInt default as a string of digits when it is past 2^53.
-    case 'long':
-      return longLiteral(value)
-    case 'float':
-      return typeof value === 'number' && Number.isFinite(value) ? `${value}f` : null
-    case 'double':
-      return typeof value === 'number' && Number.isFinite(value) ? doubleText(value) : null
-    case 'decimal':
-      return /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/iu.test(String(value))
-        ? `${exprRef(KT.BigDecimal)}(${kotlinString(String(value))})`
-        : null
-    case 'uuid':
-      return typeof value === 'string'
-        ? `${exprRef(KT.UUID)}.fromString(${kotlinString(value)})`
-        : null
-    // A Bytes default is the base64 of the bytes.
-    case 'bytes':
-      return typeof value === 'string'
-        ? `${exprRef(KT.Base64)}.getDecoder().decode(${kotlinString(value)})`
-        : null
-    default:
-      return null
-  }
+  return KOTLIN_LITERALS[map.literal](value, plan, field, map)
 }
 
 function hexOfBase64(value: string) {
@@ -1572,7 +1608,8 @@ function generatorExpr(
     case 'uuid': {
       const uuid =
         arg === 7 ? callText(funRef(local('uuidV7')), []) : `${exprRef(KT.UUID)}.randomUUID()`
-      return isUuid ? uuid : isString ? `${uuid}.toString()` : null
+      if (isUuid) return uuid
+      return isString ? `${uuid}.toString()` : null
     }
     case 'ulid':
       return isString ? `${exprRef(KT.UlidCreator)}.getUlid().toString()` : null
@@ -1604,47 +1641,70 @@ function defaultPlan(
       ? { kind: 'client' as const, expr: nowExpr(map.temporal) }
       : null
   if (def === undefined || def === null) return updatedAt
-  if (isFunctionDefault(def)) {
-    const [arg] = def.args
-    // Prisma Migrate gives an oid column no sequence.
-    if (def.name === 'autoincrement') {
-      return field.nativeType?.[0] === 'Oid' ? null : { kind: 'autoincrement' }
-    }
-    if (def.name === 'now') {
-      return {
-        kind: 'database',
-        sql: 'CURRENT_TIMESTAMP',
-        client: map.temporal ? nowExpr(map.temporal) : null,
-      }
-    }
-    if (def.name === 'dbgenerated') {
-      return typeof arg === 'string' && arg.length > 0
-        ? { kind: 'database', sql: arg, client: null }
-        : { kind: 'generated' }
-    }
-    const generated = field.isList ? null : generatorExpr(def, map)
-    return generated === null ? updatedAt : { kind: 'client', expr: generated }
+  if (isFunctionDefault(def)) return functionDefaultPlan(def, field, map, updatedAt)
+  if (isListDefault(def)) return listDefaultPlan(plan, def, field, map)
+  return literalDefaultPlan(plan, def, field, map)
+}
+
+function functionDefaultPlan(
+  def: { readonly name: string; readonly args: readonly (string | number)[] },
+  field: DMMF.Field,
+  map: Mapping,
+  updatedAt: DefaultPlan | null,
+): DefaultPlan | null {
+  const [arg] = def.args
+  // Prisma Migrate gives an oid column no sequence.
+  if (def.name === 'autoincrement') {
+    return field.nativeType?.[0] === 'Oid' ? null : { kind: 'autoincrement' }
   }
-  if (isListDefault(def)) {
-    const elements = def.map((value) => kotlinLiteral(plan, value, field, map))
-    const labels = def.map((value) => {
-      if (map.literal === 'enum') {
-        return (
-          plan.enums.find((e) => e.name === field.type)?.values.find((v) => v.name === value)
-            ?.dbName ?? String(value)
-        )
-      }
-      if (map.literal === 'bytes' && typeof value === 'string') return `\\x${hexOfBase64(value)}`
-      return map.temporal !== null ? sqlTimestamp(value) : String(value)
-    })
-    const client = elements.every((element) => element !== null)
-      ? {
-          name: funRef(elements.length === 0 ? KT.emptyList : KT.listOf),
-          args: elements.filter((element) => element !== null),
-        }
-      : null
-    return { kind: 'database', sql: sqlArray(labels), client }
+  if (def.name === 'now') {
+    return {
+      kind: 'database',
+      sql: 'CURRENT_TIMESTAMP',
+      client: map.temporal === null ? null : nowExpr(map.temporal),
+    }
   }
+  if (def.name === 'dbgenerated') {
+    return typeof arg === 'string' && arg.length > 0
+      ? { kind: 'database', sql: arg, client: null }
+      : { kind: 'generated' }
+  }
+  const generated = field.isList ? null : generatorExpr(def, map)
+  return generated === null ? updatedAt : { kind: 'client', expr: generated }
+}
+
+function listDefaultPlan(
+  plan: ExposedPlan,
+  def: readonly (string | number | boolean)[],
+  field: DMMF.Field,
+  map: Mapping,
+): DefaultPlan {
+  const enumLabels = new Map(
+    (plan.enums.find((e) => e.name === field.type)?.values ?? []).map((v) => [v.name, v.dbName]),
+  )
+  const elements = def.map((value) => kotlinLiteral(plan, value, field, map))
+  const labels = def.map((value) => {
+    if (map.literal === 'enum') {
+      return (typeof value === 'string' ? enumLabels.get(value) : undefined) ?? String(value)
+    }
+    if (map.literal === 'bytes' && typeof value === 'string') return `\\x${hexOfBase64(value)}`
+    return map.temporal !== null ? sqlTimestamp(value) : String(value)
+  })
+  const client = elements.every((element) => element !== null)
+    ? {
+        name: funRef(elements.length === 0 ? KT.emptyList : KT.listOf),
+        args: elements.filter((element) => element !== null),
+      }
+    : null
+  return { kind: 'database', sql: sqlArray(labels), client }
+}
+
+function literalDefaultPlan(
+  plan: ExposedPlan,
+  def: string | number | boolean,
+  field: DMMF.Field,
+  map: Mapping,
+): DefaultPlan {
   const expr = kotlinLiteral(plan, def, field, map)
   const sql = sqlValue(plan, def, field, map)
   if (expr === null) return { kind: 'database', sql, client: null }
@@ -1728,6 +1788,33 @@ function isReferenceColumn(schema: Pick<SchemaInfo, 'keyOf'>, fk: ForeignKey | u
   return !(target && isSmallserial(target))
 }
 
+// The call a column starts from, where it is not a reference.
+function plainColumnHead(field: DMMF.Field, map: Mapping, name: string, smallserial: boolean) {
+  if (field.isList) {
+    return map.listReadAs !== null
+      ? { name: funRef(local('pgList')), args: [name, map.element, map.listReadAs] }
+      : { name: 'array', args: [name, map.element] }
+  }
+  return smallserial ? { name: funRef(local('pgSmallserial')), args: [name] } : map.factory(name)
+}
+
+function defaultCall(def: DefaultPlan, smallserial: boolean, wrap: (expr: Expr) => Expr): Call {
+  if (def.kind === 'literal') return { name: 'default', args: [wrap(def.expr)] }
+  if (def.kind === 'database') {
+    return def.client === null
+      ? { name: funRef(local('databaseDefault')), args: [kotlinString(def.sql)] }
+      : {
+          name: funRef(local('databaseDefault')),
+          args: [kotlinString(def.sql)],
+          lambda: wrap(def.client),
+        }
+  }
+  if (def.kind === 'client') return { name: 'clientDefault', args: [], lambda: wrap(def.expr) }
+  return def.kind === 'generated' || smallserial
+    ? { name: 'databaseGenerated', args: [] }
+    : { name: 'autoIncrement', args: [] }
+}
+
 function columnCalls(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) {
   const map = postgresMapping(plan, field)
   const key = plan.keyOf(model)
@@ -1742,70 +1829,58 @@ function columnCalls(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) {
     isReference ? { name: exprRef(KT.EntityID), args: [expr, principal] } : expr
   const head: Call =
     isReference && fk
-      ? {
-          name: field.isRequired ? 'reference' : 'optReference',
-          args: [name, principal, ...foreignKeyArgs(fk, 'fkName')],
-        }
-      : field.isList
-        ? map.listReadAs
-          ? { name: funRef(local('pgList')), args: [name, map.element, map.listReadAs] }
-          : { name: 'array', args: [name, map.element] }
-        : smallserial
-          ? { name: funRef(local('pgSmallserial')), args: [name] }
-          : map.factory(name)
+      ? referenceHead(field, fk, name, principal)
+      : plainColumnHead(field, map, name, smallserial)
   const references: readonly Call[] =
-    fk && !isReference
-      ? [
-          {
-            name: 'references',
-            args: [
-              `${principal}.${kotlinName(columnProperty(plan, fk.principal, fk.to[0] ?? ''))}`,
-              ...foreignKeyArgs(fk, 'fkName'),
-            ],
-          },
-        ]
-      : []
-  const nullable: readonly Call[] =
-    (!field.isRequired || field.isList) && !(isReference && !field.isRequired)
-      ? [{ name: 'nullable', args: [] }]
-      : []
-  const defaults: readonly Call[] =
-    def === null
-      ? []
-      : def.kind === 'literal'
-        ? [{ name: 'default', args: [wrap(def.expr)] }]
-        : def.kind === 'database'
-          ? [
-              def.client === null
-                ? { name: funRef(local('databaseDefault')), args: [kotlinString(def.sql)] }
-                : {
-                    name: funRef(local('databaseDefault')),
-                    args: [kotlinString(def.sql)],
-                    lambda: wrap(def.client),
-                  },
-            ]
-          : def.kind === 'client'
-            ? [{ name: 'clientDefault', args: [], lambda: wrap(def.expr) }]
-            : def.kind === 'generated' || smallserial
-              ? [{ name: 'databaseGenerated', args: [] }]
-              : [{ name: 'autoIncrement', args: [] }]
-  const unique = inlineUniques(plan, model).find((index) => index.fields[0]?.name === field.name)
+    fk && !isReference ? [referencesCall(plan, fk, principal)] : []
+  const nullable = nullableCalls(field, isReference)
+  const defaults = def === null ? [] : [defaultCall(def, smallserial, wrap)]
+  const isAutoincrement = def?.kind === 'autoincrement'
   return [
     head,
-    ...(def?.kind === 'autoincrement' ? defaults : []),
+    ...(isAutoincrement ? defaults : []),
     ...references,
     ...nullable,
-    ...(def?.kind === 'autoincrement' ? [] : defaults),
-    ...(unique
-      ? [
-          {
-            name: 'uniqueIndex',
-            args: [kotlinString(exposedConstraintName(indexName(model, unique)))],
-          },
-        ]
-      : []),
+    ...(isAutoincrement ? [] : defaults),
+    ...uniqueIndexCalls(plan, model, field),
     ...(isSingleKey ? [{ name: 'entityId', args: [] }] : []),
   ]
+}
+
+function referenceHead(field: DMMF.Field, fk: ForeignKey, name: string, principal: string): Call {
+  return {
+    name: field.isRequired ? 'reference' : 'optReference',
+    args: [name, principal, ...foreignKeyArgs(fk, 'fkName')],
+  }
+}
+
+// `.nullable()` on an optional column or a list; an optReference is nullable already.
+function nullableCalls(field: DMMF.Field, isReference: boolean): readonly Call[] {
+  return (!field.isRequired || field.isList) && !(isReference && !field.isRequired)
+    ? [{ name: 'nullable', args: [] }]
+    : []
+}
+
+function referencesCall(plan: ExposedPlan, fk: ForeignKey, principal: string): Call {
+  return {
+    name: 'references',
+    args: [
+      `${principal}.${kotlinName(columnProperty(plan, fk.principal, fk.to[0] ?? ''))}`,
+      ...foreignKeyArgs(fk, 'fkName'),
+    ],
+  }
+}
+
+function uniqueIndexCalls(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field): Call[] {
+  const unique = inlineUniques(plan, model).find((index) => index.fields[0]?.name === field.name)
+  return unique
+    ? [
+        {
+          name: 'uniqueIndex',
+          args: [kotlinString(exposedConstraintName(indexName(model, unique)))],
+        },
+      ]
+    : []
 }
 
 // ktlint's layout: its default style takes lines of up to 140 characters. A property that does not
@@ -2055,7 +2130,8 @@ function importRank(fullName: string) {
 function compareImports(left: string, right: string) {
   const rank = importRank(left) - importRank(right)
   if (rank !== 0) return rank
-  return left < right ? -1 : left > right ? 1 : 0
+  if (left < right) return -1
+  return left > right ? 1 : 0
 }
 
 function placeholders(blocks: readonly Block[]) {
@@ -2099,11 +2175,12 @@ function renderFile(packageName: string, types: ReadonlySet<string>, blocks: rea
   ]
   // One class per simple name is written simply: a class Kotlin imports by default before any
   // other, and none whose name a declaration of the package takes.
+  const bySimpleName = Map.groupBy(classes, simpleName)
   const simpleClasses = new Set(
     classes.filter((fullName) => {
       const name = simpleName(fullName)
       if (types.has(name)) return false
-      const rivals = classes.filter((other) => simpleName(other) === name)
+      const rivals = bySimpleName.get(name) ?? []
       return (rivals.find(isDefaultImport) ?? rivals[0]) === fullName
     }),
   )
@@ -2254,6 +2331,7 @@ function columnOrder(plan: ExposedPlan, model: DMMF.Model) {
 
 function indexCalls(plan: ExposedPlan, model: DMMF.Model) {
   const inline = new Set(inlineUniques(plan, model))
+  const fieldByName = new Map(model.fields.map((f) => [f.name, f]))
   return modelIndexesOf(plan, model)
     .filter((index) => (index.type === 'unique' || index.type === 'normal') && !inline.has(index))
     .map((index) => {
@@ -2270,7 +2348,7 @@ function indexCalls(plan: ExposedPlan, model: DMMF.Model) {
               value: {
                 name: funRef(KT.listOf),
                 args: index.fields.map((f) => {
-                  const field = model.fields.find((mf) => mf.name === f.name)
+                  const field = fieldByName.get(f.name)
                   const operator =
                     f.operatorClass === undefined || f.operatorClass === ''
                       ? ''
@@ -2348,15 +2426,18 @@ export function tableFile(plan: ExposedPlan, model: DMMF.Model) {
   }
 }
 
+// An IdTable of the key's type, a CompositeIdTable, or a plain Table for a model without a key.
+function tableBaseClass(plan: ExposedPlan, key: Key) {
+  if (key.kind === 'single') {
+    return `${typeRef(KT.IdTable)}<${postgresMapping(plan, key.field).kotlin}>`
+  }
+  return key.kind === 'composite' ? typeRef(KT.CompositeIdTable) : typeRef(KT.Table)
+}
+
 function tableBlocks(plan: ExposedPlan, model: DMMF.Model) {
   const name = plan.names.tables.get(model.name) ?? model.name
   const key = plan.keyOf(model)
-  const base =
-    key.kind === 'single'
-      ? `${typeRef(KT.IdTable)}<${postgresMapping(plan, key.field).kotlin}>`
-      : key.kind === 'composite'
-        ? typeRef(KT.CompositeIdTable)
-        : typeRef(KT.Table)
+  const base = tableBaseClass(plan, key)
   const fields = columnOrder(plan, model)
   const columns = fields.map((field, index) => {
     const isKey = key.kind === 'single' && key.field === field
@@ -2443,18 +2524,31 @@ function relationLines(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) 
     )
   }
   const incoming = plan.inverseKeyOf(field)
-  if (incoming) {
-    const target =
-      plan.navigationOf(incoming) === 'table'
-        ? tableRef(plan, incoming.dependent)
-        : columnRef(plan, incoming.dependent, incoming.from[0] ?? '')
-    const operator = field.isList
-      ? incoming.isRequired
-        ? 'referrersOn'
-        : 'optionalReferrersOn'
-      : 'optionalBackReferencedOn'
-    return delegate('    ', `val ${name} by`, entityRef(plan, incoming.dependent), operator, target)
-  }
+  if (incoming) return incomingRelationLines(plan, field, name, incoming)
+  return manyToManyRelationLines(plan, model, field, name)
+}
+
+function incomingRelationLines(
+  plan: ExposedPlan,
+  field: DMMF.Field,
+  name: string,
+  incoming: ForeignKey,
+) {
+  const target =
+    plan.navigationOf(incoming) === 'table'
+      ? tableRef(plan, incoming.dependent)
+      : columnRef(plan, incoming.dependent, incoming.from[0] ?? '')
+  const referrers = incoming.isRequired ? 'referrersOn' : 'optionalReferrersOn'
+  const operator = field.isList ? referrers : 'optionalBackReferencedOn'
+  return delegate('    ', `val ${name} by`, entityRef(plan, incoming.dependent), operator, target)
+}
+
+function manyToManyRelationLines(
+  plan: ExposedPlan,
+  model: DMMF.Model,
+  field: DMMF.Field,
+  name: string,
+) {
   const m2m = plan.manyToMany.find(
     (r) =>
       (r.a.model === model && r.a.field === field) || (r.b.model === model && r.b.field === field),
@@ -2636,27 +2730,13 @@ function joinTableBlocks(plan: ExposedPlan, m2m: ManyToMany) {
       `onUpdate = ${cascade}`,
       `fkName = ${constraint(`_${label}_fkey`)}`,
     ]
-    const calls: readonly Call[] =
+    const calls =
       key.kind === 'single' && isSmallserial(key.field)
-        ? [
-            { name: 'short', args: [labelName] },
-            ...(plan.foreignKeysInDatabase
-              ? [{ name: 'references', args: [`${target}.id`, ...actions] }]
-              : []),
-          ]
-        : plan.foreignKeysInDatabase
-          ? [{ name: 'reference', args: [labelName, target, ...actions] }]
-          : [{ name: 'entityId', args: [labelName, target] }]
+        ? smallserialJoinColumn(plan, labelName, target, actions)
+        : keyJoinColumn(plan, labelName, target, actions)
     return property('    ', `val ${member}`, calls)
   }
-  const schema = m2m.a.model.schema
-  const fullName = !schema
-    ? isFolded(table)
-      ? sqlQuoted(table)
-      : table
-    : isFolded(schema) || isFolded(table)
-      ? `${sqlQuoted(schema)}.${sqlQuoted(table)}`
-      : `${schema}.${table}`
+  const fullName = qualifiedTableName(m2m.a.model.schema, table)
   const body = joinLines(
     column('a', 'A', m2m.a.model),
     column('b', 'B', m2m.b.model),
@@ -2680,8 +2760,37 @@ function joinTableBlocks(plan: ExposedPlan, m2m: ManyToMany) {
   ]
 }
 
+const SCHEMA_OBJECT_MEMBERS: ReadonlySet<string> = new Set(['enumTypes', 'schemas', 'tables'])
+
+// A join column to a smallserial key: a short, as a reference would copy the key's type.
+function smallserialJoinColumn(
+  plan: ExposedPlan,
+  labelName: string,
+  target: string,
+  actions: readonly string[],
+): readonly Call[] {
+  return [
+    { name: 'short', args: [labelName] },
+    ...(plan.foreignKeysInDatabase
+      ? [{ name: 'references', args: [`${target}.id`, ...actions] }]
+      : []),
+  ]
+}
+
+function keyJoinColumn(
+  plan: ExposedPlan,
+  labelName: string,
+  target: string,
+  actions: readonly string[],
+): readonly Call[] {
+  return plan.foreignKeysInDatabase
+    ? [{ name: 'reference', args: [labelName, target, ...actions] }]
+    : [{ name: 'entityId', args: [labelName, target] }]
+}
+
 /**
  * The tables of the schema, and what `SchemaUtils.create` needs before them: the schemas and the
+
  * enum types, which Exposed does not create.
  *
  * @param plan - The plan.
@@ -2690,7 +2799,7 @@ function joinTableBlocks(plan: ExposedPlan, m2m: ManyToMany) {
 export function schemaFile(plan: ExposedPlan) {
   const schemas = [
     ...new Set([
-      ...plan.models.flatMap((m) => (m.schema ? [m.schema] : [])),
+      ...plan.models.flatMap((m) => (m.schema === null || m.schema === '' ? [] : [m.schema])),
       ...plan.enumSchemas.values(),
     ]),
   ].toSorted()
@@ -2722,10 +2831,7 @@ export function schemaFile(plan: ExposedPlan) {
     fileName: `${SCHEMA_OBJECT}.kt`,
     code: renderFile(plan.names.package, generatedTypes(plan), [
       fileBlock(textLines([`object ${SCHEMA_OBJECT} {`])),
-      fileBlock(body, {
-        members: new Set(['enumTypes', 'schemas', 'tables']),
-        nestedTypes: new Set(),
-      }),
+      fileBlock(body, { members: SCHEMA_OBJECT_MEMBERS, nestedTypes: new Set() }),
       fileBlock(textLines(['}'])),
     ]),
   }

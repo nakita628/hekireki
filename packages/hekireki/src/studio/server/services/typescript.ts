@@ -371,12 +371,7 @@ export function createTypeChecker(input: z.infer<typeof CreateTypeCheckerInput>)
           .flatMap((diagnostic) => {
             const start = diagnostic.start
             if (start === undefined || start < base) return []
-            const severity =
-              diagnostic.category === typescript.DiagnosticCategory.Error
-                ? ('error' as const)
-                : diagnostic.category === typescript.DiagnosticCategory.Warning
-                  ? ('warning' as const)
-                  : ('info' as const)
+            const severity = severityOf(typescript, diagnostic.category)
             return [
               {
                 message: typescript.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
@@ -389,4 +384,12 @@ export function createTypeChecker(input: z.infer<typeof CreateTypeCheckerInput>)
       })
     },
   }
+}
+
+// How the editor marks a diagnostic of each TypeScript category.
+function severityOf(typescript: typeof ts, category: ts.DiagnosticCategory) {
+  if (category === typescript.DiagnosticCategory.Error) return 'error' as const
+  return category === typescript.DiagnosticCategory.Warning
+    ? ('warning' as const)
+    : ('info' as const)
 }

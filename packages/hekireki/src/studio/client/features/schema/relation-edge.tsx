@@ -42,8 +42,8 @@ export function RelationEdge({
       <BaseEdge
         id={id}
         path={geometry?.path ?? fallback}
-        markerStart={markerStart}
-        markerEnd={markerEnd}
+        {...(markerStart === undefined ? {} : { markerStart })}
+        {...(markerEnd === undefined ? {} : { markerEnd })}
       />
       {what === undefined ? null : (
         <EdgeLabelRenderer>

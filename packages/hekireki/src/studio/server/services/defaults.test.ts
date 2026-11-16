@@ -43,7 +43,7 @@ describe('generateDefaults', () => {
     expect(values['slug']).toHaveLength(10)
     expect(values['code']).toHaveLength(21)
     expect(values['order']).toMatch(/^[0-9A-Z]{26}$/u)
-    const at = new Date(values['createdAt'] ?? '').getTime()
+    const at = new Date(String(values['createdAt'])).getTime()
     expect(at).toBeGreaterThanOrEqual(before)
     expect(at).toBeLessThanOrEqual(Date.now())
     expect(values['tags']).toBe('[]')

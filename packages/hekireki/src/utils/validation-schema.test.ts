@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { makePropertiesGenerator } from './validation-schema.js'
 
+/** A Zod field as written: optional with `.exactOptional()` unless it is required. */
+function exactOptionalUnlessRequired(expr: string, isRequired: boolean) {
+  return isRequired ? expr : `${expr}.exactOptional()`
+}
+
 describe('makePropertiesGenerator', () => {
   const zodProperties = makePropertiesGenerator('z')
   const valibotProperties = makePropertiesGenerator('v')
@@ -53,9 +58,7 @@ describe('makePropertiesGenerator', () => {
   })
 
   it.concurrent('wraps optional fields with wrapCardinality', () => {
-    const zodWithWrap = makePropertiesGenerator('z', (expr, isRequired) =>
-      isRequired ? expr : `${expr}.exactOptional()`,
-    )
+    const zodWithWrap = makePropertiesGenerator('z', exactOptionalUnlessRequired)
     const fields = [
       {
         documentation: '',

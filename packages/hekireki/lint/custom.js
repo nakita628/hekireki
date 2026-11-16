@@ -106,6 +106,12 @@ export function handlerDocNames(body) {
   return [...new Set([...useCases, ...tags])]
 }
 
+// The names a doc does not mention.
+function unmentioned(doc, names) {
+  const absent = (name) => !doc.includes(name)
+  return names.filter(absent)
+}
+
 /**
  * The layer module an import points at, seen from the file under lint.
  *
@@ -269,6 +275,46 @@ function namespaceMember(node) {
   return node.property.type === 'Identifier' ? node.property.name : null
 }
 
+// The client imports lib modules through lib/index.js.
+function reportClientLibImport(context, node, source) {
+  const lib = CLIENT_LIB_IMPORT.exec(source)
+  if (!lib || lib[2] === 'index') return
+  context.report({
+    node: node.source,
+    message: `Import \`${lib[2]}\` through the barrel: \`from '${source.replace(/[\w-]+\.js$/u, 'index.js')}'\`.`,
+  })
+}
+
+// A layer module is imported whole, under a namespace named after its module and layer.
+function reportLayerNamespace(context, { node, namespace, target, barrel }) {
+  const suffix = LAYER_SUFFIXES[target.layer]
+  // A sibling is named after the module its path already names; through the barrel the
+  // path names none, so any `Xxx${suffix}` stands for the module it is used for.
+  const expected = target.sibling ? layerNamespaceOf(target.layer, target.module) : `Xxx${suffix}`
+  if (!namespace || node.specifiers.length !== 1) {
+    context.report({
+      node,
+      message: `Import the ${target.layer} module as a whole: \`import * as ${expected} from '${barrel}'\`, then call \`${expected}.fn(...)\`.`,
+    })
+    return
+  }
+  if (target.sibling) {
+    if (namespace.local.name !== expected) {
+      context.report({
+        node: namespace,
+        message: `\`${namespace.local.name}\` must be named after its module and layer: \`${expected}\`.`,
+      })
+    }
+    return
+  }
+  if (!new RegExp(`^[A-Z][A-Za-z0-9]*${suffix}$`, 'u').test(namespace.local.name)) {
+    context.report({
+      node: namespace,
+      message: `\`${namespace.local.name}\` must name the ${target.layer} module it stands for and end with \`${suffix}\` (\`import * as ${expected} from '${barrel}'\`).`,
+    })
+  }
+}
+
 // Why a function is one that only forwards, or null where it is not: see `no-pass-through`.
 function passThroughReason(node) {
   if (node.typeParameters ?? node.returnType?.typeAnnotation?.type === 'TSTypePredicate') {
@@ -281,30 +327,37 @@ function passThroughReason(node) {
   if (returned.type === 'Identifier' && names.includes(returned.name)) {
     return 'returns its own argument'
   }
-  const passesParams = (args) =>
+  if (forwardsParams(returned, names)) return 'hands its arguments to another call unchanged'
+  if (isTypeofCheckOf(returned, names)) return 'renames a built-in check'
+  return null
+}
+
+// Whether an expression calls a named function with exactly the parameters, in order.
+function forwardsParams(returned, names) {
+  if (returned.type !== 'CallExpression') return false
+  const callee = returned.callee
+  if (callee.type !== 'Identifier' && (callee.type !== 'MemberExpression' || callee.computed)) {
+    return false
+  }
+  const args = returned.arguments
+  return (
     args.length === names.length &&
     args.every(
       (argument, index) => argument.type === 'Identifier' && argument.name === names[index],
     )
-  if (
-    returned.type === 'CallExpression' &&
-    (returned.callee.type === 'Identifier' ||
-      (returned.callee.type === 'MemberExpression' && !returned.callee.computed)) &&
-    passesParams(returned.arguments)
-  ) {
-    return 'hands its arguments to another call unchanged'
-  }
-  if (
+  )
+}
+
+// Whether an expression is `typeof param === …` on one of the parameters.
+function isTypeofCheckOf(returned, names) {
+  return (
     returned.type === 'BinaryExpression' &&
     returned.operator === '===' &&
     returned.left.type === 'UnaryExpression' &&
     returned.left.operator === 'typeof' &&
     returned.left.argument.type === 'Identifier' &&
     names.includes(returned.left.argument.name)
-  ) {
-    return 'renames a built-in check'
-  }
-  return null
+  )
 }
 
 /** The one expression a function returns, or null when its body is more than that. */
@@ -948,13 +1001,7 @@ const plugin = {
             const source = node.source?.value
             if (typeof source !== 'string') return
             if (client) {
-              const lib = CLIENT_LIB_IMPORT.exec(source)
-              if (lib && lib[2] !== 'index') {
-                context.report({
-                  node: node.source,
-                  message: `Import \`${lib[2]}\` through the barrel: \`from '${source.replace(/[\w-]+\.js$/u, 'index.js')}'\`.`,
-                })
-              }
+              reportClientLibImport(context, node, source)
               return
             }
             const namespace = node.specifiers.find((s) => s.type === 'ImportNamespaceSpecifier')
@@ -985,34 +1032,7 @@ const plugin = {
               })
               return
             }
-            const suffix = LAYER_SUFFIXES[target.layer]
-            // A sibling is named after the module its path already names; through the barrel the
-            // path names none, so any `Xxx${suffix}` stands for the module it is used for.
-            const expected = target.sibling
-              ? layerNamespaceOf(target.layer, target.module)
-              : `Xxx${suffix}`
-            if (!namespace || node.specifiers.length !== 1) {
-              context.report({
-                node,
-                message: `Import the ${target.layer} module as a whole: \`import * as ${expected} from '${barrel}'\`, then call \`${expected}.fn(...)\`.`,
-              })
-              return
-            }
-            if (target.sibling) {
-              if (namespace.local.name !== expected) {
-                context.report({
-                  node: namespace,
-                  message: `\`${namespace.local.name}\` must be named after its module and layer: \`${expected}\`.`,
-                })
-              }
-              return
-            }
-            if (!new RegExp(`^[A-Z][A-Za-z0-9]*${suffix}$`, 'u').test(namespace.local.name)) {
-              context.report({
-                node: namespace,
-                message: `\`${namespace.local.name}\` must name the ${target.layer} module it stands for and end with \`${suffix}\` (\`import * as ${expected} from '${barrel}'\`).`,
-              })
-            }
+            reportLayerNamespace(context, { node, namespace, target, barrel })
           },
         }
       },
@@ -1284,13 +1304,11 @@ const plugin = {
                   message: `The doc of \`${name}\` draws the request as a \`\`\`mermaid sequenceDiagram (client, handler, use case).`,
                 })
               }
-              for (const needed of handlerDocNames(text.slice(start, end))) {
-                if (!doc.includes(needed)) {
-                  context.report({
-                    node: declarator.id,
-                    message: `The doc of \`${name}\` does not mention \`${needed}\`: name every use case the handler calls and every \`Match.tag\` it answers, with the status each one gets.`,
-                  })
-                }
+              for (const needed of unmentioned(doc, handlerDocNames(text.slice(start, end)))) {
+                context.report({
+                  node: declarator.id,
+                  message: `The doc of \`${name}\` does not mention \`${needed}\`: name every use case the handler calls and every \`Match.tag\` it answers, with the status each one gets.`,
+                })
               }
             }
           },

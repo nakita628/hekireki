@@ -84,7 +84,7 @@ function entry(
   options: YamlOptions,
 ): readonly string[] {
   const name = PLAIN_KEY.test(key) ? key : JSON.stringify(key)
-  if (typeof item === 'string' && options.quote?.includes(key)) {
+  if (typeof item === 'string' && options.quote?.includes(key) === true) {
     return [`${indent}${name}: ${JSON.stringify(item)}`]
   }
   if (typeof item === 'string' && isLiteralBlock(item)) {
@@ -92,7 +92,7 @@ function entry(
     return [`${indent}${name}: ${indicator.trimStart()}`, ...body]
   }
   if (isList(item) && item.length > 0) {
-    if (options.flow?.includes(key) && item.every(isScalar)) {
+    if (options.flow?.includes(key) === true && item.every(isScalar)) {
       return [`${indent}${name}: [${item.map(scalar).join(', ')}]`]
     }
     return [`${indent}${name}:`, ...nested(item, `${indent}  `, options)]

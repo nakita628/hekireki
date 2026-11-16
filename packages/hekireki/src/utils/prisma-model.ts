@@ -31,13 +31,12 @@ export function primaryKeyFields(model: DMMF.Model) {
   const id = model.fields.find((f) => f.isId)
   if (id) return [id.name]
   if (model.primaryKey) return [...model.primaryKey.fields]
+  const required = new Set(model.fields.filter((f) => f.isRequired).map((f) => f.name))
   return (
     [
       ...model.fields.filter((f) => f.isUnique).map((f) => [f.name]),
       ...model.uniqueFields.map((fields) => [...fields]),
-    ].find((fields) =>
-      fields.every((name) => model.fields.find((f) => f.name === name)?.isRequired),
-    ) ?? []
+    ].find((fields) => fields.every((name) => required.has(name))) ?? []
   )
 }
 
@@ -200,13 +199,14 @@ export type ManyToMany = {
 // lists the `B` of its rows; in a self-relation both columns hold the same model's ids, and the
 // field whose name sorts first is the one that lists `B`.
 export function manyToManyRelations(models: readonly DMMF.Model[]) {
+  const byName = new Map(models.map((m) => [m.name, m]))
   return models.flatMap((model) =>
     model.fields
       .filter((f) => f.kind === 'object' && f.isList && (f.relationFromFields ?? []).length === 0)
       .flatMap((field): ManyToMany[] => {
         const inverse = backRelation(field, model, models)
-        const other = models.find((m) => m.name === field.type)
-        if (!(other && inverse?.isList)) return []
+        const other = byName.get(field.type)
+        if (other === undefined || inverse?.isList !== true) return []
         if (!isJoinSideA(field, model, inverse)) return []
         return [
           {

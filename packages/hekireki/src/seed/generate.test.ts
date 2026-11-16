@@ -133,6 +133,21 @@ function rowsOf(entries: readonly SeedTableRows[], name: string) {
   return entry.rows
 }
 
+function asString(value: unknown) {
+  if (typeof value !== 'string') throw new TypeError(`expected a string, got ${String(value)}`)
+  return value
+}
+
+function asDate(value: unknown) {
+  if (!(value instanceof Date)) throw new TypeError(`expected a Date, got ${String(value)}`)
+  return value
+}
+
+/** The length of a string, or -1 for a value that is not one (an optional field left null). */
+function lengthOf(value: unknown) {
+  return typeof value === 'string' ? value.length : -1
+}
+
 describe('generateSeedRows', () => {
   it('gives every table the default count, one-to-one children at most one per parent, join rows per pair', () => {
     const result = generate({ count: 6 })
@@ -168,13 +183,15 @@ describe('generateSeedRows', () => {
     for (const post of rowsOf(result, 'Post')) expect(userIds.has(post['authorId'])).toBe(true)
     for (const comment of rowsOf(result, 'Comment')) {
       expect(postIds.has(comment['postId'])).toBe(true)
-      expect(comment['authorId'] === null || userIds.has(comment['authorId'])).toBe(true)
+      expect([null, ...userIds]).toContain(comment['authorId'])
     }
     for (const follow of rowsOf(result, 'Follow')) {
-      expect(userIds.has(follow['followerId']) && userIds.has(follow['followingId'])).toBe(true)
+      expect(userIds.has(follow['followerId'])).toBe(true)
+      expect(userIds.has(follow['followingId'])).toBe(true)
     }
     for (const pair of rowsOf(result, '_PostToTag')) {
-      expect(postIds.has(pair['A']) && tagIds.has(pair['B'])).toBe(true)
+      expect(postIds.has(pair['A'])).toBe(true)
+      expect(tagIds.has(pair['B'])).toBe(true)
     }
     const warehouses = new Set(
       rowsOf(result, 'Warehouse').map((row) => JSON.stringify([row['country'], row['code']])),
@@ -223,18 +240,15 @@ describe('generateSeedRows', () => {
     expect(categories[0]?.['parentId']).toBeNull()
     for (const [index, category] of categories.entries()) {
       const parent = category['parentId']
-      expect(
-        parent === null || categories.slice(0, index).some((row) => row['id'] === parent),
-      ).toBe(true)
+      expect([null, ...categories.slice(0, index).map((row) => row['id'])]).toContain(parent)
     }
   })
 
   it('updates a row at or after it was created', () => {
     const result = generate({ count: 20 })
     for (const user of rowsOf(result, 'User')) {
-      const created = user['createdAt']
-      const updated = user['updatedAt']
-      expect(created instanceof Date && updated instanceof Date && updated >= created).toBe(true)
+      const created = asDate(user['createdAt'])
+      expect(asDate(user['updatedAt']).getTime()).toBeGreaterThanOrEqual(created.getTime())
     }
   })
 
@@ -260,11 +274,7 @@ describe('generateSeedRows', () => {
       },
     })
     expect(rowsOf(result, 'User').every((row) => row['role'] === 'ADMIN')).toBe(true)
-    expect(
-      rowsOf(result, 'User').map((row) =>
-        typeof row['name'] === 'string' ? row['name'].slice(0, 7) : '',
-      ),
-    ).toStrictEqual([
+    expect(rowsOf(result, 'User').map((row) => asString(row['name']).slice(0, 7))).toStrictEqual([
       'user-0-',
       'user-1-',
       'user-2-',
@@ -282,7 +292,10 @@ describe('generateSeedRows', () => {
       models: { Tag: { count: 5, relations: { posts: { min: 1, max: 1 } } } },
     })
     expect(rowsOf(fromTags, '_PostToTag')).toHaveLength(5)
-    expect(rowsOf(fromTags, '_PostToTag').every((pair) => 'A' in pair && 'B' in pair)).toBe(true)
+    for (const pair of rowsOf(fromTags, '_PostToTag')) {
+      expect(pair).toHaveProperty('A')
+      expect(pair).toHaveProperty('B')
+    }
   })
 
   it('rejects rules for models and fields the schema does not have', () => {
@@ -338,9 +351,7 @@ describe('generateSeedRows', () => {
       const faker = new Faker({ locale: [allLocales.en, allLocales.base] })
       faker.seed(42)
       const entries = Effect.runSync(generateSeedRows({ tables: TABLES, config, faker, dialect }))
-      return rowsOf(entries, 'Profile').map((row) =>
-        typeof row['bio'] === 'string' ? row['bio'].length : -1,
-      )
+      return rowsOf(entries, 'Profile').map((row) => lengthOf(row['bio']))
     }
     expect(Math.max(...bios('mysql'))).toBeLessThanOrEqual(191)
     // PostgreSQL makes it text: the same paragraphs go in whole.
@@ -358,12 +369,9 @@ describe('generateSeedRows', () => {
     )
     const yearAgo = Date.now() - 366 * 24 * 60 * 60 * 1000
     for (const user of rowsOf(rows, 'User')) {
-      const created = user['createdAt']
-      expect(
-        created instanceof Date &&
-          created.getTime() >= yearAgo &&
-          created.getTime() <= Date.now() + 1000,
-      ).toBe(true)
+      const created = asDate(user['createdAt']).getTime()
+      expect(created).toBeGreaterThanOrEqual(yearAgo)
+      expect(created).toBeLessThanOrEqual(Date.now() + 1000)
     }
   })
 
@@ -533,15 +541,13 @@ describe('generateSeedRows', () => {
     const userIds = rowsOf(result, 'Profile').map((row) => row['userId'])
     expect(userIds).toHaveLength(2)
     expect(new Set(userIds).size).toBe(2)
-    expect(
-      userIds.every((id) =>
-        [
-          `0195a4c8-3d2e-7f10-8a5b-1c2d3e4f5a01`,
-          `0195a4c8-3d2e-7f10-8a5b-1c2d3e4f5a02`,
-          `0195a4c8-3d2e-7f10-8a5b-1c2d3e4f5a03`,
-        ].includes(typeof id === 'string' ? id : ''),
-      ),
-    ).toBe(true)
+    for (const id of userIds) {
+      expect([
+        `0195a4c8-3d2e-7f10-8a5b-1c2d3e4f5a01`,
+        `0195a4c8-3d2e-7f10-8a5b-1c2d3e4f5a02`,
+        `0195a4c8-3d2e-7f10-8a5b-1c2d3e4f5a03`,
+      ]).toContain(id)
+    }
     expect(rowsOf(result, 'Post').every((row) => typeof row['authorId'] === 'string')).toBe(true)
   })
 
@@ -560,9 +566,10 @@ describe('generateSeedRows', () => {
     })
     const tagIds = new Set(rowsOf(mixed, 'Tag').map((row) => row['id']))
     const postIds = new Set(rowsOf(mixed, 'Post').map((row) => row['id']))
-    expect(
-      rowsOf(mixed, '_PostToTag').every((pair) => postIds.has(pair['A']) && tagIds.has(pair['B'])),
-    ).toBe(true)
+    for (const pair of rowsOf(mixed, '_PostToTag')) {
+      expect(postIds.has(pair['A'])).toBe(true)
+      expect(tagIds.has(pair['B'])).toBe(true)
+    }
   })
 
   it('reports unknown fields in data', () => {
@@ -768,13 +775,12 @@ describe('generateSeedRows', () => {
         Post: { count: 10 },
       },
     })
-    const perUser = new Map<string, number>()
-    for (const post of rowsOf(shaped, 'Post')) {
-      const author = typeof post['authorId'] === 'string' ? post['authorId'] : ''
-      perUser.set(author, (perUser.get(author) ?? 0) + 1)
-    }
+    const perUser = Map.groupBy(rowsOf(shaped, 'Post'), (post) => asString(post['authorId']))
     expect(perUser.size).toBe(4)
-    expect([...perUser.values()].every((n) => n >= 1 && n <= 3)).toBe(true)
+    for (const posts of perUser.values()) {
+      expect(posts.length).toBeGreaterThanOrEqual(1)
+      expect(posts.length).toBeLessThanOrEqual(3)
+    }
     expect(
       failure({
         models: { User: { count: 2, relations: { posts: { max: 1 } } }, Post: { count: 3 } },

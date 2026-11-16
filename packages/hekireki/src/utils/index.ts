@@ -6,11 +6,13 @@ export function parseRelation(line: string) {
 }
 
 export function getString(v: string | string[] | undefined) {
-  return typeof v === 'string' ? v : Array.isArray(v) ? v[0] : undefined
+  if (typeof v === 'string') return v
+  return Array.isArray(v) ? v[0] : undefined
 }
 
 export function getStrings(v: string | string[] | undefined) {
-  return typeof v === 'string' ? [v] : Array.isArray(v) ? v : undefined
+  if (typeof v === 'string') return [v]
+  return Array.isArray(v) ? v : undefined
 }
 
 export function getBool(v: unknown, fallback = false) {
@@ -33,7 +35,7 @@ export function makeValidationExtractor(annotationPrefix: `@${string}.`) {
   const escaped = annotationPrefix.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&')
   const regex = new RegExp(`${escaped}(.+?)(?:\\n|$)`, 'u')
   return function extractValidation(documentation: string | undefined) {
-    if (!documentation) return null
+    if (documentation === undefined || documentation === '') return null
     const match = documentation.match(regex)
     return match?.[1]?.trim() ?? null
   }
@@ -53,6 +55,9 @@ const ANNOTATION_PREFIXES = [
   '@relation',
 ] as const
 const ANNOTATION_EXACT = new Set(['@z', '@v', '@a', '@e', '@t', '@j', '@p', '@ar', '@ecto'])
+
+// The longest identifier each database keeps; the rest truncate at PostgreSQL's 63.
+const IDENTIFIER_LIMITS: { readonly [provider: string]: number } = { sqlite: Infinity, mysql: 64 }
 
 export function isAnnotationLine(line: string) {
   const trimmed = line.trim()
@@ -100,7 +105,7 @@ export function extractObjectType(
   documentation: string | undefined,
   prefix: `@${string}.`,
 ): 'strict' | 'loose' | undefined {
-  if (!documentation) return undefined
+  if (documentation === undefined || documentation === '') return undefined
   const prefixWithoutAt = prefix.slice(1)
   const match = documentation
     .split('\n')
@@ -110,7 +115,7 @@ export function extractObjectType(
         line.includes(`${prefixWithoutAt}strictObject`) ||
         line.includes(`${prefixWithoutAt}looseObject`),
     )
-  if (!match) return undefined
+  if (match === undefined) return undefined
   if (match.includes('strictObject')) return 'strict'
   return 'loose'
 }
@@ -216,7 +221,7 @@ export function constraintName(
   suffix: string,
   provider: string,
 ) {
-  const limit = provider === 'sqlite' ? Infinity : provider === 'mysql' ? 64 : 63
+  const limit = IDENTIFIER_LIMITS[provider] ?? 63
   return `${[table, ...columns].join('_').slice(0, limit - suffix.length - 1)}_${suffix}`
 }
 
@@ -243,10 +248,12 @@ export function indexPrefix(
   field: { readonly name: string; readonly length?: number },
 ) {
   const native = model.fields.find((f) => f.name === field.name)?.nativeType
-  const size = !native
-    ? 191
-    : native[0] === 'VarChar' || native[0] === 'Char'
-      ? Number(native[1][0] ?? 1)
-      : Infinity
+  const size = indexableLength(native)
   return field.length === undefined || field.length >= size ? undefined : field.length
+}
+
+// How much of a column MySQL can index: a String with no native type is `varchar(191)`.
+function indexableLength(native: readonly [string, readonly string[]] | null | undefined) {
+  if (native === null || native === undefined) return 191
+  return native[0] === 'VarChar' || native[0] === 'Char' ? Number(native[1][0] ?? 1) : Infinity
 }

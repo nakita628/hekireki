@@ -2,7 +2,7 @@ import type { Dialect } from '../../database/url.js'
 import { splitStatements } from '../../sql/index.js'
 import { fieldOf } from './checks.js'
 import { CHOICES } from './decisions.js'
-import { escape, rewriteMigration } from './rewrite.js'
+import { rewriteMigration } from './rewrite.js'
 
 /**
  * A statement that drops something, or changes a column in a way that can lose what it holds. A
@@ -32,6 +32,9 @@ export function isDestructiveStatement(sql: string) {
  * `DROP TABLE` in the middle of that loses nothing, and calling it destructive would put a
  * warning on the one shape of migration that is careful by construction.
  */
+const INSERT_INTO = /^\s*INSERT\s+INTO/iu
+const DROP_TABLE = /^\s*DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?["`](?<name>[^"`]+)["`]/iu
+
 export function rebuiltTables(statements: readonly string[]) {
   const renamed = statements.flatMap((statement) => {
     const match =
@@ -42,18 +45,20 @@ export function rebuiltTables(statements: readonly string[]) {
     const to = match?.groups?.['to']
     return from === undefined || to === undefined ? [] : [{ from, to }]
   })
-  return new Set(
-    renamed.flatMap(({ from, to }) => {
-      const copied = statements.some(
-        (statement) => /^\s*INSERT\s+INTO/iu.test(statement) && namesOf(statement).includes(from),
-      )
-      const drop = new RegExp(
-        `^\\s*DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?["\`]${escape(to)}["\`]`,
-        'iu',
-      )
-      const dropped = statements.some((statement) => drop.test(statement))
-      return copied && dropped ? [to] : []
+  const copied = new Set(
+    statements.filter((statement) => INSERT_INTO.test(statement)).flatMap(namesOf),
+  )
+  // A table name compares as the statement's case-insensitive match did.
+  const dropped = new Set(
+    statements.flatMap((statement) => {
+      const name = DROP_TABLE.exec(statement)?.groups?.['name']
+      return name === undefined ? [] : [name.toLowerCase()]
     }),
+  )
+  return new Set(
+    renamed.flatMap(({ from, to }) =>
+      copied.has(from) && dropped.has(to.toLowerCase()) ? [to] : [],
+    ),
   )
 }
 
@@ -72,17 +77,34 @@ function describeStatement(sql: string, rebuilt: ReadonlySet<string>) {
   if (/^CREATE\s+(?:TYPE|)/iu.test(statement) && /AS\s+ENUM/iu.test(statement)) {
     return change('create-enum', first)
   }
+  if (/^ALTER\s+TABLE/iu.test(statement)) return describeAlter(statement, first, second)
+  // `CREATE [UNIQUE] INDEX "name" ON "Table"("column", ...)`: the index is named first.
+  if (/^CREATE\s+(?:UNIQUE\s+)?INDEX/iu.test(statement)) {
+    const [, table = '', ...columns] = namesOf(statement)
+    return change(/UNIQUE/iu.test(statement) ? 'unique' : 'index', table, columns)
+  }
+  return describeTableStatement(statement, first, rebuilt)
+}
+
+/** A table created, filled or dropped, where it is not SQLite's copy of a table it rebuilds. */
+function describeTableStatement(statement: string, first: string, rebuilt: ReadonlySet<string>) {
+  const original = first.replace(/^new_/u, '')
   if (/^CREATE\s+TABLE/iu.test(statement)) {
-    return rebuilt.has(first.replace(/^new_/u, '')) && first.startsWith('new_')
-      ? change('rebuild-table', first.replace(/^new_/u, ''))
+    return rebuilt.has(original) && first.startsWith('new_')
+      ? change('rebuild-table', original)
       : change('create-table', first)
   }
   if (/^INSERT\s+INTO/iu.test(statement)) {
-    return rebuilt.has(first.replace(/^new_/u, '')) ? [] : change('copy-rows', first)
+    return rebuilt.has(original) ? [] : change('copy-rows', first)
   }
   if (/^DROP\s+TABLE/iu.test(statement)) {
     return rebuilt.has(first) ? [] : change('drop-table', first)
   }
+  return []
+}
+
+/** An ALTER TABLE: a column added or dropped, or a foreign key; a rename is part of a rebuild. */
+function describeAlter(statement: string, first: string, second: string) {
   if (/^ALTER\s+TABLE[\s\S]*RENAME\s+TO/iu.test(statement)) return []
   if (/^ALTER\s+TABLE[\s\S]*ADD\s+COLUMN/iu.test(statement)) {
     return change('add-column', first, [second])
@@ -97,11 +119,6 @@ function describeStatement(sql: string, rebuilt: ReadonlySet<string>) {
     ]
     const target = /REFERENCES\s+["`](?<table>[^"`]+)["`]/iu.exec(statement)?.groups?.['table']
     return change('foreign-key', first, key === undefined ? [] : [key], target)
-  }
-  // `CREATE [UNIQUE] INDEX "name" ON "Table"("column", ...)`: the index is named first.
-  if (/^CREATE\s+(?:UNIQUE\s+)?INDEX/iu.test(statement)) {
-    const [, table = '', ...columns] = namesOf(statement)
-    return change(/UNIQUE/iu.test(statement) ? 'unique' : 'index', table, columns)
   }
   return []
 }
@@ -332,12 +349,7 @@ export function batchedStatements(
   if (batch === null || parts === null || parts === undefined || (fix.rows ?? 0) <= batch) {
     return fix.statements
   }
-  const row =
-    database.dialect === 'mysql' || database.cockroach
-      ? null
-      : database.dialect === 'postgresql'
-        ? 'ctid'
-        : 'rowid'
+  const row = rowIdentifier(database)
   const limited =
     row === null
       ? `${parts.head} WHERE ${parts.where} LIMIT ${batch}`
@@ -452,4 +464,10 @@ export function makePlan(
       ),
     ],
   }
+}
+
+/** The hidden column that names a row, for a batch to pick its rows by; null where LIMIT does it. */
+function rowIdentifier(database: Report['database']) {
+  if (database.dialect === 'mysql' || database.cockroach) return null
+  return database.dialect === 'postgresql' ? 'ctid' : 'rowid'
 }

@@ -9,6 +9,7 @@ import {
   stripAnnotations,
 } from '../utils/index.js'
 import { allocate } from '../utils/naming.js'
+import type { RelationEnd } from '../utils/prisma-model.js'
 import { fieldColumn, referentialActions, relationEnds } from '../utils/prisma-model.js'
 import { ACTIVE_RECORD_INSTANCE_METHODS, RUBY_TOP_LEVEL_CONSTANTS } from './activerecord-names.js'
 
@@ -1094,11 +1095,10 @@ function foreignKeyOpt(columns: readonly string[]) {
 // key Rails reads from the table: without it a FK referencing a unique column
 // joins against the primary key.
 function primaryKeyOpt(columns: readonly string[], referencesPrimaryKey: boolean) {
-  return referencesPrimaryKey
-    ? []
-    : columns.length > 1
-      ? [`primary_key: ${rubyArray(columns.map((c) => `:${c}`))}`]
-      : [`primary_key: "${columns[0]}"`]
+  if (referencesPrimaryKey) return []
+  return columns.length > 1
+    ? [`primary_key: ${rubyArray(columns.map((c) => `:${c}`))}`]
+    : [`primary_key: "${columns[0]}"`]
 }
 
 // What Rails does to the children when the owner is destroyed, as the
@@ -1190,6 +1190,21 @@ function arCalls(documentation: string | undefined, on: 'model' | 'field') {
  * written after the calls, a call left open, a call in a shape that is not a
  * validator. Each names the model or field it is on.
  */
+// The association a relation field stands for is validated by its
+// `belongs_to`, or by a line on the model; the field itself only
+// carries the name Rails reports that on.
+function relationFieldProblems(calls: readonly string[]) {
+  return calls
+    .filter((call) => {
+      const { validator } = validatorCall(call)
+      return validator !== null && validator !== 'name'
+    })
+    .map(
+      (call) =>
+        `the @ar. call "${call}" is on a relation field, which takes only @ar.name; validate the association with an @ar. line on the model`,
+    )
+}
+
 export function activeRecordProblems(models: readonly DMMF.Model[]) {
   return models.flatMap((model) => [
     ...arCalls(model.documentation, 'model').problems.map(
@@ -1197,21 +1212,7 @@ export function activeRecordProblems(models: readonly DMMF.Model[]) {
     ),
     ...model.fields.flatMap((field) => {
       const { calls, problems } = arCalls(field.documentation, 'field')
-      // The association a relation field stands for is validated by its
-      // `belongs_to`, or by a line on the model; the field itself only
-      // carries the name Rails reports that on.
-      const notNames =
-        field.kind === 'object'
-          ? calls
-              .filter((call) => {
-                const { validator } = validatorCall(call)
-                return validator !== null && validator !== 'name'
-              })
-              .map(
-                (call) =>
-                  `the @ar. call "${call}" is on a relation field, which takes only @ar.name; validate the association with an @ar. line on the model`,
-              )
-          : []
+      const notNames = field.kind === 'object' ? relationFieldProblems(calls) : []
       return [...problems, ...notNames].map(
         (problem) => `field ${model.name}.${field.name}: ${problem}`,
       )
@@ -1257,10 +1258,24 @@ function stringLiteral(value: string) {
   return m ? (m[1] ?? m[2] ?? '').replaceAll('\\"', '"') : null
 }
 
+type Translation = { locale: string; form: string | null; text: string }
+
+// A locale's hash of plural forms, or null where one of them is not a plural form and a string.
+function pluralTranslations(locale: string, forms: string) {
+  const found: Translation[] = []
+  for (const formPair of splitArguments(forms)) {
+    const f = formPair.match(/^([a-z]+):\s*([\s\S]+)$/u)
+    const formText = f ? stringLiteral(f[2] ?? '') : null
+    if (!f || formText === null || !PLURAL_FORMS.has(f[1] ?? '')) return null
+    found.push({ locale, form: f[1] ?? '', text: formText })
+  }
+  return found
+}
+
 function translations(value: string) {
   const inner = value.match(/^\{([\s\S]*)\}$/u)?.[1]
   if (inner === undefined) return null
-  const found: { locale: string; form: string | null; text: string }[] = []
+  const found: Translation[] = []
   for (const pair of splitArguments(inner)) {
     const m = pair.match(/^([a-z]{2,3}(?:[-_][A-Za-z0-9]+)?):\s*([\s\S]+)$/u)
     if (!m) return null
@@ -1272,12 +1287,9 @@ function translations(value: string) {
     }
     const forms = rest.match(/^\{([\s\S]*)\}$/u)?.[1]
     if (forms === undefined) return null
-    for (const formPair of splitArguments(forms)) {
-      const f = formPair.match(/^([a-z]+):\s*([\s\S]+)$/u)
-      const formText = f ? stringLiteral(f[2] ?? '') : null
-      if (!f || formText === null || !PLURAL_FORMS.has(f[1] ?? '')) return null
-      found.push({ locale, form: f[1] ?? '', text: formText })
-    }
+    const plural = pluralTranslations(locale, forms)
+    if (plural === null) return null
+    found.push(...plural)
   }
   return found.length === 0 ? null : found
 }
@@ -1314,22 +1326,41 @@ const COMPARISON_KEYS = new Set([
   'even',
 ])
 
+// The error key an option of numericality or comparison raises, if it raises one.
+function optionKeys(name: string, validator: string) {
+  if (COMPARISON_KEYS.has(name)) return [name]
+  return name === 'only_integer' && validator === 'numericality' ? ['not_an_integer'] : []
+}
+
 function messageKeys(validator: string, options: readonly string[]) {
   const found = MESSAGE_KEYS[validator]
   if (found !== undefined) return found
   if (validator !== 'numericality' && validator !== 'comparison') return ['invalid']
-  const keys = options.flatMap((option) => {
-    const name = option.match(/^([a-z_]+):/u)?.[1] ?? ''
-    return COMPARISON_KEYS.has(name)
-      ? [name]
-      : name === 'only_integer' && validator === 'numericality'
-        ? ['not_an_integer']
-        : []
-  })
+  const keys = options.flatMap((option) =>
+    optionKeys(option.match(/^([a-z_]+):/u)?.[1] ?? '', validator),
+  )
   return validator === 'numericality' ? ['not_a_number', ...keys] : keys
 }
 
+// A call's arguments parted into the options kept for `validates` and the
+// ones whose value is a translation hash.
+function splitTranslated(args: string) {
+  const kept: string[] = []
+  const translated: { name: string; found: Translation[] }[] = []
+  for (const argument of splitArguments(args)) {
+    const pair = argument.match(/^([a-z_][a-z0-9_]*):\s*([\s\S]+)$/u)
+    const found = pair ? translations(pair[2] ?? '') : null
+    if (pair && found) {
+      translated.push({ name: pair[1] ?? '', found })
+    } else {
+      kept.push(argument)
+    }
+  }
+  return { kept, translated }
+}
+
 // One `@ar.` call of a field taken apart: the validator, the option it
+
 // becomes in `validates`, and the translations to write to the locale files
 // under Rails' error keys (`too_long:` is one already; `message:` is the
 // validator's own).
@@ -1349,20 +1380,7 @@ function validatorCall(call: string) {
   // option that is false): the validator the schema implied is dropped and
   // nothing is written for it.
   if (args.trim() === 'false') return { validator, option: null, messages }
-  const kept: string[] = []
-  const translated: {
-    name: string
-    found: { locale: string; form: string | null; text: string }[]
-  }[] = []
-  for (const argument of splitArguments(args)) {
-    const pair = argument.match(/^([a-z_][a-z0-9_]*):\s*([\s\S]+)$/u)
-    const found = pair ? translations(pair[2] ?? '') : null
-    if (pair && found) {
-      translated.push({ name: pair[1] ?? '', found })
-    } else {
-      kept.push(argument)
-    }
-  }
+  const { kept, translated } = splitTranslated(args)
   for (const { name, found } of translated) {
     for (const key of name === 'message' ? messageKeys(validator, kept) : [name]) {
       for (const t of found) {
@@ -1483,105 +1501,89 @@ function symbolKey(name: string) {
   return /^[a-z_][a-z0-9_]*$/u.test(name) ? name : `"${name}"`
 }
 
+// A `belongs_to`: the foreign key on this model, the columns it references on the target.
+function belongsToAssociation(
+  model: DMMF.Model,
+  end: Extract<RelationEnd, { kind: 'belongsTo' }>,
+  targetModel: DMMF.Model | undefined,
+) {
+  const { field } = end
+  const fromFields = field.relationFromFields ?? []
+  const referencedField = field.relationToFields?.[0] ?? 'id'
+  const referencedFields = field.relationToFields ?? ['id']
+  return {
+    name: field.name,
+    targetModel: field.type,
+    foreignKeyColumn: fieldColumn(model, fromFields[0] ?? ''),
+    primaryKeyColumn: targetModel ? fieldColumn(targetModel, referencedField) : referencedField,
+    foreignKeyColumns: fromFields.map((c) => fieldColumn(model, c)),
+    primaryKeyColumns: referencedFields.map((c) => (targetModel ? fieldColumn(targetModel, c) : c)),
+    referencesPrimaryKey: isSameList(
+      referencedFields,
+      targetModel === undefined ? ['id'] : primaryKeyFields(targetModel),
+    ),
+    optional: !field.isRequired,
+    inverse: end.inverse?.name ?? null,
+    inverseIsList: end.inverse?.isList ?? false,
+  }
+}
+
+// A `has_and_belongs_to_many` through Prisma's implicit join table.
+function habtmAssociation(model: DMMF.Model, end: Extract<RelationEnd, { kind: 'manyToMany' }>) {
+  const { field } = end
+  const [left, right] =
+    model.name < field.type ? [model.name, field.type] : [field.type, model.name]
+  return {
+    name: field.name,
+    targetModel: field.type,
+    joinTable: `_${field.relationName ?? `${left}To${right}`}`,
+    foreignKey: end.isSideA ? 'A' : 'B',
+    associationForeignKey: end.isSideA ? 'B' : 'A',
+  }
+}
+
+// A `has_many` or `has_one`: the foreign key is on the target, in the inverse field.
+function ownedAssociation(
+  model: DMMF.Model,
+  field: DMMF.Field,
+  fkField: DMMF.Field,
+  targetModel: DMMF.Model,
+) {
+  const fromFields = fkField.relationFromFields ?? []
+  return {
+    name: field.name,
+    targetModel: field.type,
+    foreignKeyColumn: fieldColumn(targetModel, fromFields[0] ?? ''),
+    foreignKeyColumns: fromFields.map((c) => fieldColumn(targetModel, c)),
+    primaryKeyColumns: (fkField.relationToFields ?? ['id']).map((c) => fieldColumn(model, c)),
+    referencesPrimaryKey: isSameList(fkField.relationToFields ?? ['id'], primaryKeyFields(model)),
+    inverse: fkField.name,
+    // Prisma's default action when the schema names none.
+    onDelete: referentialActions(fkField).onDelete,
+  }
+}
+
 function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
-  const belongsTo: {
-    name: string
-    targetModel: string
-    foreignKeyColumn: string
-    primaryKeyColumn: string
-    foreignKeyColumns: readonly string[]
-    primaryKeyColumns: readonly string[]
-    referencesPrimaryKey: boolean
-    optional: boolean
-    inverse: string | null
-    inverseIsList: boolean
-  }[] = []
-  const hasMany: {
-    name: string
-    targetModel: string
-    foreignKeyColumn: string
-    foreignKeyColumns: readonly string[]
-    primaryKeyColumns: readonly string[]
-    referencesPrimaryKey: boolean
-    inverse: string
-    onDelete: string
-  }[] = []
-  const hasOne: {
-    name: string
-    targetModel: string
-    foreignKeyColumn: string
-    foreignKeyColumns: readonly string[]
-    primaryKeyColumns: readonly string[]
-    referencesPrimaryKey: boolean
-    inverse: string
-    onDelete: string
-  }[] = []
-  const habtm: {
-    name: string
-    targetModel: string
-    joinTable: string
-    foreignKey: string
-    associationForeignKey: string
-  }[] = []
+  const modelsByName = new Map(allModels.map((m) => [m.name, m]))
+  const belongsTo: ReturnType<typeof belongsToAssociation>[] = []
+  const hasMany: ReturnType<typeof ownedAssociation>[] = []
+  const hasOne: ReturnType<typeof ownedAssociation>[] = []
+  const habtm: ReturnType<typeof habtmAssociation>[] = []
 
   for (const end of relationEnds(model, allModels)) {
-    const { field } = end
-    const targetModel = allModels.find((m) => m.name === field.type)
-
+    const targetModel = modelsByName.get(end.field.type)
     if (end.kind === 'belongsTo') {
-      const fromFields = field.relationFromFields ?? []
-      const referencedField = field.relationToFields?.[0] ?? 'id'
-      const referencedFields = field.relationToFields ?? ['id']
-      belongsTo.push({
-        name: field.name,
-        targetModel: field.type,
-        foreignKeyColumn: fieldColumn(model, fromFields[0] ?? ''),
-        primaryKeyColumn: targetModel ? fieldColumn(targetModel, referencedField) : referencedField,
-        foreignKeyColumns: fromFields.map((c) => fieldColumn(model, c)),
-        primaryKeyColumns: referencedFields.map((c) =>
-          targetModel ? fieldColumn(targetModel, c) : c,
-        ),
-        referencesPrimaryKey: isSameList(
-          referencedFields,
-          targetModel === undefined ? ['id'] : primaryKeyFields(targetModel),
-        ),
-        optional: !field.isRequired,
-        inverse: end.inverse?.name ?? null,
-        inverseIsList: end.inverse?.isList ?? false,
-      })
+      belongsTo.push(belongsToAssociation(model, end, targetModel))
       continue
     }
-
-    if (!targetModel) continue
-
+    if (targetModel === undefined) continue
     if (end.kind === 'manyToMany') {
-      const [left, right] =
-        model.name < field.type ? [model.name, field.type] : [field.type, model.name]
-      habtm.push({
-        name: field.name,
-        targetModel: field.type,
-        joinTable: `_${field.relationName ?? `${left}To${right}`}`,
-        foreignKey: end.isSideA ? 'A' : 'B',
-        associationForeignKey: end.isSideA ? 'B' : 'A',
-      })
-      continue
+      habtm.push(habtmAssociation(model, end))
+    } else if (end.kind === 'hasMany') {
+      hasMany.push(ownedAssociation(model, end.field, end.inverse, targetModel))
+    } else {
+      hasOne.push(ownedAssociation(model, end.field, end.inverse, targetModel))
     }
-
-    const fkField = end.inverse
-    const fromFields = fkField.relationFromFields ?? []
-    const association = {
-      name: field.name,
-      targetModel: field.type,
-      foreignKeyColumn: fieldColumn(targetModel, fromFields[0] ?? ''),
-      foreignKeyColumns: fromFields.map((c) => fieldColumn(targetModel, c)),
-      primaryKeyColumns: (fkField.relationToFields ?? ['id']).map((c) => fieldColumn(model, c)),
-      referencesPrimaryKey: isSameList(fkField.relationToFields ?? ['id'], primaryKeyFields(model)),
-      inverse: fkField.name,
-      // Prisma's default action when the schema names none.
-      onDelete: referentialActions(fkField).onDelete,
-    }
-    if (end.kind === 'hasMany') hasMany.push(association)
-    else hasOne.push(association)
   }
 
   return { belongsTo, hasMany, hasOne, habtm }
@@ -1632,6 +1634,692 @@ function nativeLength(field: DMMF.Field) {
   return Number.isInteger(length) && length > 0 ? length : null
 }
 
+type RailsNames = ReturnType<typeof railsNames>
+type Associations = ReturnType<typeof getAssociations>
+type FieldDefaultValue = NonNullable<DMMF.Field['default']>
+
+// Prisma names the table after the model as written (Todo -> "Todo")
+// unless @@map says otherwise; Rails infers the plural of the class
+// (todos), so only a table named that way goes unsaid.
+function tableNameLines(model: DMMF.Model, modelSnake: string) {
+  const tableName = model.dbName ?? model.name
+  return tableName === pluralize(modelSnake) ? [] : [`self.table_name = "${tableName}"`]
+}
+
+function primaryKeyLines(model: DMMF.Model, idField: DMMF.Field | undefined) {
+  if (idField !== undefined) {
+    const column = idField.dbName ?? idField.name
+    return column !== 'id' ? [`self.primary_key = "${column}"`] : []
+  }
+  const compositePkColumns = (model.primaryKey?.fields ?? []).map((name) =>
+    fieldColumn(model, name),
+  )
+  return compositePkColumns.length > 0
+    ? [`self.primary_key = ${rubyArray(compositePkColumns.map((c) => `"${c}"`))}`]
+    : []
+}
+
+// A column named "type" triggers Rails single-table inheritance: reading
+// rows whose value is not a class name raises ActiveRecord::SubclassNotFound.
+function inheritanceColumnLines(model: DMMF.Model) {
+  return model.fields.some(
+    (f) => (f.kind === 'scalar' || f.kind === 'enum') && (f.dbName ?? f.name) === 'type',
+  )
+    ? ['self.inheritance_column = nil']
+    : []
+}
+
+// Active Record writes timestamps only into created_at/updated_at (or
+// *_on), while Prisma's convention is createdAt/updatedAt, and @updatedAt
+// is set by the Prisma client, not the database. alias_attribute is how
+// Rails 7.1+ points its timestamp machinery at a column of another name:
+// the column is filled on create, bumped on update, and `touch` works.
+function createdAtField(model: DMMF.Model) {
+  return model.fields.find(
+    (f) =>
+      f.kind === 'scalar' &&
+      f.type === 'DateTime' &&
+      !f.isList &&
+      (f.name === 'createdAt' || f.name === 'created_at'),
+  )
+}
+
+function updatedAtField(model: DMMF.Model) {
+  return (
+    model.fields.find((f) => f.isUpdatedAt === true) ??
+    model.fields.find(
+      (f) =>
+        f.kind === 'scalar' &&
+        f.type === 'DateTime' &&
+        !f.isList &&
+        ['updatedAt', 'updated_at', 'modifiedAt', 'modified_at'].includes(f.name),
+    )
+  )
+}
+
+// The `alias_attribute` pointing Rails' timestamp at the field, unless the
+// field's column is one Rails already reads.
+function timestampAlias(
+  timestamp: 'created_at' | 'updated_at',
+  field: DMMF.Field | undefined,
+  railsColumns: readonly string[],
+) {
+  if (field === undefined) return []
+  const column = field.dbName ?? field.name
+  return railsColumns.includes(column) ? [] : [`alias_attribute :${timestamp}, :${column}`]
+}
+
+function timestampLines(
+  model: DMMF.Model,
+  createdField: DMMF.Field | undefined,
+  updatedField: DMMF.Field | undefined,
+) {
+  // Prisma bumps every @updatedAt column; Active Record only updated_at
+  // and updated_on (or the column aliased to updated_at), so the rest are added
+  // to the list it fills on create and bumps on update and `touch`.
+  const otherUpdatedColumns = model.fields
+    .filter(
+      (f) =>
+        f.isUpdatedAt === true &&
+        f !== updatedField &&
+        !['updated_at', 'updated_on'].includes(f.dbName ?? f.name),
+    )
+    .map((f) => `"${f.dbName ?? f.name}"`)
+  return [
+    ...timestampAlias('created_at', createdField, ['created_at', 'created_on']),
+    ...timestampAlias('updated_at', updatedField, ['updated_at', 'updated_on']),
+    ...(otherUpdatedColumns.length > 0
+      ? [
+          'def self.timestamp_attributes_for_update',
+          `  super + ${rubyArray(otherUpdatedColumns)}`,
+          'end',
+          'private_class_method :timestamp_attributes_for_update',
+        ]
+      : []),
+  ]
+}
+
+// `first`/`last` order by the primary key; a uuid(), cuid() or nanoid()
+// key is random, so the created timestamp orders instead, as Rails
+// suggests for UUID keys. uuid(7) and ulid() sort by time already.
+function isRandomKey(idField: DMMF.Field | undefined) {
+  const idDefault = idField?.default
+  return (
+    typeof idDefault === 'object' &&
+    'name' in idDefault &&
+    ((idDefault.name === 'uuid' && idDefault.args[0] !== 7) ||
+      idDefault.name === 'cuid' ||
+      idDefault.name === 'nanoid')
+  )
+}
+
+// The digits of a second a DateTime column holds: its own precision, or the
+// database's default for the type.
+function secondDigits(nativeName: string, nativeArgs: readonly string[], provider?: string) {
+  if (nativeArgs[0] !== undefined) return Number(nativeArgs[0])
+  return provider === 'mysql' && ['DateTime', 'Timestamp', 'Time'].includes(nativeName) ? 0 : 3
+}
+
+function sqlServerCastType(nativeName: string) {
+  if (nativeName === 'DateTime') return ['PrismaDateTime.new']
+  return nativeName === 'SmallDateTime' ? ['PrismaDateTime.new("smalldatetime")'] : []
+}
+
+// Where Active Record's own type for a DateTime column would not
+// store what Prisma Client stores:
+// - SQLite keeps it as text. Prisma writes 2030-01-02T03:04:05.678+00:00
+//   and Active Record 2030-01-02 03:04:05.678000, which compare, sort
+//   and index as different values; PrismaDateTime (prisma_date_time.rb)
+//   writes Prisma's text.
+// - A column holding fewer than three digits of a second (Timestamp(0),
+//   Time(0), MySQL's bare DateTime, Timestamp and Time) is rounded by
+//   the database from the milliseconds Prisma sends, and truncated by
+//   Active Record to the column's precision before sending, so 05.678
+//   is 06 from one and 05 from the other. precision: 3 sends what
+//   Prisma sends and leaves the rounding to the database.
+// - SQL Server's DateTime (1/300 s) is rounded by the adapter by an
+//   approximation of its own, and a SmallDateTime cut to the second;
+//   PrismaDateTime (prisma_date_time.rb) sends milliseconds for the
+//   server to round, typed as the column. DateTime2,
+//   DateTimeOffset and Time take no precision in Prisma (7 digits).
+// - A Timetz column has no Active Record type and reads as a String.
+function dateTimeCastType(f: DMMF.Field, provider?: string): readonly string[] {
+  if (f.type !== 'DateTime' || f.isList) return []
+  if (provider === 'sqlite') return ['PrismaDateTime.new']
+  const [nativeName, nativeArgs] = f.nativeType ?? ['', []]
+  if (provider === 'sqlserver') return sqlServerCastType(nativeName)
+  if (
+    ['Timestamp', 'Timestamptz', 'Time', 'Timetz', 'DateTime'].includes(nativeName) &&
+    secondDigits(nativeName, nativeArgs, provider) < 3
+  ) {
+    const timeOfDay = nativeName === 'Time' || nativeName === 'Timetz'
+    return [timeOfDay ? ':time' : ':datetime', 'precision: 3']
+  }
+  return nativeName === 'Timetz' ? [':time'] : []
+}
+
+// SecureRandom.uuid_v7 requires Ruby 3.3+; ULID.generate, Cuid.generate,
+// Cuid2.call and Nanoid.generate come from the ulid, cuid, cuid2 and
+// nanoid gems.
+function generatorCall(def: DMMF.FieldDefault) {
+  switch (def.name) {
+    case 'uuid':
+      return def.args[0] === 7 ? 'SecureRandom.uuid_v7' : 'SecureRandom.uuid'
+    case 'ulid':
+      return 'ULID.generate'
+    case 'cuid':
+      return def.args[0] === 2 ? 'Cuid2.call' : 'Cuid.generate'
+    case 'nanoid':
+      return typeof def.args[0] === 'number'
+        ? `Nanoid.generate(size: ${def.args[0]})`
+        : 'Nanoid.generate'
+    default:
+      return null
+  }
+}
+
+// The Ruby default a scalar field's `attribute` carries, or null for none.
+function attributeDefault(f: DMMF.Field, def: FieldDefaultValue, provider?: string) {
+  // Prisma Client fills now() itself. The database's CURRENT_TIMESTAMP
+  // is the same instant elsewhere, but on SQLite it is text of another
+  // shape (2030-01-02 03:04:05), and on SQL Server the clock of the
+  // server's own zone, which no session setting turns to UTC: there
+  // the model fills it as well.
+  if (typeof def === 'object' && 'name' in def && def.name === 'now') {
+    return provider === 'sqlite' || provider === 'sqlserver' ? '-> { Time.current }' : null
+  }
+  // No cast type is passed with a generator: a symbol type resolves through
+  // the connection adapter at class load, while a bare default keeps
+  // the column type untouched.
+  if (typeof def === 'object' && 'name' in def) {
+    if (f.type !== 'String') return null
+    const generator = generatorCall(def)
+    return generator === null ? null : `-> { ${generator} }`
+  }
+  // A literal default is written into the model so a record built in
+  // Ruby carries it before it is saved, whatever the table says. A
+  // list or JSON value is mutable, so a lambda hands out a fresh one.
+  if (typeof def === 'object') {
+    const items = def.map((item) => rubyDefault(f.type, item))
+    if (!f.isList || items.some((item) => item === null)) return null
+    return `-> { ${rubyArray(items.map(String))} }`
+  }
+  const literal = rubyDefault(f.type, def)
+  if (literal === null) return null
+  return f.type === 'Json' ? `-> { ${literal} }` : literal
+}
+
+function attributeLine(f: DMMF.Field, value: string | null, provider?: string) {
+  const castType = dateTimeCastType(f, provider)
+  if (castType.length === 0 && value === null) return []
+  return [
+    rubyCall(
+      'attribute',
+      [`:${f.dbName ?? f.name}`, ...castType],
+      value === null ? [] : [`default: ${value}`],
+    ),
+  ]
+}
+
+function attributeLines(f: DMMF.Field, provider?: string) {
+  const def = f.default
+  // A list without a default is a nullable array column that the
+  // Prisma client reads and writes as []: so does the model.
+  if (def === undefined) return attributeLine(f, f.isList ? '-> { [] }' : null, provider)
+  if (f.kind === 'enum') return []
+  return attributeLine(f, attributeDefault(f, def, provider), provider)
+}
+
+type EnumValue = { readonly key: string; readonly name: string; readonly stored: string }
+
+// An enum column whose plural Active Record defines: the stored values,
+// checked by an inclusion validation, with its default written as an attribute.
+function inclusionEnumLines(
+  f: DMMF.Field,
+  column: string,
+  values: readonly EnumValue[],
+  defaultValue: EnumValue | undefined,
+) {
+  return [
+    ...(typeof f.default === 'string' && defaultValue !== undefined
+      ? [rubyCall('attribute', [`:${column}`], [`default: "${defaultValue.stored}"`])]
+      : []),
+    rubyCall(
+      'validates',
+      [`:${column}`],
+      [
+        `inclusion: { in: ${rubyArray(values.map((v) => `"${v.stored}"`))}${f.isRequired ? '' : ', allow_nil: true'} }`,
+      ],
+    ),
+  ]
+}
+
+function isAffixFree(
+  name: (key: string) => string,
+  values: readonly EnumValue[],
+  taken: ReadonlySet<string>,
+) {
+  return values.every((v) => !taken.has(name(v.key)) && !RAILS_RESERVED_NAMES.has(name(v.key)))
+}
+
+// The keys bare, behind the prefix, or behind the suffix: the first under
+// which none of their names is taken.
+function enumAffix(column: string, values: readonly EnumValue[], taken: ReadonlySet<string>) {
+  return [
+    { option: [], name: (key: string) => key },
+    { option: ['prefix: true'], name: (key: string) => `${column}_${key}` },
+    { option: ['suffix: true'], name: (key: string) => `${key}_${column}` },
+  ].find(({ name }) => isAffixFree(name, values, taken))
+}
+
+// One enum column's lines; the names its keys take are added to `taken`.
+function enumFieldLines(
+  f: DMMF.Field,
+  enumMap: ReadonlyMap<string, DMMF.DatamodelEnum['values']>,
+  taken: Set<string>,
+) {
+  const column = f.dbName ?? f.name
+  const values = (enumMap.get(f.type) ?? []).map((v) => ({
+    key: makeSnakeCase(v.name),
+    name: v.name,
+    stored: v.dbName ?? v.name,
+  }))
+  const defaultValue = values.find((v) => v.name === f.default)
+  if (RAILS_RESERVED_NAMES.has(pluralize(column))) {
+    return inclusionEnumLines(f, column, values, defaultValue)
+  }
+  const pairs = values.map((v) => `${symbolKey(v.key)}: "${v.stored}"`).join(', ')
+  const affix = enumAffix(column, values, taken)
+  const opts = [
+    ...(typeof f.default === 'string' && defaultValue !== undefined
+      ? [`default: :${symbolKey(defaultValue.key)}`]
+      : []),
+    ...(affix === undefined ? ['scopes: false', 'instance_methods: false'] : affix.option),
+    f.isRequired ? 'validate: true' : 'validate: { allow_nil: true }',
+  ]
+  if (affix !== undefined) {
+    for (const v of values) {
+      taken.add(affix.name(v.key))
+    }
+  }
+  return [rubyCall('enum', [`:${column}`, `{ ${pairs} }`], opts)]
+}
+
+// Array enum columns get no `enum` DSL (it casts a scalar column). Keys
+// are the Rails-cased value names (PENDING_REVIEW -> pending_review, so
+// `record.pending_review?` and the `pending_review` scope), the stored
+// value stays the database's. Rails names a class method after the
+// plural of the enum (`statuses`) and, for each key, the scopes `m` and
+// `not_m` and the predicates `m?` and `m!`, where `m` is the key, or
+// `column_key` with prefix: true, or `key_column` with suffix: true. It
+// raises for a name Active Record or ActiveRecord::Relation defines,
+// and for a predicate an earlier enum on the model took: the keys go
+// bare where none of their names is taken, else behind the prefix, else
+// the suffix (`type_condition` is Active Record's, `condition_type` is
+// free), else without scopes and predicates. A plural Active Record
+// defines (`values` for a column `value`) cannot be helped by any
+// option, so that column is no `enum` at all: it holds the stored
+// values, checked by an inclusion validation, with its default written
+// as an attribute. A literal default names its key.
+// validate: true makes a value outside the enum, or nil where the
+// column is NOT NULL, a validation error like the other constraints,
+// instead of an ArgumentError on assignment.
+function enumLines(model: DMMF.Model, enumMap: ReadonlyMap<string, DMMF.DatamodelEnum['values']>) {
+  const taken = new Set<string>()
+  return model.fields
+    .filter((f) => f.kind === 'enum' && !f.isList)
+    .flatMap((f) => enumFieldLines(f, enumMap, taken))
+}
+
+// A @@unique pair is validated on the column a person fills in and
+// scoped by the rest, as a Rails developer writes it: `validates :slot,
+// uniqueness: { scope: :post_id }`, so the error lands on `slot`. A
+// foreign key is the scope, unless the set is nothing but foreign keys;
+// a column that already answers for another set is passed over, so
+// `@@unique([tenantId, email])` and `@@unique([tenantId, handle])` are
+// one error on email and one on handle.
+// An enum or list member is scope only: `validates` is written for
+// scalar columns, so the set is the first scalar's.
+function uniqueSetsOf(model: DMMF.Model, foreignKeyFields: ReadonlySet<string>) {
+  const scalarColumns = new Set(
+    model.fields.filter((f) => f.kind === 'scalar' && !f.isList).map((f) => f.name),
+  )
+  const taken = new Set(model.fields.filter((f) => f.isUnique && !f.isId).map((f) => f.name))
+  return [
+    ...model.fields.filter((f) => f.isUnique && !f.isId).map((f) => [f.name]),
+    ...model.uniqueFields.map((set) => {
+      const columns = set.filter((name) => scalarColumns.has(name))
+      const own =
+        columns.find((name) => !foreignKeyFields.has(name) && !taken.has(name)) ??
+        columns.find((name) => !foreignKeyFields.has(name)) ??
+        columns[0] ??
+        set[0] ??
+        ''
+      taken.add(own)
+      return [own, ...set.filter((name) => name !== own)]
+    }),
+  ]
+}
+
+// The unique sets by the column that answers for them, each column's in order.
+function uniqueSetsByColumn(sets: readonly (readonly string[])[]) {
+  const byColumn = new Map<string, (readonly string[])[]>()
+  for (const set of sets) {
+    const column = set[0] ?? ''
+    byColumn.set(column, [...(byColumn.get(column) ?? []), set])
+  }
+  return byColumn
+}
+
+type ValidationContext = {
+  readonly model: DMMF.Model
+  readonly foreignKeyFields: ReadonlySet<string>
+  readonly compositeKeyFields: ReadonlySet<string>
+  readonly digestColumns: ReadonlySet<string>
+  readonly createdField: DMMF.Field | undefined
+  readonly updatedField: DMMF.Field | undefined
+  readonly uniqueSets: ReadonlyMap<string, readonly (readonly string[])[]>
+  readonly nullableFields: ReadonlySet<string>
+}
+
+// `presence(false)` says the column is filled some other way, whatever
+// the schema's requirement would have been written as (`inclusion`
+// for a Boolean, `exclusion` for Json and Bytes).
+function isPresenceRequired(
+  f: DMMF.Field,
+  own: readonly ReturnType<typeof validatorCall>[],
+  ctx: ValidationContext,
+) {
+  return (
+    !own.some(({ validator, option }) => validator === 'presence' && option === null) &&
+    f.isRequired &&
+    !f.hasDefaultValue &&
+    !f.isId &&
+    f.isUpdatedAt !== true &&
+    !ctx.foreignKeyFields.has(f.name) &&
+    !ctx.compositeKeyFields.has(f.name) &&
+    !ctx.digestColumns.has(f.dbName ?? f.name) &&
+    f !== ctx.createdField &&
+    f !== ctx.updatedField
+  )
+}
+
+function presenceRule(type: string) {
+  if (type === 'Boolean') return 'inclusion: { in: [ true, false ] }'
+  return type === 'Json' || type === 'Bytes' ? 'exclusion: { in: [ nil ] }' : 'presence: true'
+}
+
+// A unique index counts no row whose scope column is NULL (NULLs are
+// distinct), so a nullable scope column keeps those rows out of the
+// check too: `conditions: -> { where.not(parent_id: nil) }` is empty
+// for a record with no parent and exact for one with a parent.
+function uniquenessRule(f: DMMF.Field, set: readonly string[], ctx: ValidationContext) {
+  const scope = set.slice(1).map((name) => `:${fieldColumn(ctx.model, name)}`)
+  const nullable = set
+    .slice(1)
+    .filter((name) => ctx.nullableFields.has(name))
+    .map((name) => `where.not(${fieldColumn(ctx.model, name)}: nil)`)
+  const opts = [
+    ...(scope.length === 0 ? [] : [`scope: ${scope.length === 1 ? scope[0] : rubyArray(scope)}`]),
+    ...(nullable.length === 0 ? [] : [`conditions: -> { ${nullable.join('.')} }`]),
+    ...(f.isRequired ? [] : ['allow_nil: true']),
+  ]
+  return opts.length === 0 ? 'uniqueness: true' : `uniqueness: { ${opts.join(', ')} }`
+}
+
+// A field's own `@ar.` validators come after what the schema implies; one
+// the schema also wrote (`length`) replaces it, message and all, and
+// `presence(false)` takes it away.
+function fieldValidationLines(f: DMMF.Field, ctx: ValidationContext) {
+  if (!(f.kind === 'scalar' || f.kind === 'enum')) return []
+  const column = f.kind === 'scalar' && !f.isList
+  const own = arCalls(f.documentation, 'field').calls.map((call) => validatorCall(call))
+  const presence = column && isPresenceRequired(f, own, ctx) ? [presenceRule(f.type)] : []
+  const length = column && f.type === 'String' ? nativeLength(f) : null
+  const lengthOpt = length === null ? [] : [`length: { maximum: ${length} }`]
+  // Every set this column answers for: the first joins the column's
+  // `validates`, and any other is a `validates` of its own, a hash
+  // taking one `uniqueness:`.
+  const uniqueness = (column ? (ctx.uniqueSets.get(f.name) ?? []) : []).map((set) =>
+    uniquenessRule(f, set, ctx),
+  )
+  // An own `uniqueness` stands in for the set on the column's line; a
+  // set on a line of its own is another constraint and stays.
+  const ownValidators = new Set(own.map(({ validator }) => validator))
+  const rules = [
+    ...[...presence, ...lengthOpt, ...uniqueness.slice(0, 1)].filter(
+      (rule) => !ownValidators.has(rule.split(':')[0] ?? ''),
+    ),
+    ...own.flatMap(({ option }) => (option === null ? [] : [option])),
+  ]
+  return [
+    ...(rules.length === 0 ? [] : [rubyCall('validates', [`:${f.dbName ?? f.name}`], rules)]),
+    ...uniqueness.slice(1).map((rule) => rubyCall('validates', [`:${f.dbName ?? f.name}`], [rule])),
+  ]
+}
+
+// `has_secure_password` (or `has_secure_password :recovery`) validates
+// the password through `password`, adding `blank` there when the digest
+// is empty: a `presence` on `password_digest` would report it twice.
+// With `validations: false` it adds nothing, and the column keeps its own.
+function digestColumnsOf(modelLines: readonly string[]) {
+  return new Set(
+    modelLines.flatMap((line) => {
+      const m = line.match(/^has_secure_password(?:\s*\(?\s*:([a-z_][a-z0-9_]*))?/u)
+      return m && !/validations:\s*false/u.test(line) ? [`${m[1] ?? 'password'}_digest`] : []
+    }),
+  )
+}
+
+// What the schema promises of a column, as a validation, so a bad value
+// is an error on the record rather than an exception from the database:
+// a required column without a default must be present (a foreign key is
+// the belongs_to's to check, a timestamp is written after validation, an
+// enum has validate: true),
+// a @unique column or @@unique set is unique, and a VarChar(n) is no
+// longer than n. A nullable unique column may be NULL any number of
+// times, which allow_nil mirrors. `presence` reads false, {} and "" as
+// blank, so a Boolean is held to true or false and a Json or Bytes
+// column only to not nil.
+function validationLines(
+  model: DMMF.Model,
+  modelLines: readonly string[],
+  createdField: DMMF.Field | undefined,
+  updatedField: DMMF.Field | undefined,
+) {
+  const foreignKeyFields = new Set(
+    model.fields.flatMap((f) => (f.kind === 'object' ? (f.relationFromFields ?? []) : [])),
+  )
+  const ctx: ValidationContext = {
+    model,
+    foreignKeyFields,
+    compositeKeyFields: new Set(model.primaryKey?.fields),
+    digestColumns: digestColumnsOf(modelLines),
+    createdField,
+    updatedField,
+    uniqueSets: uniqueSetsByColumn(uniqueSetsOf(model, foreignKeyFields)),
+    nullableFields: new Set(model.fields.filter((g) => !g.isRequired).map((g) => g.name)),
+  }
+  return model.fields.flatMap((f) => fieldValidationLines(f, ctx))
+}
+
+// Rails derives class_name from the association name, camelized, and
+// singularized first for a collection (author -> Author, posts -> Post,
+// but event_data -> EventDatum), foreign_key from the name on the
+// belongs_to side (user_id) and from the owner's class on the has side
+// (User -> user_id), and the inverse from the owner's class name (Post
+// -> :post, or :posts) as long as no foreign_key is given on either
+// side. What matches is left unsaid, as a Rails developer would;
+// anything else is written out.
+function belongsToLine(
+  model: DMMF.Model,
+  modelSnake: string,
+  a: Associations['belongsTo'][number],
+  { classOf, associationOf }: RailsNames,
+) {
+  const name = associationOf(model.name, a.name)
+  const targetClass = classOf(a.targetModel)
+  const conventionalKey =
+    a.foreignKeyColumns.length === 1 && a.foreignKeyColumns[0] === `${name}_id`
+  // Rails finds the inverse only when the has side needs no
+  // foreign_key either, which takes this side to be named after its
+  // class, and only a has_one: the plural form is behind
+  // automatically_invert_plural_associations, off unless the
+  // application turns it on.
+  const inverse = a.inverse === null ? null : associationOf(a.targetModel, a.inverse)
+  const conventional =
+    name === underscore(targetClass) &&
+    conventionalKey &&
+    a.referencesPrimaryKey &&
+    inverse !== null &&
+    !a.inverseIsList &&
+    inverse === modelSnake
+  return rubyCall(
+    'belongs_to',
+    [`:${name}`],
+    [
+      ...(camelize(name) === targetClass ? [] : [`class_name: "${targetClass}"`]),
+      ...(conventionalKey ? [] : [foreignKeyOpt(a.foreignKeyColumns)]),
+      ...primaryKeyOpt(a.primaryKeyColumns, a.referencesPrimaryKey),
+      ...(a.optional ? ['optional: true'] : []),
+      ...(inverse === null || conventional ? [] : [`inverse_of: :${inverse}`]),
+    ],
+  )
+}
+
+function hasLine(
+  macro: 'has_one' | 'has_many',
+  model: DMMF.Model,
+  modelSnake: string,
+  a: Associations['hasOne'][number],
+  { classOf, associationOf }: RailsNames,
+) {
+  const name = associationOf(model.name, a.name)
+  const inverse = associationOf(a.targetModel, a.inverse)
+  const targetClass = classOf(a.targetModel)
+  const derivedClass = camelize(macro === 'has_many' ? singularize(name) : name) === targetClass
+  const conventionalKey =
+    a.foreignKeyColumns.length === 1 && a.foreignKeyColumns[0] === `${modelSnake}_id`
+  const conventional =
+    conventionalKey && a.referencesPrimaryKey && inverse === modelSnake && derivedClass
+  const dependent = DEPENDENT[a.onDelete]
+  return rubyCall(
+    macro,
+    [`:${name}`],
+    [
+      ...(derivedClass ? [] : [`class_name: "${targetClass}"`]),
+      ...(conventionalKey ? [] : [foreignKeyOpt(a.foreignKeyColumns)]),
+      ...primaryKeyOpt(a.primaryKeyColumns, a.referencesPrimaryKey),
+      ...(conventional ? [] : [`inverse_of: :${inverse}`]),
+      ...(dependent === undefined ? [] : [`dependent: :${dependent}`]),
+    ],
+  )
+}
+
+// Prisma's implicit join table is _AToB with columns A and B, never
+// what Rails would derive, so those three options always stay.
+function habtmLine(
+  model: DMMF.Model,
+  a: Associations['habtm'][number],
+  { classOf, associationOf }: RailsNames,
+) {
+  const name = associationOf(model.name, a.name)
+  const targetClass = classOf(a.targetModel)
+  return rubyCall(
+    'has_and_belongs_to_many',
+    [`:${name}`],
+    [
+      ...(camelize(singularize(name)) === targetClass ? [] : [`class_name: "${targetClass}"`]),
+      `join_table: "${a.joinTable}"`,
+      `foreign_key: "${a.foreignKey}"`,
+      `association_foreign_key: "${a.associationForeignKey}"`,
+    ],
+  )
+}
+
+// The model's prose, then each attribute's or association's as an RDoc labelled list.
+function docCommentLines(model: DMMF.Model, { associationOf }: RailsNames) {
+  const modelProse = stripAnnotations(model.documentation)?.split('\n') ?? []
+  const fieldProse = model.fields.flatMap((f) => {
+    const [first = '', ...rest] = stripAnnotations(f.documentation)?.split('\n') ?? []
+    if (first === '') return []
+    const name = f.kind === 'object' ? associationOf(model.name, f.name) : (f.dbName ?? f.name)
+    return [`${name}:: ${first}`, ...rest.map((line) => (line === '' ? '' : `  ${line}`))]
+  })
+  return [
+    ...modelProse,
+    ...(modelProse.length > 0 && fieldProse.length > 0 ? [''] : []),
+    ...fieldProse,
+  ].map((line) => (line === '' ? '#' : `# ${line}`))
+}
+
+type ModelContext = {
+  readonly contextModels: readonly DMMF.Model[]
+  readonly enumMap: ReadonlyMap<string, DMMF.DatamodelEnum['values']>
+  readonly names: RailsNames
+  readonly provider: string | undefined
+}
+
+function activeRecordModel(model: DMMF.Model, ctx: ModelContext) {
+  const { names, provider } = ctx
+  const associations = getAssociations(model, ctx.contextModels)
+  const className = names.classOf(model.name)
+  // What Rails takes the class to be called by: its foreign key on the
+  // other side (user_id) and its inverse there (:user) are this, as its
+  // table is this pluralized.
+  const modelSnake = underscore(className)
+  const idField = model.fields.find((f) => f.isId)
+  const createdField = createdAtField(model)
+  const updatedField = updatedAtField(model)
+  const orderColumnLines =
+    isRandomKey(idField) && createdField !== undefined
+      ? [`self.implicit_order_column = "${createdField.dbName ?? createdField.name}"`]
+      : []
+  const attributes = model.fields
+    .filter((f) => (f.kind === 'scalar' || f.kind === 'enum') && (f.isList || f.kind === 'scalar'))
+    .flatMap((f) => attributeLines(f, provider))
+  // The model's own `@ar.` lines, written into the class as they are;
+  // `name(...)` is a translation and goes to the locale files instead.
+  const modelLines = arCalls(model.documentation, 'model').calls.filter(
+    (call) => validatorCall(call).validator !== 'name',
+  )
+  const associationLines = [
+    ...associations.belongsTo.map((a) => belongsToLine(model, modelSnake, a, names)),
+    ...associations.hasOne.map((a) => hasLine('has_one', model, modelSnake, a, names)),
+    ...associations.hasMany.map((a) => hasLine('has_many', model, modelSnake, a, names)),
+    ...associations.habtm.map((a) => habtmLine(model, a, names)),
+  ]
+
+  // One blank line between the groups that have anything to say. The
+  // model's own lines come last, after the associations: a `has_many
+  // :tags, through: :post_tags` raises HasManyThroughOrderError when it
+  // is defined before the `has_many :post_tags` it goes through.
+  const body = [
+    [
+      ...tableNameLines(model, modelSnake),
+      ...primaryKeyLines(model, idField),
+      ...inheritanceColumnLines(model),
+      ...orderColumnLines,
+    ],
+    [...attributes, ...timestampLines(model, createdField, updatedField)],
+    enumLines(model, ctx.enumMap),
+    validationLines(model, modelLines, createdField, updatedField),
+    associationLines,
+    modelLines,
+  ]
+    .filter((group) => group.length > 0)
+    .map((group) => group.join('\n'))
+    .join('\n\n')
+    .split('\n')
+
+  return [
+    ...docCommentLines(model, names),
+    `class ${className} < ApplicationRecord`,
+    ...body.map((line) => (line === '' ? '' : `  ${line}`)),
+    'end',
+  ].join('\n')
+}
+
 export function activeRecordModels(
   models: readonly DMMF.Model[],
   allModels?: readonly DMMF.Model[],
@@ -1639,563 +2327,14 @@ export function activeRecordModels(
   provider?: string,
 ) {
   const contextModels = allModels ?? models
-  const enumMap = new Map((enums ?? []).map((e) => [e.name, e.values]))
-  const { classOf, associationOf } = railsNames(contextModels)
+  const ctx: ModelContext = {
+    contextModels,
+    enumMap: new Map((enums ?? []).map((e) => [e.name, e.values])),
+    names: railsNames(contextModels),
+    provider,
+  }
   return models
-    .map((model) => {
-      const associations = getAssociations(model, contextModels)
-      const className = classOf(model.name)
-      // What Rails takes the class to be called by: its foreign key on the
-      // other side (user_id) and its inverse there (:user) are this, as its
-      // table is this pluralized.
-      const modelSnake = underscore(className)
-      // Prisma names the table after the model as written (Todo -> "Todo")
-      // unless @@map says otherwise; Rails infers the plural of the class
-      // (todos), so only a table named that way goes unsaid.
-      const tableName = model.dbName ?? model.name
-      const tableNameLines =
-        tableName === pluralize(modelSnake) ? [] : [`self.table_name = "${tableName}"`]
-      const idField = model.fields.find((f) => f.isId)
-      const compositePkColumns = (model.primaryKey?.fields ?? []).map((name) =>
-        fieldColumn(model, name),
-      )
-
-      const primaryKeyLines = idField
-        ? (idField.dbName ?? idField.name) !== 'id'
-          ? [`self.primary_key = "${idField.dbName ?? idField.name}"`]
-          : []
-        : compositePkColumns.length > 0
-          ? [`self.primary_key = ${rubyArray(compositePkColumns.map((c) => `"${c}"`))}`]
-          : []
-
-      // A column named "type" triggers Rails single-table inheritance: reading
-      // rows whose value is not a class name raises ActiveRecord::SubclassNotFound.
-      const inheritanceColumnLines = model.fields.some(
-        (f) => (f.kind === 'scalar' || f.kind === 'enum') && (f.dbName ?? f.name) === 'type',
-      )
-        ? ['self.inheritance_column = nil']
-        : []
-
-      // Active Record writes timestamps only into created_at/updated_at (or
-      // *_on), while Prisma's convention is createdAt/updatedAt, and @updatedAt
-      // is set by the Prisma client, not the database. alias_attribute is how
-      // Rails 7.1+ points its timestamp machinery at a column of another name:
-      // the column is filled on create, bumped on update, and `touch` works.
-      const createdField = model.fields.find(
-        (f) =>
-          f.kind === 'scalar' &&
-          f.type === 'DateTime' &&
-          !f.isList &&
-          (f.name === 'createdAt' || f.name === 'created_at'),
-      )
-      const updatedField =
-        model.fields.find((f) => f.isUpdatedAt) ??
-        model.fields.find(
-          (f) =>
-            f.kind === 'scalar' &&
-            f.type === 'DateTime' &&
-            !f.isList &&
-            ['updatedAt', 'updated_at', 'modifiedAt', 'modified_at'].includes(f.name),
-        )
-      // Prisma bumps every @updatedAt column; Active Record only updated_at
-      // and updated_on (or the column aliased to updated_at), so the rest are added
-      // to the list it fills on create and bumps on update and `touch`.
-      const otherUpdatedColumns = model.fields
-        .filter(
-          (f) =>
-            f.isUpdatedAt &&
-            f !== updatedField &&
-            !['updated_at', 'updated_on'].includes(f.dbName ?? f.name),
-        )
-        .map((f) => `"${f.dbName ?? f.name}"`)
-      const timestampLines = [
-        ...(createdField &&
-        !['created_at', 'created_on'].includes(createdField.dbName ?? createdField.name)
-          ? [`alias_attribute :created_at, :${createdField.dbName ?? createdField.name}`]
-          : []),
-        ...(updatedField &&
-        !['updated_at', 'updated_on'].includes(updatedField.dbName ?? updatedField.name)
-          ? [`alias_attribute :updated_at, :${updatedField.dbName ?? updatedField.name}`]
-          : []),
-        ...(otherUpdatedColumns.length > 0
-          ? [
-              'def self.timestamp_attributes_for_update',
-              `  super + ${rubyArray(otherUpdatedColumns)}`,
-              'end',
-              'private_class_method :timestamp_attributes_for_update',
-            ]
-          : []),
-      ]
-
-      // `first`/`last` order by the primary key; a uuid(), cuid() or nanoid()
-      // key is random, so the created timestamp orders instead, as Rails
-      // suggests for UUID keys. uuid(7) and ulid() sort by time already.
-      const idDefault = idField?.default
-      const randomKey =
-        typeof idDefault === 'object' &&
-        'name' in idDefault &&
-        ((idDefault.name === 'uuid' && idDefault.args[0] !== 7) ||
-          idDefault.name === 'cuid' ||
-          idDefault.name === 'nanoid')
-      const orderColumnLines =
-        randomKey && createdField
-          ? [`self.implicit_order_column = "${createdField.dbName ?? createdField.name}"`]
-          : []
-
-      const attributeLines = model.fields
-        .filter(
-          (f) => (f.kind === 'scalar' || f.kind === 'enum') && (f.isList || f.kind === 'scalar'),
-        )
-        .flatMap((f) => {
-          const column = f.dbName ?? f.name
-          // Where Active Record's own type for a DateTime column would not
-          // store what Prisma Client stores:
-          // - SQLite keeps it as text. Prisma writes 2030-01-02T03:04:05.678+00:00
-          //   and Active Record 2030-01-02 03:04:05.678000, which compare, sort
-          //   and index as different values; PrismaDateTime (prisma_date_time.rb)
-          //   writes Prisma's text.
-          // - A column holding fewer than three digits of a second (Timestamp(0),
-          //   Time(0), MySQL's bare DateTime, Timestamp and Time) is rounded by
-          //   the database from the milliseconds Prisma sends, and truncated by
-          //   Active Record to the column's precision before sending, so 05.678
-          //   is 06 from one and 05 from the other. precision: 3 sends what
-          //   Prisma sends and leaves the rounding to the database.
-          // - SQL Server's DateTime (1/300 s) is rounded by the adapter by an
-          //   approximation of its own, and a SmallDateTime cut to the second;
-          //   PrismaDateTime (prisma_date_time.rb) sends milliseconds for the
-          //   server to round, typed as the column. DateTime2,
-          //   DateTimeOffset and Time take no precision in Prisma (7 digits).
-          // - A Timetz column has no Active Record type and reads as a String.
-          const [nativeName, nativeArgs] = f.nativeType ?? ['', []]
-          const secondDigits =
-            nativeArgs[0] !== undefined
-              ? Number(nativeArgs[0])
-              : provider === 'mysql' && ['DateTime', 'Timestamp', 'Time'].includes(nativeName)
-                ? 0
-                : 3
-          const timeOfDay = nativeName === 'Time' || nativeName === 'Timetz'
-          const castType =
-            f.type !== 'DateTime' || f.isList
-              ? []
-              : provider === 'sqlite'
-                ? ['PrismaDateTime.new']
-                : provider === 'sqlserver'
-                  ? nativeName === 'DateTime'
-                    ? ['PrismaDateTime.new']
-                    : nativeName === 'SmallDateTime'
-                      ? ['PrismaDateTime.new("smalldatetime")']
-                      : []
-                  : ['Timestamp', 'Timestamptz', 'Time', 'Timetz', 'DateTime'].includes(
-                        nativeName,
-                      ) && secondDigits < 3
-                    ? [timeOfDay ? ':time' : ':datetime', 'precision: 3']
-                    : nativeName === 'Timetz'
-                      ? [':time']
-                      : []
-          const attribute = (value: string | null) =>
-            castType.length === 0 && value === null
-              ? []
-              : [
-                  rubyCall(
-                    'attribute',
-                    [`:${column}`, ...castType],
-                    value === null ? [] : [`default: ${value}`],
-                  ),
-                ]
-          const def = f.default
-          // A list without a default is a nullable array column that the
-          // Prisma client reads and writes as []: so does the model.
-          if (def === undefined) return attribute(f.isList ? '-> { [] }' : null)
-          if (f.kind === 'enum') return []
-          // Prisma Client fills now() itself. The database's CURRENT_TIMESTAMP
-          // is the same instant elsewhere, but on SQLite it is text of another
-          // shape (2030-01-02 03:04:05), and on SQL Server the clock of the
-          // server's own zone, which no session setting turns to UTC: there
-          // the model fills it as well.
-          if (typeof def === 'object' && 'name' in def && def.name === 'now') {
-            return attribute(
-              provider === 'sqlite' || provider === 'sqlserver' ? '-> { Time.current }' : null,
-            )
-          }
-          // SecureRandom.uuid_v7 requires Ruby 3.3+; ULID.generate, Cuid.generate,
-          // Cuid2.call and Nanoid.generate come from the ulid, cuid, cuid2 and
-          // nanoid gems. No cast type is passed: a symbol type resolves through
-          // the connection adapter at class load, while a bare default keeps
-          // the column type untouched.
-          if (typeof def === 'object' && 'name' in def) {
-            if (f.type !== 'String') return attribute(null)
-            const generator =
-              def.name === 'uuid'
-                ? def.args[0] === 7
-                  ? 'SecureRandom.uuid_v7'
-                  : 'SecureRandom.uuid'
-                : def.name === 'ulid'
-                  ? 'ULID.generate'
-                  : def.name === 'cuid'
-                    ? def.args[0] === 2
-                      ? 'Cuid2.call'
-                      : 'Cuid.generate'
-                    : def.name === 'nanoid'
-                      ? typeof def.args[0] === 'number'
-                        ? `Nanoid.generate(size: ${def.args[0]})`
-                        : 'Nanoid.generate'
-                      : null
-            return attribute(generator === null ? null : `-> { ${generator} }`)
-          }
-          // A literal default is written into the model so a record built in
-          // Ruby carries it before it is saved, whatever the table says. A
-          // list or JSON value is mutable, so a lambda hands out a fresh one.
-          if (typeof def === 'object') {
-            const items = def.map((item) => rubyDefault(f.type, item))
-            if (!f.isList || items.some((item) => item === null)) return attribute(null)
-            return attribute(`-> { ${rubyArray(items.map(String))} }`)
-          }
-          const literal = rubyDefault(f.type, def)
-          if (literal === null) return attribute(null)
-          return attribute(f.type === 'Json' ? `-> { ${literal} }` : literal)
-        })
-
-      // Array enum columns get no `enum` DSL (it casts a scalar column). Keys
-      // are the Rails-cased value names (PENDING_REVIEW -> pending_review, so
-      // `record.pending_review?` and the `pending_review` scope), the stored
-      // value stays the database's. Rails names a class method after the
-      // plural of the enum (`statuses`) and, for each key, the scopes `m` and
-      // `not_m` and the predicates `m?` and `m!`, where `m` is the key, or
-      // `column_key` with prefix: true, or `key_column` with suffix: true. It
-      // raises for a name Active Record or ActiveRecord::Relation defines,
-      // and for a predicate an earlier enum on the model took: the keys go
-      // bare where none of their names is taken, else behind the prefix, else
-      // the suffix (`type_condition` is Active Record's, `condition_type` is
-      // free), else without scopes and predicates. A plural Active Record
-      // defines (`values` for a column `value`) cannot be helped by any
-      // option, so that column is no `enum` at all: it holds the stored
-      // values, checked by an inclusion validation, with its default written
-      // as an attribute. A literal default names its key.
-      // validate: true makes a value outside the enum, or nil where the
-      // column is NOT NULL, a validation error like the other constraints,
-      // instead of an ArgumentError on assignment.
-      const enumLines = model.fields
-        .filter((f) => f.kind === 'enum' && !f.isList)
-        .reduce<{ lines: string[]; taken: Set<string> }>(
-          (acc, f) => {
-            const column = f.dbName ?? f.name
-            const values = (enumMap.get(f.type) ?? []).map((v) => ({
-              key: makeSnakeCase(v.name),
-              name: v.name,
-              stored: v.dbName ?? v.name,
-            }))
-            const defaultValue = values.find((v) => v.name === f.default)
-            if (RAILS_RESERVED_NAMES.has(pluralize(column))) {
-              return {
-                lines: [
-                  ...acc.lines,
-                  ...(typeof f.default === 'string' && defaultValue !== undefined
-                    ? [rubyCall('attribute', [`:${column}`], [`default: "${defaultValue.stored}"`])]
-                    : []),
-                  rubyCall(
-                    'validates',
-                    [`:${column}`],
-                    [
-                      `inclusion: { in: ${rubyArray(values.map((v) => `"${v.stored}"`))}${f.isRequired ? '' : ', allow_nil: true'} }`,
-                    ],
-                  ),
-                ],
-                taken: acc.taken,
-              }
-            }
-            const pairs = values.map((v) => `${symbolKey(v.key)}: "${v.stored}"`).join(', ')
-            const affix = [
-              { option: [], name: (key: string) => key },
-              { option: ['prefix: true'], name: (key: string) => `${column}_${key}` },
-              { option: ['suffix: true'], name: (key: string) => `${key}_${column}` },
-            ].find(({ name }) =>
-              values.every(
-                (v) => !acc.taken.has(name(v.key)) && !RAILS_RESERVED_NAMES.has(name(v.key)),
-              ),
-            )
-            const opts = [
-              ...(typeof f.default === 'string' && defaultValue !== undefined
-                ? [`default: :${symbolKey(defaultValue.key)}`]
-                : []),
-              ...(affix === undefined
-                ? ['scopes: false', 'instance_methods: false']
-                : affix.option),
-              f.isRequired ? 'validate: true' : 'validate: { allow_nil: true }',
-            ]
-            if (affix !== undefined) {
-              for (const v of values) {
-                acc.taken.add(affix.name(v.key))
-              }
-            }
-            return {
-              lines: [...acc.lines, rubyCall('enum', [`:${column}`, `{ ${pairs} }`], opts)],
-              taken: acc.taken,
-            }
-          },
-          { lines: [], taken: new Set() },
-        ).lines
-
-      // What the schema promises of a column, as a validation, so a bad value
-      // is an error on the record rather than an exception from the database:
-      // a required column without a default must be present (a foreign key is
-      // the belongs_to's to check, a timestamp is written after validation, an
-      // enum has validate: true),
-      // a @unique column or @@unique set is unique, and a VarChar(n) is no
-      // longer than n. A nullable unique column may be NULL any number of
-      // times, which allow_nil mirrors. `presence` reads false, {} and "" as
-      // blank, so a Boolean is held to true or false and a Json or Bytes
-      // column only to not nil.
-      const foreignKeyFields = new Set(
-        model.fields.flatMap((f) => (f.kind === 'object' ? (f.relationFromFields ?? []) : [])),
-      )
-      const compositeKeyFields = new Set(model.primaryKey?.fields)
-      // A @@unique pair is validated on the column a person fills in and
-      // scoped by the rest, as a Rails developer writes it: `validates :slot,
-      // uniqueness: { scope: :post_id }`, so the error lands on `slot`. A
-      // foreign key is the scope, unless the set is nothing but foreign keys;
-      // a column that already answers for another set is passed over, so
-      // `@@unique([tenantId, email])` and `@@unique([tenantId, handle])` are
-      // one error on email and one on handle.
-      // An enum or list member is scope only: `validates` is written for
-      // scalar columns, so the set is the first scalar's.
-      const scalarColumns = new Set(
-        model.fields.filter((f) => f.kind === 'scalar' && !f.isList).map((f) => f.name),
-      )
-      const taken = new Set(model.fields.filter((f) => f.isUnique && !f.isId).map((f) => f.name))
-      const uniqueSets = [
-        ...model.fields.filter((f) => f.isUnique && !f.isId).map((f) => [f.name]),
-        ...model.uniqueFields.map((set) => {
-          const columns = set.filter((name) => scalarColumns.has(name))
-          const own =
-            columns.find((name) => !foreignKeyFields.has(name) && !taken.has(name)) ??
-            columns.find((name) => !foreignKeyFields.has(name)) ??
-            columns[0] ??
-            set[0] ??
-            ''
-          taken.add(own)
-          return [own, ...set.filter((name) => name !== own)]
-        }),
-      ]
-      // The model's own `@ar.` lines, written into the class as they are;
-      // `name(...)` is a translation and goes to the locale files instead.
-      const modelLines = arCalls(model.documentation, 'model').calls.filter(
-        (call) => validatorCall(call).validator !== 'name',
-      )
-      // `has_secure_password` (or `has_secure_password :recovery`) validates
-      // the password through `password`, adding `blank` there when the digest
-      // is empty: a `presence` on `password_digest` would report it twice.
-      // With `validations: false` it adds nothing, and the column keeps its own.
-      const digestColumns = new Set(
-        modelLines.flatMap((line) => {
-          const m = line.match(/^has_secure_password(?:\s*\(?\s*:([a-z_][a-z0-9_]*))?/u)
-          return m && !/validations:\s*false/u.test(line) ? [`${m[1] ?? 'password'}_digest`] : []
-        }),
-      )
-      // A field's own `@ar.` validators come after what the schema implies; one
-      // the schema also wrote (`length`) replaces it, message and all, and
-      // `presence(false)` takes it away.
-      const validationLines = model.fields.flatMap((f) => {
-        if (!(f.kind === 'scalar' || f.kind === 'enum')) return []
-        const column = f.kind === 'scalar' && !f.isList
-        const own = arCalls(f.documentation, 'field').calls.map((call) => validatorCall(call))
-        // `presence(false)` says the column is filled some other way, whatever
-        // the schema's requirement would have been written as (`inclusion`
-        // for a Boolean, `exclusion` for Json and Bytes).
-        const required =
-          column &&
-          !own.some(({ validator, option }) => validator === 'presence' && option === null) &&
-          f.isRequired &&
-          !f.hasDefaultValue &&
-          !f.isId &&
-          !f.isUpdatedAt &&
-          !foreignKeyFields.has(f.name) &&
-          !compositeKeyFields.has(f.name) &&
-          !digestColumns.has(f.dbName ?? f.name) &&
-          f !== createdField &&
-          f !== updatedField
-        const presence = !required
-          ? []
-          : f.type === 'Boolean'
-            ? ['inclusion: { in: [ true, false ] }']
-            : f.type === 'Json' || f.type === 'Bytes'
-              ? ['exclusion: { in: [ nil ] }']
-              : ['presence: true']
-        const length = column && f.type === 'String' ? nativeLength(f) : null
-        const lengthOpt = length === null ? [] : [`length: { maximum: ${length} }`]
-        // Every set this column answers for: the first joins the column's
-        // `validates`, and any other is a `validates` of its own, a hash
-        // taking one `uniqueness:`.
-        // A unique index counts no row whose scope column is NULL (NULLs are
-        // distinct), so a nullable scope column keeps those rows out of the
-        // check too: `conditions: -> { where.not(parent_id: nil) }` is empty
-        // for a record with no parent and exact for one with a parent.
-        const uniqueness = (column ? uniqueSets.filter((set) => set[0] === f.name) : []).map(
-          (set) => {
-            const scope = set.slice(1).map((name) => `:${fieldColumn(model, name)}`)
-            const nullable = set
-              .slice(1)
-              .filter((name) => model.fields.some((g) => g.name === name && !g.isRequired))
-              .map((name) => `where.not(${fieldColumn(model, name)}: nil)`)
-            const opts = [
-              ...(scope.length === 0
-                ? []
-                : [`scope: ${scope.length === 1 ? scope[0] : rubyArray(scope)}`]),
-              ...(nullable.length === 0 ? [] : [`conditions: -> { ${nullable.join('.')} }`]),
-              ...(f.isRequired ? [] : ['allow_nil: true']),
-            ]
-            return opts.length === 0 ? 'uniqueness: true' : `uniqueness: { ${opts.join(', ')} }`
-          },
-        )
-        // An own `uniqueness` stands in for the set on the column's line; a
-        // set on a line of its own is another constraint and stays.
-        const rules = [
-          ...[...presence, ...lengthOpt, ...uniqueness.slice(0, 1)].filter(
-            (rule) => !own.some(({ validator }) => validator === rule.split(':')[0]),
-          ),
-          ...own.flatMap(({ option }) => (option === null ? [] : [option])),
-        ]
-        return [
-          ...(rules.length === 0 ? [] : [rubyCall('validates', [`:${f.dbName ?? f.name}`], rules)]),
-          ...uniqueness
-            .slice(1)
-            .map((rule) => rubyCall('validates', [`:${f.dbName ?? f.name}`], [rule])),
-        ]
-      })
-
-      // Rails derives class_name from the association name, camelized, and
-      // singularized first for a collection (author -> Author, posts -> Post,
-      // but event_data -> EventDatum), foreign_key from the name on the
-      // belongs_to side (user_id) and from the owner's class on the has side
-      // (User -> user_id), and the inverse from the owner's class name (Post
-      // -> :post, or :posts) as long as no foreign_key is given on either
-      // side. What matches is left unsaid, as a Rails developer would;
-      // anything else is written out.
-      const belongsToLines = associations.belongsTo.map((a) => {
-        const name = associationOf(model.name, a.name)
-        const targetClass = classOf(a.targetModel)
-        // Rails finds the inverse only when the has side needs no
-        // foreign_key either, which takes this side to be named after its
-        // class, and only a has_one: the plural form is behind
-        // automatically_invert_plural_associations, off unless the
-        // application turns it on.
-        const inverse = a.inverse === null ? null : associationOf(a.targetModel, a.inverse)
-        const conventional =
-          name === underscore(targetClass) &&
-          a.foreignKeyColumns.length === 1 &&
-          a.foreignKeyColumns[0] === `${name}_id` &&
-          a.referencesPrimaryKey &&
-          inverse !== null &&
-          !a.inverseIsList &&
-          inverse === modelSnake
-        return rubyCall(
-          'belongs_to',
-          [`:${name}`],
-          [
-            ...(camelize(name) === targetClass ? [] : [`class_name: "${targetClass}"`]),
-            ...(a.foreignKeyColumns.length === 1 && a.foreignKeyColumns[0] === `${name}_id`
-              ? []
-              : [foreignKeyOpt(a.foreignKeyColumns)]),
-            ...primaryKeyOpt(a.primaryKeyColumns, a.referencesPrimaryKey),
-            ...(a.optional ? ['optional: true'] : []),
-            ...(inverse === null || conventional ? [] : [`inverse_of: :${inverse}`]),
-          ],
-        )
-      })
-
-      const hasLines = (
-        macro: 'has_one' | 'has_many',
-        list: typeof associations.hasOne | typeof associations.hasMany,
-      ) =>
-        list.map((a) => {
-          const name = associationOf(model.name, a.name)
-          const inverse = associationOf(a.targetModel, a.inverse)
-          const targetClass = classOf(a.targetModel)
-          const derivedClass =
-            camelize(macro === 'has_many' ? singularize(name) : name) === targetClass
-          const conventional =
-            a.foreignKeyColumns.length === 1 &&
-            a.foreignKeyColumns[0] === `${modelSnake}_id` &&
-            a.referencesPrimaryKey &&
-            inverse === modelSnake &&
-            derivedClass
-          const dependent = DEPENDENT[a.onDelete]
-          return rubyCall(
-            macro,
-            [`:${name}`],
-            [
-              ...(derivedClass ? [] : [`class_name: "${targetClass}"`]),
-              ...(a.foreignKeyColumns.length === 1 && a.foreignKeyColumns[0] === `${modelSnake}_id`
-                ? []
-                : [foreignKeyOpt(a.foreignKeyColumns)]),
-              ...primaryKeyOpt(a.primaryKeyColumns, a.referencesPrimaryKey),
-              ...(conventional ? [] : [`inverse_of: :${inverse}`]),
-              ...(dependent === undefined ? [] : [`dependent: :${dependent}`]),
-            ],
-          )
-        })
-
-      const hasOneLines = hasLines('has_one', associations.hasOne)
-      const hasManyLines = hasLines('has_many', associations.hasMany)
-
-      // Prisma's implicit join table is _AToB with columns A and B, never
-      // what Rails would derive, so those three options always stay.
-      const habtmLines = associations.habtm.map((a) => {
-        const name = associationOf(model.name, a.name)
-        const targetClass = classOf(a.targetModel)
-        return rubyCall(
-          'has_and_belongs_to_many',
-          [`:${name}`],
-          [
-            ...(camelize(singularize(name)) === targetClass
-              ? []
-              : [`class_name: "${targetClass}"`]),
-            `join_table: "${a.joinTable}"`,
-            `foreign_key: "${a.foreignKey}"`,
-            `association_foreign_key: "${a.associationForeignKey}"`,
-          ],
-        )
-      })
-
-      const associationLines = [...belongsToLines, ...hasOneLines, ...hasManyLines, ...habtmLines]
-
-      // One blank line between the groups that have anything to say. The
-      // model's own lines come last, after the associations: a `has_many
-      // :tags, through: :post_tags` raises HasManyThroughOrderError when it
-      // is defined before the `has_many :post_tags` it goes through.
-      const body = [
-        [...tableNameLines, ...primaryKeyLines, ...inheritanceColumnLines, ...orderColumnLines],
-        [...attributeLines, ...timestampLines],
-        enumLines,
-        validationLines,
-        associationLines,
-        modelLines,
-      ]
-        .filter((group) => group.length > 0)
-        .map((group) => group.join('\n'))
-        .join('\n\n')
-        .split('\n')
-
-      // The model's prose, then each attribute's or association's as an RDoc labelled list.
-      const modelProse = stripAnnotations(model.documentation)?.split('\n') ?? []
-      const fieldProse = model.fields.flatMap((f) => {
-        const [first = '', ...rest] = stripAnnotations(f.documentation)?.split('\n') ?? []
-        if (first === '') return []
-        const name = f.kind === 'object' ? associationOf(model.name, f.name) : (f.dbName ?? f.name)
-        return [`${name}:: ${first}`, ...rest.map((line) => (line === '' ? '' : `  ${line}`))]
-      })
-      const commentLines = [
-        ...modelProse,
-        ...(modelProse.length > 0 && fieldProse.length > 0 ? [''] : []),
-        ...fieldProse,
-      ].map((line) => (line === '' ? '#' : `# ${line}`))
-
-      return [
-        ...commentLines,
-        `class ${className} < ApplicationRecord`,
-        ...body.map((line) => (line === '' ? '' : `  ${line}`)),
-        'end',
-      ].join('\n')
-    })
+    .map((model) => activeRecordModel(model, ctx))
     .filter(Boolean)
     .join('\n\n')
 }

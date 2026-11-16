@@ -36,19 +36,22 @@ export function countTables(
         dialect: driver.dialect,
         schemas: [],
       })).tables
-    return yield* Effect.forEach(counted, (table) =>
-      driver
-        .query({
-          sql: `SELECT COUNT(*) AS ${quoteIdentifier(driver.dialect, 'count')} FROM ${qualifiedName(driver.dialect, table)}`,
-          params: [],
-        })
-        .pipe(
-          Effect.map((result) => ({
-            table: table.table,
-            rows: Number(result.rows[0]?.['count'] ?? 0),
-          })),
-          Effect.orElseSucceed(() => ({ table: table.table, rows: null })),
-        ),
+    return yield* Effect.forEach(
+      counted,
+      (table) =>
+        driver
+          .query({
+            sql: `SELECT COUNT(*) AS ${quoteIdentifier(driver.dialect, 'count')} FROM ${qualifiedName(driver.dialect, table)}`,
+            params: [],
+          })
+          .pipe(
+            Effect.map((result) => ({
+              table: table.table,
+              rows: Number(result.rows[0]?.['count'] ?? 0),
+            })),
+            Effect.orElseSucceed(() => ({ table: table.table, rows: null })),
+          ),
+      { concurrency: 1 },
     )
   })
 }
@@ -125,10 +128,14 @@ function rehearseOn(input: {
     const before = yield* countTables(target)
     // A step after one that failed is not run: it was written for a database the failure never made.
     const failedYet = yield* Ref.make(false)
-    const results = yield* Effect.forEach(input.steps, (statements) =>
-      rehearseStep({ target, statements, failedYet }),
+    const results = yield* Effect.forEach(
+      input.steps,
+      (statements) => rehearseStep({ target, statements, failedYet }),
+      { concurrency: 1 },
     )
     const after = yield* countTables(target)
+    const rowsBefore = new Map(before.toReversed().map((one) => [one.table, one.rows]))
+    const rowsAfter = new Map(after.toReversed().map((one) => [one.table, one.rows]))
     const ok = results.every((step) => step.ok)
     // What the schema engine makes of the database the steps left: nothing, when it matches.
     const diff =
@@ -144,8 +151,8 @@ function rehearseOn(input: {
       steps: results,
       tables: [...new Set([...before, ...after].map((one) => one.table))].map((table) => ({
         table,
-        before: before.find((one) => one.table === table)?.rows ?? null,
-        after: after.find((one) => one.table === table)?.rows ?? null,
+        before: rowsBefore.get(table) ?? null,
+        after: rowsAfter.get(table) ?? null,
       })),
       /** Null when the engine cannot be asked: the result is not compared with the schema. */
       schemaMatches: diff === null ? null : !diff.drift,

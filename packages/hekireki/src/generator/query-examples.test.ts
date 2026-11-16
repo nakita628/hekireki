@@ -131,7 +131,7 @@ describe('queryExamples', () => {
   })
 
   it('carries the same values in the request the SQL is compiled from', () => {
-    const create = examples.find((e) => e.model === 'Post' && e.name === 'create')
+    const create = examples.filter((e) => e.model === 'Post').find((e) => e.name === 'create')
     expect(create?.request).toStrictEqual({
       modelName: 'Post',
       action: 'createOne',

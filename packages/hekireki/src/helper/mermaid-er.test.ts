@@ -4,6 +4,12 @@ import { describe, expect, it } from 'vite-plus/test'
 import { erContent } from '../generator/mermaid-er.js'
 import { erRelationLine, escapeComment, modelFields, modelInfo } from './mermaid-er.js'
 
+const TABLE_NAMES: { readonly [model: string]: string } = { User: 'users', Post: 'posts' }
+
+function tableName(model: string) {
+  return TABLE_NAMES[model] ?? model
+}
+
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
     dbName: null,
@@ -98,7 +104,7 @@ describe('helper/mermaid-er', () => {
           from: { model: 'User', field: 'id', cardinality: 'one' },
           to: { model: 'Post', field: 'userId', cardinality: 'many' },
         },
-        (model) => (model === 'User' ? 'users' : model === 'Post' ? 'posts' : model),
+        tableName,
       )
       expect(result).toBe('    users ||--|{ posts : "(id) - (userId)"')
     })

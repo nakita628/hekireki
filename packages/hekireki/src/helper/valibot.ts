@@ -5,13 +5,14 @@ export function makeValibotInfer(modelName: string) {
   return `export type ${modelName} = v.InferOutput<typeof ${modelName}Schema>`
 }
 
+const VALIBOT_OBJECT_WRAPPER = { strict: 'strictObject', loose: 'looseObject' } as const
+
 export function makeValibotSchema(
   modelName: string,
   fields: string,
   objectType?: 'strict' | 'loose',
 ) {
-  const wrapper =
-    objectType === 'strict' ? 'strictObject' : objectType === 'loose' ? 'looseObject' : 'object'
+  const wrapper = objectType === undefined ? 'object' : VALIBOT_OBJECT_WRAPPER[objectType]
   return `export const ${modelName}Schema = v.${wrapper}({\n${fields}\n})`
 }
 
@@ -73,9 +74,10 @@ export function makeValibotRelations(
         `  ${r.key}: ${r.isMany ? `v.array(${r.targetModel}Schema)` : `${r.targetModel}Schema`},`,
     )
     .join('\n')
-  const typeLine = options?.includeType
-    ? `\n\nexport type ${model.name}Relations = v.InferOutput<typeof ${model.name}RelationsSchema>`
-    : ''
+  const typeLine =
+    options?.includeType === true
+      ? `\n\nexport type ${model.name}Relations = v.InferOutput<typeof ${model.name}RelationsSchema>`
+      : ''
   return `export const ${model.name}RelationsSchema = v.object({\n${base}\n${rels}\n})${typeLine}`
 }
 
@@ -105,7 +107,7 @@ export function valibotSchemaCode(
     inferType: makeValibotInfer,
     schemas: makeValibotSchemas,
     typeMapping: PRISMA_TO_VALIBOT,
-    enums,
+    ...(enums === undefined ? {} : { enums }),
     formatEnum: makeValibotEnumExpression,
     wrapList: makeValibotListExpression,
   })

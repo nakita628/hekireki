@@ -30,89 +30,67 @@ export function prismaTypeToGoType(type: string, isRequired: boolean) {
   return base
 }
 
+const GORM_NATIVE_FIXED: { [k: string]: string } = {
+  Text: 'text',
+  MediumText: 'text',
+  LongText: 'text',
+  TinyText: 'text',
+  SmallInt: 'smallint',
+  TinyInt: 'smallint',
+  MediumInt: 'mediumint',
+  DoublePrecision: 'double precision',
+  Double: 'double precision',
+  Real: 'double precision',
+  Uuid: 'char(36)',
+  Date: 'date',
+  JsonB: 'jsonb',
+  Xml: 'xml',
+}
+
+// A time's precision and zone are kept: `timestamp` would turn a timestamptz column into
+// one without a zone, and a (0) into the dialect's default.
+const GORM_NATIVE_TEMPORAL = new Set(['Timestamp', 'Timestamptz', 'DateTime', 'Time', 'Timetz'])
+
 function resolveNativeType(field: DMMF.Field) {
   if (!field.nativeType) return null
 
   const [nativeName, nativeArgs] = field.nativeType
   const args = nativeArgs ?? []
 
-  switch (nativeName) {
-    case 'VarChar':
-    case 'Char':
-      return args.length > 0 ? `varchar(${args[0]})` : null
-    case 'Text':
-    case 'MediumText':
-    case 'LongText':
-    case 'TinyText':
-      return 'text'
-    case 'SmallInt':
-    case 'TinyInt':
-      return 'smallint'
-    case 'MediumInt':
-      return 'mediumint'
-    case 'DoublePrecision':
-    case 'Double':
-    case 'Real':
-      return 'double precision'
-    case 'Decimal':
-    case 'Money':
-      return args.length >= 2 ? `decimal(${args[0]},${args[1]})` : 'decimal'
-    case 'Uuid':
-      return 'char(36)'
-    // A time's precision and zone are kept: `timestamp` would turn a timestamptz column into
-    // one without a zone, and a (0) into the dialect's default.
-    case 'Timestamp':
-    case 'Timestamptz':
-    case 'DateTime':
-    case 'Time':
-    case 'Timetz': {
-      const name = nativeName.toLowerCase()
-      return args.length > 0 ? `${name}(${args[0]})` : name
-    }
-    case 'Date':
-      return 'date'
-    case 'JsonB':
-      return 'jsonb'
-    case 'Xml':
-      return 'xml'
-    default:
-      return null
+  if (nativeName === 'VarChar' || nativeName === 'Char') {
+    return args.length > 0 ? `varchar(${args[0]})` : null
+  }
+  if (nativeName === 'Decimal' || nativeName === 'Money') {
+    return args.length >= 2 ? `decimal(${args[0]},${args[1]})` : 'decimal'
+  }
+  if (GORM_NATIVE_TEMPORAL.has(nativeName)) {
+    const name = nativeName.toLowerCase()
+    return args.length > 0 ? `${name}(${args[0]})` : name
+  }
+  return GORM_NATIVE_FIXED[nativeName] ?? null
+}
+
+/** A relation through the foreign key `fkField` holds, which is on either end of it. */
+function foreignKeyAssociation(name: string, targetModel: string, fkField: DMMF.Field) {
+  const foreignKeys = fkField.relationFromFields ?? []
+  return {
+    name,
+    targetModel,
+    foreignKey: foreignKeys[0] ?? '',
+    references: fkField.relationToFields?.[0] ?? 'id',
+    foreignKeys,
+    referencesList: fkField.relationToFields ?? ['id'],
+    onDelete: fkField.relationOnDelete,
+    onUpdate: fkField.relationOnUpdate,
   }
 }
 
+type ForeignKeyAssociation = ReturnType<typeof foreignKeyAssociation>
+
 function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
-  const belongsTo: {
-    name: string
-    targetModel: string
-    foreignKey: string
-    references: string
-    foreignKeys: readonly string[]
-    referencesList: readonly string[]
-    onDelete?: string
-    onUpdate?: string
-  }[] = []
-  const hasMany: {
-    name: string
-    targetModel: string
-    foreignKey: string
-    references: string
-    foreignKeys: readonly string[]
-    referencesList: readonly string[]
-    isList: boolean
-    onDelete?: string
-    onUpdate?: string
-  }[] = []
-  const hasOne: {
-    name: string
-    targetModel: string
-    foreignKey: string
-    references: string
-    foreignKeys: readonly string[]
-    referencesList: readonly string[]
-    isList: boolean
-    onDelete?: string
-    onUpdate?: string
-  }[] = []
+  const belongsTo: ForeignKeyAssociation[] = []
+  const hasMany: (ForeignKeyAssociation & { isList: boolean })[] = []
+  const hasOne: (ForeignKeyAssociation & { isList: boolean })[] = []
   const manyToMany: {
     name: string
     targetModel: string
@@ -123,17 +101,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   for (const end of relationEnds(model, allModels)) {
     const { field } = end
     if (end.kind === 'belongsTo') {
-      const foreignKeys = field.relationFromFields ?? []
-      belongsTo.push({
-        name: field.name,
-        targetModel: field.type,
-        foreignKey: foreignKeys[0] ?? '',
-        references: field.relationToFields?.[0] ?? 'id',
-        foreignKeys,
-        referencesList: field.relationToFields ?? ['id'],
-        onDelete: field.relationOnDelete,
-        onUpdate: field.relationOnUpdate,
-      })
+      belongsTo.push(foreignKeyAssociation(field.name, field.type, field))
       continue
     }
     if (end.kind === 'manyToMany') {
@@ -145,18 +113,9 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       })
       continue
     }
-    const fkField = end.inverse
-    const foreignKeys = fkField.relationFromFields ?? []
     const association = {
-      name: field.name,
-      targetModel: field.type,
-      foreignKey: foreignKeys[0] ?? '',
-      references: fkField.relationToFields?.[0] ?? 'id',
-      foreignKeys,
-      referencesList: fkField.relationToFields ?? ['id'],
+      ...foreignKeyAssociation(field.name, field.type, end.inverse),
       isList: end.kind === 'hasMany',
-      onDelete: fkField.relationOnDelete,
-      onUpdate: fkField.relationOnUpdate,
     }
     if (end.kind === 'hasMany') hasMany.push(association)
     else hasOne.push(association)
@@ -202,20 +161,104 @@ function isDateTimeList(field: DMMF.Field) {
   return field.kind === 'scalar' && field.type === 'DateTime' && field.isList
 }
 
+function dateTimeElement(nativeName: string | undefined): 'Date' | 'TimeOfDay' | 'DateTime' {
+  if (nativeName === 'Date') return 'Date'
+  return nativeName === 'Time' || nativeName === 'Timetz' ? 'TimeOfDay' : 'DateTime'
+}
+
 /**
  * The type written beside the models that holds a DateTime field: a date or a time of day where
  * the native type keeps only that much of it, an instant otherwise; a list of them for a
  * DateTime[].
  */
 function dateTimeGoType(field: DMMF.Field) {
-  const nativeName = field.nativeType?.[0]
-  const element =
-    nativeName === 'Date'
-      ? 'Date'
-      : nativeName === 'Time' || nativeName === 'Timetz'
-        ? 'TimeOfDay'
-        : 'DateTime'
+  const element = dateTimeElement(field.nativeType?.[0])
   return field.isList ? (`${element}List` as const) : element
+}
+
+// An enum default arrives as the Prisma-level value name; the column stores
+// the @map-ped database value.
+function enumMappedDefault(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[] | undefined) {
+  if (!(field.kind === 'enum' && typeof field.default === 'string')) return null
+  const value = enums
+    ?.find((e) => e.name === field.type)
+    ?.values.find((v) => v.name === field.default)
+  return formatGoDefault(value?.dbName ?? field.default, field.type, field.kind)
+}
+
+// dbgenerated() is a raw DDL expression, valid on any column including the PK.
+function dbGeneratedDefault(field: DMMF.Field) {
+  return isFunctionDefault(field.default) &&
+    field.default.name === 'dbgenerated' &&
+    typeof field.default.args[0] === 'string'
+    ? field.default.args[0]
+    : null
+}
+
+// A DateTime literal is written as the model writes the value (BeforeCreate fills it, so this
+// is what the table's DDL and a create that skips hooks see): an ISO string on SQLite, where
+// the text is compared, and the UTC value elsewhere.
+function dateTimeDefault(field: DMMF.Field, provider: string | undefined) {
+  if (!(isDateTimeScalar(field) && typeof field.default === 'string')) return null
+  const iso = new Date(field.default).toISOString()
+  const goType = dateTimeGoType(field)
+  if (goType === 'Date') return `'${iso.slice(0, 10)}'`
+  if (goType === 'TimeOfDay') return `'${iso.slice(11, 23)}'`
+  return provider === 'sqlite'
+    ? `'${iso.replace('Z', '+00:00')}'`
+    : `'${iso.slice(0, 10)} ${iso.slice(11, 23)}'`
+}
+
+function gormDefault(
+  field: DMMF.Field,
+  isPk: boolean,
+  isCompositePk: boolean,
+  enums: readonly DMMF.DatamodelEnum[] | undefined,
+  provider: string | undefined,
+) {
+  const isNowDefault =
+    field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
+  return (
+    dbGeneratedDefault(field) ??
+    dateTimeDefault(field, provider) ??
+    ((!isPk || isCompositePk) && !isNowDefault && field.isUpdatedAt !== true
+      ? (enumMappedDefault(field, enums) ?? formatGoDefault(field.default, field.type, field.kind))
+      : null)
+  )
+}
+
+function primaryKeyTags(field: DMMF.Field, isPk: boolean) {
+  if (!isPk) return []
+  const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
+  return [
+    'primaryKey',
+    ...(isAutoincrement(field) ? ['autoIncrement'] : []),
+    ...(defaultName === 'uuid' ? ['type:char(36)'] : []),
+    ...(defaultName === 'ulid' ? ['type:char(26)'] : []),
+  ]
+}
+
+function columnTypeTag(field: DMMF.Field, isPk: boolean) {
+  const nativeType = resolveNativeType(field)
+  // A DateTime[] is a PostgreSQL array, `timestamp(3)[]` unless the native type says otherwise,
+  // which the list type writes and reads as Prisma Client does.
+  if (isDateTimeList(field)) return `type:${nativeType ?? 'timestamp(3)'}[]`
+  const includeNativeType =
+    nativeType !== null &&
+    (!isPk || !isFunctionDefault(field.default) || field.default.name !== 'uuid')
+  return includeNativeType ? `type:${nativeType}` : null
+}
+
+// GORM fills a field named CreatedAt or UpdatedAt on its own, a time with the application's
+// clock bound as a time.Time the driver formats and a number with the Unix seconds; the hooks
+// fill what the schema asks for, and a number is the caller's.
+function trackedTimeTags(field: DMMF.Field, fieldName: string) {
+  const isTracked = isDateTimeScalar(field) || ['Int', 'BigInt'].includes(field.type)
+  if (!isTracked) return []
+  return [
+    ...(fieldName === 'CreatedAt' ? ['autoCreateTime:false'] : []),
+    ...(fieldName === 'UpdatedAt' ? ['autoUpdateTime:false'] : []),
+  ]
 }
 
 export function buildGormTags(
@@ -228,74 +271,19 @@ export function buildGormTags(
   fieldName = goFieldName(field.name),
 ) {
   const columnName = field.dbName ?? field.name
-  const isUuidDefault = isFunctionDefault(field.default) && field.default.name === 'uuid'
-  const isUlidDefault = isFunctionDefault(field.default) && field.default.name === 'ulid'
-  const isNowDefault =
-    field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
-  const nativeType = resolveNativeType(field)
-  const includeNativeType =
-    nativeType && (!isPk || !isFunctionDefault(field.default) || field.default.name !== 'uuid')
-  // An enum default arrives as the Prisma-level value name; the column stores
-  // the @map-ped database value. dbgenerated() is a raw DDL expression, valid
-  // on any column including the PK.
-  const dbGeneratedExpr =
-    isFunctionDefault(field.default) &&
-    field.default.name === 'dbgenerated' &&
-    typeof field.default.args[0] === 'string'
-      ? field.default.args[0]
-      : null
-  const enumMappedDefault = (() => {
-    if (!(field.kind === 'enum' && typeof field.default === 'string')) return null
-    const value = enums
-      ?.find((e) => e.name === field.type)
-      ?.values.find((v) => v.name === field.default)
-    return formatGoDefault(value?.dbName ?? field.default, field.type, field.kind)
-  })()
-  // A DateTime literal is written as the model writes the value (BeforeCreate fills it, so this
-  // is what the table's DDL and a create that skips hooks see): an ISO string on SQLite, where
-  // the text is compared, and the UTC value elsewhere.
-  const dateTimeDefault = (() => {
-    if (!(isDateTimeScalar(field) && typeof field.default === 'string')) return null
-    const iso = new Date(field.default).toISOString()
-    const goType = dateTimeGoType(field)
-    if (goType === 'Date') return `'${iso.slice(0, 10)}'`
-    if (goType === 'TimeOfDay') return `'${iso.slice(11, 23)}'`
-    return provider === 'sqlite'
-      ? `'${iso.replace('Z', '+00:00')}'`
-      : `'${iso.slice(0, 10)} ${iso.slice(11, 23)}'`
-  })()
-  const defaultVal =
-    dbGeneratedExpr ??
-    dateTimeDefault ??
-    ((!isPk || isCompositePk) && !isNowDefault && !field.isUpdatedAt
-      ? (enumMappedDefault ?? formatGoDefault(field.default, field.type, field.kind))
-      : null)
-  // GORM fills a field named CreatedAt or UpdatedAt on its own, a time with the application's
-  // clock bound as a time.Time the driver formats and a number with the Unix seconds; the hooks
-  // fill what the schema asks for, and a number is the caller's.
-  const isTracked = isDateTimeScalar(field) || ['Int', 'BigInt'].includes(field.type)
+  const defaultVal = gormDefault(field, isPk, isCompositePk, enums, provider)
 
   const parts = [
     `column:${columnName}`,
-    isPk ? 'primaryKey' : null,
-    isPk && isAutoincrement(field) ? 'autoIncrement' : null,
-    isPk && isUuidDefault ? 'type:char(36)' : null,
-    isPk && isUlidDefault ? 'type:char(26)' : null,
+    ...primaryKeyTags(field, isPk),
     field.isUnique ? 'uniqueIndex' : null,
     ...compositeIndexTags,
-    // A DateTime[] is a PostgreSQL array, `timestamp(3)[]` unless the native type says otherwise,
-    // which the list type writes and reads as Prisma Client does.
-    isDateTimeList(field)
-      ? `type:${nativeType ?? 'timestamp(3)'}[]`
-      : includeNativeType
-        ? `type:${nativeType}`
-        : null,
+    columnTypeTag(field, isPk),
     // Other scalar lists need a serializer so GORM can persist the slice; the built-in
     // json serializer works on every dialect without extra deps.
     field.isList && field.kind !== 'object' && !isDateTimeList(field) ? 'serializer:json' : null,
     defaultVal !== null ? `default:${defaultVal}` : null,
-    isTracked && fieldName === 'CreatedAt' ? 'autoCreateTime:false' : null,
-    isTracked && fieldName === 'UpdatedAt' ? 'autoUpdateTime:false' : null,
+    ...trackedTimeTags(field, fieldName),
     field.isRequired && !isPk ? 'not null' : null,
   ].filter((p) => p !== null)
 
@@ -307,14 +295,12 @@ function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Ind
   // (`Post_authorId_idx`, `User_email_key`), so AutoMigrate and the migration
   // agree; index names are global per schema in PostgreSQL either way.
   const tableName = model.dbName ?? model.name
+  const fieldByName = new Map(model.fields.map((mf) => [mf.name, mf]))
 
   const uniqueTags = model.uniqueFields
     .filter((fields) => fields.length > 1)
     .flatMap((fields) => {
-      const cols = fields.map((f) => {
-        const fo = model.fields.find((mf) => mf.name === f)
-        return fo?.dbName ?? f
-      })
+      const cols = fields.map((f) => fieldByName.get(f)?.dbName ?? f)
       const idxName = `${tableName}_${cols.join('_')}_key`
       return fields.map((f): [string, string] => [f, `uniqueIndex:${idxName}`])
     })
@@ -325,7 +311,7 @@ function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Ind
       const idxName =
         idx.dbName ??
         idx.name ??
-        `${tableName}_${idx.fields.map((f) => model.fields.find((mf) => mf.name === f.name)?.dbName ?? f.name).join('_')}_idx`
+        `${tableName}_${idx.fields.map((f) => fieldByName.get(f.name)?.dbName ?? f.name).join('_')}_idx`
       return idx.fields.map((f): [string, string] => [f.name, `index:${idxName}`])
     })
 
@@ -467,7 +453,10 @@ function generatedIdFields(model: DMMF.Model) {
  */
 function createdTimeExpr(field: DMMF.Field) {
   if (!isDateTimeScalar(field)) return null
-  if (field.isUpdatedAt || (isFunctionDefault(field.default) && field.default.name === 'now')) {
+  if (
+    field.isUpdatedAt === true ||
+    (isFunctionDefault(field.default) && field.default.name === 'now')
+  ) {
     return 'now'
   }
   if (typeof field.default !== 'string') return null
@@ -519,7 +508,9 @@ function generateBeforeCreateHook(model: DMMF.Model, names: ReadonlyMap<string, 
 // application's clock as a time.Time, past the generated type, and GORM calls this hook on
 // Update, Updates and Save alike. A value the update sets itself is kept.
 function generateBeforeUpdateHook(model: DMMF.Model, names: ReadonlyMap<string, string>) {
-  const stamped = model.fields.filter((field) => isDateTimeScalar(field) && field.isUpdatedAt)
+  const stamped = model.fields.filter(
+    (field) => isDateTimeScalar(field) && field.isUpdatedAt === true,
+  )
   if (stamped.length === 0) return []
   return [
     '',
@@ -538,6 +529,34 @@ function generateBeforeUpdateHook(model: DMMF.Model, names: ReadonlyMap<string, 
   ]
 }
 
+// GORM skips a zero value in a column with a default and lets the default
+// in: `false` under `@default(true)` would be stored as true. A pointer
+// tells the two apart, as GORM's documentation advises: nil takes the
+// default, a pointer to the zero value is stored as it is.
+function hasNonZeroDefault(field: DMMF.Field, isPk: boolean) {
+  const def = field.default
+  return (
+    field.kind === 'scalar' &&
+    !isPk &&
+    ['Int', 'BigInt', 'Float', 'Decimal', 'Boolean', 'String'].includes(field.type) &&
+    (def === true ||
+      (typeof def === 'number' && def !== 0) ||
+      (typeof def === 'string' && (field.type === 'String' ? def !== '' : Number(def) !== 0)))
+  )
+}
+
+function structFieldGoType(field: DMMF.Field, isPk: boolean) {
+  if (isDateTimeList(field)) return dateTimeGoType(field)
+  // A scalar list (e.g. `tags String[]`) is a collection, not a scalar; collapse
+  // it to a single value loses data. Emit a slice of the element type.
+  if (field.isList) {
+    return `[]${field.kind === 'enum' ? 'string' : prismaTypeToGoType(field.type, true)}`
+  }
+  if (isDateTimeScalar(field)) return `${field.isRequired ? '' : '*'}${dateTimeGoType(field)}`
+  if (field.kind === 'enum') return field.isRequired ? 'string' : '*string'
+  return prismaTypeToGoType(field.type, field.isRequired && !hasNonZeroDefault(field, isPk))
+}
+
 function generateStructField(
   field: DMMF.Field,
   fieldName: string,
@@ -547,37 +566,9 @@ function generateStructField(
   enums?: readonly DMMF.DatamodelEnum[],
   provider?: string,
 ) {
-  // GORM skips a zero value in a column with a default and lets the default
-  // in: `false` under `@default(true)` would be stored as true. A pointer
-  // tells the two apart, as GORM's documentation advises: nil takes the
-  // default, a pointer to the zero value is stored as it is.
-  const def = field.default
-  const hasNonZeroDefault =
-    field.kind === 'scalar' &&
-    !isPk &&
-    ['Int', 'BigInt', 'Float', 'Decimal', 'Boolean', 'String'].includes(field.type) &&
-    (def === true ||
-      (typeof def === 'number' && def !== 0) ||
-      (typeof def === 'string' && (field.type === 'String' ? def !== '' : Number(def) !== 0)))
-  const scalarType =
-    field.kind === 'enum'
-      ? field.isRequired
-        ? 'string'
-        : '*string'
-      : prismaTypeToGoType(field.type, field.isRequired && !hasNonZeroDefault)
-  // A scalar list (e.g. `tags String[]`) is a collection, not a scalar; collapse
-  // it to a single value loses data. Emit a slice of the element type.
-  const goType = isDateTimeList(field)
-    ? dateTimeGoType(field)
-    : field.isList
-      ? `[]${field.kind === 'enum' ? 'string' : prismaTypeToGoType(field.type, true)}`
-      : isDateTimeScalar(field)
-        ? `${field.isRequired ? '' : '*'}${dateTimeGoType(field)}`
-        : scalarType
-
   return [
     fieldName,
-    goType,
+    structFieldGoType(field, isPk),
     buildGormTags(field, isPk, isCompositePk, compositeIndexTags, enums, provider, fieldName),
   ]
 }
@@ -596,8 +587,12 @@ const SQL_ACTION: { [k: string]: string } = {
 
 function constraintTag(onDelete: string | undefined, onUpdate: string | undefined) {
   const clauses = [
-    onUpdate && SQL_ACTION[onUpdate] ? `OnUpdate:${SQL_ACTION[onUpdate]}` : null,
-    onDelete && SQL_ACTION[onDelete] ? `OnDelete:${SQL_ACTION[onDelete]}` : null,
+    onUpdate !== undefined && SQL_ACTION[onUpdate] !== undefined
+      ? `OnUpdate:${SQL_ACTION[onUpdate]}`
+      : null,
+    onDelete !== undefined && SQL_ACTION[onDelete] !== undefined
+      ? `OnDelete:${SQL_ACTION[onDelete]}`
+      : null,
   ].filter((c) => c !== null)
   return clauses.length > 0 ? `constraint:${clauses.join(',')}` : null
 }
@@ -632,6 +627,10 @@ function generateRelationFields(
     ).map((line) => [line]),
     row,
   ]
+  const belongsToCount = associations.belongsTo.reduce(
+    (counts, a) => counts.set(a.targetModel, (counts.get(a.targetModel) ?? 0) + 1),
+    new Map<string, number>(),
+  )
   const belongsToLines = associations.belongsTo.flatMap((assoc) => {
     const fieldName = own(assoc.name)
     const fkFieldName = assoc.foreignKeys.map(own).join(',')
@@ -639,7 +638,7 @@ function generateRelationFields(
     const isComposite = assoc.foreignKeys.length > 1
     const isAmbiguous =
       fieldName !== goModelName(assoc.targetModel) ||
-      associations.belongsTo.filter((a) => a.targetModel === assoc.targetModel).length > 1
+      (belongsToCount.get(assoc.targetModel) ?? 0) > 1
     // GORM guesses a belongs-to key as the field's name and the referenced
     // field's (`User` + `ID`); a key named otherwise (`ownerId`) is named.
     const isGuessed = fkFieldName === `${fieldName}${refsFieldName}`
@@ -860,27 +859,23 @@ function dateTypes(models: readonly DMMF.Model[]) {
  * A date column holds the UTC date (`@db.Date`) and a time column the UTC time of day on
  * 1970-01-01 (`@db.Time`, `@db.Timetz`), as Prisma Client writes and reads them.
  */
+// The text a DateTime is sent to the database as: Prisma Client's on SQLite, the UTC wall clock on
+// MySQL, and the time.Time itself elsewhere.
+function dateTimeValueFormat(provider: string | undefined) {
+  if (provider === 'sqlite') return '.Format("2006-01-02T15:04:05.000-07:00")'
+  if (provider === 'mysql') return '.Format("2006-01-02 15:04:05.000")'
+  return ''
+}
+
 export function generateDateTypes(models: readonly DMMF.Model[], provider?: string) {
   const types = dateTypes(models)
   if (types.length === 0) return []
-  const value =
-    provider === 'sqlite'
-      ? [
-          'func (dateTime DateTime) Value() (driver.Value, error) {',
-          '\treturn dateTime.UTC().Truncate(time.Millisecond).Format("2006-01-02T15:04:05.000-07:00"), nil',
-          '}',
-        ]
-      : provider === 'mysql'
-        ? [
-            'func (dateTime DateTime) Value() (driver.Value, error) {',
-            '\treturn dateTime.UTC().Truncate(time.Millisecond).Format("2006-01-02 15:04:05.000"), nil',
-            '}',
-          ]
-        : [
-            'func (dateTime DateTime) Value() (driver.Value, error) {',
-            '\treturn dateTime.UTC().Truncate(time.Millisecond), nil',
-            '}',
-          ]
+  const typeSet = new Set(types)
+  const value = [
+    'func (dateTime DateTime) Value() (driver.Value, error) {',
+    `\treturn dateTime.UTC().Truncate(time.Millisecond)${dateTimeValueFormat(provider)}, nil`,
+    '}',
+  ]
   const fromDriver =
     provider === 'mysql'
       ? [
@@ -966,7 +961,7 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
     { name: 'DateList', element: 'Date' },
     { name: 'TimeOfDayList', element: 'TimeOfDay' },
   ]
-    .filter((list) => types.includes(list.name))
+    .filter((list) => typeSet.has(list.name))
     .flatMap(({ name, element }) => [
       '',
       `type ${name} []${element}`,
@@ -1076,13 +1071,30 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
  * time type written beside the models, where the schema needs that type.
  */
 export function gormProblems(models: readonly DMMF.Model[]) {
-  const types = dateTypes(models)
+  const types = new Set(dateTypes(models))
   return models
-    .filter((model) => types.includes(goModelName(model.name)))
+    .filter((model) => types.has(goModelName(model.name)))
     .map(
       (model) =>
         `model ${model.name}: its Go name is ${goModelName(model.name)}, the type the models hold a DateTime in; rename the model and keep its table with @@map`,
     )
+}
+
+function standardImports(
+  types: readonly string[],
+  generators: ReadonlySet<string>,
+  needsTime: boolean,
+) {
+  const lists = types.some((name) => name.endsWith('List'))
+  return [
+    generators.has('ulid') ? '"crypto/rand"' : null,
+    lists ? '"database/sql"' : null,
+    types.length > 0 ? '"database/sql/driver"' : null,
+    types.length > 0 ? '"fmt"' : null,
+    types.length > 0 ? '"strconv"' : null,
+    types.includes('TimeOfDay') || lists ? '"strings"' : null,
+    needsTime ? '"time"' : null,
+  ]
 }
 
 export function collectImports(models: readonly DMMF.Model[]) {
@@ -1090,9 +1102,10 @@ export function collectImports(models: readonly DMMF.Model[]) {
     m.fields.some((f) => f.kind !== 'object' && f.type === 'DateTime'),
   )
   const types = dateTypes(models)
-  const lists = types.some((name) => name.endsWith('List'))
   const fillsTimes = models.some((m) =>
-    m.fields.some((f) => createdTimeExpr(f) !== null || (isDateTimeScalar(f) && f.isUpdatedAt)),
+    m.fields.some(
+      (f) => createdTimeExpr(f) !== null || (isDateTimeScalar(f) && f.isUpdatedAt === true),
+    ),
   )
   const needsDatatypes = models.some((m) =>
     m.fields.some((f) => f.kind !== 'object' && f.type === 'Json'),
@@ -1108,15 +1121,7 @@ export function collectImports(models: readonly DMMF.Model[]) {
   )
   // Standard library first, then the modules, each group sorted by path, as
   // gofmt keeps them.
-  const standard = [
-    generators.has('ulid') ? '"crypto/rand"' : null,
-    lists ? '"database/sql"' : null,
-    types.length > 0 ? '"database/sql/driver"' : null,
-    types.length > 0 ? '"fmt"' : null,
-    types.length > 0 ? '"strconv"' : null,
-    types.includes('TimeOfDay') || lists ? '"strings"' : null,
-    needsTime ? '"time"' : null,
-  ]
+  const standard = standardImports(types, generators, needsTime)
   const modules = [
     generators.has('uuid') ? '"github.com/google/uuid"' : null,
     generators.has('cuid') ? '"github.com/lucsky/cuid"' : null,

@@ -47,6 +47,28 @@ async function setup(options: { readonly schema?: string; readonly withIndex?: b
   return { app, state, schemaPath, staticDir }
 }
 
+// A field of a JSON body; a list field as an array and an object field's keys, empty where the
+// field is not one.
+function fieldOf(json: unknown, key: string): unknown {
+  return typeof json === 'object' && json !== null ? Reflect.get(json, key) : undefined
+}
+
+function listOf(json: unknown, key: string): unknown[] {
+  const value = fieldOf(json, key)
+  return Array.isArray(value) ? value : []
+}
+
+function keysOf(json: unknown, key: string): string[] {
+  const value = fieldOf(json, key)
+  return typeof value === 'object' && value !== null ? Object.keys(value) : []
+}
+
+/** The reader of a streamed response body, which an event stream always has. */
+function readerOf(response: Response) {
+  if (response.body === null) throw new Error('no body')
+  return response.body.getReader()
+}
+
 function brokenError(schemaPath: string) {
   return `error: Type "Nope" is neither a built-in type, nor refers to another model, composite type, or enum.\n  -->  ${schemaPath}:2\n   | \n 1 | model User {\n 2 |   id Nope @id\n   | \n\nValidation Error Count: 1`
 }
@@ -166,12 +188,7 @@ describe('createStudioApp', () => {
     })
     expect(response.status).toBe(200)
     const body: unknown = await response.json()
-    const statement =
-      typeof body === 'object' && body !== null && 'statements' in body
-        ? Array.isArray(body.statements)
-          ? body.statements[0]
-          : undefined
-        : undefined
+    const statement = listOf(body, 'statements')[0]
     expect(statement).toMatchObject({
       kind: 'select',
       tables: [
@@ -210,14 +227,7 @@ describe('createStudioApp', () => {
     const response = await app.request('/api/openapi.json')
     expect(response.status).toBe(200)
     const body: unknown = await response.json()
-    const paths =
-      typeof body === 'object' &&
-      body !== null &&
-      'paths' in body &&
-      typeof body.paths === 'object' &&
-      body.paths !== null
-        ? Object.keys(body.paths)
-        : []
+    const paths = keysOf(body, 'paths')
     expect(new Set(paths)).toStrictEqual(
       new Set([
         '/api/client',
@@ -274,8 +284,7 @@ describe('createStudioApp', () => {
     const response = await app.request('/api/schema/events')
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('text/event-stream')
-    const reader = response.body?.getReader()
-    if (!reader) throw new Error('no body')
+    const reader = readerOf(response)
     const chunk = await reader.read()
     await reader.cancel()
     expect(new TextDecoder().decode(chunk.value)).toBe(
@@ -286,8 +295,7 @@ describe('createStudioApp', () => {
   it('streams a change event after a reload', async () => {
     const { app, state, schemaPath } = await setup()
     const response = await app.request('/api/schema/events')
-    const reader = response.body?.getReader()
-    if (!reader) throw new Error('no body')
+    const reader = readerOf(response)
     await reader.read()
     writeFileSync(schemaPath, `${SCHEMA}\nmodel Post {\n  id Int @id\n}\n`)
     const next = await reloadState(state)

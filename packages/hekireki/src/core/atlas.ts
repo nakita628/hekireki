@@ -24,7 +24,11 @@ export function atlas(options: GeneratorOptions) {
       })
     }
     const schemaName = getString(options.generator.config?.['schemaName'])
-    const content = atlasSchema(options.dmmf.datamodel, provider, { schemaName })
+    const content = atlasSchema(
+      options.dmmf.datamodel,
+      provider,
+      schemaName === undefined ? {} : { schemaName },
+    )
     const resolved = outputFile(output, 'schema.hcl')
     return yield* emitRaw(content, resolved.dir, resolved.file)
   })

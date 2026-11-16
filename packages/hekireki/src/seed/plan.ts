@@ -100,9 +100,9 @@ function uniqueSets(model: DMMF.Model) {
     ...model.uniqueFields,
   ]
   const all: readonly (readonly string[])[] = [...singles, ...composite]
-  return all.filter(
-    (set, index) => all.findIndex((other) => other.join(' ') === set.join(' ')) === index,
-  )
+  // Entries in reverse, so each key ends up at the index it first appears at.
+  const first = new Map(all.map((set, index) => [set.join(' '), index] as const).toReversed())
+  return all.filter((set, index) => first.get(set.join(' ')) === index)
 }
 
 /** The scalar fields other models' foreign keys point at, so their values must exist. */
@@ -138,6 +138,7 @@ function makeModelTable(
       isList: f.isList,
       enumValues: f.kind === 'enum' ? enumMembers(enums, f.type) : null,
     }))
+  const uniqueKeys = new Set(uniques.map((set) => [...set].toSorted().join(' ')))
   const foreignKeys = model.fields.filter(isForeignKeyField).map((f) => {
     const fromFields = f.relationFromFields ?? []
     const key = [...fromFields].toSorted().join(' ')
@@ -147,7 +148,7 @@ function makeModelTable(
       toModel: f.type,
       toFields: f.relationToFields ?? [],
       required: f.isRequired,
-      oneToOne: uniques.some((set) => [...set].toSorted().join(' ') === key),
+      oneToOne: uniqueKeys.has(key),
       self: f.type === model.name,
     }
   })
@@ -186,9 +187,10 @@ function joinSide(
 
 /** Every implicit many-to-many relation once, as the join table Prisma creates for it. */
 function makeJoinTables(models: readonly DMMF.Model[], enums: readonly DMMF.DatamodelEnum[]) {
+  const byName = new Map(models.map((m) => [m.name, m]))
   return models.flatMap((model) =>
     model.fields.filter(isImplicitListField).flatMap((field): readonly JoinTable[] => {
-      const other = models.find((m) => m.name === field.type)
+      const other = byName.get(field.type)
       const inverse = backRelation(field, model, models)
       if (other === undefined || inverse === undefined || !inverse.isList) return []
       // Emitted from the side that sorts first; a self relation is emitted from its first field.
@@ -287,7 +289,8 @@ export function makeSeedPlan(datamodel: DMMF.Datamodel) {
         message: `Required relations form a cycle: ${visited.cycle}.\n   Make one of them optional so the seeder can insert the models in order.`,
       })
     }
-    const ordered = visited.order.flatMap((name) => tables.filter((table) => table.name === name))
+    const byName = Map.groupBy(tables, (table) => table.name)
+    const ordered = visited.order.flatMap((name) => byName.get(name) ?? [])
     const all: readonly SeedTable[] = [
       ...ordered,
       ...makeJoinTables(datamodel.models, datamodel.enums),

@@ -36,6 +36,26 @@ const FORBIDDEN_IMPORTS = {
     handlers: 'Services sit below usecases; they do not call back up.',
   },
 }
+const DOMAIN_IO_CALLS = new Set([
+  'fetch',
+  'setTimeout',
+  'setInterval',
+  'setImmediate',
+  'queueMicrotask',
+  'require',
+])
+const DOMAIN_IO_OBJECTS = new Set(['console', 'process', 'window', 'document', 'globalThis'])
+const RAW_REQUEST_READERS = new Set([
+  'json',
+  'param',
+  'query',
+  'queries',
+  'parseBody',
+  'formData',
+  'text',
+  'arrayBuffer',
+  'blob',
+])
 const DOMAIN_ALLOWED = [
   /^zod(\/.*)?$/u,
   /^acorn$/u,
@@ -258,15 +278,6 @@ export const layerRules = {
     },
     create(context) {
       if (TEST_FILE.test(filenameOf(context))) return {}
-      const ioCalls = new Set([
-        'fetch',
-        'setTimeout',
-        'setInterval',
-        'setImmediate',
-        'queueMicrotask',
-        'require',
-      ])
-      const ioObjects = new Set(['console', 'process', 'window', 'document', 'globalThis'])
       const tail =
         'Domain functions take values and return values; do this in a service and pass the result in.'
       function reportAsync(node) {
@@ -279,12 +290,12 @@ export const layerRules = {
       }
       return {
         CallExpression(node) {
-          if (node.callee.type === 'Identifier' && ioCalls.has(node.callee.name)) {
+          if (node.callee.type === 'Identifier' && DOMAIN_IO_CALLS.has(node.callee.name)) {
             context.report({ node, message: `\`${node.callee.name}()\` in domain. ${tail}` })
           }
         },
         MemberExpression(node) {
-          if (node.object.type === 'Identifier' && ioObjects.has(node.object.name)) {
+          if (node.object.type === 'Identifier' && DOMAIN_IO_OBJECTS.has(node.object.name)) {
             context.report({ node, message: `\`${node.object.name}\` in domain. ${tail}` })
           }
         },
@@ -390,17 +401,6 @@ export const layerRules = {
     },
     create(context) {
       if (TEST_FILE.test(filenameOf(context))) return {}
-      const rawReaders = new Set([
-        'json',
-        'param',
-        'query',
-        'queries',
-        'parseBody',
-        'formData',
-        'text',
-        'arrayBuffer',
-        'blob',
-      ])
       return {
         CallExpression(node) {
           const method = requestMethod(node)
@@ -414,7 +414,7 @@ export const layerRules = {
             })
             return
           }
-          if (!rawReaders.has(method)) return
+          if (!RAW_REQUEST_READERS.has(method)) return
           context.report({
             node,
             message: `\`c.req.${method}()\` reads the request before validation. Declare the input in main.tsp and read it as \`const data = c.req.valid('...')\`.`,

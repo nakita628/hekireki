@@ -220,6 +220,11 @@ function run(
 }
 
 /** The message of a failure, whichever way it failed. */
+function defined<T>(value: T | undefined) {
+  if (value === undefined) throw new Error('expected a value')
+  return value
+}
+
 function failure(exit: Exit.Exit<unknown, unknown>) {
   return Exit.isFailure(exit) ? String(exit.cause) : ''
 }
@@ -451,7 +456,8 @@ describe('generator config', () => {
   it('refuses @db.Timetz for SeaORM and writes nothing', async () => {
     const dir = tmp()
     const base = options(dir)
-    const [user, ...rest] = base.dmmf.datamodel.models
+    const [first, ...rest] = base.dmmf.datamodel.models
+    const user = defined(first)
     const withTimetz = {
       ...base,
       dmmf: {
@@ -461,7 +467,7 @@ describe('generator config', () => {
             {
               ...user,
               fields: [
-                ...(user?.fields ?? []),
+                ...user.fields,
                 {
                   name: 'opens',
                   kind: 'scalar',

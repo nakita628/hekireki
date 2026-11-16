@@ -53,10 +53,10 @@ function makeIndex(index: {
   const columns = index.columns.length > 1 ? `(${index.columns.join(', ')})` : index.columns[0]
 
   const constraints = [
-    index.isPrimaryKey && 'pk',
-    index.isUnique && 'unique',
-    index.name && `name: '${index.name}'`,
-  ].filter((c): c is string => Boolean(c))
+    ...(index.isPrimaryKey === true ? ['pk'] : []),
+    ...(index.isUnique === true ? ['unique'] : []),
+    ...(index.name === undefined ? [] : [`name: '${index.name}'`]),
+  ]
 
   return `    ${columns}${formatConstraints(constraints)}`
 }
@@ -77,16 +77,16 @@ function makeRef(ref: {
   readonly toTable: string
   readonly toColumn: string
   readonly type?: '>' | '<' | '-'
-  readonly onDelete?: string
-  readonly onUpdate?: string
+  readonly onDelete?: string | undefined
+  readonly onUpdate?: string | undefined
 }) {
   const name = makeRefName(ref)
   const operator = ref.type ?? '>'
 
   const actions = [
-    ref.onDelete && `delete: ${toDbmlAction(ref.onDelete)}`,
-    ref.onUpdate && `update: ${toDbmlAction(ref.onUpdate)}`,
-  ].filter((a): a is string => Boolean(a))
+    ...(ref.onDelete === undefined ? [] : [`delete: ${toDbmlAction(ref.onDelete)}`]),
+    ...(ref.onUpdate === undefined ? [] : [`update: ${toDbmlAction(ref.onUpdate)}`]),
+  ]
 
   const actionStr = actions.length > 0 ? ` [${actions.join(', ')}]` : ''
 
@@ -100,17 +100,17 @@ function makePrismaColumn(column: {
   readonly isUnique?: boolean
   readonly isNotNull?: boolean
   readonly isIncrement?: boolean
-  readonly defaultValue?: string
-  readonly note?: string
+  readonly defaultValue?: string | undefined
+  readonly note?: string | undefined
 }) {
   const constraints = [
-    column.isPrimaryKey && 'pk',
-    column.isIncrement && 'increment',
-    column.defaultValue !== undefined && `default: ${column.defaultValue}`,
-    column.isUnique && 'unique',
-    column.isNotNull && 'not null',
-    column.note && `note: ${noteLiteral(column.note)}`,
-  ].filter((c): c is string => Boolean(c))
+    ...(column.isPrimaryKey === true ? ['pk'] : []),
+    ...(column.isIncrement === true ? ['increment'] : []),
+    ...(column.defaultValue === undefined ? [] : [`default: ${column.defaultValue}`]),
+    ...(column.isUnique === true ? ['unique'] : []),
+    ...(column.isNotNull === true ? ['not null'] : []),
+    ...(column.note === undefined ? [] : [`note: ${noteLiteral(column.note)}`]),
+  ]
 
   return `  ${column.name} ${column.type}${formatConstraints(constraints)}`
 }
@@ -129,7 +129,7 @@ function toDBMLColumn(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]) {
   const enumDef = field.kind === 'enum' ? enums.find((e) => e.name === field.type) : undefined
 
   const baseType = enumDef ? dbNameOf(enumDef) : field.type
-  const type = field.isList && !field.relationName ? `${baseType}[]` : baseType
+  const type = field.isList && field.relationName === undefined ? `${baseType}[]` : baseType
 
   const defaultValue = (() => {
     if (defaultName === 'autoincrement') return undefined
@@ -165,9 +165,10 @@ function toDBMLColumn(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[]) {
  * and no `Ref` in the DBML.
  */
 function joinTables(models: readonly DMMF.Model[]) {
+  const modelByName = new Map(models.map((m) => [m.name, m]))
   return implicitJoinTables(models).flatMap((pair) => {
-    const left = models.find((m) => m.name === pair.left)
-    const right = models.find((m) => m.name === pair.right)
+    const left = modelByName.get(pair.left)
+    const right = modelByName.get(pair.right)
     const leftId = left?.fields.find((f) => f.isId)
     const rightId = right?.fields.find((f) => f.isId)
     if (!(left && right && leftId && rightId)) return []
@@ -204,7 +205,7 @@ export function makeTables(
     const modelName = dbNameOf(model)
 
     const columns = model.fields
-      .filter((field) => !field.relationName)
+      .filter((field) => field.relationName === undefined)
       .map((field) => toDBMLColumn(field, enums))
     const columnLines = columns.map(makePrismaColumn).join('\n')
 
@@ -221,7 +222,7 @@ export function makeTables(
       indexes.length > 0 ? `\n\n  indexes {\n${indexes.map(makeIndex).join('\n')}\n  }` : ''
 
     const strippedNote = stripAnnotations(model.documentation)
-    const noteBlock = strippedNote ? `\n\n  Note: ${noteLiteral(strippedNote)}` : ''
+    const noteBlock = strippedNote !== undefined ? `\n\n  Note: ${noteLiteral(strippedNote)}` : ''
 
     return `Table ${modelName} {\n${columnLines}${indexBlock}${noteBlock}\n}`
   })
@@ -253,20 +254,23 @@ export function makeRelations(models: readonly DMMF.Model[]) {
       })
     }),
   )
+  const modelByName = new Map(models.map((m) => [m.name, m]))
   const refs = models.flatMap((model) =>
     model.fields
       .filter(
         (field) =>
-          field.relationName && field.relationToFields?.length && field.relationFromFields?.length,
+          field.relationName !== undefined &&
+          (field.relationToFields?.length ?? 0) > 0 &&
+          (field.relationFromFields?.length ?? 0) > 0,
       )
       .map((field) => {
         const relationTo = field.type
 
-        const toModel = models.find((m) => m.name === relationTo)
+        const toModel = modelByName.get(relationTo)
         // The back relation is the other field of the same relation, not merely the first field
         // pointing back at this model, nor a relation of the same name to another model.
         const toField = backRelation(field, model, models)
-        const operator: '>' | '<' | '-' = toField?.isList ? '>' : '-'
+        const operator: '>' | '<' | '-' = toField?.isList === true ? '>' : '-'
 
         const relationFromName = dbNameOf(model)
         const relationToName = toModel ? dbNameOf(toModel) : relationTo

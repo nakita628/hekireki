@@ -25,6 +25,16 @@ import {
 } from '../services/index.js'
 import { loadSnapshot } from '../usecases/index.js'
 
+// A field of a JSON body, and a list field as an array (empty where it is not one).
+function fieldOf(json: unknown, key: string): unknown {
+  return typeof json === 'object' && json !== null ? Reflect.get(json, key) : undefined
+}
+
+function listOf(json: unknown, key: string): any[] {
+  const value = fieldOf(json, key)
+  return Array.isArray(value) ? value : []
+}
+
 const dirs: string[] = []
 const clients: ReturnType<typeof createProjectClient>[] = []
 
@@ -384,9 +394,10 @@ describe('client routes', () => {
       }),
     ])
     const statementsOf = (json: unknown) =>
-      typeof json === 'object' && json !== null && 'queries' in json && Array.isArray(json.queries)
-        ? json.queries.map((query: { sql: string; params: unknown[] }) => [query.sql, query.params])
-        : []
+      listOf(json, 'queries').map((query: { sql: string; params: unknown[] }) => [
+        query.sql,
+        query.params,
+      ])
     // Each call lists the two statements it sent, and none of the other's.
     expect(statementsOf(ann.json)).toStrictEqual([
       ['SELECT 1 FROM "User" WHERE "email" = ?', ['ann']],
@@ -409,9 +420,10 @@ describe('client routes', () => {
       }),
     ])
     const statementsOf = (json: unknown) =>
-      typeof json === 'object' && json !== null && 'queries' in json && Array.isArray(json.queries)
-        ? json.queries.map((query: { sql: string; params: unknown[] }) => [query.sql, query.params])
-        : []
+      listOf(json, 'queries').map((query: { sql: string; params: unknown[] }) => [
+        query.sql,
+        query.params,
+      ])
     expect(statementsOf(previewed.json)).toStrictEqual([
       ['SELECT 1 FROM "User" WHERE "email" = ?', ['ann']],
       ['SELECT 2 FROM "User" WHERE "email" = ?', ['ann']],
@@ -458,9 +470,7 @@ describe('client routes', () => {
   it('answers two questions about different texts that arrive together, each about its own text', async () => {
     const { call } = await setup({ client: projectClient })
     const labels = (json: unknown) =>
-      typeof json === 'object' && json !== null && 'items' in json && Array.isArray(json.items)
-        ? json.items.map((item: { label: string }) => item.label)
-        : []
+      listOf(json, 'items').map((item: { label: string }) => item.label)
     // The members of the client, and those of one of its arrays: two answers with nothing in common.
     const [client, array] = await Promise.all([
       call('/api/client/complete', { query: 'prisma.', offset: 7 }),
@@ -539,13 +549,7 @@ describe('client routes', () => {
     const { call } = await setup({ client: projectClient })
     const completions = await call('/api/client/complete', { query: 'prisma.', offset: 7 })
     expect(completions.status).toBe(200)
-    const items =
-      typeof completions.json === 'object' &&
-      completions.json !== null &&
-      'items' in completions.json &&
-      Array.isArray(completions.json.items)
-        ? completions.json.items
-        : []
+    const items = listOf(completions.json, 'items')
     expect(items).toContainEqual({
       label: 'user',
       kind: 'property',
@@ -617,9 +621,7 @@ describe('client routes', () => {
     const { call, dir } = await setup({ client: projectClient })
     const before = await call('/api/client/complete', { query: 'prisma.', offset: 7 })
     const labels = (json: unknown) =>
-      typeof json === 'object' && json !== null && 'items' in json && Array.isArray(json.items)
-        ? json.items.map((item: { label: string }) => item.label)
-        : []
+      listOf(json, 'items').map((item: { label: string }) => item.label)
     expect(labels(before.json)).not.toContain('post')
     const file = path.join(dir, 'generated', 'client', 'client.ts')
     writeFileSync(
@@ -765,12 +767,8 @@ describe('client routes', () => {
     })
     expect(status).toBe(200)
     expect(json).toMatchObject({ rowCount: 600, truncated: true })
-    const result =
-      typeof json === 'object' && json !== null && 'result' in json ? json.result : null
-    expect(Array.isArray(result) ? [result.length, result.at(-1)] : null).toStrictEqual([
-      500,
-      { id: 499 },
-    ])
+    const result = listOf(json, 'result')
+    expect([result.length, result.at(-1)]).toStrictEqual([500, { id: 499 }])
   })
 
   it('reports an operation that throws before it is sent, and skips events that are not statements', async () => {

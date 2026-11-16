@@ -132,6 +132,16 @@ function token(kind: TokenKind, raw: string, text: string, start: number, end: n
 }
 
 function step(text: string, at: number, previous: Token | null): Step {
+  return (
+    skipStep(text, at) ??
+    quotedStep(text, at, previous) ??
+    paramStep(text, at, previous) ??
+    plainStep(text, at)
+  )
+}
+
+/** Whitespace and comments, which leave no token. */
+function skipStep(text: string, at: number): Step | null {
   const char = text[at] ?? ''
   if (isSpace(char)) return { skip: at + 1 }
   if (char === '-' && text[at + 1] === '-') {
@@ -143,6 +153,12 @@ function step(text: string, at: number, previous: Token | null): Step {
     if (end === -1) return { error: { message: 'Unterminated block comment', offset: at } }
     return { skip: end + 2 }
   }
+  return null
+}
+
+/** A string literal or a quoted identifier. */
+function quotedStep(text: string, at: number, previous: Token | null): Step | null {
+  const char = text[at] ?? ''
   if (char === "'") {
     const end = readDelimited(text, at, "'", true)
     if (end === null) return { error: { message: 'Unterminated string literal', offset: at } }
@@ -161,6 +177,12 @@ function step(text: string, at: number, previous: Token | null): Step {
     const raw = text.slice(at, end)
     return token('quoted', raw, unquote(raw, ']', false), at, end)
   }
+  return null
+}
+
+/** A placeholder (`$1`, `?`, `:name`, `@name`), or a dollar-quoted string. */
+function paramStep(text: string, at: number, previous: Token | null): Step | null {
+  const char = text[at] ?? ''
   if (char === '$') {
     const dollar = readDollarQuoted(text, at)
     if (dollar !== null) {
@@ -168,7 +190,7 @@ function step(text: string, at: number, previous: Token | null): Step {
       return token('string', raw, raw.slice(dollar.tag.length, -dollar.tag.length), at, dollar.end)
     }
     const end = readWord(text, at + 1)
-    if (end > at + 1) return token('param', text.slice(at, end), text.slice(at, end), at, end)
+    return end > at + 1 ? token('param', text.slice(at, end), text.slice(at, end), at, end) : null
   }
   if (char === '?') {
     const end = readWord(text, at + 1)
@@ -184,6 +206,12 @@ function step(text: string, at: number, previous: Token | null): Step {
     const end = readWord(text, at + 1)
     return token('param', text.slice(at, end), text.slice(at, end), at, end)
   }
+  return null
+}
+
+/** A number, a word, punctuation or an operator; anything else is an error. */
+function plainStep(text: string, at: number): Step {
+  const char = text[at] ?? ''
   if (isDigit(char) || (char === '.' && isDigit(text[at + 1] ?? ''))) {
     const end = readNumber(text, at)
     return token('number', text.slice(at, end), text.slice(at, end), at, end)

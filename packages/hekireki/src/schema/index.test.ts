@@ -16,6 +16,18 @@ afterEach(() => {
   }
 })
 
+/** The schema files of a directory, relative to it, and the models they declare. */
+function readModels(dir: string) {
+  return Effect.gen(function* () {
+    const files = yield* readSchemaFiles(dir)
+    const { dmmf } = yield* parseSchema(files)
+    return {
+      files: files.map((f) => path.relative(dir, f.path)),
+      models: dmmf.datamodel.models.map((m) => m.name),
+    }
+  })
+}
+
 // hekireki seed, hekireki migrate and Studio read a schema directory as Prisma does: down through
 // its subdirectories, so `User.posts` finds the Post kept in `models/`.
 describe('readSchemaFiles', () => {
@@ -32,14 +44,7 @@ describe('readSchemaFiles', () => {
       'model Post {\n  id     Int  @id\n  userId Int\n  user   User @relation(fields: [userId], references: [id])\n}\n',
     )
     const models = await Effect.runPromise(
-      Effect.gen(function* () {
-        const files = yield* readSchemaFiles(dir)
-        const { dmmf } = yield* parseSchema(files)
-        return {
-          files: files.map((f) => path.relative(dir, f.path)),
-          models: dmmf.datamodel.models.map((m) => m.name),
-        }
-      }).pipe(Effect.provide(NodeFileSystem.layer)),
+      readModels(dir).pipe(Effect.provide(NodeFileSystem.layer)),
     )
     expect(models).toStrictEqual({
       files: ['main.prisma', path.join('models', 'post.prisma')],

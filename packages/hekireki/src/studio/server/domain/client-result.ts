@@ -13,13 +13,22 @@ type JsonValue =
 
 function jsonOf(value: unknown): JsonValue {
   if (value === null || value === undefined) return null
-  if (typeof value === 'string' || typeof value === 'boolean') return value
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null
-  if (typeof value === 'bigint') return value.toString()
+  if (typeof value !== 'object') return primitiveJsonOf(value)
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString()
   if (value instanceof Uint8Array) return Buffer.from(value).toString('base64')
   if (Array.isArray(value)) return value.map((item: unknown) => jsonOf(item))
-  if (typeof value !== 'object') return null
+  return objectJsonOf(value)
+}
+
+// A string, boolean, finite number or bigint as JSON; anything else has no JSON form.
+function primitiveJsonOf(value: unknown): JsonValue {
+  if (typeof value === 'string' || typeof value === 'boolean') return value
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'bigint') return value.toString()
+  return null
+}
+
+function objectJsonOf(value: object): JsonValue {
   const prototype: unknown = Object.getPrototypeOf(value)
   if (prototype === Object.prototype || prototype === null) {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, jsonOf(item)]))

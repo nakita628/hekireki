@@ -160,13 +160,15 @@ export function toTsType(dialect: Dialect, dataType: string) {
   }
 }
 
+const LITERAL_TYPES: {
+  readonly [kind in 'string' | 'number' | 'boolean']: { readonly [dialect in Dialect]: string }
+} = {
+  string: { sqlite: 'TEXT', mysql: 'varchar', postgresql: 'text' },
+  number: { sqlite: 'INTEGER', mysql: 'int', postgresql: 'int4' },
+  boolean: { sqlite: 'INTEGER', mysql: 'tinyint', postgresql: 'bool' },
+}
+
 /** The declared type a literal of the expression kind would have in the dialect, for the type column of the picture. */
 export function literalDataType(dialect: Dialect, kind: 'string' | 'number' | 'boolean') {
-  if (kind === 'string') {
-    return dialect === 'sqlite' ? 'TEXT' : dialect === 'mysql' ? 'varchar' : 'text'
-  }
-  if (kind === 'number') {
-    return dialect === 'sqlite' ? 'INTEGER' : dialect === 'mysql' ? 'int' : 'int4'
-  }
-  return dialect === 'postgresql' ? 'bool' : dialect === 'mysql' ? 'tinyint' : 'INTEGER'
+  return LITERAL_TYPES[kind][dialect]
 }

@@ -15,12 +15,12 @@ export function touchedHighlight(
     readonly fields: readonly { readonly name: string; readonly dbName?: string | null }[]
   }[],
 ) {
+  const byName = new Map(models.map((entry) => [entry.name, entry]))
   const tables = touched.flatMap(({ model, fields }) => {
-    const declared = models.find((entry) => entry.name === model)
+    const declared = byName.get(model)
     if (declared === undefined) return []
-    const columns = fields.map((name) =>
-      (declared.fields.find((field) => field.name === name)?.dbName ?? name).toLowerCase(),
-    )
+    const fieldsByName = new Map(declared.fields.map((field) => [field.name, field]))
+    const columns = fields.map((name) => (fieldsByName.get(name)?.dbName ?? name).toLowerCase())
     return [[(declared.dbName ?? declared.name).toLowerCase(), new Set(columns)] as const]
   })
   return tables.length === 0 ? null : new Map(tables)

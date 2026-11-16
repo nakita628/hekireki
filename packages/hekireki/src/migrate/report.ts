@@ -63,29 +63,16 @@ export function checkBanner(report: Effect.Success<ReturnType<typeof runMigrateC
           '',
           `   Fixes from ${path.relative(process.cwd(), report.decisionsPath) || report.decisionsPath}, counted in: the checks read the rows as they leave them`,
           ...report.fixes.map((fix) => {
-            const found =
-              fix.rows === null
-                ? `not counted: ${fix.error ?? ''}`
-                : fix.rows === 0
-                  ? 'nothing to fix: drop it once the migration has shipped'
-                  : plural(fix.rows, 'row')
+            const found = rowsFound(fix)
             return `   ${fix.rows === null ? '?' : '✓'} ${fix.subject.padEnd(fixWidth)}  ${fix.action.padEnd(actionWidth)}  ${found}`
           }),
           ...renamed.map(
             (rename) =>
               `   ✓ ${rename.subject.padEnd(fixWidth)}  ${rename.action.padEnd(actionWidth)}  in the migration`,
           ),
-          inMigration.every(Boolean)
-            ? '   `hekireki migrate plan --migration` writes them into the migration Prisma wrote.'
-            : inMigration.some(Boolean)
-              ? '   `hekireki migrate plan --migration` writes them as SQL: renames, conversions, fills and new enum members into the migration Prisma wrote, the rest before it.'
-              : '   `hekireki migrate plan` writes them as SQL to run before the migration.',
+          planHint(inMigration),
         ]
-  const headline = summary.ok
-    ? summary.warning === 0
-      ? `⚡️ Migration check: the data is ready for this schema (${plural(summary.passed + summary.guaranteed, 'check')})`
-      : `⚡️ Migration check: nothing blocks, ${plural(summary.warning, 'warning')}`
-    : `⚡️ Migration check: ${plural(summary.blocking, 'blocking problem')}${summary.failed === 0 ? '' : `, ${summary.failed} not checked`}${summary.warning === 0 ? '' : `, ${plural(summary.warning, 'warning')}`}`
+  const headline = headlineOf(summary)
   return [
     headline,
     `   Schema: ${report.schemaPath}`,
@@ -130,4 +117,34 @@ export function checkJson(report: Effect.Success<ReturnType<typeof runMigrateChe
     null,
     2,
   )
+}
+
+/** What the check found of a fix's rows. */
+function rowsFound(fix: {
+  readonly rows: number | null
+  readonly error?: string | null | undefined
+}) {
+  if (fix.rows === null) return `not counted: ${fix.error ?? ''}`
+  return fix.rows === 0
+    ? 'nothing to fix: drop it once the migration has shipped'
+    : plural(fix.rows, 'row')
+}
+
+/** Which command writes the fixes, by whether they go into the migration, before it, or both. */
+function planHint(inMigration: readonly boolean[]) {
+  if (inMigration.every(Boolean)) {
+    return '   `hekireki migrate plan --migration` writes them into the migration Prisma wrote.'
+  }
+  return inMigration.some(Boolean)
+    ? '   `hekireki migrate plan --migration` writes them as SQL: renames, conversions, fills and new enum members into the migration Prisma wrote, the rest before it.'
+    : '   `hekireki migrate plan` writes them as SQL to run before the migration.'
+}
+
+function headlineOf(summary: ReturnType<typeof summarize>) {
+  if (!summary.ok) {
+    return `⚡️ Migration check: ${plural(summary.blocking, 'blocking problem')}${summary.failed === 0 ? '' : `, ${summary.failed} not checked`}${summary.warning === 0 ? '' : `, ${plural(summary.warning, 'warning')}`}`
+  }
+  return summary.warning === 0
+    ? `⚡️ Migration check: the data is ready for this schema (${plural(summary.passed + summary.guaranteed, 'check')})`
+    : `⚡️ Migration check: nothing blocks, ${plural(summary.warning, 'warning')}`
 }

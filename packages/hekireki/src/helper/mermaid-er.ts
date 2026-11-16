@@ -58,7 +58,7 @@ function keyMarkers(
 export function modelFields(model: DMMF.Model) {
   const fkFields = new Set(
     model.fields
-      .filter((f) => f.relationFromFields && f.relationFromFields.length > 0)
+      .filter((f) => (f.relationFromFields?.length ?? 0) > 0)
       .flatMap((f) => f.relationFromFields ?? []),
   )
   const primaryKey = new Set(model.primaryKey?.fields)
@@ -68,7 +68,7 @@ export function modelFields(model: DMMF.Model) {
 
   return model.fields
     .map((field) => {
-      if (field.relationName) return null
+      if (field.relationName !== undefined) return null
       const commentPart = stripAnnotations(field.documentation) ?? ''
       const markers = keyMarkers(field, primaryKey, fkFields, uniques)
       const keyPart = markers.length > 0 ? ` ${markers.join(', ')}` : ''

@@ -71,9 +71,10 @@ export function makeAjvRelations(
         `    ${r.key}: ${r.isMany ? `{ type: 'array' as const, items: ${r.targetModel}Schema }` : `${r.targetModel}Schema`},`,
     )
     .join('\n')
-  const typeLine = options?.includeType
-    ? `\n\nexport type ${model.name}Relations = FromSchema<typeof ${model.name}RelationsSchema>`
-    : ''
+  const typeLine =
+    options?.includeType === true
+      ? `\n\nexport type ${model.name}Relations = FromSchema<typeof ${model.name}RelationsSchema>`
+      : ''
   return `export const ${model.name}RelationsSchema = {\n  type: 'object' as const,\n  properties: {\n${base}\n${rels}\n  },\n  additionalProperties: false,\n} as const${typeLine}`
 }
 
@@ -103,7 +104,7 @@ export function ajvSchemaCode(
     inferType: makeAjvInfer,
     schemas: makeAjvSchemas,
     typeMapping: PRISMA_TO_AJV,
-    enums,
+    ...(enums === undefined ? {} : { enums }),
     formatEnum: makeAjvEnumExpression,
     wrapList: makeAjvListExpression,
   })

@@ -21,7 +21,7 @@ export function makePropertiesGenerator(
     }[],
   ) {
     return modelFields
-      .filter((field) => field.validation)
+      .filter((field) => field.validation !== null && field.validation !== '')
       .map((field) => {
         const base = `${libraryPrefix}.${field.validation}`
         const wrapped = wrapCardinality ? wrapCardinality(base, field.isRequired) : base
@@ -83,7 +83,7 @@ export function validationSchemas(
   const resolveElement = (field: { readonly type: string; readonly kind: string }) => {
     if (config.typeMapping) {
       const mapped = config.typeMapping[field.type]
-      if (mapped) return mapped
+      if (mapped !== undefined && mapped !== '') return mapped
     }
     if (config.enums && config.formatEnum && field.kind === 'enum') {
       const enumDef = config.enums.find((e) => e.name === field.type)
@@ -118,16 +118,14 @@ export function validationSchemas(
   )
 
   if (config.onWarning) {
+    const enumNames = new Set((config.enums ?? []).map((e) => e.name))
     const missing = models.flatMap((model) =>
       model.fields
         .filter((f) => f.kind !== 'object')
         .filter((f) => {
           if (config.extractValidation(f.documentation) !== null) return false
-          if (config.typeMapping?.[f.type]) return false
-          if (config.enums && f.kind === 'enum' && config.enums.some((e) => e.name === f.type)) {
-            return false
-          }
-          return true
+          if ((config.typeMapping?.[f.type] ?? '') !== '') return false
+          return !(f.kind === 'enum' && enumNames.has(f.type))
         })
         .map((f) => ({ modelName: model.name, fieldName: f.name })),
     )

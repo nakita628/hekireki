@@ -35,6 +35,13 @@ enum Role {
 }
 `
 
+/** The entry of that name, which the fixture has. */
+function named<T extends { readonly name: string }>(items: readonly T[], name: string): T {
+  const item = items.find((entry) => entry.name === name)
+  if (item === undefined) throw new Error(`fixture: no ${name}`)
+  return item
+}
+
 function docsOf(content: string) {
   const { dmmf } = Effect.runSync(
     parseSchemaFiles({ files: [{ path: 'schema.prisma', content }], diagnostics: [] }),
@@ -45,15 +52,15 @@ function docsOf(content: string) {
 describe('makeDocs', () => {
   it('renders models with directives, fields and every client operation', () => {
     const docs = docsOf(SCHEMA)
-    const user = docs.models.find((m) => m.name === 'User')
+    const user = named(docs.models, 'User')
     expect(docs.models.map((m) => m.name)).toStrictEqual(['User', 'Post'])
-    expect(user?.documentation).toBe('A registered account')
+    expect(user.documentation).toBe('A registered account')
     // As on the original page: `@@unique` comes from uniqueFields and `@@index` from uniqueIndexes.
-    expect(user?.directives).toStrictEqual([
+    expect(user.directives).toStrictEqual([
       { name: '@@unique', values: ['email', 'role'] },
       { name: '@@index', values: ['email', 'role'] },
     ])
-    expect(user?.fields.map((f) => [f.name, f.type, f.directives, f.required])).toStrictEqual([
+    expect(user.fields.map((f) => [f.name, f.type, f.directives, f.required])).toStrictEqual([
       ['id', 'Int', ['@id', '@default(autoincrement())'], true],
       ['email', 'String', ['@unique'], true],
       ['role', 'Role', ['@default(VIEWER)'], true],
@@ -62,9 +69,9 @@ describe('makeDocs', () => {
       ['updatedAt', 'DateTime', ['@updatedAt'], true],
       ['posts', 'Post[]', [], true],
     ])
-    expect(user?.fields[1]?.documentation).toBe('Sign-in address')
+    expect(user.fields[1]?.documentation).toBe('Sign-in address')
     // The kind decides what the page links to: relations to the output type, enums to the enum.
-    expect(user?.fields.map((f) => f.kind)).toStrictEqual([
+    expect(user.fields.map((f) => f.kind)).toStrictEqual([
       'scalar',
       'scalar',
       'enum',
@@ -73,7 +80,7 @@ describe('makeDocs', () => {
       'scalar',
       'object',
     ])
-    expect(user?.operations.map((op) => op.name)).toStrictEqual([
+    expect(user.operations.map((op) => op.name)).toStrictEqual([
       'findUnique',
       'findFirst',
       'findMany',
@@ -84,18 +91,18 @@ describe('makeDocs', () => {
       'delete',
       'deleteMany',
     ])
-    const findUnique = user?.operations[0]
-    expect(findUnique?.description).toBe('Find zero or one User')
-    expect(findUnique?.usage).toBe(
+    const findUnique = named(user.operations, 'findUnique')
+    expect(findUnique.description).toBe('Find zero or one User')
+    expect(findUnique.usage).toBe(
       '// Get one User\nconst user = await prisma.user.findUnique({\n  where: {\n    // ... provide filter here\n  }\n})',
     )
-    expect(findUnique?.inputs?.map((i) => [i.name, i.required])).toStrictEqual([['where', true]])
-    expect(findUnique?.inputs?.[0]?.types).toStrictEqual([
+    expect(findUnique.inputs?.map((i) => [i.name, i.required])).toStrictEqual([['where', true]])
+    expect(findUnique.inputs?.[0]?.types).toStrictEqual([
       { type: 'UserWhereUniqueInput', isList: false, location: 'inputObjectTypes' },
     ])
-    expect(findUnique?.output).toStrictEqual({ type: 'User', required: false, list: false })
-    const findMany = user?.operations[2]
-    expect(findMany?.output).toStrictEqual({ type: 'User', required: true, list: true })
+    expect(findUnique.output).toStrictEqual({ type: 'User', required: false, list: false })
+    const findMany = named(user.operations, 'findMany')
+    expect(findMany.output).toStrictEqual({ type: 'User', required: true, list: true })
   })
 
   it('lists the client input and output types', () => {
@@ -109,7 +116,8 @@ describe('makeDocs', () => {
       ?.fields.find((f) => f.name === 'role')
     expect(role?.types).toStrictEqual([{ type: 'Role', isList: false, location: 'enumTypes' }])
     expect(docs.outputTypes.slice(0, 2).map((t) => t.name)).toStrictEqual(['User', 'Post'])
-    expect(docs.outputTypes.some((t) => t.name === 'Query' || t.name === 'Mutation')).toBe(false)
+    expect(docs.outputTypes.map((t) => t.name)).not.toContain('Query')
+    expect(docs.outputTypes.map((t) => t.name)).not.toContain('Mutation')
     const user = docs.outputTypes.find((t) => t.name === 'User')
     expect(user?.fields.find((f) => f.name === 'email')).toStrictEqual({
       name: 'email',
@@ -131,12 +139,15 @@ describe('makeDocs', () => {
       ...names,
     ])
     const refs = [
-      ...docs.inputTypes.flatMap((t) => t.fields.flatMap((f) => f.types)),
-      ...docs.outputTypes.flatMap((t) => t.fields.flatMap((f) => f.types)),
+      ...docs.inputTypes.flatMap((t) => t.fields).flatMap((f) => f.types),
+      ...docs.outputTypes.flatMap((t) => t.fields).flatMap((f) => f.types),
       ...docs.models
-        .flatMap((m) => m.operations.flatMap((op) => op.inputs ?? []))
+        .flatMap((m) => m.operations)
+        .map((op) => op.inputs)
+        .filter((inputs) => inputs !== null)
+        .flat()
         .flatMap((i) => i.types),
-    ].filter((ref) => ref.location !== 'scalar' && ref.location !== 'fieldRefTypes')
+    ].filter((ref) => !['scalar', 'fieldRefTypes'].includes(ref.location))
     expect(refs.length).toBeGreaterThan(0)
     expect(refs.filter((ref) => !sections.has(ref.type))).toStrictEqual([])
   })

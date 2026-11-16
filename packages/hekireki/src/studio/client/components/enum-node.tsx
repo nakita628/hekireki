@@ -24,7 +24,7 @@ function EnumNodeComponent({ data, selected }: NodeProps<EnumNodeType>) {
         />
         <span className="mr-auto flex min-w-0 items-center gap-2">
           <span className="text-body font-bold">{value.name}</span>
-          {value.dbName ? (
+          {(value.dbName ?? '') !== '' ? (
             <span className="truncate text-meta opacity-60">{value.dbName}</span>
           ) : null}
         </span>
@@ -39,7 +39,7 @@ function EnumNodeComponent({ data, selected }: NodeProps<EnumNodeType>) {
             style={{ height: NODE_ROW_HEIGHT }}
           >
             <span className="min-w-0 flex-1 truncate text-enum">{member.name}</span>
-            {member.dbName ? (
+            {(member.dbName ?? '') !== '' ? (
               <span className="shrink-0 text-meta text-faint">{member.dbName}</span>
             ) : null}
           </div>

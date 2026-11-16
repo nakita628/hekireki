@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vite-plus/test'
 
 import { collectRelationProps, makeRelationsOnly } from './extract-relations.js'
 
+/** A comment for each model with relations, and nothing for one without. */
+const relationsComment: Parameters<typeof makeRelationsOnly>[2] = (model, relProps) =>
+  relProps.length === 0 ? null : `// relations for ${model.name}`
+
 describe('collectRelationProps', () => {
   it('should collect relation props from User and Post', () => {
     const result = collectRelationProps([
@@ -65,9 +69,7 @@ describe('collectRelationProps', () => {
 
 describe('makeRelationsOnly', () => {
   it('should call makeRelations for each model and join results', () => {
-    const mockMakeRelations = vi.fn<Parameters<typeof makeRelationsOnly>[2]>((model, relProps) =>
-      relProps.length === 0 ? null : `// relations for ${model.name}`,
-    )
+    const mockMakeRelations = vi.fn<Parameters<typeof makeRelationsOnly>[2]>(relationsComment)
 
     const dmmf = {
       datamodel: {

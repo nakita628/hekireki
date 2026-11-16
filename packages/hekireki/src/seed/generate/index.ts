@@ -4,7 +4,7 @@ import { Effect } from 'effect'
 import type { Dialect } from '../../database/url.js'
 import type { SeedRow } from '../config.js'
 import type { ResolvedSeedConfig } from '../options.js'
-import type { ModelTable, SeedTable, SeedTableRows } from '../plan.js'
+import type { ForeignKey, ModelTable, SeedTable, SeedTableRows } from '../plan.js'
 import { validateRows } from '../validate.js'
 import { checkCardinality } from './cardinality.js'
 import type { Context } from './context.js'
@@ -14,6 +14,63 @@ import { nestChildren } from './nest.js'
 import { claimOf } from './parents.js'
 import { attemptRow } from './rows.js'
 import { checkRules } from './rules.js'
+
+/**
+ * Faker rows come after the real ones: as many as the rule says, or the config's count for a
+ * model with no rule, never more one-to-one children than there are parents left.
+ */
+function generatedCount(
+  context: Context,
+  rule: ResolvedSeedConfig['models'][string] | undefined,
+  parentCounts: readonly number[],
+) {
+  if (rule?.data !== undefined) return 0
+  if (rule?.count !== undefined) return rule.count
+  return context.config.count === null ? 0 : Math.min(context.config.count, ...parentCounts)
+}
+
+/** A parent a real row points at is spoken for; the others are dealt out to the rest. */
+function parentPools(context: Context, oneToOne: readonly ForeignKey[], queue: readonly SeedRow[]) {
+  return new Map(
+    oneToOne.map((fk) => {
+      const parents = context.rowsByModel.get(fk.toModel) ?? []
+      const claimed = new Set(queue.flatMap((given) => claimOf(fk, given, parents) ?? []))
+      return [
+        fk.field,
+        context.faker.helpers.shuffle(
+          parents.filter((parent) => !claimed.has(uniqueKey(parent, fk.toFields))),
+        ),
+      ] as const
+    }),
+  )
+}
+
+/** A row that claims no parent of a one-to-one key takes the next one of its pool. */
+function advanceSlots(
+  context: Context,
+  oneToOne: readonly ForeignKey[],
+  given: SeedRow | null,
+  slots: Map<string, number>,
+) {
+  for (const fk of oneToOne) {
+    if (given === null || claimOf(fk, given, context.rowsByModel.get(fk.toModel) ?? []) === null) {
+      slots.set(fk.field, (slots.get(fk.field) ?? 0) + 1)
+    }
+  }
+}
+
+/** How many rows point at each parent, by foreign key. */
+function countLinks(context: Context, table: ModelTable, row: SeedRow) {
+  for (const fk of table.foreignKeys) {
+    const parent = uniqueKey(row, fk.fromFields)
+    if (fk.fromFields.some((field) => row[field] !== null && row[field] !== undefined)) {
+      const counts =
+        context.linkCounts.get(`${table.name}.${fk.field}`) ?? new Map<string, number>()
+      counts.set(parent, (counts.get(parent) ?? 0) + 1)
+      context.linkCounts.set(`${table.name}.${fk.field}`, counts)
+    }
+  }
+}
 
 function makeModelRows(context: Context, table: ModelTable) {
   return Effect.gen(function* () {
@@ -26,26 +83,8 @@ function makeModelRows(context: Context, table: ModelTable) {
     const parentCounts = oneToOne
       .filter((fk) => fk.required)
       .map((fk) => (context.rowsByModel.get(fk.toModel) ?? []).length)
-    // Faker rows come after the real ones: as many as the rule says, or the config's count for a
-    // model with no rule, never more one-to-one children than there are parents left.
-    const generated =
-      rule?.data !== undefined
-        ? 0
-        : (rule?.count ??
-          (context.config.count === null ? 0 : Math.min(context.config.count, ...parentCounts)))
-    // A parent a real row points at is spoken for; the others are dealt out to the rest.
-    const pools = new Map(
-      oneToOne.map((fk) => {
-        const parents = context.rowsByModel.get(fk.toModel) ?? []
-        const claimed = new Set(queue.flatMap((given) => claimOf(fk, given, parents) ?? []))
-        return [
-          fk.field,
-          context.faker.helpers.shuffle(
-            parents.filter((parent) => !claimed.has(uniqueKey(parent, fk.toFields))),
-          ),
-        ] as const
-      }),
-    )
+    const generated = generatedCount(context, rule, parentCounts)
+    const pools = parentPools(context, oneToOne, queue)
     const slots = new Map<string, number>(oneToOne.map((fk) => [fk.field, 0]))
     const seen = new Map(
       table.uniques.map((fields) => [fields.join(' '), new Set<string>()] as const),
@@ -59,26 +98,11 @@ function makeModelRows(context: Context, table: ModelTable) {
         seen,
       )
       if (given !== null) yield* nestChildren(context, table, given, row)
-      for (const fk of oneToOne) {
-        if (
-          given === null ||
-          claimOf(fk, given, context.rowsByModel.get(fk.toModel) ?? []) === null
-        ) {
-          slots.set(fk.field, (slots.get(fk.field) ?? 0) + 1)
-        }
-      }
+      advanceSlots(context, oneToOne, given, slots)
       for (const fields of table.uniques) {
         seen.get(fields.join(' '))?.add(uniqueKey(row, fields))
       }
-      for (const fk of table.foreignKeys) {
-        const parent = uniqueKey(row, fk.fromFields)
-        if (fk.fromFields.some((field) => row[field] !== null && row[field] !== undefined)) {
-          const counts =
-            context.linkCounts.get(`${table.name}.${fk.field}`) ?? new Map<string, number>()
-          counts.set(parent, (counts.get(parent) ?? 0) + 1)
-          context.linkCounts.set(`${table.name}.${fk.field}`, counts)
-        }
-      }
+      countLinks(context, table, row)
       // oxlint-disable-next-line custom/no-mutation -- see the declaration above: in-place keeps it linear
       rows.push(row)
     }
@@ -141,8 +165,10 @@ export function generateSeedRows(input: {
       givenByModel: new Map(),
       linkCounts: new Map(),
     }
-    const entries = yield* Effect.forEach(input.tables, (table) =>
-      makeTableRows(context, rowsByModel, table),
+    const entries = yield* Effect.forEach(
+      input.tables,
+      (table) => makeTableRows(context, rowsByModel, table),
+      { concurrency: 1 },
     )
     yield* checkCardinality(context)
     return entries

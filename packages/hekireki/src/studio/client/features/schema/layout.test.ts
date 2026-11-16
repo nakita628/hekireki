@@ -81,6 +81,13 @@ describe('nodeHeight', () => {
   })
 })
 
+/** Where the layout put a node; a node it left out fails the test. */
+function positionOf<T>(positions: { readonly [id: string]: T | undefined }, id: string): T {
+  const position = positions[id]
+  if (position === undefined) throw new Error(`${id} is not positioned`)
+  return position
+}
+
 describe('autoLayout', () => {
   it('positions every model without overlap and parents left of children', () => {
     const models = [
@@ -92,10 +99,9 @@ describe('autoLayout', () => {
       schema(models, [relation('User', 'Post'), relation('Post', 'Tag')]),
     )
     expect(Object.keys(positions).toSorted()).toStrictEqual(['Post', 'Tag', 'User'])
-    const user = positions['User']
-    const post = positions['Post']
-    const tag = positions['Tag']
-    if (!(user && post && tag)) throw new Error('positions')
+    const user = positionOf(positions, 'User')
+    const post = positionOf(positions, 'Post')
+    const tag = positionOf(positions, 'Tag')
     expect(post.x - user.x).toBeGreaterThanOrEqual(NODE_WIDTH)
     expect(tag.x - post.x).toBeGreaterThanOrEqual(NODE_WIDTH)
   })

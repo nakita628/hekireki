@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 import { Effect } from 'effect'
 
-import type { SeedRow } from '../config.js'
+import type { RelationRule, SeedRow } from '../config.js'
 import { SeedGenerationError } from '../errors.js'
 import type { JoinTable, ModelTable } from '../plan.js'
 import type { Context } from './context.js'
@@ -58,35 +58,45 @@ function relatedCounts(
 
 /** Every relation rule against the rows made: each row must have between `min` and `max` related rows. */
 
+/** The rows of one model with too few or too many related rows, one line each. */
+function modelProblems(
+  context: Context,
+  name: string,
+  relations: Readonly<Record<string, RelationRule>>,
+) {
+  const table = modelTable(context.tables, name)
+  if (table === undefined) return []
+  const rows = context.rowsByModel.get(name) ?? []
+  const fields = new Map(table.model.fields.map((f) => [f.name, f]))
+  return Object.entries(relations).flatMap(([fieldName, bound]) => {
+    const field = fields.get(fieldName)
+    if (field === undefined) return []
+    return relatedCounts(context, table, field, rows).flatMap((count, index) => {
+      const row = rows[index]
+      if (row === undefined) return []
+      const where = `${labelOf(table, index, row)}.${fieldName}: ${count} row${count === 1 ? '' : 's'}`
+      return boundProblem(where, count, bound, `models.${name}.relations.${fieldName}`)
+    })
+  })
+}
+
+/** Why a count lies outside its bound, or nothing when it lies inside. */
+function boundProblem(where: string, count: number, bound: RelationRule, path: string) {
+  if (bound.min !== undefined && count < bound.min) {
+    return [`${where}, at least ${bound.min} expected (${path}.min)`]
+  }
+  if (bound.max !== undefined && count > bound.max) {
+    return [`${where}, at most ${bound.max} expected (${path}.max)`]
+  }
+  return []
+}
+
 /** Every relation rule against the rows made: each row must have between `min` and `max` related rows. */
 export function checkCardinality(context: Context) {
   return Effect.gen(function* () {
-    const problems = Object.entries(context.config.models).flatMap(([name, rule]) => {
-      const table = modelTable(context.tables, name)
-      const rows = context.rowsByModel.get(name) ?? []
-      if (table === undefined) return []
-      return Object.entries(rule.relations ?? {}).flatMap(([fieldName, bound]) => {
-        const field = table.model.fields.find((f) => f.name === fieldName)
-        if (field === undefined) return []
-        const counts = relatedCounts(context, table, field, rows)
-        return counts.flatMap((count, index) => {
-          const row = rows[index]
-          if (row === undefined) return []
-          const where = `${labelOf(table, index, row)}.${fieldName}: ${count} row${count === 1 ? '' : 's'}`
-          if (bound.min !== undefined && count < bound.min) {
-            return [
-              `${where}, at least ${bound.min} expected (models.${name}.relations.${fieldName}.min)`,
-            ]
-          }
-          if (bound.max !== undefined && count > bound.max) {
-            return [
-              `${where}, at most ${bound.max} expected (models.${name}.relations.${fieldName}.max)`,
-            ]
-          }
-          return []
-        })
-      })
-    })
+    const problems = Object.entries(context.config.models).flatMap(([name, rule]) =>
+      modelProblems(context, name, rule.relations ?? {}),
+    )
     if (problems.length > 0) {
       const shown = problems.slice(0, 20)
       const more = problems.length - shown.length

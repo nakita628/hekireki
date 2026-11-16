@@ -9,6 +9,106 @@ import { ResultTable } from '../../components/result-table.js'
 import { problemMessage, tableOf } from './result.js'
 import { Statements } from './statements.js'
 
+type RunResult = InferResponseType<typeof clientClient.client.run.$post, 200>
+type Statement = RunResult['queries'][number]
+type SqlData = { readonly queries: RunResult['queries']; readonly durationMs: number }
+type Table = ReturnType<typeof tableOf>
+
+function statementCount(count: number) {
+  return `${count} ${count === 1 ? 'statement' : 'statements'}`
+}
+
+/** How many rows came back; the server sends the first rows of a long array, and that is said. */
+function rowSummaryOf(result: RunResult) {
+  const shown = Array.isArray(result.result) ? result.result.length : 1
+  const { rowCount } = result
+  if (rowCount === null) return 'one value'
+  const rows = `${rowCount.toLocaleString()} ${rowCount === 1 ? 'row' : 'rows'}`
+  return shown < rowCount ? `first ${shown.toLocaleString()} of ${rows}` : rows
+}
+
+function runStatusOf(running: boolean, result: RunResult | null) {
+  if (running) return 'Running…'
+  if (result === null) return ''
+  return `${rowSummaryOf(result)} · ${result.durationMs} ms · ${statementCount(result.queries.length)}`
+}
+
+function sqlStatusOf(updating: boolean, statements: SqlData | null, stale: boolean) {
+  if (updating) return 'Updating…'
+  if (statements === null || stale) return ''
+  return `${statementCount(statements.queries.length)} · ${statements.durationMs} ms`
+}
+
+/** The SQL tab: the statements, stepped back under the note while they are an earlier text's. */
+function SqlBody({
+  statements,
+  note,
+  stale,
+  error,
+  dialect,
+  asSent,
+  onOpen,
+}: {
+  readonly statements: SqlData | null
+  readonly note: string | null
+  readonly stale: boolean
+  readonly error: unknown
+  readonly dialect: 'postgresql' | 'mysql' | 'sqlite' | null
+  readonly asSent: boolean
+  readonly onOpen: (statement: Statement) => void
+}) {
+  if (statements === null) {
+    if (note !== null) return <div className="p-6 text-muted">{note}</div>
+    if (error === null || error === undefined) return null
+    return <pre className="error-box m-4 whitespace-pre-wrap">{problemMessage(error)}</pre>
+  }
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {stale && note !== null ? (
+        <div className="border-b border-line bg-surface-2 px-4 py-1.5 text-code text-muted">
+          {note}
+        </div>
+      ) : null}
+      <div
+        className={`flex min-h-0 flex-1 flex-col transition-opacity ${stale ? 'opacity-50' : ''}`}
+      >
+        <Statements
+          queries={statements.queries}
+          dialect={dialect}
+          asSent={asSent}
+          onOpen={onOpen}
+        />
+      </div>
+    </div>
+  )
+}
+
+/** The result tab: why the run was refused, or what it came back with, as a table or as JSON. */
+function ResultBody({
+  error,
+  result,
+  table,
+  asJson,
+}: {
+  readonly error: unknown
+  readonly result: RunResult | null
+  readonly table: Table | null
+  readonly asJson: boolean
+}) {
+  if (error !== null && error !== undefined) {
+    return <pre className="error-box m-4 whitespace-pre-wrap">{problemMessage(error)}</pre>
+  }
+  if (result === null) {
+    return <div className="p-6 text-muted">Run the call to see what it returns.</div>
+  }
+  if (table !== null && !asJson) return <ResultTable columns={table.columns} rows={table.rows} />
+  return (
+    <div className="min-h-0 flex-1 overflow-auto p-4">
+      <CodeBlock code={JSON.stringify(result.result, null, 2)} />
+    </div>
+  )
+}
+
 /**
  * Under the editor, one tab at a time: what the call came back with, as a table or as JSON (and,
  * when it was refused, why), or the SQL of the call in the editor — what a read sends, from
@@ -59,15 +159,6 @@ export function ResultPane({
   ) => void
 }) {
   const table = useMemo(() => (result === null ? null : tableOf(result.result)), [result])
-  // The server sends the first rows of a long array; say so rather than showing a wrong total.
-  const shown = Array.isArray(result?.result) ? result.result.length : 1
-  const rowCount = result?.rowCount ?? null
-  const rows =
-    rowCount === null
-      ? 'one value'
-      : `${rowCount.toLocaleString()} ${rowCount === 1 ? 'row' : 'rows'}`
-  const summary =
-    rowCount !== null && shown < rowCount ? `first ${shown.toLocaleString()} of ${rows}` : rows
   const sqlFailed = sql.error !== null && sql.error !== undefined
   // The statements, when there are some to show: the text's own, or an earlier text's under the note.
   const statements = (sql.note === null || sql.stale) && !sqlFailed ? sql.data : null
@@ -101,11 +192,7 @@ export function ResultPane({
               />
             )}
             <output aria-label="Run status" className="ml-auto text-faint">
-              {running
-                ? 'Running…'
-                : result === null
-                  ? ''
-                  : `${summary} · ${result.durationMs} ms · ${result.queries.length} ${result.queries.length === 1 ? 'statement' : 'statements'}`}
+              {runStatusOf(running, result)}
             </output>
           </>
         ) : (
@@ -120,51 +207,23 @@ export function ResultPane({
               />
             )}
             <output aria-label="SQL status" className="ml-auto text-faint">
-              {sql.updating
-                ? 'Updating…'
-                : statements === null || sql.stale
-                  ? ''
-                  : `${statements.queries.length} ${statements.queries.length === 1 ? 'statement' : 'statements'} · ${statements.durationMs} ms`}
+              {sqlStatusOf(sql.updating, statements, sql.stale)}
             </output>
           </>
         )}
       </div>
       {tab === 'sql' ? (
-        statements === null ? (
-          sql.note !== null ? (
-            <div className="p-6 text-muted">{sql.note}</div>
-          ) : sqlFailed ? (
-            <pre className="error-box m-4 whitespace-pre-wrap">{problemMessage(sql.error)}</pre>
-          ) : null
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col">
-            {sql.stale && sql.note !== null ? (
-              <div className="border-b border-line bg-surface-2 px-4 py-1.5 text-code text-muted">
-                {sql.note}
-              </div>
-            ) : null}
-            <div
-              className={`flex min-h-0 flex-1 flex-col transition-opacity ${sql.stale ? 'opacity-50' : ''}`}
-            >
-              <Statements
-                queries={statements.queries}
-                dialect={dialect}
-                asSent={asSent}
-                onOpen={onOpen}
-              />
-            </div>
-          </div>
-        )
-      ) : error !== null && error !== undefined ? (
-        <pre className="error-box m-4 whitespace-pre-wrap">{problemMessage(error)}</pre>
-      ) : result === null ? (
-        <div className="p-6 text-muted">Run the call to see what it returns.</div>
-      ) : table !== null && !asJson ? (
-        <ResultTable columns={table.columns} rows={table.rows} />
+        <SqlBody
+          statements={statements}
+          note={sql.note}
+          stale={sql.stale}
+          error={sqlFailed ? sql.error : null}
+          dialect={dialect}
+          asSent={asSent}
+          onOpen={onOpen}
+        />
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto p-4">
-          <CodeBlock code={JSON.stringify(result.result, null, 2)} />
-        </div>
+        <ResultBody error={error} result={result} table={table} asJson={asJson} />
       )}
     </div>
   )

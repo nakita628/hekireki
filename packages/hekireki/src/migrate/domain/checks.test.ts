@@ -494,7 +494,8 @@ model Post {
     })
     expect(
       checks
-        .filter((check) => check.model === 'Post' && !check.guaranteed)
+        .filter((check) => check.model === 'Post')
+        .filter((check) => !check.guaranteed)
         .map((check) => [check.kind, check.subject, check.severity]),
     ).toStrictEqual([
       ['column-recreated', 'Post.code', 'blocking'],

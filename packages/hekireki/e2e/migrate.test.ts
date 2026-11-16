@@ -20,6 +20,31 @@ test.afterEach(async ({ request }) => {
   await request.put('/api/migrate/decisions', { data: { decisions: [] } })
 })
 
+/** Resolves once the browser has drawn two more frames, run in the browser. */
+function twoFrames() {
+  return new Promise<void>((resolve) => {
+    globalThis.requestAnimationFrame(() => {
+      globalThis.requestAnimationFrame(() => {
+        resolve()
+      })
+    })
+  })
+}
+
+/** The count a `SELECT count(*) AS n` read, or -1 when it read no row. */
+function countOf(body: { rows: { n: number }[] }) {
+  return body.rows[0]?.n ?? -1
+}
+
+/** How many posts the database holds, or -1 while it cannot be asked. */
+async function countPosts(request: Parameters<typeof loadedFiles>[0]) {
+  const back = await request.post('/api/db/sql', {
+    data: { sql: 'SELECT count(*) AS n FROM "Post"' },
+  })
+  if (!back.ok()) return -1
+  return countOf((await back.json()) as { rows: { n: number }[] })
+}
+
 /** Rewrites one schema file of the workspace, the way the editor saves it. */
 async function writeSchema(
   request: Parameters<typeof loadedFiles>[0],
@@ -64,7 +89,7 @@ test('the page compares the schema with the database as it opens, and lays out t
   const changes = page.getByRole('heading', { level: 2, name: 'What the schema changes' })
   const upToDate = page.getByText('The database already matches the schema')
   await expect(changes.or(upToDate)).toBeVisible()
-  if (await upToDate.isVisible()) return
+  test.skip(await upToDate.isVisible(), 'the database already matches the schema')
 
   await expect(page.getByRole('heading', { level: 2, name: 'Check the result' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: 'Run the migration' })).toBeVisible()
@@ -377,16 +402,7 @@ model Profile {
   // The browser tells the page of a scroll with the next frame it draws, not as it happens, so the
   // list is opened after that frame: opened before it, the scroll arrives late and closes it again.
   await card.getByRole('combobox').scrollIntoViewIfNeeded()
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) => {
-        globalThis.requestAnimationFrame(() => {
-          globalThis.requestAnimationFrame(() => {
-            resolve()
-          })
-        })
-      }),
-  )
+  await page.evaluate(twoFrames)
   await card.getByRole('combobox').fill('')
   await expect(page.getByRole('option')).toHaveText([/Profile\.fullName/u, /Profile\.bio/u])
   await page.getByRole('option', { name: /Profile\.bio/u }).click()
@@ -550,8 +566,7 @@ test('a migration that loses data shows what goes, is rehearsed, backed up, chec
     const counted = await request.post('/api/db/sql', {
       data: { sql: 'SELECT count(*) AS n FROM "Post"' },
     })
-    const body = (await counted.json()) as { rows: { n: number }[] }
-    const posts = body.rows[0]?.n ?? -1
+    const posts = countOf((await counted.json()) as { rows: { n: number }[] })
 
     await page.goto('/migrate')
     // What is lost is said before anything runs, and the rows themselves can be read.
@@ -598,16 +613,7 @@ test('a migration that loses data shows what goes, is rehearsed, backed up, chec
     // And undone: the backup brings back the table, its rows and a history without the run.
     await result.getByRole('button', { name: /^Undo/u }).click()
     await expect(result).toBeHidden({ timeout: 15_000 })
-    await expect
-      .poll(async () => {
-        const back = await request.post('/api/db/sql', {
-          data: { sql: 'SELECT count(*) AS n FROM "Post"' },
-        })
-        if (!back.ok()) return -1
-        const read = (await back.json()) as { rows: { n: number }[] }
-        return read.rows[0]?.n ?? -1
-      })
-      .toBe(posts)
+    await expect.poll(() => countPosts(request)).toBe(posts)
     await expect(page.getByText(/No migrations in .*migrations\.$/u)).toBeVisible()
     await page.getByText(/^Backups/u).click()
     await expect(page.getByRole('button', { name: 'Restore' }).first()).toBeVisible()

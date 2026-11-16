@@ -93,8 +93,22 @@ function field(name: string) {
 /** The first message a value fails the field's schema with, or null when it passes. */
 function problem(name: string, value: unknown) {
   const column = TABLE.columns.find((c) => c.field === name)
-  const result = fieldSchema(field(name), column?.enumValues ?? null).safeParse(value)
+  return firstIssue(field(name), column?.enumValues ?? null, value)
+}
+
+function firstIssue(
+  found: DMMF.Field,
+  enumValues: Parameters<typeof fieldSchema>[1],
+  value: unknown,
+) {
+  const result = fieldSchema(found, enumValues).safeParse(value)
   return result.success ? null : (result.error.issues[0]?.message ?? '')
+}
+
+function widthField(name: string) {
+  const found = WIDTHS.model.fields.find((f) => f.name === name)
+  if (found === undefined) throw new Error(`no field ${name}`)
+  return found
 }
 
 // cspell:ignore ghijklmnopqrstuv xxat zmbrgj NDEKTSV RRFFQ
@@ -255,10 +269,7 @@ describe('fieldSchema, the MySQL integer widths one by one', () => {
     ['plain', 2_147_483_647, null],
     ['plain', 2_147_483_648, 'Too big: expected number to be <=2147483647'],
   ] as const)('%s = %s → %s', (name, value, expected) => {
-    const found = WIDTHS.model.fields.find((f) => f.name === name)
-    if (found === undefined) throw new Error(`no field ${name}`)
-    const result = fieldSchema(found, null).safeParse(value)
-    expect(result.success ? null : (result.error.issues[0]?.message ?? '')).toBe(expected)
+    expect(firstIssue(widthField(name), null, value)).toBe(expected)
   })
 })
 

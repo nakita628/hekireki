@@ -20,6 +20,11 @@ import {
   isLoopbackHostname,
 } from './index.js'
 
+/** The field names, comma separated. */
+function joinedFieldNames(fields: readonly { readonly fieldName: string }[]) {
+  return fields.map((f) => f.fieldName).join(', ')
+}
+
 describe('utils', () => {
   describe('getString', () => {
     it('returns string when given a string', () => {
@@ -332,10 +337,7 @@ describe('utils', () => {
         },
       ]
       const mockSchema = (name: string, f: string) => `schema(${name}, ${f})`
-      const mockProps = (_fields: readonly { readonly fieldName: string }[]) =>
-        _fields.map((f) => f.fieldName).join(', ')
-
-      const result = schemaFromFields(fields, mockSchema, mockProps)
+      const result = schemaFromFields(fields, mockSchema, joinedFieldNames)
       expect(result).toBe('schema(User, id, name)')
     })
   })

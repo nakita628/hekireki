@@ -118,6 +118,11 @@ function failure(exit: Exit.Exit<unknown, unknown>) {
   return String(exit.cause)
 }
 
+/** Fails the test with the cause unless the effect succeeded, and narrows the exit to its value. */
+function assertSuccess<A, E>(exit: Exit.Exit<A, E>): asserts exit is Exit.Success<A, E> {
+  if (Exit.isFailure(exit)) throw new Error(`expected a success, got ${String(exit.cause)}`)
+}
+
 describe('runSeed', () => {
   it('reads hekireki.config.ts next to the schema and writes through the client it returns, in one transaction', async () => {
     const dir = project(
@@ -126,8 +131,7 @@ describe('runSeed', () => {
   models: { User: { count: 3, fields: { role: { values: ['ADMIN'] } } } },`),
     )
     const exit = await run({}, dir)
-    expect(Exit.isSuccess(exit)).toBe(true)
-    if (!Exit.isSuccess(exit)) return
+    assertSuccess(exit)
     expect(exit.value.tables).toStrictEqual([
       { name: 'User', table: 'User', rows: 3 },
       { name: 'Post', table: 'Post', rows: 4 },
@@ -219,8 +223,7 @@ export class PrismaClient {
       JSON.stringify({ name: 'project', type: 'module' }),
     )
     const exit = await run({ url: 'file:./dev.db' }, dir)
-    expect(Exit.isSuccess(exit)).toBe(true)
-    if (!Exit.isSuccess(exit)) return
+    assertSuccess(exit)
     expect(exit.value.target).toStrictEqual({
       kind: 'client',
       source: 'generated/client',
@@ -282,8 +285,7 @@ export class PrismaClient {
   it('writes a SQL file instead when --sql is given, the same for the same seed, and no client is needed', async () => {
     const dir = project(null)
     const first = await run({ output: 'out/seed.sql', seed: 3, count: 2 }, dir)
-    expect(Exit.isSuccess(first)).toBe(true)
-    if (!Exit.isSuccess(first)) return
+    assertSuccess(first)
     expect(first.value.target).toStrictEqual({ kind: 'sql', path: path.join(dir, 'out/seed.sql') })
     const sql = readFileSync(path.join(dir, 'out/seed.sql'), 'utf8')
     expect(
@@ -315,12 +317,14 @@ CREATE TABLE "Post" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "title" TE
     const nested = path.join(dir, 'nested')
     mkdirSync(nested)
     const fromConfig = await run({ config: '../hekireki.config.ts' }, nested)
-    expect(Exit.isSuccess(fromConfig) ? fromConfig.value.target : null).toStrictEqual({
+    assertSuccess(fromConfig)
+    expect(fromConfig.value.target).toStrictEqual({
       kind: 'sql',
       path: path.join(dir, 'from-config.sql'),
     })
     const fromFlag = await run({ config: '../hekireki.config.ts', output: 'from-flag.sql' }, nested)
-    expect(Exit.isSuccess(fromFlag) ? fromFlag.value.target : null).toStrictEqual({
+    assertSuccess(fromFlag)
+    expect(fromFlag.value.target).toStrictEqual({
       kind: 'sql',
       path: path.join(nested, 'from-flag.sql'),
     })
@@ -331,8 +335,7 @@ CREATE TABLE "Post" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "title" TE
       `export default { schema: 'schema.prisma', seed: 1, count: 9, locale: 'en', models: { User: { count: 30 }, Post: { count: 5 } } }\n`,
     )
     const exit = await run({ output: 'seed.sql', seed: 2, count: 1, locale: 'ja, en' }, dir)
-    expect(Exit.isSuccess(exit)).toBe(true)
-    if (!Exit.isSuccess(exit)) return
+    assertSuccess(exit)
     expect(exit.value.seed).toBe(2)
     expect(exit.value.locale).toStrictEqual(['ja', 'en'])
     expect(exit.value.tables.map((t) => t.rows)).toStrictEqual([1, 1])
@@ -341,9 +344,8 @@ CREATE TABLE "Post" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "title" TE
       `export default { schema: 'schema.prisma', models: { User: { data: [{ email: 'a@example.com' }, { email: 'b@example.com' }] }, Post: { count: 7 } } }\n`,
     )
     const kept = await run({ output: 'seed.sql', count: 3 }, withData)
-    expect(
-      Exit.isSuccess(kept) ? kept.value.tables.map((t) => [t.name, t.rows]) : null,
-    ).toStrictEqual([
+    assertSuccess(kept)
+    expect(kept.value.tables.map((t) => [t.name, t.rows])).toStrictEqual([
       ['User', 2],
       ['Post', 3],
     ])

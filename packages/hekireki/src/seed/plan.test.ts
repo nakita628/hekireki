@@ -5,13 +5,58 @@ import { Effect } from 'effect'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { fieldDefault, makeSeedPlan } from './plan.js'
+import type { SeedTable } from './plan.js'
 
-function datamodel(schema: string) {
-  const result: DMMF.Document | GetDMMFError = getDMMF({
-    datamodel: [['schema.prisma', `datasource db {\n  provider = "postgresql"\n}\n${schema}`]],
-  })
+function parse(text: string) {
+  const result: DMMF.Document | GetDMMFError = getDMMF({ datamodel: [['schema.prisma', text]] })
   if ('type' in result) throw new Error(result.error.message)
   return result.datamodel
+}
+
+function datamodel(schema: string) {
+  return parse(`datasource db {\n  provider = "postgresql"\n}\n${schema}`)
+}
+
+function asModel(table: SeedTable | undefined) {
+  if (table?.kind !== 'model') throw new Error('model table expected')
+  return table
+}
+
+function modelNamed(tables: readonly SeedTable[], name: string) {
+  return asModel(tables.find((table) => table.name === name))
+}
+
+function fieldNamed(model: DMMF.Model | undefined, name: string) {
+  const found = model?.fields.find((f) => f.name === name)
+  if (found === undefined) throw new Error(`no field ${name}`)
+  return found
+}
+
+/** Three models whose required keys run in a circle, the last one optional when asked. */
+function threeWayCycle(optional: boolean) {
+  const mark = optional ? '?' : ''
+  return `
+model A {
+  id  Int @id
+  bId Int
+  b   B   @relation("ab", fields: [bId], references: [id])
+  cs  C[] @relation("ca")
+}
+
+model B {
+  id  Int @id
+  cId Int
+  c   C   @relation("bc", fields: [cId], references: [id])
+  as  A[] @relation("ab")
+}
+
+model C {
+  id  Int  @id
+  aId Int${mark}
+  a   A${mark}   @relation("ca", fields: [aId], references: [id])
+  bs  B[]  @relation("bc")
+}
+`
 }
 
 const SCHEMA = `
@@ -96,9 +141,7 @@ describe('makeSeedPlan', () => {
   })
 
   it('maps @@map and @map to table and column names, and leaves dbgenerated columns to the database', () => {
-    const post = tables.find((table) => table.name === 'Post')
-    expect(post?.kind).toBe('model')
-    if (post?.kind !== 'model') return
+    const post = modelNamed(tables, 'Post')
     expect(post.table).toBe('posts')
     expect(post.columns).toStrictEqual([
       { field: 'id', column: 'id', type: 'Int', kind: 'scalar', isList: false, enumValues: null },
@@ -134,13 +177,9 @@ describe('makeSeedPlan', () => {
   })
 
   it('describes each foreign key: required, one-to-one and self', () => {
-    const byName = new Map(tables.map((table) => [table.name, table] as const))
-    const comment = byName.get('Comment')
-    const profile = byName.get('Profile')
-    const user = byName.get('User')
-    if (comment?.kind !== 'model' || profile?.kind !== 'model' || user?.kind !== 'model') {
-      throw new Error('model tables expected')
-    }
+    const comment = modelNamed(tables, 'Comment')
+    const profile = modelNamed(tables, 'Profile')
+    const user = modelNamed(tables, 'User')
     expect(comment.foreignKeys).toStrictEqual([
       {
         field: 'post',
@@ -186,8 +225,7 @@ describe('makeSeedPlan', () => {
   })
 
   it('collects @id, @unique, @@id and @@unique as unique constraints, once each', () => {
-    const user = tables.find((table) => table.name === 'User')
-    if (user?.kind !== 'model') throw new Error('model table expected')
+    const user = modelNamed(tables, 'User')
     expect(user.uniques).toStrictEqual([['id'], ['email'], ['parentId', 'email']])
   })
 
@@ -262,10 +300,8 @@ model B {
 describe('fieldDefault', () => {
   it('reads a function default and ignores a literal one', () => {
     const [post, user] = datamodel(SCHEMA).models.filter((m) => ['Post', 'User'].includes(m.name))
-    const visibility = post?.fields.find((f) => f.name === 'visibility')
-    const id = user?.fields.find((f) => f.name === 'id')
-    expect(visibility === undefined ? null : fieldDefault(visibility)).toBeNull()
-    expect(id === undefined ? null : fieldDefault(id)).toStrictEqual({ name: 'uuid', args: [7] })
+    expect(fieldDefault(fieldNamed(post, 'visibility'))).toBeNull()
+    expect(fieldDefault(fieldNamed(user, 'id'))).toStrictEqual({ name: 'uuid', args: [7] })
   })
 })
 
@@ -308,33 +344,11 @@ model A {
   })
 
   it('names every model of a three-way required cycle, and breaks it at one optional key', () => {
-    const models = (optional: boolean) => `
-model A {
-  id  Int @id
-  bId Int
-  b   B   @relation("ab", fields: [bId], references: [id])
-  cs  C[] @relation("ca")
-}
-
-model B {
-  id  Int @id
-  cId Int
-  c   C   @relation("bc", fields: [cId], references: [id])
-  as  A[] @relation("ab")
-}
-
-model C {
-  id  Int  @id
-  aId Int${optional ? '?' : ''}
-  a   A${optional ? '?' : ''}   @relation("ca", fields: [aId], references: [id])
-  bs  B[]  @relation("bc")
-}
-`
-    expect(Effect.runSync(Effect.flip(makeSeedPlan(datamodel(models(false))))).message).toBe(
+    expect(Effect.runSync(Effect.flip(makeSeedPlan(datamodel(threeWayCycle(false))))).message).toBe(
       'Required relations form a cycle: A -> B -> C -> A.\n   Make one of them optional so the seeder can insert the models in order.',
     )
     expect(
-      Effect.runSync(makeSeedPlan(datamodel(models(true)))).map((table) => table.name),
+      Effect.runSync(makeSeedPlan(datamodel(threeWayCycle(true)))).map((table) => table.name),
     ).toStrictEqual(['C', 'B', 'A'])
   })
 
@@ -392,11 +406,9 @@ model Category {
       '_rel',
     ])
     const [warehouse, stock, , rel] = tables
-    expect(warehouse?.kind === 'model' ? warehouse.uniques : null).toStrictEqual([
-      ['country', 'code'],
-    ])
-    expect(warehouse?.kind === 'model' ? warehouse.autoincrement : null).toStrictEqual([])
-    expect(stock?.kind === 'model' ? stock.columns.map((c) => c.field) : null).toStrictEqual([
+    expect(asModel(warehouse).uniques).toStrictEqual([['country', 'code']])
+    expect(asModel(warehouse).autoincrement).toStrictEqual([])
+    expect(asModel(stock).columns.map((c) => c.field)).toStrictEqual([
       'id',
       'country',
       'code',
@@ -406,9 +418,7 @@ model Category {
       'roles',
       'meta',
     ])
-    expect(
-      stock?.kind === 'model' ? stock.columns.find((c) => c.field === 'roles') : null,
-    ).toStrictEqual({
+    expect(asModel(stock).columns.find((c) => c.field === 'roles')).toStrictEqual({
       field: 'roles',
       column: 'roles',
       type: 'Role',
@@ -419,7 +429,7 @@ model Category {
         { name: 'VIEWER', dbName: 'viewer' },
       ],
     })
-    expect(stock?.kind === 'model' ? stock.foreignKeys : null).toStrictEqual([
+    expect(asModel(stock).foreignKeys).toStrictEqual([
       {
         field: 'warehouse',
         fromFields: ['country', 'code'],
@@ -430,11 +440,7 @@ model Category {
         self: false,
       },
     ])
-    expect(stock?.kind === 'model' ? stock.uniques : null).toStrictEqual([
-      ['id'],
-      ['slug'],
-      ['a', 'b'],
-    ])
+    expect(asModel(stock).uniques).toStrictEqual([['id'], ['slug'], ['a', 'b']])
     expect(rel).toStrictEqual({
       kind: 'join',
       name: '_rel',
@@ -464,11 +470,7 @@ model Category {
   })
 
   it('carries the @@schema and @@map of a model into the table it writes to', () => {
-    const result: DMMF.Document | GetDMMFError = getDMMF({
-      datamodel: [
-        [
-          'schema.prisma',
-          `datasource db {
+    const parsed = parse(`datasource db {
   provider = "postgresql"
   schemas  = ["inventory", "public"]
 }
@@ -479,22 +481,16 @@ model Item {
   @@schema("inventory")
   @@map("items")
 }
-`,
-        ],
-      ],
-    })
-    if ('type' in result) throw new Error(result.error.message)
-    const [item] = Effect.runSync(makeSeedPlan(result.datamodel))
-    expect(
-      item?.kind === 'model' ? { table: item.table, schema: item.schema } : null,
-    ).toStrictEqual({
+`)
+    const [item] = Effect.runSync(makeSeedPlan(parsed))
+    expect({ table: asModel(item).table, schema: asModel(item).schema }).toStrictEqual({
       table: 'items',
       schema: 'inventory',
     })
   })
 
   it('reads every function default with its arguments, and nothing for literals and dbgenerated', () => {
-    const [model] = datamodel(`
+    const fields = datamodel(`
 model Defaults {
   id    String   @id @default(cuid(2))
   n     String   @default(nanoid(12))
@@ -508,10 +504,8 @@ model Defaults {
   gen   DateTime @default(dbgenerated("now()"))
   up    DateTime @updatedAt
 }
-`).models
-    const defaults = Object.fromEntries(
-      (model?.fields ?? []).map((field) => [field.name, fieldDefault(field)]),
-    )
+`).models.flatMap((model) => model.fields)
+    const defaults = Object.fromEntries(fields.map((field) => [field.name, fieldDefault(field)]))
     expect(defaults).toStrictEqual({
       id: { name: 'cuid', args: [2] },
       n: { name: 'nanoid', args: [12] },

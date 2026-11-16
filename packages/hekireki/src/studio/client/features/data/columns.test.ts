@@ -34,7 +34,7 @@ describe('saveHiddenColumns and loadHiddenColumns', () => {
   it('stores what is hidden, so an unknown field shows up on its own', () => {
     const store = stubStorage(new Map())
     saveHiddenColumns('User', new Set(['email']))
-    expect(JSON.parse(store.get(columnsStorageKey('User')) ?? '')).toStrictEqual(['email'])
+    expect(JSON.parse(String(store.get(columnsStorageKey('User'))))).toStrictEqual(['email'])
   })
 
   it('hides nothing when nothing is stored', () => {

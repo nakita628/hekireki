@@ -38,13 +38,15 @@ function until(predicate: () => boolean, attempts = 100): Effect.Effect<boolean>
 describe('watchSchema', () => {
   it('reloads after a burst of .prisma writes and stops with the scope', async () => {
     const { dir, schemaPath, state } = setup()
+    const reload = () => loadSnapshot({ state })
+    const changedSince = (before: string) => () => state.snapshot().updatedAt !== before
     const result = await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
           yield* loadSnapshot({ state })
           const before = state.snapshot().updatedAt
           yield* watchSchema({
-            onChange: () => loadSnapshot({ state }),
+            onChange: reload,
             dir,
             recursive: false,
             debounceMs: 50,
@@ -52,7 +54,7 @@ describe('watchSchema', () => {
           yield* Effect.sleep('100 millis')
           writeFileSync(schemaPath, 'model User {\n  id Int @id\n  name String\n}\n')
           writeFileSync(path.join(dir, 'README.md'), 'ignored')
-          const reloaded = yield* until(() => state.snapshot().updatedAt !== before)
+          const reloaded = yield* until(changedSince(before))
           return { reloaded, fields: state.snapshot().schema?.models[0]?.fields.length }
         }),
       ).pipe(Effect.provide(NodeFileSystem.layer)),
@@ -68,21 +70,23 @@ describe('watchSchema', () => {
     const { dir } = setup()
     mkdirSync(path.join(dir, 'models'))
     const changes = { count: 0 }
+    const count = () =>
+      Effect.sync(() => {
+        changes.count += 1
+      })
+    const changed = () => changes.count > 0
     const reloaded = await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
           yield* watchSchema({
-            onChange: () =>
-              Effect.sync(() => {
-                changes.count += 1
-              }),
+            onChange: count,
             dir,
             recursive: true,
             debounceMs: 50,
           })
           yield* Effect.sleep('100 millis')
           writeFileSync(path.join(dir, 'models', 'post.prisma'), 'model Post {\n  id Int @id\n}\n')
-          return yield* until(() => changes.count > 0)
+          return yield* until(changed)
         }),
       ).pipe(Effect.provide(NodeFileSystem.layer)),
     )
@@ -95,6 +99,7 @@ describe('watchMigrations', () => {
     const { dir, state } = setup()
     // Not there yet: the first migration makes it.
     const migrations = path.join(dir, 'migrations')
+    const movedFrom = (from: string) => () => state.migrationsUpdatedAt() !== from
     const seen = await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
@@ -112,7 +117,7 @@ describe('watchMigrations', () => {
             path.join(migrations, '20260101000000_init', 'migration.sql'),
             'CREATE TABLE "User" ("id" INTEGER NOT NULL PRIMARY KEY);\n',
           )
-          const added = yield* until(() => state.migrationsUpdatedAt() !== start)
+          const added = yield* until(movedFrom(start))
           const afterAdd = state.migrationsUpdatedAt()
 
           // Written again with more in it: an edit.
@@ -121,7 +126,7 @@ describe('watchMigrations', () => {
             path.join(migrations, '20260101000000_init', 'migration.sql'),
             'CREATE TABLE "User" ("id" INTEGER NOT NULL PRIMARY KEY, "name" TEXT);\n',
           )
-          const edited = yield* until(() => state.migrationsUpdatedAt() !== afterAdd)
+          const edited = yield* until(movedFrom(afterAdd))
           return { quiet, added, edited }
         }),
       ).pipe(Effect.provide(NodeFileSystem.layer)),

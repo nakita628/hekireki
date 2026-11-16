@@ -224,48 +224,39 @@ function viaBody(path: string) {
   return inner.includes('\n') ? `        Some(\n${inner}\n        )` : line
 }
 
+// The sea-orm column type of a native type that takes no arguments of its own; one not here
+// (`Timestamp` among them) is left to the Rust type.
+const NATIVE_COLUMN_TYPES: { readonly [nativeType: string]: string } = {
+  Text: 'Text',
+  MediumText: 'Text',
+  LongText: 'Text',
+  TinyText: 'Text',
+  SmallInt: 'SmallInteger',
+  TinyInt: 'SmallInteger',
+  MediumInt: 'Integer',
+  DoublePrecision: 'Double',
+  Double: 'Double',
+  Real: 'Double',
+  Uuid: 'Uuid',
+  Timestamptz: 'TimestampWithTimeZone',
+  Date: 'Date',
+  Time: 'Time',
+  JsonB: 'JsonBinary',
+}
+
 export function resolveSeaOrmColumnType(field: DMMF.Field) {
   if (!field.nativeType) return null
 
   const [nativeName, nativeArgs] = field.nativeType
   const args = nativeArgs ?? []
 
-  switch (nativeName) {
-    case 'VarChar':
-    case 'Char':
-      return args.length > 0 ? `String(StringLen::N(${args[0]}))` : null
-    case 'Text':
-    case 'MediumText':
-    case 'LongText':
-    case 'TinyText':
-      return 'Text'
-    case 'SmallInt':
-    case 'TinyInt':
-      return 'SmallInteger'
-    case 'MediumInt':
-      return 'Integer'
-    case 'DoublePrecision':
-    case 'Double':
-    case 'Real':
-      return 'Double'
-    case 'Decimal':
-    case 'Money':
-      return args.length >= 2 ? `Decimal(Some((${args[0]}, ${args[1]})))` : 'Decimal(None)'
-    case 'Uuid':
-      return 'Uuid'
-    case 'Timestamp':
-      return null
-    case 'Timestamptz':
-      return 'TimestampWithTimeZone'
-    case 'Date':
-      return 'Date'
-    case 'Time':
-      return 'Time'
-    case 'JsonB':
-      return 'JsonBinary'
-    default:
-      return null
+  if (nativeName === 'VarChar' || nativeName === 'Char') {
+    return args.length > 0 ? `String(StringLen::N(${args[0]}))` : null
   }
+  if (nativeName === 'Decimal' || nativeName === 'Money') {
+    return args.length >= 2 ? `Decimal(Some((${args[0]}, ${args[1]})))` : 'Decimal(None)'
+  }
+  return NATIVE_COLUMN_TYPES[nativeName] ?? null
 }
 
 function generatedIdExpr(field: DMMF.Field) {
@@ -300,10 +291,17 @@ function formatRustDefault(def: DMMF.Field['default']) {
 const WIDE =
   /[\p{Emoji_Presentation}ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{20000}-\u{3FFFF}]/u
 
+const COMBINING = /\p{Mn}/u
+
+function charWidth(char: string) {
+  if (WIDE.test(char)) return 2
+  return COMBINING.test(char) ? 0 : 1
+}
+
 function displayWidth(text: string) {
   let width = 0
   for (const char of text) {
-    width += WIDE.test(char) ? 2 : /\p{Mn}/u.test(char) ? 0 : 1
+    width += charWidth(char)
   }
   return width
 }
@@ -370,6 +368,49 @@ function relatedImplHeader(targetModule: string) {
     : line
 }
 
+// An enum default arrives as the Prisma-level value name; the column
+// stores the @map-ped database value.
+function enumMappedDefault(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum[] | undefined) {
+  if (field.kind !== 'enum' || typeof field.default !== 'string') return null
+  return (
+    enums?.find((e) => e.name === field.type)?.values.find((v) => v.name === field.default)
+      ?.dbName ?? null
+  )
+}
+
+function columnAttributeParts(
+  field: DMMF.Field,
+  isPk: boolean,
+  isCompositePk: boolean,
+  derivedColumn: string | undefined,
+  enums: readonly DMMF.DatamodelEnum[] | undefined,
+) {
+  const columnParts: string[] = []
+
+  // column_name: emit when the real column differs from the one sea-orm derives
+  // from the (possibly keyword-escaped) Rust field identifier.
+  const columnName = field.dbName ?? field.name
+  const snakeName = derivedColumn ?? makeSnakeCase(field.name)
+  if (columnName !== snakeName) {
+    columnParts.push(`column_name = "${columnName}"`)
+  }
+
+  const colType = resolveSeaOrmColumnType(field)
+  if (colType !== null) {
+    columnParts.push(`column_type = "${colType}"`)
+  }
+
+  // A DateTime default (now() or a literal) is filled in by ActiveModelBehavior, as Prisma Client
+  // does: sea-query would write a literal back as `2024-01-15 10:30:00 +00:00`.
+  if ((!isPk || isCompositePk) && field.type !== 'DateTime') {
+    const defaultVal = formatRustDefault(enumMappedDefault(field, enums) ?? field.default)
+    if (defaultVal !== null) {
+      columnParts.push(`default_value = ${defaultVal}`)
+    }
+  }
+  return columnParts
+}
+
 export function buildSeaOrmAttributes(
   field: DMMF.Field,
   isPk: boolean,
@@ -391,37 +432,7 @@ export function buildSeaOrmAttributes(
     attrs.push('    #[sea_orm(unique)]')
   }
 
-  const columnParts: string[] = []
-
-  // column_name: emit when the real column differs from the one sea-orm derives
-  // from the (possibly keyword-escaped) Rust field identifier.
-  const columnName = field.dbName ?? field.name
-  const snakeName = derivedColumn ?? makeSnakeCase(field.name)
-  if (columnName !== snakeName) {
-    columnParts.push(`column_name = "${columnName}"`)
-  }
-
-  const colType = resolveSeaOrmColumnType(field)
-  if (colType) {
-    columnParts.push(`column_type = "${colType}"`)
-  }
-
-  // A DateTime default (now() or a literal) is filled in by ActiveModelBehavior, as Prisma Client
-  // does: sea-query would write a literal back as `2024-01-15 10:30:00 +00:00`.
-  if ((!isPk || isCompositePk) && field.type !== 'DateTime') {
-    // An enum default arrives as the Prisma-level value name; the column
-    // stores the @map-ped database value.
-    const enumMappedDefault =
-      field.kind === 'enum' && typeof field.default === 'string'
-        ? (enums?.find((e) => e.name === field.type)?.values.find((v) => v.name === field.default)
-            ?.dbName ?? null)
-        : null
-    const defaultVal = formatRustDefault(enumMappedDefault ?? field.default)
-    if (defaultVal !== null) {
-      columnParts.push(`default_value = ${defaultVal}`)
-    }
-  }
-
+  const columnParts = columnAttributeParts(field, isPk, isCompositePk, derivedColumn, enums)
   if (columnParts.length > 0) {
     attrs.push(seaOrmAttribute('    ', columnParts))
   }
@@ -437,8 +448,8 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
     references: string
     foreignKeys: readonly string[]
     referencesList: readonly string[]
-    onDelete?: string
-    onUpdate?: string
+    onDelete?: string | undefined
+    onUpdate?: string | undefined
   }[] = []
   const hasMany: {
     name: string
@@ -509,7 +520,7 @@ export function canDeriveEq(fields: readonly DMMF.Field[]) {
 
 function buildSerdeAttributes(opts: { readonly renameAll?: string }) {
   const parts: string[] = []
-  if (opts.renameAll) {
+  if (opts.renameAll !== undefined && opts.renameAll !== '') {
     parts.push(`rename_all = "${opts.renameAll}"`)
   }
   if (parts.length === 0) return []
@@ -564,6 +575,10 @@ export function generateEnum(e: DMMF.DatamodelEnum, serde: { readonly renameAll?
   ].join('\n')
 }
 
+function referentialAction(option: string, action: string | undefined) {
+  return action === undefined || action === '' ? null : `${option} = "${action}"`
+}
+
 function generateRelationEnum(
   model: DMMF.Model,
   associations: ReturnType<typeof getAssociations>,
@@ -613,8 +628,8 @@ function generateRelationEnum(
         : target(assoc.references)
     // Prisma action names match sea-orm's ForeignKeyAction variants verbatim.
     const actions = [
-      assoc.onUpdate ? `on_update = "${assoc.onUpdate}"` : null,
-      assoc.onDelete ? `on_delete = "${assoc.onDelete}"` : null,
+      referentialAction('on_update', assoc.onUpdate),
+      referentialAction('on_delete', assoc.onDelete),
     ].filter((l) => l !== null)
     const attribute = seaOrmAttribute('    ', [
       `belongs_to = "super::${targetModule}::Entity"`,
@@ -778,6 +793,144 @@ function generateRelatedImpls(model: DMMF.Model, associations: ReturnType<typeof
   return impls
 }
 
+// rustfmt orders a path segment by segment: `status` before `status2`.
+function compareModules(a: string, b: string) {
+  if (a < b) return -1
+  return a > b ? 1 : 0
+}
+
+function fieldRustType(
+  field: DMMF.Field,
+  enumNames: ReadonlySet<string>,
+  provider: string | undefined,
+) {
+  const nativeOverride = rustTypeForNative(field, provider)
+  const isEnum = enumNames.has(field.type)
+  const elemType = isEnum ? field.type : (nativeOverride ?? prismaTypeToRustType(field.type, true))
+  if (field.isList) return { elemType, rustType: `Vec<${elemType}>` }
+  if (isEnum || nativeOverride !== null) {
+    return { elemType, rustType: field.isRequired ? elemType : `Option<${elemType}>` }
+  }
+  return { elemType, rustType: prismaTypeToRustType(field.type, field.isRequired) }
+}
+
+// What before_save sets a DateTime to: `now` is a DateTimeUtc at Prisma's millisecond precision;
+// a literal is parsed as the field's own type, which Set leaves the compiler to infer.
+function stampValue(field: DMMF.Field, elemType: string) {
+  if (field.type !== 'DateTime' || field.isList) return null
+  const form = isDateTimeForm(elemType) ? DATE_TIME_FORMS[elemType] : DATE_TIME_FORMS.DateTime
+  if (
+    field.isUpdatedAt === true ||
+    (isFunctionDefault(field.default) && field.default.name === 'now')
+  ) {
+    return `now${form.fromUtc}`
+  }
+  return typeof field.default === 'string'
+    ? `"${new Date(field.default).toISOString().slice(...form.text)}".parse().unwrap()`
+    : null
+}
+
+// Laid out as rustfmt lays them out. It puts a method chain longer than 60 columns
+// (`chain_width`) one call per line, and the right-hand side of an assignment that runs past
+// 100 columns on the next line. Where even that does not fit, rustfmt leaves the line as it is.
+function stampLines(field: DMMF.Field, fieldName: string, value: string) {
+  const updated = field.isUpdatedAt === true
+  const check = updated ? 'is_set' : 'is_not_set'
+  const chainIndent = updated ? '            ' : '                '
+  const condition =
+    `self.${fieldName}.${check}()`.length <= 60 || `${chainIndent}.${fieldName}`.length > 100
+      ? [
+          updated
+            ? `        if !self.${fieldName}.is_set() {`
+            : `        if insert && self.${fieldName}.is_not_set() {`,
+        ]
+      : [
+          ...(updated ? ['        if !self'] : ['        if insert', '            && self']),
+          `${chainIndent}.${fieldName}`,
+          `${chainIndent}.${check}()`,
+          '        {',
+        ]
+  const assignment = `            self.${fieldName} = Set(${field.isRequired ? value : `Some(${value})`});`
+  return [
+    ...condition,
+    assignment.length <= 100 || `            self.${fieldName} =`.length > 99
+      ? assignment
+      : `            self.${fieldName} =\n                ${assignment.trimStart().slice(`self.${fieldName} = `.length)}`,
+    '        }',
+  ]
+}
+
+function superImportNames(
+  f: DMMF.Field,
+  enumNames: ReadonlySet<string>,
+  provider: string | undefined,
+) {
+  if (enumNames.has(f.type)) return [f.type]
+  return f.type === 'DateTime' && provider === 'sqlite' ? ['PrismaDateTime'] : []
+}
+
+function newFnField(field: DMMF.Field, ident: string) {
+  const generate = generatedIdExpr(field) ?? ''
+  const value = field.isRequired ? generate : `Some(${generate})`
+  // rustfmt's layout of the field, as it writes it for each length of the name (n) and
+  // of the generator call (g): on one line while `name: Set(value)` fits in 100
+  // columns; then the argument of Set, or of Some, on a line of its own; then the value
+  // on the line after the name. Past 85 it leaves the line as it is. The bounds are
+  // what rustfmt 1.9 does, not a rule it states, and test/lang/sea-orm.test.ts holds
+  // the harness to it.
+  const n = ident.length
+  const g = generate.length
+  const inner = '                '
+  // The comma counts toward the 100 columns only after Some.
+  const width = `            ${ident}: Set(${value})`.length + (field.isRequired ? 0 : 1)
+  if (width <= 100 || n > 85) {
+    return `            ${ident}: Set(${value}),`
+  }
+  if (n > 82) return `            ${ident}:\n${inner}Set(${value}),`
+  if (!field.isRequired) {
+    return n > 75
+      ? `            ${ident}: Set(\n${inner}${value},\n            ),`
+      : `            ${ident}: Set(Some(\n${inner}${generate},\n            )),`
+  }
+  if (n + g > 93) return `            ${ident}: Set(\n${inner}${value},\n            ),`
+  if (n + g < 93) return `            ${ident}: Set(\n${inner}${value}\n            ),`
+  // At exactly 93 rustfmt breaks inside the generator's own call.
+  const call = generate.slice(0, -'().to_string()'.length)
+  return `            ${ident}: Set(${call}(\n            )\n            .to_string()),`
+}
+
+function behaviorImpl(
+  newFn: readonly string[],
+  stamps: readonly string[],
+  stampsNow: boolean,
+  stampsOnInsert: boolean,
+) {
+  const beforeSave =
+    stamps.length === 0
+      ? []
+      : [
+          `    async fn before_save<C>(mut self, _db: &C, ${stampsOnInsert ? 'insert' : '_insert'}: bool) -> Result<Self, DbErr>`,
+          '    where',
+          '        C: ConnectionTrait,',
+          '    {',
+          ...(stampsNow ? ['        let now = chrono::Utc::now().trunc_subsecs(3);'] : []),
+          ...stamps,
+          '        Ok(self)',
+          '    }',
+        ]
+  if (newFn.length === 0 && beforeSave.length === 0) {
+    return 'impl ActiveModelBehavior for ActiveModel {}'
+  }
+  return [
+    ...(beforeSave.length > 0 ? ['#[async_trait::async_trait]'] : []),
+    'impl ActiveModelBehavior for ActiveModel {',
+    ...newFn,
+    ...(newFn.length > 0 && beforeSave.length > 0 ? [''] : []),
+    ...beforeSave,
+    '}',
+  ].join('\n')
+}
+
 export function generateEntityFile(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
@@ -794,99 +947,44 @@ export function generateEntityFile(
   const associations = getAssociations(model, allModels)
   const enumNames = new Set(enums.map((e) => e.name))
   const fieldNames = seaOrmFieldNames(model)
+  const identOf = (field: DMMF.Field) =>
+    fieldNames.get(field.name) ?? rustFieldIdent(makeSnakeCase(field.name))
 
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
-  const fieldLines: string[] = []
+  const columns = scalarFields.map((field) => {
+    const isPk = primaryKey.has(field.name)
+    const { ident, derivedColumn } = identOf(field)
+    const attrs = buildSeaOrmAttributes(field, isPk, isCompositePk, derivedColumn, enums)
+    const { elemType, rustType } = fieldRustType(field, enumNames, provider)
+    return {
+      field,
+      ident,
+      lines: [
+        ...rustDocLines(stripAnnotations(field.documentation), '    '),
+        ...attrs,
+        rustField(ident, rustType),
+      ],
+      stamp: stampValue(field, elemType),
+    }
+  })
+  const fieldLines = columns.flatMap((c) => c.lines)
   // What before_save sets, as Prisma Client does: an @updatedAt on every save the caller left it
   // out of, a now() or literal default on insert.
-  const stampLines: string[] = []
-  let stampsNow = false
-  let stampsOnInsert = false
-
-  for (const field of scalarFields) {
-    const isPk = primaryKey.has(field.name)
-    const { ident: fieldName, derivedColumn } =
-      fieldNames.get(field.name) ?? rustFieldIdent(makeSnakeCase(field.name))
-    const attrs = buildSeaOrmAttributes(field, isPk, isCompositePk, derivedColumn, enums)
-
-    const nativeOverride = rustTypeForNative(field, provider)
-    const elemType = enumNames.has(field.type)
-      ? field.type
-      : (nativeOverride ?? prismaTypeToRustType(field.type, true))
-    const rustType = field.isList
-      ? `Vec<${elemType}>`
-      : enumNames.has(field.type) || nativeOverride !== null
-        ? field.isRequired
-          ? elemType
-          : `Option<${elemType}>`
-        : prismaTypeToRustType(field.type, field.isRequired)
-
-    fieldLines.push(
-      ...rustDocLines(stripAnnotations(field.documentation), '    '),
-      ...attrs,
-      rustField(fieldName, rustType),
-    )
-
-    if (field.type !== 'DateTime' || field.isList) continue
-    // `now` is a DateTimeUtc at Prisma's millisecond precision; a literal is parsed as the
-    // field's own type, which Set leaves the compiler to infer.
-    const form = isDateTimeForm(elemType) ? DATE_TIME_FORMS[elemType] : DATE_TIME_FORMS.DateTime
-    const value =
-      field.isUpdatedAt || (isFunctionDefault(field.default) && field.default.name === 'now')
-        ? `now${form.fromUtc}`
-        : typeof field.default === 'string'
-          ? `"${new Date(field.default).toISOString().slice(...form.text)}".parse().unwrap()`
-          : null
-    if (value === null) continue
-    stampsNow ||= value.startsWith('now')
-    stampsOnInsert ||= !field.isUpdatedAt
-    // Laid out as rustfmt lays them out. It puts a method chain longer than 60 columns
-    // (`chain_width`) one call per line, and the right-hand side of an assignment that runs past
-    // 100 columns on the next line. Where even that does not fit, rustfmt leaves the line as it is.
-    const check = field.isUpdatedAt ? 'is_set' : 'is_not_set'
-    const chainIndent = field.isUpdatedAt ? '            ' : '                '
-    const condition =
-      `self.${fieldName}.${check}()`.length <= 60 || `${chainIndent}.${fieldName}`.length > 100
-        ? [
-            field.isUpdatedAt
-              ? `        if !self.${fieldName}.is_set() {`
-              : `        if insert && self.${fieldName}.is_not_set() {`,
-          ]
-        : [
-            ...(field.isUpdatedAt
-              ? ['        if !self']
-              : ['        if insert', '            && self']),
-            `${chainIndent}.${fieldName}`,
-            `${chainIndent}.${check}()`,
-            '        {',
-          ]
-    const assignment = `            self.${fieldName} = Set(${field.isRequired ? value : `Some(${value})`});`
-    stampLines.push(
-      ...condition,
-      assignment.length <= 100 || `            self.${fieldName} =`.length > 99
-        ? assignment
-        : `            self.${fieldName} =\n                ${assignment.trimStart().slice(`self.${fieldName} = `.length)}`,
-      '        }',
-    )
-  }
+  const stamped = columns.flatMap(({ field, ident, stamp }) =>
+    stamp === null ? [] : [{ field, ident, value: stamp }],
+  )
+  const stamps = stamped.flatMap(({ field, ident, value }) => stampLines(field, ident, value))
+  const stampsNow = stamped.some(({ value }) => value.startsWith('now'))
+  const stampsOnInsert = stamped.some(({ field }) => field.isUpdatedAt !== true)
 
   const relationEnum = generateRelationEnum(model, associations, allModels)
   const relatedImpls = generateRelatedImpls(model, associations)
 
   const superImports = [
-    ...new Set(
-      scalarFields.flatMap((f) =>
-        enumNames.has(f.type)
-          ? [f.type]
-          : f.type === 'DateTime' && provider === 'sqlite'
-            ? ['PrismaDateTime']
-            : [],
-      ),
-    ),
+    ...new Set(scalarFields.flatMap((f) => superImportNames(f, enumNames, provider))),
   ]
     .map((name) => ({ module: rustModule(name).ident, name }))
-    // rustfmt orders a path segment by segment: `status` before `status2`.
-    .toSorted((a, b) => (a.module < b.module ? -1 : a.module > b.module ? 1 : 0))
+    .toSorted((a, b) => compareModules(a.module, b.module))
     .map(({ module, name }) => `use super::${module}::${name};`)
 
   const generatedIdFields = scalarFields.filter(
@@ -898,7 +996,7 @@ export function generateEntityFile(
     ...superImports,
     ...(stampsNow ? ['use chrono::SubsecRound;'] : []),
     'use sea_orm::entity::prelude::*;',
-    ...(generatedIdFields.length > 0 || stampLines.length > 0 ? ['use sea_orm::Set;'] : []),
+    ...(generatedIdFields.length > 0 || stamps.length > 0 ? ['use sea_orm::Set;'] : []),
     'use serde::{Deserialize, Serialize};',
   ]
 
@@ -908,65 +1006,11 @@ export function generateEntityFile(
       : [
           '    fn new() -> Self {',
           '        Self {',
-          ...generatedIdFields.map((field) => {
-            const { ident } =
-              fieldNames.get(field.name) ?? rustFieldIdent(makeSnakeCase(field.name))
-            const generate = generatedIdExpr(field) ?? ''
-            const value = field.isRequired ? generate : `Some(${generate})`
-            // rustfmt's layout of the field, as it writes it for each length of the name (n) and
-            // of the generator call (g): on one line while `name: Set(value)` fits in 100
-            // columns; then the argument of Set, or of Some, on a line of its own; then the value
-            // on the line after the name. Past 85 it leaves the line as it is. The bounds are
-            // what rustfmt 1.9 does, not a rule it states, and test/lang/sea-orm.test.ts holds
-            // the harness to it.
-            const n = ident.length
-            const g = generate.length
-            const inner = '                '
-            // The comma counts toward the 100 columns only after Some.
-            const width = `            ${ident}: Set(${value})`.length + (field.isRequired ? 0 : 1)
-            if (width <= 100 || n > 85) {
-              return `            ${ident}: Set(${value}),`
-            }
-            if (n > 82) return `            ${ident}:\n${inner}Set(${value}),`
-            if (!field.isRequired) {
-              return n > 75
-                ? `            ${ident}: Set(\n${inner}${value},\n            ),`
-                : `            ${ident}: Set(Some(\n${inner}${generate},\n            )),`
-            }
-            if (n + g > 93) return `            ${ident}: Set(\n${inner}${value},\n            ),`
-            if (n + g < 93) return `            ${ident}: Set(\n${inner}${value}\n            ),`
-            // At exactly 93 rustfmt breaks inside the generator's own call.
-            const call = generate.slice(0, -'().to_string()'.length)
-            return `            ${ident}: Set(${call}(\n            )\n            .to_string()),`
-          }),
+          ...generatedIdFields.map((field) => newFnField(field, identOf(field).ident)),
           '            ..ActiveModelTrait::default()',
           '        }',
           '    }',
         ]
-  const beforeSave =
-    stampLines.length === 0
-      ? []
-      : [
-          `    async fn before_save<C>(mut self, _db: &C, ${stampsOnInsert ? 'insert' : '_insert'}: bool) -> Result<Self, DbErr>`,
-          '    where',
-          '        C: ConnectionTrait,',
-          '    {',
-          ...(stampsNow ? ['        let now = chrono::Utc::now().trunc_subsecs(3);'] : []),
-          ...stampLines,
-          '        Ok(self)',
-          '    }',
-        ]
-  const behaviorImpl =
-    newFn.length === 0 && beforeSave.length === 0
-      ? 'impl ActiveModelBehavior for ActiveModel {}'
-      : [
-          ...(beforeSave.length > 0 ? ['#[async_trait::async_trait]'] : []),
-          'impl ActiveModelBehavior for ActiveModel {',
-          ...newFn,
-          ...(newFn.length > 0 && beforeSave.length > 0 ? [''] : []),
-          ...beforeSave,
-          '}',
-        ].join('\n')
 
   const eq = canDeriveEq(scalarFields)
   const deriveModel = eq
@@ -989,7 +1033,7 @@ export function generateEntityFile(
     relationEnum,
     '',
     ...relatedImpls.map((impl) => `${impl}\n`),
-    behaviorImpl,
+    behaviorImpl(newFn, stamps, stampsNow, stampsOnInsert),
     '',
   ]
 
@@ -1170,8 +1214,9 @@ export function generatePreludeRs(models: readonly DMMF.Model[]) {
     .map((m) => ({ module: rustModule(m.name).ident, name: m.name }))
     // rustfmt orders a path segment by segment: `profile_builder_state` before
     // `profile_builder_state2`, where the lines as text would put `2` before `:`.
-    .toSorted((a, b) => (a.module < b.module ? -1 : a.module > b.module ? 1 : 0))
+    .toSorted((a, b) => compareModules(a.module, b.module))
     // A model named Entity needs no alias, and rustfmt drops `as Entity`.
+
     .map(({ module, name }) =>
       name === 'Entity'
         ? `pub use super::${module}::Entity;`

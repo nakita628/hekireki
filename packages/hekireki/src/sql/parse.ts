@@ -258,118 +258,77 @@ function parseComparison(p: Parser): Expr {
 
 /** The predicates that follow a value: comparison operators, IS, IN, BETWEEN, LIKE and friends. */
 function parsePredicate(p: Parser, start: number, left: Expr): Expr {
+  const next =
+    parseComparisonPredicate(p, start, left) ??
+    parseIsPredicate(p, start, left) ??
+    parseNegatablePredicate(p, start, left)
+  return next === null ? left : parsePredicate(p, start, next)
+}
+
+function parseComparisonPredicate(p: Parser, start: number, left: Expr): Expr | null {
   const token = peek(p)
-  if (token.kind === 'op' && COMPARISON.has(token.text)) {
-    advance(p)
-    // `= ANY (...)` / `= ALL (...)` / `= SOME (...)` qualify the comparison; the operand still reads.
-    if (atWord(p, 'ANY') || atWord(p, 'ALL') || atWord(p, 'SOME')) advance(p)
-    const right = parseConcat(p)
-    return parsePredicate(p, start, {
-      type: 'binary',
-      op: token.text,
-      left,
-      right,
-      range: rangeFrom(p, start),
-    })
-  }
-  if (atWord(p, 'IS')) {
-    advance(p)
-    const not = acceptWord(p, 'NOT')
-    if (acceptWords(p, 'DISTINCT', 'FROM')) {
-      const right = parseConcat(p)
-      return parsePredicate(p, start, {
-        type: 'binary',
-        op: not ? 'IS NOT DISTINCT FROM' : 'IS DISTINCT FROM',
-        left,
-        right,
-        range: rangeFrom(p, start),
-      })
-    }
-    const value = advance(p)
-    if (!['NULL', 'TRUE', 'FALSE', 'UNKNOWN'].includes(value.text) || value.kind !== 'word') {
-      fail(p, 'Expected NULL, TRUE, FALSE or UNKNOWN after IS')
-    }
-    const literal =
-      value.text === 'NULL'
-        ? 'NULL'
-        : value.text === 'TRUE'
-          ? 'TRUE'
-          : value.text === 'FALSE'
-            ? 'FALSE'
-            : 'UNKNOWN'
-    return parsePredicate(p, start, {
-      type: 'is',
-      expr: left,
-      not,
-      value: literal,
-      range: rangeFrom(p, start),
-    })
-  }
+  if (token.kind !== 'op' || !COMPARISON.has(token.text)) return null
+  advance(p)
+  // `= ANY (...)` / `= ALL (...)` / `= SOME (...)` qualify the comparison; the operand still reads.
+  if (atWord(p, 'ANY') || atWord(p, 'ALL') || atWord(p, 'SOME')) advance(p)
+  const right = parseConcat(p)
+  return { type: 'binary', op: token.text, left, right, range: rangeFrom(p, start) }
+}
+
+const IS_VALUES: ReadonlyMap<string, 'NULL' | 'TRUE' | 'FALSE' | 'UNKNOWN'> = new Map([
+  ['NULL', 'NULL'],
+  ['TRUE', 'TRUE'],
+  ['FALSE', 'FALSE'],
+  ['UNKNOWN', 'UNKNOWN'],
+] as const)
+
+/** `IS [NOT] NULL` and the like, `IS [NOT] DISTINCT FROM`, and `ISNULL` / `NOTNULL`. */
+function parseIsPredicate(p: Parser, start: number, left: Expr): Expr | null {
   if (atWord(p, 'ISNULL') || atWord(p, 'NOTNULL')) {
     const word = advance(p)
-    return parsePredicate(p, start, {
+    return {
       type: 'is',
       expr: left,
       not: word.text === 'NOTNULL',
       value: 'NULL',
       range: rangeFrom(p, start),
-    })
+    }
   }
+  if (!atWord(p, 'IS')) return null
+  advance(p)
+  const not = acceptWord(p, 'NOT')
+  if (acceptWords(p, 'DISTINCT', 'FROM')) {
+    const right = parseConcat(p)
+    return {
+      type: 'binary',
+      op: not ? 'IS NOT DISTINCT FROM' : 'IS DISTINCT FROM',
+      left,
+      right,
+      range: rangeFrom(p, start),
+    }
+  }
+  const value = advance(p)
+  const literal = IS_VALUES.get(value.text)
+  if (literal === undefined || value.kind !== 'word') {
+    fail(p, 'Expected NULL, TRUE, FALSE or UNKNOWN after IS')
+  }
+  return { type: 'is', expr: left, not, value: literal, range: rangeFrom(p, start) }
+}
+
+/** IN, BETWEEN and LIKE, each of which NOT may come before. */
+function parseNegatablePredicate(p: Parser, start: number, left: Expr): Expr | null {
   const negated =
     atWord(p, 'NOT') &&
     (atWord(p, 'IN', 1) || atWord(p, 'BETWEEN', 1) || LIKE_WORDS.has(peek(p, 1).text))
   if (negated) advance(p)
-  if (atWord(p, 'IN')) {
-    advance(p)
-    if (acceptPunct(p, '(')) {
-      if (atQueryStart(p)) {
-        const query = parseQuery(p)
-        expectPunct(p, ')')
-        return parsePredicate(p, start, {
-          type: 'in',
-          expr: left,
-          not: negated,
-          list: null,
-          subquery: query,
-          range: rangeFrom(p, start),
-        })
-      }
-      const list = atPunct(p, ')') ? [] : parseExprList(p)
-      expectPunct(p, ')')
-      return parsePredicate(p, start, {
-        type: 'in',
-        expr: left,
-        not: negated,
-        list,
-        subquery: null,
-        range: rangeFrom(p, start),
-      })
-    }
-    // `position('a' IN s)` and a bare `x IN y`: one operand on the right.
-    const single = parseConcat(p)
-    return parsePredicate(p, start, {
-      type: 'in',
-      expr: left,
-      not: negated,
-      list: [single],
-      subquery: null,
-      range: rangeFrom(p, start),
-    })
-  }
+  if (atWord(p, 'IN')) return parseInPredicate(p, start, left, negated)
   if (atWord(p, 'BETWEEN')) {
     advance(p)
     acceptWord(p, 'SYMMETRIC')
     const low = parseConcat(p)
     expectWord(p, 'AND')
     const high = parseConcat(p)
-    return parsePredicate(p, start, {
-      type: 'between',
-      expr: left,
-      not: negated,
-      low,
-      high,
-      range: rangeFrom(p, start),
-    })
+    return { type: 'between', expr: left, not: negated, low, high, range: rangeFrom(p, start) }
   }
   const like = peek(p)
   if (LIKE_WORDS.has(like.text) && like.kind === 'word') {
@@ -377,17 +336,55 @@ function parsePredicate(p: Parser, start: number, left: Expr): Expr {
     if (like.text === 'SIMILAR') expectWord(p, 'TO')
     const pattern = parseConcat(p)
     if (acceptWord(p, 'ESCAPE')) parseConcat(p)
-    return parsePredicate(p, start, {
+    return {
       type: 'like',
       op: like.text,
       expr: left,
       not: negated,
       pattern,
       range: rangeFrom(p, start),
-    })
+    }
   }
   if (negated) fail(p, 'Expected IN, BETWEEN or LIKE after NOT')
-  return left
+  return null
+}
+
+function parseInPredicate(p: Parser, start: number, left: Expr, negated: boolean): Expr {
+  advance(p)
+  if (acceptPunct(p, '(')) {
+    if (atQueryStart(p)) {
+      const query = parseQuery(p)
+      expectPunct(p, ')')
+      return {
+        type: 'in',
+        expr: left,
+        not: negated,
+        list: null,
+        subquery: query,
+        range: rangeFrom(p, start),
+      }
+    }
+    const list = atPunct(p, ')') ? [] : parseExprList(p)
+    expectPunct(p, ')')
+    return {
+      type: 'in',
+      expr: left,
+      not: negated,
+      list,
+      subquery: null,
+      range: rangeFrom(p, start),
+    }
+  }
+  // `position('a' IN s)` and a bare `x IN y`: one operand on the right.
+  const single = parseConcat(p)
+  return {
+    type: 'in',
+    expr: left,
+    not: negated,
+    list: [single],
+    subquery: null,
+    range: rangeFrom(p, start),
+  }
 }
 
 function parseConcat(p: Parser): Expr {
@@ -516,112 +513,130 @@ function atQueryStartAt(p: Parser, ahead: number): boolean {
 
 function parsePrimary(p: Parser): Expr {
   const token = peek(p)
-  const start = token.start
-  if (token.kind === 'string') {
-    advance(p)
-    return { type: 'literal', kind: 'string', value: token.text, range: rangeFrom(p, start) }
+  const parsed =
+    parseLiteralPrimary(p, token) ??
+    parseGroupPrimary(p, token) ??
+    (token.kind === 'word' ? parseKeywordPrimary(p, token) : null)
+  if (parsed !== null) return parsed
+  if (isNameToken(token) || (token.kind === 'word' && !RESERVED.has(token.text))) {
+    return parseNameExpr(p)
   }
-  if (token.kind === 'number') {
+  return fail(p, `Unexpected ${token.kind === 'eof' ? 'end of statement' : `"${token.raw}"`}`)
+}
+
+/** A string, a number, a placeholder or `*`. */
+function parseLiteralPrimary(p: Parser, token: Token): Expr | null {
+  const start = token.start
+  if (token.kind === 'string' || token.kind === 'number') {
     advance(p)
-    return { type: 'literal', kind: 'number', value: token.text, range: rangeFrom(p, start) }
+    return { type: 'literal', kind: token.kind, value: token.text, range: rangeFrom(p, start) }
   }
   if (token.kind === 'param') {
     advance(p)
     return { type: 'param', placeholder: token.text, range: rangeFrom(p, start) }
   }
-  if (token.kind === 'punct' && token.text === '(') {
-    advance(p)
-    if (atQueryStart(p)) {
-      const query = parseQuery(p)
-      expectPunct(p, ')')
-      return { type: 'subquery', query, range: rangeFrom(p, start) }
-    }
-    const items = parseExprList(p)
-    expectPunct(p, ')')
-    const single = items[0]
-    return items.length === 1 && single !== undefined
-      ? single
-      : { type: 'list', items, range: rangeFrom(p, start) }
-  }
   if (token.kind === 'op' && token.text === '*') {
     advance(p)
     return { type: 'star', table: null, range: rangeFrom(p, start) }
   }
-  if (token.kind === 'word') {
-    switch (token.text) {
-      case 'NULL':
-        advance(p)
-        return { type: 'literal', kind: 'null', value: 'NULL', range: rangeFrom(p, start) }
-      case 'TRUE':
-      case 'FALSE':
-        advance(p)
-        return {
-          type: 'literal',
-          kind: 'boolean',
-          value: token.text.toLowerCase(),
-          range: rangeFrom(p, start),
-        }
-      case 'CASE':
-        return parseCase(p)
-      case 'CAST':
-        return parseCast(p)
-      case 'EXISTS': {
-        advance(p)
-        expectPunct(p, '(')
-        const query = parseQuery(p)
-        expectPunct(p, ')')
-        return { type: 'exists', not: false, query, range: rangeFrom(p, start) }
+  return null
+}
+
+/** `(...)`: a subquery, one expression in parentheses, or a list of them. */
+function parseGroupPrimary(p: Parser, token: Token): Expr | null {
+  if (token.kind !== 'punct' || token.text !== '(') return null
+  const start = token.start
+  advance(p)
+  if (atQueryStart(p)) {
+    const query = parseQuery(p)
+    expectPunct(p, ')')
+    return { type: 'subquery', query, range: rangeFrom(p, start) }
+  }
+  const items = parseExprList(p)
+  expectPunct(p, ')')
+  const single = items[0]
+  return items.length === 1 && single !== undefined
+    ? single
+    : { type: 'list', items, range: rangeFrom(p, start) }
+}
+
+/** What a keyword starts: NULL, TRUE, CASE, CAST, EXISTS, NOT, a typed literal, an ARRAY[...]. */
+function parseKeywordPrimary(p: Parser, token: Token): Expr | null {
+  const start = token.start
+  switch (token.text) {
+    case 'NULL':
+      advance(p)
+      return { type: 'literal', kind: 'null', value: 'NULL', range: rangeFrom(p, start) }
+    case 'TRUE':
+    case 'FALSE':
+      advance(p)
+      return {
+        type: 'literal',
+        kind: 'boolean',
+        value: token.text.toLowerCase(),
+        range: rangeFrom(p, start),
       }
-      case 'NOT': {
-        advance(p)
-        const operand = parseUnary(p)
-        return { type: 'unary', op: 'NOT', operand, range: rangeFrom(p, start) }
-      }
-      case 'INTERVAL':
-      case 'DATE':
-      case 'TIME':
-      case 'TIMESTAMP':
-        // `DATE '2024-01-01'`, `INTERVAL '1 day'`: a typed literal.
-        if (peek(p, 1).kind === 'string') {
-          advance(p)
-          const literal = advance(p)
-          return {
-            type: 'cast',
-            expr: {
-              type: 'literal',
-              kind: 'string',
-              value: literal.text,
-              range: { start: literal.start, end: literal.end },
-            },
-            to: token.raw,
-            range: rangeFrom(p, start),
-          }
-        }
-        break
-      case 'ARRAY':
-        if (atPunct(p, '[', 1)) {
-          advance(p)
-          advance(p)
-          const items = atPunct(p, ']') ? [] : parseExprList(p)
-          expectPunct(p, ']')
-          return {
-            type: 'call',
-            name: 'array',
-            args: items,
-            distinct: false,
-            over: null,
-            range: rangeFrom(p, start),
-          }
-        }
-        break
-      default:
-        break
+    case 'CASE':
+      return parseCase(p)
+    case 'CAST':
+      return parseCast(p)
+    case 'EXISTS': {
+      advance(p)
+      expectPunct(p, '(')
+      const query = parseQuery(p)
+      expectPunct(p, ')')
+      return { type: 'exists', not: false, query, range: rangeFrom(p, start) }
     }
+    case 'NOT': {
+      advance(p)
+      const operand = parseUnary(p)
+      return { type: 'unary', op: 'NOT', operand, range: rangeFrom(p, start) }
+    }
+    case 'INTERVAL':
+    case 'DATE':
+    case 'TIME':
+    case 'TIMESTAMP':
+      return parseTypedLiteral(p, token)
+    case 'ARRAY':
+      return parseArrayLiteral(p, token)
+    default:
+      return null
   }
-  if (isNameToken(token) || (token.kind === 'word' && !RESERVED.has(token.text))) {
-    return parseNameExpr(p)
+}
+
+/** `DATE '2024-01-01'`, `INTERVAL '1 day'`: a typed literal. */
+function parseTypedLiteral(p: Parser, token: Token): Expr | null {
+  if (peek(p, 1).kind !== 'string') return null
+  advance(p)
+  const literal = advance(p)
+  return {
+    type: 'cast',
+    expr: {
+      type: 'literal',
+      kind: 'string',
+      value: literal.text,
+      range: { start: literal.start, end: literal.end },
+    },
+    to: token.raw,
+    range: rangeFrom(p, token.start),
   }
-  return fail(p, `Unexpected ${token.kind === 'eof' ? 'end of statement' : `"${token.raw}"`}`)
+}
+
+/** `ARRAY[1, 2]`. */
+function parseArrayLiteral(p: Parser, token: Token): Expr | null {
+  if (!atPunct(p, '[', 1)) return null
+  advance(p)
+  advance(p)
+  const items = atPunct(p, ']') ? [] : parseExprList(p)
+  expectPunct(p, ']')
+  return {
+    type: 'call',
+    name: 'array',
+    args: items,
+    distinct: false,
+    over: null,
+    range: rangeFrom(p, token.start),
+  }
 }
 
 /** `a`, `a.b`, `a.b.c`, `a.*` or a function call `f(...)`. */
@@ -748,12 +763,17 @@ function parseCast(p: Parser): Expr {
   return { type: 'cast', expr, to, range: rangeFrom(p, start) }
 }
 
+function parseDirection(p: Parser) {
+  if (acceptWord(p, 'ASC')) return 'ASC'
+  return acceptWord(p, 'DESC') ? 'DESC' : null
+}
+
 function parseOrderItems(p: Parser): OrderItem[] {
   const items: OrderItem[] = []
   do {
     const start = peek(p).start
     const expr = parseOr(p)
-    const direction = acceptWord(p, 'ASC') ? 'ASC' : acceptWord(p, 'DESC') ? 'DESC' : null
+    const direction = parseDirection(p)
     if (acceptWord(p, 'NULLS') && !acceptWord(p, 'FIRST') && !acceptWord(p, 'LAST')) {
       fail(p, 'Expected FIRST or LAST')
     }
@@ -822,24 +842,21 @@ function parseLimit(p: Parser): { readonly limit: Expr | null; readonly offset: 
   }
   if (acceptWord(p, 'OFFSET')) {
     const offset = parseOffsetValue(p)
-    if (acceptWord(p, 'FETCH')) {
-      if (!acceptWord(p, 'FIRST') && !acceptWord(p, 'NEXT')) fail(p, 'Expected FIRST or NEXT')
-      const limit = atWord(p, 'ROW') || atWord(p, 'ROWS') ? null : parseOr(p)
-      if (!acceptWord(p, 'ROWS') && !acceptWord(p, 'ROW')) fail(p, 'Expected ROWS')
-      expectWord(p, 'ONLY')
-      return { limit, offset }
-    }
+    if (acceptWord(p, 'FETCH')) return { limit: parseFetchCount(p), offset }
     const limit = acceptWord(p, 'LIMIT') ? parseOr(p) : null
     return { limit, offset }
   }
-  if (acceptWord(p, 'FETCH')) {
-    if (!acceptWord(p, 'FIRST') && !acceptWord(p, 'NEXT')) fail(p, 'Expected FIRST or NEXT')
-    const limit = atWord(p, 'ROW') || atWord(p, 'ROWS') ? null : parseOr(p)
-    if (!acceptWord(p, 'ROWS') && !acceptWord(p, 'ROW')) fail(p, 'Expected ROWS')
-    expectWord(p, 'ONLY')
-    return { limit, offset: null }
-  }
+  if (acceptWord(p, 'FETCH')) return { limit: parseFetchCount(p), offset: null }
   return { limit: null, offset: null }
+}
+
+/** `FETCH FIRST n ROWS ONLY`, after FETCH: the count, null when it is left out. */
+function parseFetchCount(p: Parser) {
+  if (!acceptWord(p, 'FIRST') && !acceptWord(p, 'NEXT')) fail(p, 'Expected FIRST or NEXT')
+  const limit = atWord(p, 'ROW') || atWord(p, 'ROWS') ? null : parseOr(p)
+  if (!acceptWord(p, 'ROWS') && !acceptWord(p, 'ROW')) fail(p, 'Expected ROWS')
+  expectWord(p, 'ONLY')
+  return limit
 }
 
 function parseOffsetValue(p: Parser) {
@@ -847,6 +864,11 @@ function parseOffsetValue(p: Parser) {
   if (!acceptWord(p, 'ROWS')) acceptWord(p, 'ROW')
   return value
 }
+
+const SET_OPERATOR_OF: ReadonlyMap<string, 'UNION' | 'INTERSECT' | 'EXCEPT'> = new Map([
+  ['UNION', 'UNION'],
+  ['INTERSECT', 'INTERSECT'],
+] as const)
 
 function parseSetOperation(p: Parser): QueryBody {
   const start = peek(p).start
@@ -856,7 +878,7 @@ function parseSetOperation(p: Parser): QueryBody {
   advance(p)
   const all = acceptWord(p, 'ALL')
   if (!all) acceptWord(p, 'DISTINCT')
-  const op = token.text === 'UNION' ? 'UNION' : token.text === 'INTERSECT' ? 'INTERSECT' : 'EXCEPT'
+  const op = SET_OPERATOR_OF.get(token.text) ?? 'EXCEPT'
   const right = parseSetOperation(p)
   return { type: 'setop', op, all, left, right, range: rangeFrom(p, start) }
 }
@@ -988,19 +1010,17 @@ function parseJoinTail(p: Parser, start: number, left: FromItem): FromItem {
   })
 }
 
+const JOIN_TYPE_OF: ReadonlyMap<string, JoinType> = new Map([
+  ['LEFT', 'LEFT'],
+  ['RIGHT', 'RIGHT'],
+  ['FULL', 'FULL'],
+  ['CROSS', 'CROSS'],
+] as const)
+
 function parseJoinType(p: Parser): JoinType {
   if (acceptWord(p, 'JOIN')) return 'INNER'
   const word = advance(p)
-  const type: JoinType =
-    word.text === 'LEFT'
-      ? 'LEFT'
-      : word.text === 'RIGHT'
-        ? 'RIGHT'
-        : word.text === 'FULL'
-          ? 'FULL'
-          : word.text === 'CROSS'
-            ? 'CROSS'
-            : 'INNER'
+  const type = JOIN_TYPE_OF.get(word.text) ?? 'INNER'
   if (
     word.text !== 'INNER' &&
     word.text !== 'CROSS' &&
@@ -1201,27 +1221,7 @@ function parseStatement(p: Parser): Statement {
     isWord(first, 'VALUES') ||
     atPunct(p, '(')
   ) {
-    // A WITH may lead a SELECT or a DML statement; peek past it to tell which.
-    const { ctes, recursive } = parseWith(p)
-    if (ctes.length > 0 && (atWord(p, 'INSERT') || atWord(p, 'REPLACE'))) {
-      return parseInsert(p, start, ctes)
-    }
-    if (ctes.length > 0 && atWord(p, 'UPDATE')) return parseUpdate(p, start, ctes)
-    if (ctes.length > 0 && atWord(p, 'DELETE')) return parseDelete(p, start, ctes)
-    const body = parseSetOperation(p)
-    const orderBy = acceptWords(p, 'ORDER', 'BY') ? parseOrderItems(p) : []
-    const { limit, offset } = parseLimit(p)
-    const query: Query = {
-      type: 'query',
-      ctes,
-      recursive,
-      body,
-      orderBy,
-      limit,
-      offset,
-      range: rangeFrom(p, start),
-    }
-    return { type: 'select', query, range: rangeFrom(p, start) }
+    return parseQueryStatement(p, start)
   }
   if (isWord(first, 'INSERT') || isWord(first, 'REPLACE')) return parseInsert(p, start, [])
   if (isWord(first, 'UPDATE')) return parseUpdate(p, start, [])
@@ -1230,6 +1230,31 @@ function parseStatement(p: Parser): Statement {
   const keyword = first.kind === 'word' ? first.text : first.raw
   skipToStatementEnd(p)
   return { type: 'other', keyword, range: rangeFrom(p, start) }
+}
+
+/** A SELECT, or a DML statement after a WITH. */
+function parseQueryStatement(p: Parser, start: number): Statement {
+  // A WITH may lead a SELECT or a DML statement; peek past it to tell which.
+  const { ctes, recursive } = parseWith(p)
+  if (ctes.length > 0) {
+    if (atWord(p, 'INSERT') || atWord(p, 'REPLACE')) return parseInsert(p, start, ctes)
+    if (atWord(p, 'UPDATE')) return parseUpdate(p, start, ctes)
+    if (atWord(p, 'DELETE')) return parseDelete(p, start, ctes)
+  }
+  const body = parseSetOperation(p)
+  const orderBy = acceptWords(p, 'ORDER', 'BY') ? parseOrderItems(p) : []
+  const { limit, offset } = parseLimit(p)
+  const query: Query = {
+    type: 'query',
+    ctes,
+    recursive,
+    body,
+    orderBy,
+    limit,
+    offset,
+    range: rangeFrom(p, start),
+  }
+  return { type: 'select', query, range: rangeFrom(p, start) }
 }
 
 function skipToStatementEnd(p: Parser) {

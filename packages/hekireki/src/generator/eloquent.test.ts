@@ -4,6 +4,12 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { eloquentModelFiles } from './eloquent.js'
 
+/** The datamodel `getDMMF` parsed, or its parse error thrown. */
+function datamodelOf(result: ReturnType<typeof getDMMF>) {
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel
+}
+
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
   return {
     kind: 'scalar',
@@ -259,8 +265,7 @@ enum Tone {
         ],
       ],
     })
-    if ('type' in dmmf) throw new Error(dmmf.error.message)
-    const { models: documented, enums: documentedEnums } = dmmf.datamodel
+    const { models: documented, enums: documentedEnums } = datamodelOf(dmmf)
     const files = eloquentModelFiles(documented, 'App\\Models', documentedEnums)
     expect(files.find((file) => file.fileName === 'User.php')?.code).toBe(`<?php
 

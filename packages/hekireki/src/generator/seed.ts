@@ -31,9 +31,7 @@ function uniqueSets(model: DMMF.Model) {
     ...model.uniqueFields,
   ]
   const all = [...singles, ...composite]
-  return all.filter(
-    (set, index) => all.findIndex((other) => other.join(' ') === set.join(' ')) === index,
-  )
+  return [...new Map(all.map((set) => [set.join(' '), set])).values()]
 }
 
 function modelEntries(datamodel: DMMF.Datamodel, declaration: boolean) {

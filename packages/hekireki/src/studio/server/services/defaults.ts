@@ -103,27 +103,25 @@ export function generateDefaults(input: z.infer<typeof GenerateDefaultsInput>) {
     const now = yield* Clock.currentTimeMillis
     return yield* Effect.sync((): Readonly<Record<string, string>> =>
       Object.fromEntries(
-        input.fields.map(({ name, generator }) => [
-          name,
-          generator.kind === 'uuid'
-            ? generator.version === 7
-              ? uuidv7({ msecs: now })
-              : randomUUID()
-            : generator.kind === 'cuid'
-              ? generator.version === 2
-                ? createId()
-                : cuid()
-              : generator.kind === 'nanoid'
-                ? generator.length === null
-                  ? nanoid()
-                  : nanoid(generator.length)
-                : generator.kind === 'ulid'
-                  ? ulid(now)
-                  : generator.kind === 'now'
-                    ? new Date(now).toISOString()
-                    : generator.value,
-        ]),
+        input.fields.map(({ name, generator }) => [name, generatedValue(generator, now)]),
       ),
     )
   })
+}
+
+// The value one generator makes, at the clock's time `now`.
+function generatedValue(
+  generator: z.infer<typeof GenerateDefaultsInput>['fields'][number]['generator'],
+  now: number,
+) {
+  if (generator.kind === 'uuid') {
+    return generator.version === 7 ? uuidv7({ msecs: now }) : randomUUID()
+  }
+  if (generator.kind === 'cuid') return generator.version === 2 ? createId() : cuid()
+  if (generator.kind === 'nanoid') {
+    return generator.length === null ? nanoid() : nanoid(generator.length)
+  }
+  if (generator.kind === 'ulid') return ulid(now)
+  if (generator.kind === 'now') return new Date(now).toISOString()
+  return generator.value
 }

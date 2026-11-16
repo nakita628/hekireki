@@ -45,7 +45,7 @@ export function apiAccess(documentation: string | undefined): 'hidden' | 'readon
 
 /** Whether the server fills the field: `@updatedAt`, or a `@default` the database or Prisma makes. */
 function isGenerated(field: DMMF.Field) {
-  if (field.isUpdatedAt) return true
+  if (field.isUpdatedAt === true) return true
   const value: unknown = field.default
   return (
     typeof value === 'object' &&
@@ -102,8 +102,9 @@ function keyFields(model: DMMF.Model): readonly DMMF.Field[] {
   const id = model.fields.filter((f) => f.isId)
   if (id.length > 0) return id
   const names = model.primaryKey?.fields ?? model.uniqueFields[0] ?? []
+  const byName = new Map(model.fields.map((f) => [f.name, f]))
   return names.flatMap((name) => {
-    const field = model.fields.find((f) => f.name === name)
+    const field = byName.get(name)
     return field === undefined ? [] : [field]
   })
 }
@@ -139,7 +140,7 @@ export function makeInputSchema(
   const required =
     kind === 'create'
       ? fields
-          .filter((f) => f.isRequired && !f.isList && !f.hasDefaultValue && !f.isUpdatedAt)
+          .filter((f) => f.isRequired && !f.isList && !f.hasDefaultValue && f.isUpdatedAt !== true)
           .map((f) => f.name)
       : []
   return {
@@ -281,17 +282,19 @@ function encoder(field: DMMF.Field) {
   return undefined
 }
 
+/** `convert` applied to the field's value: to each item of a list, and past a null. */
+function convertValue(field: DMMF.Field, value: string, convert: (value: string) => string) {
+  if (field.isList) return `${value}.map((value) => ${convert('value')})`
+  return field.isRequired ? convert(value) : `${value} === null ? null : ${convert(value)}`
+}
+
 /** The row as the answer carries it: a bigint as a number, bytes as base64, the rest as it is. */
 function encodeRow(model: DMMF.Model, row: string) {
   const entries = answeredFields(model).flatMap((field) => {
     const encode = encoder(field)
     if (encode === undefined) return []
     const value = `${row}.${field.name}`
-    const expression = field.isList
-      ? `${value}.map((value) => ${encode('value')})`
-      : field.isRequired
-        ? encode(value)
-        : `${value} === null ? null : ${encode(value)}`
+    const expression = convertValue(field, value, encode)
     return [`${field.name}: ${expression}`]
   })
   return entries.length === 0 ? row : `{ ...${row}, ${entries.join(', ')} }`
@@ -324,11 +327,7 @@ function prismaData(model: DMMF.Model, kind: 'create' | 'update') {
   if (fields.length === 0) return 'data'
   const entries = fields.map((field) => {
     const value = `data.${field.name}`
-    const decoded = field.isList
-      ? `${value}.map((value) => ${bytes('value')})`
-      : field.isRequired
-        ? bytes(value)
-        : `${value} === null ? null : ${bytes(value)}`
+    const decoded = convertValue(field, value, bytes)
     const isPresent = kind === 'create' && field.isRequired && !field.hasDefaultValue
     return `${field.name}: ${isPresent ? decoded : `${value} === undefined ? undefined : ${decoded}`}`
   })

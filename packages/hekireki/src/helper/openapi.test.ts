@@ -8,6 +8,17 @@ import {
   makeOpenApiPaths,
   makeOpenApiTable,
 } from './openapi.js'
+import type { OpenApiSchema } from './openapi.js'
+
+/** The path item at `index`, which the test expects to be there. */
+function pathItem(
+  paths: readonly (readonly [string, OpenApiSchema])[],
+  index: number,
+): OpenApiSchema {
+  const entry = paths[index]
+  if (entry === undefined) throw new Error(`no path item at ${index}`)
+  return entry[1]
+}
 
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
   return {
@@ -368,8 +379,8 @@ describe('makeOpenApiPaths', () => {
   it('writes the collection and the row under the resource, named for the model', () => {
     const paths = makeOpenApiPaths(item, [], 'order-items')
     expect(paths.map(([path]) => path)).toStrictEqual(['/order-items', '/order-items/{id}'])
-    const [, collection = {}] = paths[0] ?? []
-    const [, row = {}] = paths[1] ?? []
+    const collection = pathItem(paths, 0)
+    const row = pathItem(paths, 1)
     expect(Object.keys(collection)).toStrictEqual(['get', 'post'])
     expect(Object.keys(row)).toStrictEqual(['parameters', 'get', 'patch', 'delete'])
     expect(row['parameters']).toStrictEqual([
@@ -424,7 +435,7 @@ describe('makeOpenApiPaths', () => {
       name: 'Tag',
       fields: [makeField({ name: 'id', type: 'Int', isId: true })],
     })
-    const [, collection = {}] = makeOpenApiPaths(tag, [], 'tags')[0] ?? []
+    const collection = pathItem(makeOpenApiPaths(tag, [], 'tags'), 0)
     expect(collection['post']).toMatchObject({ summary: 'Create a tag', operationId: 'createTag' })
   })
 

@@ -10,8 +10,9 @@ import { GeneratorConfigError } from './errors.js'
  * the generator refuses instead, naming itself as `prisma generate` shows it.
  */
 export function requireOutput(options: GeneratorOptions, prettyName: string) {
-  const output = options.generator.isCustomOutput ? options.generator.output?.value : undefined
-  return output
+  const output =
+    options.generator.isCustomOutput === true ? options.generator.output?.value : undefined
+  return output !== undefined && output !== null && output !== ''
     ? Effect.succeed(output)
     : Effect.fail(
         new GeneratorConfigError({

@@ -6,6 +6,7 @@ import {
   makeSnakeCase,
   stripAnnotations,
 } from '../utils/index.js'
+import type { RelationEnd } from '../utils/prisma-model.js'
 import {
   backRelation,
   fieldColumn,
@@ -59,7 +60,7 @@ export function dateTimeFields(model: DMMF.Model) {
 export function ectoTypeToTypespec(type: string) {
   // A DateTime type is named with the app's module in front of it.
   const dateTime = DATE_TIME_TYPESPECS.get(type.split('.').at(-1) ?? '')
-  if (dateTime) return dateTime
+  if (dateTime !== undefined) return dateTime
   switch (type) {
     case 'string':
       return 'String.t()'
@@ -93,16 +94,30 @@ function formatEctoType(type: string) {
   return /^[A-Z]/u.test(type) ? type : `:${type}`
 }
 
-function getPrimaryKeyConfig(field: DMMF.Field) {
+// The key Ecto generates for a primary key, by the field's type and @default.
+function generatedKey(field: DMMF.Field) {
   const def = field.default
-  const isFunctionDefault = def && typeof def === 'object' && 'name' in def
+  if (typeof def !== 'object' || !('name' in def)) return null
+  if (field.type === 'String' && def.name === 'uuid') {
+    return 'args' in def && def.args[0] === 7 ? 'uuid7' : 'uuid'
+  }
+  // ULID PK: String + @default(ulid()) — requires the ecto_ulid_next package.
+  if (field.type === 'String' && def.name === 'ulid') return 'ulid'
+  if ((field.type === 'Int' || field.type === 'BigInt') && def.name === 'autoincrement') {
+    return 'autoincrement'
+  }
+  return null
+}
+
+function getPrimaryKeyConfig(field: DMMF.Field) {
+  const key = generatedKey(field)
   // @primary_key always declares the :id field; when the actual column
   // (@map / a differently named @id field) is not "id", map it via :source.
   const pkColumn = field.dbName ?? field.name
   const sourceOpt = pkColumn === 'id' ? '' : `, source: :${pkColumn}`
 
-  if (field.type === 'String' && isFunctionDefault && def.name === 'uuid') {
-    const isV7 = 'args' in def && def.args[0] === 7
+  if (key === 'uuid' || key === 'uuid7') {
+    const isV7 = key === 'uuid7'
     return {
       // UUIDv7 autogeneration requires Ecto 3.14+.
       line: isV7
@@ -114,8 +129,7 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
     }
   }
 
-  // ULID PK: String + @default(ulid()) — requires the ecto_ulid_next package.
-  if (field.type === 'String' && isFunctionDefault && def.name === 'ulid') {
+  if (key === 'ulid') {
     return {
       line: `@primary_key {:id, Ecto.ULID, autogenerate: true${sourceOpt}}`,
       typeSpec: 'Ecto.ULID.t()',
@@ -124,11 +138,7 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
     }
   }
 
-  if (
-    (field.type === 'Int' || field.type === 'BigInt') &&
-    isFunctionDefault &&
-    def.name === 'autoincrement'
-  ) {
+  if (key === 'autoincrement') {
     return {
       line: `@primary_key {:id, :id, autogenerate: true${sourceOpt}}`,
       typeSpec: 'integer()',
@@ -182,12 +192,14 @@ function isStamped(field: DMMF.Field) {
  * timestamps(inserted_at: false, updated_at: :synced_at, updated_at_source: :syncedAt)
  * ```
  */
+const INSERTED_AT_ALIASES = new Set(['inserted_at', 'created_at', 'createdAt'])
+
 function makeTimestampsLines(fields: readonly DMMF.Field[], appName: string) {
-  const insertedAliases = new Set(['inserted_at', 'created_at', 'createdAt'])
   const inserted = fields.find(
-    (f) => isStamped(f) && insertedAliases.has(f.name) && isNowDefault(f) && !f.isUpdatedAt,
+    (f) =>
+      isStamped(f) && INSERTED_AT_ALIASES.has(f.name) && isNowDefault(f) && f.isUpdatedAt !== true,
   )
-  const updated = fields.filter((f) => isStamped(f) && f.isUpdatedAt)
+  const updated = fields.filter((f) => isStamped(f) && f.isUpdatedAt === true)
   const exclude = new Set([...(inserted ? [inserted.name] : []), ...updated.map((f) => f.name)])
   // Ecto's name for the field, unless another field of the model has it.
   const named = (field: DMMF.Field, ecto: string) =>
@@ -213,7 +225,10 @@ function makeTimestampsLines(fields: readonly DMMF.Field[], appName: string) {
       ...(source === name ? [] : [`${key}_source: :${source}`]),
     ]
   }
-  const together = inserted && first && dateTimeModule(inserted) === dateTimeModule(first)
+  const together =
+    inserted !== undefined &&
+    first !== undefined &&
+    dateTimeModule(inserted) === dateTimeModule(first)
   const calls = together
     ? [
         { module: dateTimeModule(inserted), options: stamps.slice(0, 2).flatMap(options) },
@@ -263,10 +278,10 @@ function getBelongsToFkType(
 
   const pkConfig = referenced.isId ? getPrimaryKeyConfig(referenced) : null
 
-  if (pkConfig?.foreignKeyType) return pkConfig.foreignKeyType
+  if (pkConfig !== null && pkConfig.foreignKeyType !== null) return pkConfig.foreignKeyType
 
   // Autoincrement integer PK → no explicit FK type needed (Ecto default :id)
-  if (pkConfig?.line.includes(':id, autogenerate')) return null
+  if (pkConfig?.line.includes(':id, autogenerate') === true) return null
 
   if (referenced.type === 'String') return 'string'
   if (referenced.type === 'DateTime') return `${appName}.${dateTimeModule(referenced)}`
@@ -280,91 +295,140 @@ function getBelongsToFkType(
 // always :id, whatever the Prisma field or its column is called.
 function ectoFieldName(model: DMMF.Model | undefined, fieldName: string) {
   const field = model?.fields.find((f) => f.name === fieldName)
-  return field?.isId && getPrimaryKeyConfig(field).omitIdFieldInSchema
+  return field?.isId === true && getPrimaryKeyConfig(field).omitIdFieldInSchema
     ? 'id'
     : makeSnakeCase(fieldName)
 }
 
+// Ecto's belongs_to takes a single foreign_key: a composite FK would
+// half-join on the first column, so it emits no association and the FK
+// columns stay plain fields.
+function belongsToAssociation(
+  field: DMMF.Field,
+  targetModel: DMMF.Model | undefined,
+  allModels: readonly DMMF.Model[],
+  appName: string,
+) {
+  const fromFields = field.relationFromFields ?? []
+  if (fromFields.length > 1) return null
+  return {
+    name: field.name,
+    targetModel: field.type,
+    foreignKey: fromFields[0] ?? '',
+    fkType: getBelongsToFkType(allModels, field.type, field.relationToFields?.[0], appName),
+    references: ectoFieldName(targetModel, field.relationToFields?.[0] ?? 'id'),
+  }
+}
+
+// Prisma's join table holds the model that sorts first in "A". A model related to itself
+// is on both sides: the relation field whose name sorts first reads its own key from "A".
+function manyToManyAssociation(
+  model: DMMF.Model,
+  end: Extract<RelationEnd, { kind: 'manyToMany' }>,
+  targetModel: DMMF.Model,
+  ownKey: string,
+) {
+  const { field } = end
+  const [left, right] = end.isSideA ? [model.name, field.type] : [field.type, model.name]
+  return {
+    name: field.name,
+    targetModel: field.type,
+    joinThrough: `_${field.relationName ?? `${left}To${right}`}`,
+    ownJoinColumn: end.isSideA ? 'A' : 'B',
+    ownKey,
+    relatedJoinColumn: end.isSideA ? 'B' : 'A',
+    relatedKey: ectoFieldName(targetModel, targetModel.fields.find((f) => f.isId)?.name ?? 'id'),
+  }
+}
+
+// A has_many or has_one, keyed by the inverse field's single foreign key.
+function ownedAssociation(model: DMMF.Model, field: DMMF.Field, fkField: DMMF.Field) {
+  const fromFields = fkField.relationFromFields ?? []
+  if (fromFields.length > 1) return null
+  return {
+    name: field.name,
+    targetModel: field.type,
+    foreignKey: fromFields[0] ?? '',
+    references: ectoFieldName(model, fkField.relationToFields?.[0] ?? 'id'),
+  }
+}
+
 function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[], appName: string) {
-  const belongsTo: {
-    name: string
-    targetModel: string
-    foreignKey: string
-    fkType: string | null
-    references: string
-  }[] = []
-  const hasMany: { name: string; targetModel: string; foreignKey: string; references: string }[] =
-    []
-  const hasOne: { name: string; targetModel: string; foreignKey: string; references: string }[] = []
-  const manyToMany: {
-    name: string
-    targetModel: string
-    joinThrough: string
-    ownJoinColumn: string
-    ownKey: string
-    relatedJoinColumn: string
-    relatedKey: string
-  }[] = []
+  const modelsByName = new Map(allModels.map((m) => [m.name, m]))
+  const ownKey = ectoFieldName(model, model.fields.find((f) => f.isId)?.name ?? 'id')
+  const belongsTo: NonNullable<ReturnType<typeof belongsToAssociation>>[] = []
+  const hasMany: NonNullable<ReturnType<typeof ownedAssociation>>[] = []
+  const hasOne: NonNullable<ReturnType<typeof ownedAssociation>>[] = []
+  const manyToMany: ReturnType<typeof manyToManyAssociation>[] = []
 
   for (const end of relationEnds(model, allModels)) {
-    const { field } = end
-    const targetModel = allModels.find((m) => m.name === field.type)
-
+    const targetModel = modelsByName.get(end.field.type)
     if (end.kind === 'belongsTo') {
-      const fromFields = field.relationFromFields ?? []
-      // Ecto's belongs_to takes a single foreign_key: a composite FK would
-      // half-join on the first column, so it emits no association and the FK
-      // columns stay plain fields.
-      if (fromFields.length > 1) continue
-      belongsTo.push({
-        name: field.name,
-        targetModel: field.type,
-        foreignKey: fromFields[0] ?? '',
-        fkType: getBelongsToFkType(allModels, field.type, field.relationToFields?.[0], appName),
-        references: ectoFieldName(targetModel, field.relationToFields?.[0] ?? 'id'),
-      })
+      belongsTo.push(...nonNull(belongsToAssociation(end.field, targetModel, allModels, appName)))
       continue
     }
-
-    if (!targetModel) continue
-
+    if (targetModel === undefined) continue
     if (end.kind === 'manyToMany') {
-      // Prisma's join table holds the model that sorts first in "A". A model related to itself
-      // is on both sides: the relation field whose name sorts first reads its own key from "A".
-      const [left, right] = end.isSideA ? [model.name, field.type] : [field.type, model.name]
-      manyToMany.push({
-        name: field.name,
-        targetModel: field.type,
-        joinThrough: `_${field.relationName ?? `${left}To${right}`}`,
-        ownJoinColumn: end.isSideA ? 'A' : 'B',
-        ownKey: ectoFieldName(model, model.fields.find((f) => f.isId)?.name ?? 'id'),
-        relatedJoinColumn: end.isSideA ? 'B' : 'A',
-        relatedKey: ectoFieldName(
-          targetModel,
-          targetModel.fields.find((f) => f.isId)?.name ?? 'id',
-        ),
-      })
-      continue
-    }
-
-    const fkField = end.inverse
-    const fromFields = fkField.relationFromFields ?? []
-    if (fromFields.length > 1) continue
-
-    const association = {
-      name: field.name,
-      targetModel: field.type,
-      foreignKey: fromFields[0] ?? '',
-      references: ectoFieldName(model, fkField.relationToFields?.[0] ?? 'id'),
-    }
-    if (end.kind === 'hasMany') {
-      hasMany.push(association)
+      manyToMany.push(manyToManyAssociation(model, end, targetModel, ownKey))
+    } else if (end.kind === 'hasMany') {
+      hasMany.push(...nonNull(ownedAssociation(model, end.field, end.inverse)))
     } else {
-      hasOne.push(association)
+      hasOne.push(...nonNull(ownedAssociation(model, end.field, end.inverse)))
     }
   }
 
   return { belongsTo, hasMany, hasOne, manyToMany }
+}
+
+function nonNull<T>(value: T | null) {
+  return value === null ? [] : [value]
+}
+
+// The Ecto option of a function @default.
+function functionDefaultOption(def: DMMF.FieldDefault) {
+  // now() is filled by Prisma's client, not left to the column's default (SQLite's
+  // CURRENT_TIMESTAMP writes another form): the type's autogenerate/0 fills it on insert.
+  if (def.name === 'now') return 'autogenerate: true'
+  // A default the database applies (dbgenerated()): Ecto leaves a nil field out of the INSERT,
+  // so the database fills it, and reads it back to have it on the struct.
+  if (def.name === 'dbgenerated') return 'read_after_writes: true'
+  // uuid() outside a primary key is made by Prisma's client, not the database: Ecto makes it
+  // on insert. A string, as the column is, on every adapter.
+  if (def.name === 'uuid') {
+    return def.args[0] === 7
+      ? 'autogenerate: {Ecto.UUID, :generate, [[version: 7]]}'
+      : 'autogenerate: {Ecto.UUID, :generate, []}'
+  }
+  // ulid() likewise, with Ecto.ULID from ecto_ulid_next, the package a ULID primary key needs.
+  if (def.name === 'ulid') return 'autogenerate: {Ecto.ULID, :generate, []}'
+  return null
+}
+
+// DMMF carries BigInt defaults as digit strings, DateTime literals
+// as ISO strings, and Json defaults as JSON text. Ecto validates
+// :default against the field type at compile time: :map takes an
+// Elixir map literal. A DateTime is the instant in UTC with
+// milliseconds, as Prisma's client holds it, whatever offset the
+// literal was written with; a date or a time of day is its UTC part.
+function stringDefaultOption(f: DMMF.Field, def: string) {
+  if (f.type === 'BigInt') return `default: ${def}`
+  if (f.type === 'DateTime') {
+    const iso = new Date(def).toISOString()
+    const module = dateTimeModule(f)
+    if (module === 'PrismaDate') return `default: ~D[${iso.slice(0, 10)}]`
+    if (module === 'PrismaTime') return `default: ~T[${iso.slice(11, 23)}]`
+    return `default: ~U[${iso.slice(0, 10)} ${iso.slice(11, 23)}Z]`
+  }
+  if (f.type === 'Json') {
+    // Ecto's :map only accepts a map default; an array or scalar
+    // Json default would fail schema compilation, so it stays a
+    // database-level concern and is not emitted here.
+    const parsed: unknown = JSON.parse(def)
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? `default: ${jsonToElixirLiteral(parsed)}`
+      : null
+  }
+  return `default: ${toElixirString(def)}`
 }
 
 // The Ecto option a Prisma @default becomes, or null where Ecto has nothing to say.
@@ -372,50 +436,8 @@ function ectoDefaultOption(f: DMMF.Field) {
   const def = f.default
   const type = prismaTypeToEctoType(f.type)
   if (def === undefined || def === null) return null
-  if (typeof def === 'object' && 'name' in def) {
-    // now() is filled by Prisma's client, not left to the column's default (SQLite's
-    // CURRENT_TIMESTAMP writes another form): the type's autogenerate/0 fills it on insert.
-    if (def.name === 'now') return 'autogenerate: true'
-    // A default the database applies (dbgenerated()): Ecto leaves a nil field out of the INSERT,
-    // so the database fills it, and reads it back to have it on the struct.
-    if (def.name === 'dbgenerated') return 'read_after_writes: true'
-    // uuid() outside a primary key is made by Prisma's client, not the database: Ecto makes it
-    // on insert. A string, as the column is, on every adapter.
-    if (def.name === 'uuid') {
-      return def.args[0] === 7
-        ? 'autogenerate: {Ecto.UUID, :generate, [[version: 7]]}'
-        : 'autogenerate: {Ecto.UUID, :generate, []}'
-    }
-    // ulid() likewise, with Ecto.ULID from ecto_ulid_next, the package a ULID primary key needs.
-    if (def.name === 'ulid') return 'autogenerate: {Ecto.ULID, :generate, []}'
-    return null
-  }
-  if (typeof def === 'string') {
-    // DMMF carries BigInt defaults as digit strings, DateTime literals
-    // as ISO strings, and Json defaults as JSON text. Ecto validates
-    // :default against the field type at compile time: :map takes an
-    // Elixir map literal. A DateTime is the instant in UTC with
-    // milliseconds, as Prisma's client holds it, whatever offset the
-    // literal was written with; a date or a time of day is its UTC part.
-    if (f.type === 'BigInt') return `default: ${def}`
-    if (f.type === 'DateTime') {
-      const iso = new Date(def).toISOString()
-      const module = dateTimeModule(f)
-      if (module === 'PrismaDate') return `default: ~D[${iso.slice(0, 10)}]`
-      if (module === 'PrismaTime') return `default: ~T[${iso.slice(11, 23)}]`
-      return `default: ~U[${iso.slice(0, 10)} ${iso.slice(11, 23)}Z]`
-    }
-    if (f.type === 'Json') {
-      // Ecto's :map only accepts a map default; an array or scalar
-      // Json default would fail schema compilation, so it stays a
-      // database-level concern and is not emitted here.
-      const parsed: unknown = JSON.parse(def)
-      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-        ? `default: ${jsonToElixirLiteral(parsed)}`
-        : null
-    }
-    return `default: ${toElixirString(def)}`
-  }
+  if (typeof def === 'object' && 'name' in def) return functionDefaultOption(def)
+  if (typeof def === 'string') return stringDefaultOption(f, def)
   // Ecto rejects an integer default on a :float field
   // ("value 0 is invalid for type :float"): emit a float literal.
   // A :decimal default likewise only dumps as %Decimal{}, never as a
@@ -550,6 +572,59 @@ function foreignKeyOf(model: DMMF.Model, field: DMMF.Field, allModels: readonly 
  * (`PrismaDateTime`, `PrismaDate`, `PrismaTime`) where the schema has one. Each names the model or
  * field it is on.
  */
+// What is wrong with an @ecto. call on a relation field, given the side of the key it is on.
+function relationCallProblems(name: string, side: 'owner' | 'inverse' | undefined) {
+  if (name === 'assoc_constraint') {
+    return side === 'owner'
+      ? []
+      : [
+          'assoc_constraint is on a relation whose foreign key is not a column of this model; it belongs on the side with the key',
+        ]
+  }
+  if (name === 'no_assoc_constraint') {
+    return side === 'inverse'
+      ? []
+      : [
+          'no_assoc_constraint is on a relation that is not a has_one or has_many; it belongs on the side the key points at',
+        ]
+  }
+  return [
+    `${name} is on a relation field, which takes assoc_constraint or no_assoc_constraint; write it as an @ecto. line on the model`,
+  ]
+}
+
+// What is wrong with one @ecto. call on a field the changeset casts.
+function scalarCallProblems(name: string, field: DMMF.Field, foreignKeys: ReadonlySet<string>) {
+  if (!FIELD_FUNCTIONS.has(name)) {
+    return [
+      `${name} is not an Ecto.Changeset function that takes the field first; write it as an @ecto. line on the model`,
+    ]
+  }
+  if (name === 'unique_constraint' && !(field.isUnique || field.isId)) {
+    return [
+      'unique_constraint is on a field that is not @unique; write a @@unique constraint as an @ecto. line on the model',
+    ]
+  }
+  if (name === 'foreign_key_constraint' && !foreignKeys.has(field.name)) {
+    return ['foreign_key_constraint is on a field that is not the foreign key of a relation']
+  }
+  return []
+}
+
+function scalarCallsProblems(
+  field: DMMF.Field,
+  calls: readonly { readonly name: string }[],
+  cast: ReadonlySet<string>,
+  foreignKeys: ReadonlySet<string>,
+) {
+  if (calls.length > 0 && !cast.has(field.name)) {
+    return [
+      'an @ecto. call is on a field the changeset does not cast: a primary key Ecto generates, or a timestamp',
+    ]
+  }
+  return calls.flatMap((call) => scalarCallProblems(call.name, field, foreignKeys))
+}
+
 export function ectoProblems(models: readonly DMMF.Model[]) {
   const dateTypes = new Set<string>(
     models.flatMap((model) => dateTimeFields(model).map(dateTimeModule)),
@@ -575,42 +650,8 @@ export function ectoProblems(models: readonly DMMF.Model[]) {
         const key = field.kind === 'object' ? foreignKeyOf(model, field, models) : null
         const misplaced =
           field.kind === 'object'
-            ? calls.flatMap((call) =>
-                call.name === 'assoc_constraint'
-                  ? key?.side === 'owner'
-                    ? []
-                    : [
-                        'assoc_constraint is on a relation whose foreign key is not a column of this model; it belongs on the side with the key',
-                      ]
-                  : call.name === 'no_assoc_constraint'
-                    ? key?.side === 'inverse'
-                      ? []
-                      : [
-                          'no_assoc_constraint is on a relation that is not a has_one or has_many; it belongs on the side the key points at',
-                        ]
-                    : [
-                        `${call.name} is on a relation field, which takes assoc_constraint or no_assoc_constraint; write it as an @ecto. line on the model`,
-                      ],
-              )
-            : calls.length > 0 && !cast.has(field.name)
-              ? [
-                  'an @ecto. call is on a field the changeset does not cast: a primary key Ecto generates, or a timestamp',
-                ]
-              : calls.flatMap((call) =>
-                  !FIELD_FUNCTIONS.has(call.name)
-                    ? [
-                        `${call.name} is not an Ecto.Changeset function that takes the field first; write it as an @ecto. line on the model`,
-                      ]
-                    : call.name === 'unique_constraint' && !(field.isUnique || field.isId)
-                      ? [
-                          'unique_constraint is on a field that is not @unique; write a @@unique constraint as an @ecto. line on the model',
-                        ]
-                      : call.name === 'foreign_key_constraint' && !foreignKeys.has(field.name)
-                        ? [
-                            'foreign_key_constraint is on a field that is not the foreign key of a relation',
-                          ]
-                        : [],
-                )
+            ? calls.flatMap((call) => relationCallProblems(call.name, key?.side))
+            : scalarCallsProblems(field, calls, cast, foreignKeys)
         return [...problems, ...misplaced].map(
           (problem) => `field ${model.name}.${field.name}: ${problem}`,
         )
@@ -683,16 +724,14 @@ const ELIXIR_RESERVED = new Set([
  * end
  * ```
  */
-function changesetLines(
-  model: DMMF.Model,
-  allModels: readonly DMMF.Model[],
-  options: {
-    readonly provider?: string
-    readonly indexes?: readonly DMMF.Index[]
-    readonly foreignKeyNames?: ReadonlyMap<string, string>
-    readonly relationMode?: string
-  },
-) {
+// The name the database reports, unless the line gives one (not the word inside a message),
+// or the database is SQLite.
+function withConstraintName(args: string, name: string, provider: string | undefined) {
+  if (provider === 'sqlite' || hasOption(args, 'name')) return args
+  return args === '' ? `name: ${toElixirString(name)}` : `${args}, name: ${toElixirString(name)}`
+}
+
+function changesetLines(model: DMMF.Model, allModels: readonly DMMF.Model[], options: EctoOptions) {
   const { provider } = options
   const modelCalls = ectoCalls(model.documentation)
   const cast = castFields(model).map((f) => ({
@@ -716,14 +755,7 @@ function changesetLines(
   const foreignKeyName = (owner: DMMF.Model, holder: DMMF.Field) =>
     options.foreignKeyNames?.get(`${owner.name}.${holder.name}`) ??
     prismaConstraintName(constraintBase(owner, holder.relationFromFields ?? []), '_fkey', limit)
-  // The name the database reports, unless the line gives one (not the word inside a message),
-  // or the database is SQLite.
-  const named = (args: string, name: string) =>
-    provider === 'sqlite' || hasOption(args, 'name')
-      ? args
-      : args === ''
-        ? `name: ${toElixirString(name)}`
-        : `${args}, name: ${toElixirString(name)}`
+  const named = (args: string, name: string) => withConstraintName(args, name, provider)
 
   const ownRequired = new Set(
     cast
@@ -736,7 +768,7 @@ function changesetLines(
         c.field.isRequired &&
         !c.field.isList &&
         !c.field.hasDefaultValue &&
-        !c.field.isUpdatedAt &&
+        c.field.isUpdatedAt !== true &&
         !ownRequired.has(c.atom),
     )
     .map((c) => c.atom)
@@ -792,6 +824,7 @@ function changesetLines(
   // `assoc_constraint` its relation field asks for, which puts the error on the association.
   // With `relationMode = "prisma"` there is no foreign key in the database to report one.
   const relationFields = model.fields.filter((f) => f.kind === 'object')
+  const fieldsByName = new Map(model.fields.map((f) => [f.name, f]))
   const keySteps = relationFields.flatMap((field) => {
     const first = field.relationFromFields?.[0]
     if (first === undefined) return []
@@ -806,7 +839,7 @@ function changesetLines(
         `${field.relationFromFields?.length === 1 ? 'assoc_constraint' : 'foreign_key_constraint'}(${withArgs(`:${makeSnakeCase(field.name)}`, named(assoc.args, name))})`,
       ]
     }
-    const own = ectoCalls(model.fields.find((f) => f.name === first)?.documentation).calls.find(
+    const own = ectoCalls(fieldsByName.get(first)?.documentation).calls.find(
       (call) => call.name === 'foreign_key_constraint',
     )
     return own || (provider !== 'sqlite' && options.relationMode !== 'prisma')
@@ -911,267 +944,326 @@ function ectoModuledoc(text: string | undefined) {
   return ['  @moduledoc """', ...body, '  """', '']
 }
 
+type EctoOptions = {
+  readonly provider?: string
+  readonly indexes?: readonly DMMF.Index[]
+  readonly foreignKeyNames?: ReadonlyMap<string, string>
+  readonly relationMode?: string
+}
+
+type EctoAssociations = ReturnType<typeof getAssociations>
+type EctoPrimaryKey = ReturnType<typeof getPrimaryKeyConfig>
+type EnumValues = ReadonlyMap<string, readonly DMMF.DatamodelEnum['values'][number][]>
+
+const NO_PRIMARY_KEY: EctoPrimaryKey = {
+  line: '@primary_key false',
+  typeSpec: '',
+  omitIdFieldInSchema: false,
+  foreignKeyType: null,
+}
+
+function typeSpecField(f: DMMF.Field) {
+  const nullSuffix = f.isRequired ? '' : ' | nil'
+  if (f.kind === 'enum') {
+    return `${makeSnakeCase(f.name)}: atom()${nullSuffix}`
+  }
+  const baseTypeSpec = ectoTypeToTypespec(
+    f.type === 'DateTime' ? dateTimeModule(f) : prismaTypeToEctoType(f.type),
+  )
+  const typeSpec = f.isList ? `[${baseTypeSpec}]` : baseTypeSpec
+  return `${makeSnakeCase(f.name)}: ${typeSpec}${nullSuffix}`
+}
+
+function typeSpecLines(
+  appName: string,
+  pk: EctoPrimaryKey,
+  compositePkFieldNames: ReadonlySet<string> | null,
+  schemaFields: readonly DMMF.Field[],
+  timestampTypes: readonly string[],
+  associations: EctoAssociations,
+) {
+  const compositePkFkTypeSpecs =
+    compositePkFieldNames === null
+      ? []
+      : associations.belongsTo
+          .filter((a) => compositePkFieldNames.has(a.foreignKey))
+          .map((a) => {
+            const snakeFk = makeSnakeCase(a.foreignKey)
+            const fkType = a.fkType ?? 'id'
+            return `${snakeFk}: ${ectoTypeToTypespec(fkType)}`
+          })
+  const typeSpecFields = [
+    ...(pk.omitIdFieldInSchema ? [`id: ${pk.typeSpec}`] : []),
+    ...compositePkFkTypeSpecs,
+    ...schemaFields.map(typeSpecField),
+    ...timestampTypes,
+    ...associations.belongsTo.map(
+      (a) => `${makeSnakeCase(a.name)}: ${appName}.${makePascalCase(a.targetModel)}.t() | nil`,
+    ),
+    ...associations.hasOne.map(
+      (a) => `${makeSnakeCase(a.name)}: ${appName}.${makePascalCase(a.targetModel)}.t() | nil`,
+    ),
+    ...associations.hasMany.map(
+      (a) => `${makeSnakeCase(a.name)}: [${appName}.${makePascalCase(a.targetModel)}.t()]`,
+    ),
+    ...associations.manyToMany.map(
+      (a) => `${makeSnakeCase(a.name)}: [${appName}.${makePascalCase(a.targetModel)}.t()]`,
+    ),
+  ]
+  return [
+    '  @type t :: %__MODULE__{',
+    ...typeSpecFields.map((line, i) => {
+      const isLast = i === typeSpecFields.length - 1
+      return `          ${line}${isLast ? '' : ','}`
+    }),
+    '        }',
+  ]
+}
+
+function enumSchemaFieldLines(
+  f: DMMF.Field,
+  snakeName: string,
+  sourceOpt: string,
+  values: readonly DMMF.DatamodelEnum['values'][number][],
+) {
+  // @map-ped values need the keyword form (atom -> dump value) so
+  // Ecto dumps the database value, not the atom's own name.
+  const hasMappedValue = values.some((v) => (v.dbName ?? v.name) !== v.name)
+  const valuesStr = hasMappedValue
+    ? values.map((v) => `${v.name}: "${v.dbName ?? v.name}"`).join(', ')
+    : values.map((v) => `:${v.name}`).join(', ')
+  const enumType = f.isList ? '{:array, Ecto.Enum}' : 'Ecto.Enum'
+  const enumDefault = typeof f.default === 'string' ? `, default: :${f.default}` : ''
+  return [
+    ...ectoLineComments(stripAnnotations(f.documentation)),
+    `    field(:${snakeName}, ${enumType}, values: [${valuesStr}]${enumDefault}${sourceOpt})`,
+  ]
+}
+
+function schemaFieldLines(
+  f: DMMF.Field,
+  pk: EctoPrimaryKey,
+  compositePkFieldNames: ReadonlySet<string>,
+  enumMap: EnumValues,
+  appName: string,
+) {
+  const snakeName = makeSnakeCase(f.name)
+  const dbColumnName = f.dbName ?? f.name
+  const sourceOpt = snakeName !== dbColumnName ? `, source: :${dbColumnName}` : ''
+  if (f.kind === 'enum') {
+    return enumSchemaFieldLines(f, snakeName, sourceOpt, enumMap.get(f.type) ?? [])
+  }
+  const primary =
+    (f.isId && !pk.omitIdFieldInSchema) || compositePkFieldNames.has(f.name)
+      ? ', primary_key: true'
+      : ''
+  const type =
+    f.type === 'DateTime' ? `${appName}.${dateTimeModule(f)}` : `:${prismaTypeToEctoType(f.type)}`
+  const ectoType = f.isList ? `{:array, ${type}}` : type
+  const defaultOpt = ectoDefaultOption(f)
+  const defaultClause = defaultOpt === null ? '' : `, ${defaultOpt}`
+  return [
+    ...ectoLineComments(stripAnnotations(f.documentation)),
+    `    field(:${snakeName}, ${ectoType}${primary}${defaultClause}${sourceOpt})`,
+  ]
+}
+
+// A belongs_to's key as a field: where it maps another column, is part of the primary key, or
+// has a default (belongs_to takes no :default), it is a field of its own and belongs_to does not
+// define it.
+function belongsToKey(
+  a: EctoAssociations['belongsTo'][number],
+  fkField: DMMF.Field | undefined,
+  isPkField: boolean,
+) {
+  const snakeFk = makeSnakeCase(a.foreignKey)
+  const fkDbName = fkField?.dbName ?? a.foreignKey
+  const needsSource = snakeFk !== fkDbName
+  const defaultOpt = fkField === undefined ? null : ectoDefaultOption(fkField)
+  return {
+    snakeFk,
+    fkDbName,
+    needsSource,
+    isPkField,
+    defaultOpt,
+    definesField: !(needsSource || isPkField || defaultOpt !== null),
+    prose: stripAnnotations(fkField?.documentation),
+  }
+}
+
+type BelongsToKey = ReturnType<typeof belongsToKey>
+
+function keyFieldLines(a: EctoAssociations['belongsTo'][number], key: BelongsToKey) {
+  if (key.definesField) return []
+  const fkType = a.fkType ?? 'id'
+  const pkOpt = key.isPkField ? ', primary_key: true' : ''
+  const defaultClause = key.defaultOpt === null ? '' : `, ${key.defaultOpt}`
+  const sourceOpt = key.needsSource ? `, source: :${key.fkDbName}` : ''
+  return [
+    ...ectoLineComments(key.prose),
+    `    field(:${key.snakeFk}, ${formatEctoType(fkType)}${pkOpt}${defaultClause}${sourceOpt})`,
+  ]
+}
+
+function belongsToLines(
+  a: EctoAssociations['belongsTo'][number],
+  key: BelongsToKey,
+  pk: EctoPrimaryKey,
+  appName: string,
+  comments: readonly string[],
+) {
+  const opts: string[] = [`foreign_key: :${key.snakeFk}`]
+  if (!key.definesField) opts.push('define_field: false')
+  // A module's @foreign_key_type reaches every belongs_to in it: one whose key is of
+  // Ecto's default :id type says so where the module's default is another.
+  if ((a.fkType ?? 'id') !== (pk.foreignKeyType ?? 'id')) {
+    opts.push(`type: ${formatEctoType(a.fkType ?? 'id')}`)
+  }
+  if (a.references !== 'id') opts.push(`references: :${a.references}`)
+  // Where belongs_to defines the key's field, the key's comment is written above it.
+  return [
+    ...(key.definesField ? ectoLineComments(key.prose) : []),
+
+    ...comments,
+    `    belongs_to(:${makeSnakeCase(a.name)}, ${appName}.${makePascalCase(a.targetModel)}, ${opts.join(', ')})`,
+  ]
+}
+
+// A has_one or has_many reads the key it references from @primary_key unless it is named,
+// and Ecto raises where that is false, as it is for a key declared with
+// `field(..., primary_key: true)`: there `references:` is always written.
+function ownedAssociationLines(
+  macro: 'has_one' | 'has_many',
+  a: EctoAssociations['hasOne'][number],
+  pk: EctoPrimaryKey,
+  appName: string,
+  comments: readonly string[],
+) {
+  const namesReferences = a.references !== 'id' || pk.line === '@primary_key false'
+  const referencesOpt = namesReferences ? `, references: :${a.references}` : ''
+  return [
+    ...comments,
+    `    ${macro}(:${makeSnakeCase(a.name)}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${makeSnakeCase(a.foreignKey)}${referencesOpt})`,
+  ]
+}
+
+function manyToManyLines(
+  a: EctoAssociations['manyToMany'][number],
+  appName: string,
+  comments: readonly string[],
+) {
+  // Prisma implicit m2m join tables use columns "A"/"B" (models in
+  // alphabetical order), not Ecto's inflected <schema>_id defaults.
+  const joinKeys = `join_keys: [${a.ownJoinColumn}: :${a.ownKey}, ${a.relatedJoinColumn}: :${a.relatedKey}]`
+  return [
+    ...comments,
+    `    many_to_many(:${makeSnakeCase(a.name)}, ${appName}.${makePascalCase(a.targetModel)}, join_through: "${a.joinThrough}", ${joinKeys})`,
+  ]
+}
+
+type EctoContext = {
+  readonly appName: string
+  readonly contextModels: readonly DMMF.Model[]
+  readonly enumMap: EnumValues
+  readonly options: EctoOptions
+}
+
+function ectoSchema(model: DMMF.Model, ctx: EctoContext) {
+  const { appName } = ctx
+  // A model with no @id or @@id is keyed by its first unique fields, as a composite key is,
+  // so the associations of the other models that name it have a schema to load.
+  const idField = model.fields.find((f) => f.isId)
+  const compositePkFieldNames = new Set(idField ? [] : primaryKeyFields(model))
+  const isCompositePk = !idField && compositePkFieldNames.size > 0
+
+  const pk = idField ? getPrimaryKeyConfig(idField) : NO_PRIMARY_KEY
+  const fields = model.fields.map((f) => ({ ...f }))
+  const fieldsByName = new Map(fields.map((f) => [f.name, f]))
+  const timestamps = makeTimestampsLines(fields, appName)
+  const associations = getAssociations(model, ctx.contextModels, appName)
+
+  const belongsToFkFields = new Set(associations.belongsTo.map((a) => a.foreignKey))
+
+  const schemaFieldsRaw = fields.filter(
+    (f) =>
+      !(
+        f.relationName !== undefined ||
+        (f.isId && pk.omitIdFieldInSchema) ||
+        timestamps.exclude.has(f.name) ||
+        belongsToFkFields.has(f.name)
+      ),
+  )
+
+  const keys = associations.belongsTo.map((a) => ({
+    a,
+    key: belongsToKey(a, fieldsByName.get(a.foreignKey), compositePkFieldNames.has(a.foreignKey)),
+  }))
+
+  // The prose of a relation field, above the association it becomes.
+  const relationComments = (name: string) =>
+    ectoLineComments(stripAnnotations(fieldsByName.get(name)?.documentation))
+
+  const changeset = changesetLines(model, ctx.contextModels, ctx.options)
+  const lines = [
+    `defmodule ${appName}.${makePascalCase(model.name)} do`,
+    ...ectoModuledoc(stripAnnotations(model.documentation)),
+    '  use Ecto.Schema',
+    ...(changeset.length > 0 ? ['  import Ecto.Changeset'] : []),
+    '',
+    `  ${pk.line}`,
+    ...(pk.foreignKeyType === null
+      ? []
+      : [`  @foreign_key_type ${formatEctoType(pk.foreignKeyType)}`]),
+    ...(timestamps.attribute === null ? [] : [timestamps.attribute]),
+    '',
+    ...typeSpecLines(
+      appName,
+      pk,
+      isCompositePk ? compositePkFieldNames : null,
+      schemaFieldsRaw,
+      timestamps.types,
+      associations,
+    ),
+    '',
+    `  schema "${model.dbName ?? model.name}" do`,
+    ...schemaFieldsRaw.flatMap((f) =>
+      schemaFieldLines(f, pk, compositePkFieldNames, ctx.enumMap, appName),
+    ),
+    ...keys.flatMap(({ a, key }) => keyFieldLines(a, key)),
+    ...keys.flatMap(({ a, key }) => belongsToLines(a, key, pk, appName, relationComments(a.name))),
+    ...associations.hasOne.flatMap((a) =>
+      ownedAssociationLines('has_one', a, pk, appName, relationComments(a.name)),
+    ),
+    ...associations.hasMany.flatMap((a) =>
+      ownedAssociationLines('has_many', a, pk, appName, relationComments(a.name)),
+    ),
+    ...associations.manyToMany.flatMap((a) =>
+      manyToManyLines(a, appName, relationComments(a.name)),
+    ),
+    ...timestamps.lines,
+    '  end',
+    ...changeset,
+    'end',
+  ]
+
+  return lines.join('\n')
+}
+
 export function ectoSchemas(
   models: readonly DMMF.Model[],
   app: string | string[],
   allModels?: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
-  options: {
-    readonly provider?: string
-    readonly indexes?: readonly DMMF.Index[]
-    readonly foreignKeyNames?: ReadonlyMap<string, string>
-    readonly relationMode?: string
-  } = {},
+  options: EctoOptions = {},
 ) {
-  const appName: string = Array.isArray(app) ? app.join('.') : app
-  const contextModels = allModels ?? models
+  const ctx: EctoContext = {
+    appName: Array.isArray(app) ? app.join('.') : app,
+    contextModels: allModels ?? models,
+    enumMap: new Map((enums ?? []).map((e) => [e.name, [...e.values]])),
+    options,
+  }
   return models
-    .map((model) => {
-      // A model with no @id or @@id is keyed by its first unique fields, as a composite key is,
-      // so the associations of the other models that name it have a schema to load.
-      const idField = model.fields.find((f) => f.isId)
-      const compositePkFieldNames = new Set(idField ? [] : primaryKeyFields(model))
-      const isCompositePk = !idField && compositePkFieldNames.size > 0
-
-      const pk = idField
-        ? getPrimaryKeyConfig(idField)
-        : {
-            line: '@primary_key false',
-            typeSpec: '',
-            omitIdFieldInSchema: false,
-            foreignKeyType: null,
-          }
-      const fields = model.fields.map((f) => ({ ...f }))
-      const timestamps = makeTimestampsLines(fields, appName)
-      const timestampsExclude = timestamps.exclude
-      const associations = getAssociations(model, contextModels, appName)
-
-      const belongsToFkFields = new Set(associations.belongsTo.map((a) => a.foreignKey))
-
-      const enumMap = new Map<string, readonly DMMF.DatamodelEnum['values'][number][]>()
-      if (enums) {
-        for (const e of enums) {
-          enumMap.set(e.name, [...e.values])
-        }
-      }
-
-      const schemaFieldsRaw = fields.filter(
-        (f) =>
-          !(
-            f.relationName !== undefined ||
-            (f.isId && pk.omitIdFieldInSchema) ||
-            timestampsExclude.has(f.name) ||
-            belongsToFkFields.has(f.name)
-          ),
-      )
-
-      const compositePkFkTypeSpecs = isCompositePk
-        ? associations.belongsTo
-            .filter((a) => compositePkFieldNames.has(a.foreignKey))
-            .map((a) => {
-              const snakeFk = makeSnakeCase(a.foreignKey)
-              const fkType = a.fkType ?? 'id'
-              return `${snakeFk}: ${ectoTypeToTypespec(fkType)}`
-            })
-        : []
-
-      const typeSpecFields = [
-        ...(pk.omitIdFieldInSchema ? [`id: ${pk.typeSpec}`] : []),
-        ...compositePkFkTypeSpecs,
-        ...schemaFieldsRaw.map((f) => {
-          const nullSuffix = f.isRequired ? '' : ' | nil'
-          if (f.kind === 'enum') {
-            return `${makeSnakeCase(f.name)}: atom()${nullSuffix}`
-          }
-          const baseTypeSpec = ectoTypeToTypespec(
-            f.type === 'DateTime' ? dateTimeModule(f) : prismaTypeToEctoType(f.type),
-          )
-          const typeSpec = f.isList ? `[${baseTypeSpec}]` : baseTypeSpec
-          return `${makeSnakeCase(f.name)}: ${typeSpec}${nullSuffix}`
-        }),
-        ...timestamps.types,
-        ...associations.belongsTo.map(
-          (a) => `${makeSnakeCase(a.name)}: ${appName}.${makePascalCase(a.targetModel)}.t() | nil`,
-        ),
-        ...associations.hasOne.map(
-          (a) => `${makeSnakeCase(a.name)}: ${appName}.${makePascalCase(a.targetModel)}.t() | nil`,
-        ),
-        ...associations.hasMany.map(
-          (a) => `${makeSnakeCase(a.name)}: [${appName}.${makePascalCase(a.targetModel)}.t()]`,
-        ),
-        ...associations.manyToMany.map(
-          (a) => `${makeSnakeCase(a.name)}: [${appName}.${makePascalCase(a.targetModel)}.t()]`,
-        ),
-      ]
-
-      const typeSpecLines = [
-        '  @type t :: %__MODULE__{',
-        ...typeSpecFields.map((line, i) => {
-          const isLast = i === typeSpecFields.length - 1
-          return `          ${line}${isLast ? '' : ','}`
-        }),
-        '        }',
-      ]
-
-      const schemaFields = schemaFieldsRaw.flatMap((f) => {
-        const snakeName = makeSnakeCase(f.name)
-        const primary =
-          (f.isId && !pk.omitIdFieldInSchema) || compositePkFieldNames.has(f.name)
-            ? ', primary_key: true'
-            : ''
-        const dbColumnName = f.dbName ?? f.name
-        const sourceOpt = snakeName !== dbColumnName ? `, source: :${dbColumnName}` : ''
-
-        if (f.kind === 'enum') {
-          const values = enumMap.get(f.type) ?? []
-          // @map-ped values need the keyword form (atom -> dump value) so
-          // Ecto dumps the database value, not the atom's own name.
-          const hasMappedValue = values.some((v) => v.dbName && v.dbName !== v.name)
-          const valuesStr = hasMappedValue
-            ? values.map((v) => `${v.name}: "${v.dbName ?? v.name}"`).join(', ')
-            : values.map((v) => `:${v.name}`).join(', ')
-          const enumType = f.isList ? '{:array, Ecto.Enum}' : 'Ecto.Enum'
-          const enumDefault = typeof f.default === 'string' ? `, default: :${f.default}` : ''
-          const lines = ectoLineComments(stripAnnotations(f.documentation))
-          lines.push(
-            `    field(:${snakeName}, ${enumType}, values: [${valuesStr}]${enumDefault}${sourceOpt})`,
-          )
-          return lines
-        }
-
-        const type =
-          f.type === 'DateTime'
-            ? `${appName}.${dateTimeModule(f)}`
-            : `:${prismaTypeToEctoType(f.type)}`
-        const ectoType = f.isList ? `{:array, ${type}}` : type
-        const defaultOpt = ectoDefaultOption(f)
-        const defaultClause = defaultOpt ? `, ${defaultOpt}` : ''
-        const lines = ectoLineComments(stripAnnotations(f.documentation))
-        lines.push(`    field(:${snakeName}, ${ectoType}${primary}${defaultClause}${sourceOpt})`)
-        return lines
-      })
-
-      const fkFieldLines: string[] = []
-      for (const a of associations.belongsTo) {
-        const snakeFk = makeSnakeCase(a.foreignKey)
-        const fkFieldObj = fields.find((f) => f.name === a.foreignKey)
-        const fkDbName = fkFieldObj?.dbName ?? a.foreignKey
-        const needsSource = snakeFk !== fkDbName
-        const isPkField = compositePkFieldNames.has(a.foreignKey)
-        // belongs_to takes no :default: a foreign key with one is a field of its own.
-        const defaultOpt = fkFieldObj ? ectoDefaultOption(fkFieldObj) : null
-        if (needsSource || isPkField || defaultOpt) {
-          const fkType = a.fkType ?? 'id'
-          const pkOpt = isPkField ? ', primary_key: true' : ''
-          const defaultClause = defaultOpt ? `, ${defaultOpt}` : ''
-          const sourceOpt = needsSource ? `, source: :${fkDbName}` : ''
-          fkFieldLines.push(
-            ...ectoLineComments(stripAnnotations(fkFieldObj?.documentation)),
-            `    field(:${snakeFk}, ${formatEctoType(fkType)}${pkOpt}${defaultClause}${sourceOpt})`,
-          )
-        }
-      }
-
-      // The prose of a relation field, above the association it becomes.
-      const relationComments = (name: string) =>
-        ectoLineComments(stripAnnotations(fields.find((f) => f.name === name)?.documentation))
-
-      const belongsToLines = associations.belongsTo.flatMap((a) => {
-        const snakeFk = makeSnakeCase(a.foreignKey)
-        const snakeAssocName = makeSnakeCase(a.name)
-        const fkFieldObj = fields.find((f) => f.name === a.foreignKey)
-        const fkDbName = fkFieldObj?.dbName ?? a.foreignKey
-        const needsSource = snakeFk !== fkDbName
-        const isPkField = compositePkFieldNames.has(a.foreignKey)
-        const hasDefault = fkFieldObj ? ectoDefaultOption(fkFieldObj) !== null : false
-        // Where belongs_to defines the key's field, the key's comment is written above it.
-        const definesField = !(needsSource || isPkField || hasDefault)
-        const opts: string[] = [`foreign_key: :${snakeFk}`]
-        if (!definesField) opts.push('define_field: false')
-        // A module's @foreign_key_type reaches every belongs_to in it: one whose key is of
-        // Ecto's default :id type says so where the module's default is another.
-        if ((a.fkType ?? 'id') !== (pk.foreignKeyType ?? 'id')) {
-          opts.push(`type: ${formatEctoType(a.fkType ?? 'id')}`)
-        }
-        if (a.references !== 'id') opts.push(`references: :${a.references}`)
-        const lines = definesField
-          ? ectoLineComments(stripAnnotations(fkFieldObj?.documentation))
-          : []
-        lines.push(
-          ...relationComments(a.name),
-          `    belongs_to(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, ${opts.join(', ')})`,
-        )
-        return lines
-      })
-
-      // A has_one or has_many reads the key it references from @primary_key unless it is named,
-      // and Ecto raises where that is false, as it is for a key declared with
-      // `field(..., primary_key: true)`: there `references:` is always written.
-      const namesReferences = (references: string) =>
-        references !== 'id' || pk.line === '@primary_key false'
-
-      const hasOneLines = associations.hasOne.flatMap((a) => {
-        const snakeFk = makeSnakeCase(a.foreignKey)
-        const snakeAssocName = makeSnakeCase(a.name)
-        const referencesOpt = namesReferences(a.references) ? `, references: :${a.references}` : ''
-        const lines = relationComments(a.name)
-        lines.push(
-          `    has_one(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`,
-        )
-        return lines
-      })
-
-      const hasManyLines = associations.hasMany.flatMap((a) => {
-        const snakeFk = makeSnakeCase(a.foreignKey)
-        const snakeAssocName = makeSnakeCase(a.name)
-        const referencesOpt = namesReferences(a.references) ? `, references: :${a.references}` : ''
-        const lines = relationComments(a.name)
-        lines.push(
-          `    has_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, foreign_key: :${snakeFk}${referencesOpt})`,
-        )
-        return lines
-      })
-
-      const manyToManyLines = associations.manyToMany.flatMap((a) => {
-        const snakeAssocName = makeSnakeCase(a.name)
-        // Prisma implicit m2m join tables use columns "A"/"B" (models in
-        // alphabetical order), not Ecto's inflected <schema>_id defaults.
-        const joinKeys = `join_keys: [${a.ownJoinColumn}: :${a.ownKey}, ${a.relatedJoinColumn}: :${a.relatedKey}]`
-        const lines = relationComments(a.name)
-        lines.push(
-          `    many_to_many(:${snakeAssocName}, ${appName}.${makePascalCase(a.targetModel)}, join_through: "${a.joinThrough}", ${joinKeys})`,
-        )
-        return lines
-      })
-
-      const changeset = changesetLines(model, contextModels, options)
-      const lines = [
-        `defmodule ${appName}.${makePascalCase(model.name)} do`,
-        ...ectoModuledoc(stripAnnotations(model.documentation)),
-        '  use Ecto.Schema',
-        ...(changeset.length > 0 ? ['  import Ecto.Changeset'] : []),
-        '',
-        `  ${pk.line}`,
-        ...(pk.foreignKeyType ? [`  @foreign_key_type ${formatEctoType(pk.foreignKeyType)}`] : []),
-        ...(timestamps.attribute ? [timestamps.attribute] : []),
-        '',
-        ...typeSpecLines,
-        '',
-        `  schema "${model.dbName ?? model.name}" do`,
-        ...schemaFields,
-        ...fkFieldLines,
-        ...belongsToLines,
-        ...hasOneLines,
-        ...hasManyLines,
-        ...manyToManyLines,
-        ...timestamps.lines,
-        '  end',
-        ...changeset,
-        'end',
-      ]
-
-      return lines.join('\n')
-    })
+    .map((model) => ectoSchema(model, ctx))
     .filter(Boolean)
     .join('\n\n')
 }

@@ -6,12 +6,61 @@ import path from 'node:path'
 
 import type { Page } from '@playwright/test'
 
-import { expect, loadedFiles, resetSchema, test } from './studio.js'
+import { expect, loadedFiles, present, resetSchema, test } from './studio.js'
 import { FIXTURES_DIR } from './workspace.js'
 
 test.afterEach(async ({ request }) => {
   await resetSchema(request)
 })
+
+/** The wires behind cards and the captions over them, read in the browser. */
+function readHidden() {
+  const boxOf = (element: Element) => {
+    const rect = element.getBoundingClientRect()
+    return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom }
+  }
+  const overlaps = (a: ReturnType<typeof boxOf>, b: ReturnType<typeof boxOf>) =>
+    a.x < b.right && b.x < a.right && a.y < b.bottom && b.y < a.bottom
+  const cards = [...document.querySelectorAll('.react-flow__node')].map((node) => ({
+    id: node.getAttribute('data-id') ?? '',
+    box: boxOf(node),
+  }))
+  // A card's own border is where its edges begin, so the last few pixels do not count.
+  const inset = (box: ReturnType<typeof boxOf>) => ({
+    x: box.x + 3,
+    y: box.y + 3,
+    right: box.right - 3,
+    bottom: box.bottom - 3,
+  })
+  const wires = [...document.querySelectorAll('.react-flow__edge')].map((edge) => {
+    const wire = edge.querySelector('.react-flow__edge-path')
+    const geometry = wire as SVGPathElement | null
+    const length = geometry?.getTotalLength() ?? 0
+    const matrix = geometry?.getScreenCTM() ?? null
+    const points = Array.from({ length: 201 }, (_, step) => {
+      const at = geometry?.getPointAtLength((length * step) / 200) ?? { x: 0, y: 0 }
+      return {
+        x: at.x * (matrix?.a ?? 1) + (matrix?.e ?? 0),
+        y: at.y * (matrix?.d ?? 1) + (matrix?.f ?? 0),
+      }
+    })
+    return { id: edge.getAttribute('data-id') ?? '', points }
+  })
+  const inside = (point: { x: number; y: number }, box: ReturnType<typeof boxOf>) =>
+    point.x > box.x && point.x < box.right && point.y > box.y && point.y < box.bottom
+  return {
+    wiresBehindCards: wires.flatMap((wire) =>
+      cards
+        .filter((card) => wire.points.some((point) => inside(point, inset(card.box))))
+        .map((card) => `${wire.id} behind ${card.id}`),
+    ),
+    captionsOverCards: [...document.querySelectorAll('.relation-label')].flatMap((label) =>
+      cards
+        .filter((card) => overlaps(boxOf(label), card.box))
+        .map((card) => `${label.textContent ?? ''} over ${card.id}`),
+    ),
+  }
+}
 
 /**
  * What the drawing hides from a reader, read back off the rendered page: the wires that run
@@ -19,60 +68,27 @@ test.afterEach(async ({ request }) => {
  * followed.
  */
 async function hidden(page: Page) {
-  return page.evaluate(() => {
-    const boxOf = (element: Element) => {
-      const rect = element.getBoundingClientRect()
-      return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom }
-    }
-    const overlaps = (a: ReturnType<typeof boxOf>, b: ReturnType<typeof boxOf>) =>
-      a.x < b.right && b.x < a.right && a.y < b.bottom && b.y < a.bottom
-    const cards = [...document.querySelectorAll('.react-flow__node')].map((node) => ({
-      id: node.getAttribute('data-id') ?? '',
-      box: boxOf(node),
-    }))
-    // A card's own border is where its edges begin, so the last few pixels do not count.
-    const inset = (box: ReturnType<typeof boxOf>) => ({
-      x: box.x + 3,
-      y: box.y + 3,
-      right: box.right - 3,
-      bottom: box.bottom - 3,
-    })
-    const wires = [...document.querySelectorAll('.react-flow__edge')].map((edge) => {
-      const wire = edge.querySelector('.react-flow__edge-path')
-      const geometry = wire as SVGPathElement | null
-      const length = geometry?.getTotalLength() ?? 0
-      const matrix = geometry?.getScreenCTM() ?? null
-      const points = Array.from({ length: 201 }, (_, step) => {
-        const at = geometry?.getPointAtLength((length * step) / 200) ?? { x: 0, y: 0 }
-        return {
-          x: at.x * (matrix?.a ?? 1) + (matrix?.e ?? 0),
-          y: at.y * (matrix?.d ?? 1) + (matrix?.f ?? 0),
-        }
-      })
-      return { id: edge.getAttribute('data-id') ?? '', points }
-    })
-    const inside = (point: { x: number; y: number }, box: ReturnType<typeof boxOf>) =>
-      point.x > box.x && point.x < box.right && point.y > box.y && point.y < box.bottom
-    return {
-      wiresBehindCards: wires.flatMap((wire) =>
-        cards
-          .filter((card) => wire.points.some((point) => inside(point, inset(card.box))))
-          .map((card) => `${wire.id} behind ${card.id}`),
-      ),
-      captionsOverCards: [...document.querySelectorAll('.relation-label')].flatMap((label) =>
-        cards
-          .filter((card) => overlaps(boxOf(label), card.box))
-          .map((card) => `${label.textContent ?? ''} over ${card.id}`),
-      ),
-    }
-  })
+  return page.evaluate(readHidden)
+}
+
+/** Each edge's id and the markers at its two ends, sorted by id, read in the browser. */
+function edgeEnds(edges: Element[]) {
+  return edges
+    .map((edge) => [
+      edge.getAttribute('data-id') ?? '',
+      edge.querySelector('.react-flow__edge-path')?.getAttribute('marker-start') ?? '',
+      edge.querySelector('.react-flow__edge-path')?.getAttribute('marker-end') ?? '',
+    ])
+    .toSorted((a, b) => ((a[0] ?? '') < (b[0] ?? '') ? -1 : 1))
 }
 
 test('the diagram draws every cardinality in IE notation', async ({ page, request }) => {
   const files = await loadedFiles(request)
   const write = async (name: string, content: string) => {
-    const file = files.find((loaded) => path.basename(loaded.path) === name)
-    if (file === undefined) throw new Error(`${name} is not loaded`)
+    const file = present(
+      files.find((loaded) => path.basename(loaded.path) === name),
+      `${name} is not loaded`,
+    )
     const response = await request.put('/api/schema/files', { data: { path: file.path, content } })
     expect(response.ok()).toBe(true)
   }
@@ -89,17 +105,7 @@ test('the diagram draws every cardinality in IE notation', async ({ page, reques
 
   // Both ends of every edge, as the browser resolved them: the parent end says whether the
   // foreign key may be null, and the child end whether the back relation is a list.
-  const ends = await page
-    .locator('.react-flow__edge.relation-edge')
-    .evaluateAll((edges) =>
-      edges
-        .map((edge) => [
-          edge.getAttribute('data-id') ?? '',
-          edge.querySelector('.react-flow__edge-path')?.getAttribute('marker-start') ?? '',
-          edge.querySelector('.react-flow__edge-path')?.getAttribute('marker-end') ?? '',
-        ])
-        .toSorted((a, b) => ((a[0] ?? '') < (b[0] ?? '') ? -1 : 1)),
-    )
+  const ends = await page.locator('.react-flow__edge.relation-edge').evaluateAll(edgeEnds)
   expect(ends).toStrictEqual([
     ['Category.id->Category.parentId', "url('#er-zero-one')", "url('#er-zero-many')"],
     ['Post.id->Comment.postId', "url('#er-one')", "url('#er-zero-many')"],

@@ -129,6 +129,9 @@ export function migrationStatus(input: {
       configDir: input.configDir,
     })
     const appliedNames = new Set(applied.migrations.map((migration) => migration.name))
+    const directories = new Set(
+      input.migrations.migrationDirectories.map((directory) => directory.path),
+    )
     const history = diagnosed.history
     // A database with tables and no history is one `prisma migrate deploy` refuses (P3005): the
     // migrations would create what is already there. It has to be baselined first.
@@ -155,10 +158,7 @@ export function migrationStatus(input: {
       // Recorded as applied, with no directory left to say what ran: deleted, or never committed.
       missingFiles: applied.migrations
         .map((migration) => migration.name)
-        .filter(
-          (name) =>
-            !input.migrations.migrationDirectories.some((directory) => directory.path === name),
-        ),
+        .filter((name) => !directories.has(name)),
       baselineNeeded:
         applied.migrations.length === 0 &&
         input.migrations.migrationDirectories.length > 0 &&
@@ -193,22 +193,25 @@ export function baselineCandidates(input: {
   readonly configDir: string
 }) {
   // One at a time: each replay makes and removes a shadow database of its own.
-  return Effect.forEach(input.migrations.migrationDirectories, (directory) =>
-    engineCommand(() =>
-      input.engine.diff({
-        from: { tag: 'migrations', ...historyUpTo(input.migrations, directory.path) },
-        to: { tag: 'schemaDatasource', files: [...input.files], configDir: input.configDir },
-        script: true,
-        exitCode: true,
-        filters: NO_FILTER,
-      }),
-    ).pipe(
-      Effect.map((result) => ({
-        name: directory.path,
-        matches: result.exitCode === 0,
-        difference: result.exitCode === 0 ? '' : (result.stdout ?? ''),
-      })),
-    ),
+  return Effect.forEach(
+    input.migrations.migrationDirectories,
+    (directory) =>
+      engineCommand(() =>
+        input.engine.diff({
+          from: { tag: 'migrations', ...historyUpTo(input.migrations, directory.path) },
+          to: { tag: 'schemaDatasource', files: [...input.files], configDir: input.configDir },
+          script: true,
+          exitCode: true,
+          filters: NO_FILTER,
+        }),
+      ).pipe(
+        Effect.map((result) => ({
+          name: directory.path,
+          matches: result.exitCode === 0,
+          difference: result.exitCode === 0 ? '' : (result.stdout ?? ''),
+        })),
+      ),
+    { concurrency: 1 },
   )
 }
 
@@ -252,14 +255,17 @@ export function baselineMigrations(input: {
     }
     const names = history.migrationDirectories.map((directory) => directory.path)
     // The first mark makes the history table where there is none; the ones after it find it there.
-    yield* Effect.forEach(names, (name, index) =>
-      markMigrationApplied({
-        engine: input.engine,
-        driver: input.driver,
-        migrations: input.migrations,
-        name,
-        tablePresent: index > 0,
-      }),
+    yield* Effect.forEach(
+      names,
+      (name, index) =>
+        markMigrationApplied({
+          engine: input.engine,
+          driver: input.driver,
+          migrations: input.migrations,
+          name,
+          tablePresent: index > 0,
+        }),
+      { concurrency: 1 },
     )
     return names
   })

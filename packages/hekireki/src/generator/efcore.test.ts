@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { efcoreFiles } from './efcore.js'
 
+/** The datamodel `getDMMF` parsed, or its parse error thrown. */
+function datamodelOf(result: ReturnType<typeof getDMMF>) {
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel
+}
+
 const SCHEMA = `datasource db {
   provider = "postgresql"
 }
@@ -29,9 +35,8 @@ model Post {
 describe('efcoreFiles', () => {
   it('writes an entity class per model, an enum per enum, and the DbContext last', () => {
     const result = getDMMF({ datamodel: [['schema.prisma', SCHEMA]] })
-    if ('type' in result) throw new Error(result.error.message)
     expect(
-      efcoreFiles(result.datamodel, {
+      efcoreFiles(datamodelOf(result), {
         namespace: 'Models',
         context: 'AppDbContext',
         provider: 'postgresql',

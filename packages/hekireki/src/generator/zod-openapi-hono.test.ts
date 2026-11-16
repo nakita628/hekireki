@@ -11,6 +11,11 @@ import {
   zodOpenapiHonoDocument,
 } from './zod-openapi-hono.js'
 
+/** The property names of a component schema, none where it has no properties. */
+function propertyNames(schema: { readonly properties?: object | undefined } | undefined) {
+  return Object.keys(schema?.properties ?? {})
+}
+
 function makeField(overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field {
   return {
     kind: 'scalar',
@@ -109,7 +114,7 @@ describe('zodOpenapiHonoDocument', () => {
 
   it('requires what a create cannot do without, and nothing for an update, which leaves out the key', () => {
     expect(document.components.schemas['UserCreate']?.required).toStrictEqual(['email'])
-    expect(Object.keys(document.components.schemas['UserUpdate']?.properties ?? {})).toStrictEqual([
+    expect(propertyNames(document.components.schemas['UserUpdate'])).toStrictEqual([
       'email',
       'role',
       'tags',
@@ -120,7 +125,7 @@ describe('zodOpenapiHonoDocument', () => {
 
   it('takes no field the server fills: a generated @default or @updatedAt', () => {
     // id is @default(uuid()), createdAt is @updatedAt; role's @default("USER") is a plain value.
-    expect(Object.keys(document.components.schemas['UserCreate']?.properties ?? {})).toStrictEqual([
+    expect(propertyNames(document.components.schemas['UserCreate'])).toStrictEqual([
       'email',
       'role',
       'tags',
@@ -292,9 +297,10 @@ describe('handlerBodies', () => {
   })
 
   it('has only the list and the create for a model without a key', () => {
-    expect(
-      [...bodies.keys()].filter((id) => id.endsWith('Log') || id.endsWith('Logs')),
-    ).toStrictEqual(['listLogs', 'createLog'])
+    expect([...bodies.keys()].filter((id) => /Logs?$/u.test(id))).toStrictEqual([
+      'listLogs',
+      'createLog',
+    ])
   })
 })
 
@@ -465,20 +471,12 @@ describe('@api.hidden and @api.readonly', () => {
   })
 
   it('answers neither hidden field, and the readonly one', () => {
-    expect(Object.keys(doc.components.schemas['Account']?.properties ?? {})).toStrictEqual([
-      'id',
-      'email',
-      'role',
-    ])
+    expect(propertyNames(doc.components.schemas['Account'])).toStrictEqual(['id', 'email', 'role'])
   })
 
   it('takes neither the hidden nor the readonly fields, on a create or an update', () => {
-    expect(Object.keys(doc.components.schemas['AccountCreate']?.properties ?? {})).toStrictEqual([
-      'email',
-    ])
-    expect(Object.keys(doc.components.schemas['AccountUpdate']?.properties ?? {})).toStrictEqual([
-      'email',
-    ])
+    expect(propertyNames(doc.components.schemas['AccountCreate'])).toStrictEqual(['email'])
+    expect(propertyNames(doc.components.schemas['AccountUpdate'])).toStrictEqual(['email'])
   })
 
   it('omits the hidden fields from every row Prisma answers, and never encodes one', () => {
