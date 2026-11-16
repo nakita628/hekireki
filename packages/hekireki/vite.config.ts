@@ -157,9 +157,22 @@ export default defineConfig({
       'jsdoc/require-property-description': 'error',
       'jsdoc/require-property-name': 'error',
       'jsdoc/require-returns-description': 'error',
-      // Code a reader should not have to trace: a block nested four deep is a function waiting to
-      // be named.
+      // Code a reader should not have to trace: a block nested four deep, a function with more
+      // than fifteen paths through it, a callback in a callback in a callback, a ternary inside a
+      // ternary. Each is a function or a name waiting to be written.
       'max-depth': ['error', { max: 3 }],
+      complexity: ['error', { max: 15 }],
+      'max-nested-callbacks': ['error', { max: 3 }],
+      'no-nested-ternary': 'error',
+      // A condition is a boolean: `x !== undefined`, `s !== ''`, `n > 0`, never a string, a number
+      // or an object that JavaScript coerces.
+      'typescript/strict-boolean-expressions': 'error',
+      // Work repeated where it need not be, in the generators and the CLI as in the Studio server
+      // (lint/performance.js): a linear lookup inside a loop, a literal RegExp / Set / Map built on
+      // every call, an Effect.forEach / Effect.all that does not say how many run at once.
+      'custom/no-lookup-in-loop': 'error',
+      'custom/hoist-constant': 'error',
+      'custom/effect-explicit-concurrency': 'error',
       // Old or risky APIs, and spellings that read as mistakes.
       'no-alert': 'error',
       'no-constructor-return': 'error',
@@ -212,6 +225,8 @@ export default defineConfig({
       'jest/prefer-comparison-matcher': 'error',
       'jest/prefer-to-contain': 'error',
       'jest/max-nested-describe': 'error',
+      // A test asserts unconditionally: a case that branches is two cases (it.each, or two its).
+      'jest/no-conditional-in-test': 'error',
       'jest/prefer-todo': 'error',
       'jest/no-restricted-matchers': [
         'error',
@@ -765,10 +780,7 @@ export default defineConfig({
           'custom/catch-must-log': 'error',
           'custom/effect-run-at-edge': 'error',
           'custom/require-tsdoc': 'error',
-          'custom/effect-explicit-concurrency': 'error',
-          'custom/no-lookup-in-loop': 'error',
           'custom/one-studio-read': 'error',
-          'custom/hoist-constant': 'error',
         },
       },
       {
@@ -1112,6 +1124,8 @@ export default defineConfig({
           'typescript/no-unsafe-call': 'off',
           'typescript/no-unsafe-member-access': 'off',
           'typescript/no-unsafe-return': 'off',
+          // The plugin's AST nodes are untyped, so every condition on them reads as `any`.
+          'typescript/strict-boolean-expressions': 'off',
         },
       },
       {
