@@ -69,6 +69,8 @@ export function validationSchemas(
       readonly values: readonly { readonly name: string }[]
     }[]
     readonly formatEnum?: (values: readonly string[]) => string
+    /** Wraps the schema of one element in the schema of a list (`String[]`, `Role[]`). */
+    readonly wrapList: (expression: string) => string
     readonly onWarning?: (message: string) => void
   },
 ) {
@@ -78,13 +80,7 @@ export function validationSchemas(
     fields: model.fields,
   }))
 
-  const resolveValidation = (field: {
-    readonly type: string
-    readonly kind: string
-    readonly documentation?: string
-  }) => {
-    const annotation = config.extractValidation(field.documentation)
-    if (annotation !== null) return annotation
+  const resolveElement = (field: { readonly type: string; readonly kind: string }) => {
     if (config.typeMapping) {
       const mapped = config.typeMapping[field.type]
       if (mapped) return mapped
@@ -94,6 +90,20 @@ export function validationSchemas(
       if (enumDef) return config.formatEnum(enumDef.values.map((v) => v.name))
     }
     return null
+  }
+
+  // An annotation is the schema of the field as written, a list included: it is never wrapped.
+  const resolveValidation = (field: {
+    readonly type: string
+    readonly kind: string
+    readonly documentation?: string
+    readonly isList: boolean
+  }) => {
+    const annotation = config.extractValidation(field.documentation)
+    if (annotation !== null) return annotation
+    const element = resolveElement(field)
+    if (element === null) return null
+    return field.isList ? config.wrapList(element) : element
   }
 
   const modelFields = modelInfos.map((model) =>

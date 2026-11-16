@@ -13,7 +13,7 @@ export const UserSchema = Type.Object({
   /** Display name */
   name: Type.String({ minLength: 1, maxLength: 50 }),
   role: Type.Union([Type.Literal('ADMIN'), Type.Literal('EDITOR'), Type.Literal('VIEWER')]),
-  interests: Type.String(),
+  interests: Type.Array(Type.String()),
   createdAt: Type.Date(),
   updatedAt: Type.Date(),
 })

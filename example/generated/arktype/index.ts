@@ -13,7 +13,7 @@ export const UserSchema = type({
   /** Display name */
   name: '1 <= string <= 50',
   role: "'ADMIN' | 'EDITOR' | 'VIEWER'",
-  interests: 'string',
+  interests: 'string[]',
   createdAt: 'Date',
   updatedAt: 'Date',
 })

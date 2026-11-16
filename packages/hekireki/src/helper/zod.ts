@@ -15,6 +15,10 @@ export function makeZodEnumExpression(values: readonly string[]) {
   return `enum([${values.map((v) => `'${v}'`).join(', ')}])`
 }
 
+export function makeZodListExpression(element: string) {
+  return `array(z.${element})`
+}
+
 export const PRISMA_TO_ZOD: { [k: string]: string } = {
   String: 'string()',
   Int: 'number()',
@@ -107,5 +111,6 @@ export function zodSchemaCode(
     typeMapping: PRISMA_TO_ZOD,
     enums,
     formatEnum: makeZodEnumExpression,
+    wrapList: makeZodListExpression,
   })
 }

@@ -13,7 +13,7 @@ export const UserSchema = v.object({
   /** Display name */
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
   role: v.picklist(['ADMIN', 'EDITOR', 'VIEWER']),
-  interests: v.string(),
+  interests: v.array(v.string()),
   createdAt: v.date(),
   updatedAt: v.date(),
 })

@@ -517,4 +517,32 @@ export const UserSchema = {
   additionalProperties: false,
 } as const`)
   })
+
+  describe('list fields', () => {
+    const listEnums = [{ name: 'Role', values: [{ name: 'USER' }, { name: 'ADMIN' }] }]
+    const listModels = [
+      {
+        name: 'Post',
+        fields: [
+          { name: 'id', type: 'Int', kind: 'scalar', isRequired: true, isList: false },
+          { name: 'tags', type: 'String', kind: 'scalar', isRequired: true, isList: true },
+          { name: 'roles', type: 'Role', kind: 'enum', isRequired: true, isList: true },
+          {
+            name: 'scores',
+            type: 'Int',
+            kind: 'scalar',
+            isRequired: true,
+            isList: true,
+            documentation: "@j.{ type: 'array' as const, items: { type: 'integer' as const } }",
+          },
+        ],
+      },
+    ]
+
+    it('wraps a scalar or enum list in an array, and leaves an annotation as written', () => {
+      expect(ajvSchemaCode(listModels, false, listEnums)).toBe(
+        "export const PostSchema = {\n  type: 'object' as const,\n  properties: {\n    id: { type: 'integer' as const },\n    tags: { type: 'array' as const, items: { type: 'string' as const } },\n    roles: { type: 'array' as const, items: { enum: ['USER', 'ADMIN'] as const } },\n    scores: { type: 'array' as const, items: { type: 'integer' as const } },\n  },\n  required: ['id', 'tags', 'roles', 'scores'] as const,\n  additionalProperties: false,\n} as const",
+      )
+    })
+  })
 })

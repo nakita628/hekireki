@@ -39,6 +39,10 @@ export function makeTypeBoxEnumExpression(values: readonly string[]) {
   return `Type.Union([${values.map((v) => `Type.Literal('${v}')`).join(', ')}])`
 }
 
+export function makeTypeBoxListExpression(element: string) {
+  return `Type.Array(${element})`
+}
+
 export const PRISMA_TO_TYPEBOX: { [k: string]: string } = {
   String: 'Type.String()',
   Int: 'Type.Integer()',
@@ -118,5 +122,6 @@ export function typeboxSchemaCode(
     typeMapping: PRISMA_TO_TYPEBOX,
     enums,
     formatEnum: makeTypeBoxEnumExpression,
+    wrapList: makeTypeBoxListExpression,
   })
 }

@@ -43,6 +43,12 @@ export function makeArktypeEnumExpression(values: readonly string[]) {
   return `"${values.map((v) => `'${v}'`).join(' | ')}"`
 }
 
+/** `"string"` → `"string[]"`, `"'A' | 'B'"` → `"('A' | 'B')[]"`. */
+export function makeArktypeListExpression(element: string) {
+  const inner = element.slice(1, -1)
+  return inner.includes('|') ? `"(${inner})[]"` : `"${inner}[]"`
+}
+
 export const PRISMA_TO_ARKTYPE: { [k: string]: string } = {
   String: '"string"',
   Int: '"number"',
@@ -119,5 +125,6 @@ export function arktypeSchemaCode(
     typeMapping: PRISMA_TO_ARKTYPE,
     enums,
     formatEnum: makeArktypeEnumExpression,
+    wrapList: makeArktypeListExpression,
   })
 }

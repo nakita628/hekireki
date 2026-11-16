@@ -455,4 +455,32 @@ export const UserSchema = Type.Object({
   name: Type.String(),
 })`)
   })
+
+  describe('list fields', () => {
+    const listEnums = [{ name: 'Role', values: [{ name: 'USER' }, { name: 'ADMIN' }] }]
+    const listModels = [
+      {
+        name: 'Post',
+        fields: [
+          { name: 'id', type: 'Int', kind: 'scalar', isRequired: true, isList: false },
+          { name: 'tags', type: 'String', kind: 'scalar', isRequired: true, isList: true },
+          { name: 'roles', type: 'Role', kind: 'enum', isRequired: true, isList: true },
+          {
+            name: 'scores',
+            type: 'Int',
+            kind: 'scalar',
+            isRequired: true,
+            isList: true,
+            documentation: '@t.Type.Array(Type.Integer())',
+          },
+        ],
+      },
+    ]
+
+    it('wraps a scalar or enum list in an array, and leaves an annotation as written', () => {
+      expect(typeboxSchemaCode(listModels, false, listEnums)).toBe(
+        "import { Type } from '@sinclair/typebox'\n\nexport const PostSchema = Type.Object({\n  id: Type.Integer(),\n  tags: Type.Array(Type.String()),\n  roles: Type.Array(Type.Union([Type.Literal('USER'), Type.Literal('ADMIN')])),\n  scores: Type.Array(Type.Integer()),\n})",
+      )
+    })
+  })
 })
