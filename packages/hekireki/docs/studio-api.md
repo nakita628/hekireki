@@ -305,7 +305,7 @@ migrations directory changes, and `ping` every 15 seconds to keep the connection
 
 |Status|Meaning|Description|Schema|
 |---|---|---|---|
-|200|OK|The request has succeeded.|Inline|
+|200|OK|The event stream, open until the client closes it|Inline|
 
 <aside class="success">
 This operation does not require authentication
@@ -448,7 +448,7 @@ One page of a model's rows, keyed by field name, ordered by the key fields.
 
 |Name|In|Type|Required|Description|
 |---|---|---|---|---|
-|modelName|path|[modelName](#schemamodelname)|true|none|
+|modelName|path|[modelName](#schemamodelname)|true|The model whose table is read or written, as the schema declares it|
 |skip|query|[skip](#schemaskip)|true|Rows to skip before the page|
 |take|query|[take](#schematake)|true|Rows per page|
 |search|query|[search](#schemasearch)|false|Text every returned row must contain|
@@ -586,7 +586,7 @@ Insert one row; field names are translated to columns and values to the driver's
 
 |Name|In|Type|Required|Description|
 |---|---|---|---|---|
-|modelName|path|[modelName](#schemamodelname)|true|none|
+|modelName|path|[modelName](#schemamodelname)|true|The model whose table is read or written, as the schema declares it|
 |body|body|[InsertBody](#schemainsertbody)|true|none|
 |» values|body|object|true|Field values for the new row; omitted fields take their defaults|
 |» » **additionalProperties**|body|string \| number(double) \| boolean \| null|false|none|
@@ -708,7 +708,7 @@ Delete the row identified by `where`.
 
 |Name|In|Type|Required|Description|
 |---|---|---|---|---|
-|modelName|path|[modelName](#schemamodelname)|true|none|
+|modelName|path|[modelName](#schemamodelname)|true|The model whose table is read or written, as the schema declares it|
 |body|body|[DeleteBody](#schemadeletebody)|true|none|
 |» where|body|object|true|The key fields of the row to delete|
 |» » **additionalProperties**|body|string \| number(double) \| boolean \| null|false|none|
@@ -836,7 +836,7 @@ Update the row identified by `where`; both parts must name at least one field.
 
 |Name|In|Type|Required|Description|
 |---|---|---|---|---|
-|modelName|path|[modelName](#schemamodelname)|true|none|
+|modelName|path|[modelName](#schemamodelname)|true|The model whose table is read or written, as the schema declares it|
 |body|body|[UpdateBody](#schemaupdatebody)|true|none|
 |» where|body|object|true|The key fields of the row to change|
 |» » **additionalProperties**|body|string \| number(double) \| boolean \| null|false|none|
@@ -1189,95 +1189,7 @@ Analyze the statements against the Prisma schema's tables: data flow, lineage, r
 
 ```json
 {
-  "statements": [
-    {
-      "kind": {},
-      "text": "string",
-      "range": {
-        "start": 7,
-        "end": 12
-      },
-      "nodes": [
-        {
-          "id": "n3",
-          "kind": "filter",
-          "label": "WHERE",
-          "details": [
-            "u.id = ?"
-          ],
-          "range": {
-            "start": 40,
-            "end": 48
-          },
-          "scope": "main",
-          "columns": []
-        }
-      ],
-      "edges": [
-        {
-          "id": "n1->n3:0",
-          "source": "n1",
-          "target": "n3",
-          "label": null,
-          "kind": "flow"
-        }
-      ],
-      "tables": [
-        {
-          "nodeId": "n1",
-          "name": "users",
-          "alias": "u",
-          "scope": "main",
-          "known": true,
-          "columnsUsed": [
-            "id",
-            "email"
-          ],
-          "range": {
-            "start": 20,
-            "end": 25
-          }
-        }
-      ],
-      "columns": [
-        {
-          "name": "email",
-          "expression": "u.email",
-          "dataType": "TEXT",
-          "tsType": "string",
-          "nullable": true,
-          "sources": [
-            {
-              "table": "users",
-              "column": "email"
-            }
-          ]
-        }
-      ],
-      "parameters": [
-        {
-          "index": 1,
-          "placeholder": "?",
-          "dataType": "INTEGER",
-          "tsType": "number",
-          "nullable": false,
-          "context": "u.id = ?"
-        }
-      ],
-      "diagnostics": [
-        {
-          "severity": "warning",
-          "message": "Unknown column \"nmae\"",
-          "range": {
-            "start": 7,
-            "end": 11
-          }
-        }
-      ],
-      "rowType": "string",
-      "paramsType": "string"
-    }
-  ]
+  "statements": []
 }
 ```
 
@@ -4199,7 +4111,7 @@ The migration.sql of one migration of the directory; 404 when the directory hold
 
 |Name|In|Type|Required|Description|
 |---|---|---|---|---|
-|migrationName|path|string|true|none|
+|migrationName|path|string|true|The directory name of the migration, as `MigrationRecord.name` gives it|
 
 > Example responses
 
@@ -6486,91 +6398,20 @@ A problem found in the statement.
 
 ```json
 {
-  "kind": {},
-  "text": "string",
+  "kind": "select",
+  "text": "SELECT id FROM users",
   "range": {
-    "start": 7,
-    "end": 12
+    "start": 0,
+    "end": 20
   },
-  "nodes": [
-    {
-      "id": "n3",
-      "kind": "filter",
-      "label": "WHERE",
-      "details": [
-        "u.id = ?"
-      ],
-      "range": {
-        "start": 40,
-        "end": 48
-      },
-      "scope": "main",
-      "columns": []
-    }
-  ],
-  "edges": [
-    {
-      "id": "n1->n3:0",
-      "source": "n1",
-      "target": "n3",
-      "label": null,
-      "kind": "flow"
-    }
-  ],
-  "tables": [
-    {
-      "nodeId": "n1",
-      "name": "users",
-      "alias": "u",
-      "scope": "main",
-      "known": true,
-      "columnsUsed": [
-        "id",
-        "email"
-      ],
-      "range": {
-        "start": 20,
-        "end": 25
-      }
-    }
-  ],
-  "columns": [
-    {
-      "name": "email",
-      "expression": "u.email",
-      "dataType": "TEXT",
-      "tsType": "string",
-      "nullable": true,
-      "sources": [
-        {
-          "table": "users",
-          "column": "email"
-        }
-      ]
-    }
-  ],
-  "parameters": [
-    {
-      "index": 1,
-      "placeholder": "?",
-      "dataType": "INTEGER",
-      "tsType": "number",
-      "nullable": false,
-      "context": "u.id = ?"
-    }
-  ],
-  "diagnostics": [
-    {
-      "severity": "warning",
-      "message": "Unknown column \"nmae\"",
-      "range": {
-        "start": 7,
-        "end": 11
-      }
-    }
-  ],
-  "rowType": "string",
-  "paramsType": "string"
+  "nodes": [],
+  "edges": [],
+  "tables": [],
+  "columns": [],
+  "parameters": [],
+  "diagnostics": [],
+  "rowType": "{ id: number }",
+  "paramsType": "[]"
 }
 ```
 
@@ -6601,95 +6442,7 @@ The analysis of one statement.
 
 ```json
 {
-  "statements": [
-    {
-      "kind": {},
-      "text": "string",
-      "range": {
-        "start": 7,
-        "end": 12
-      },
-      "nodes": [
-        {
-          "id": "n3",
-          "kind": "filter",
-          "label": "WHERE",
-          "details": [
-            "u.id = ?"
-          ],
-          "range": {
-            "start": 40,
-            "end": 48
-          },
-          "scope": "main",
-          "columns": []
-        }
-      ],
-      "edges": [
-        {
-          "id": "n1->n3:0",
-          "source": "n1",
-          "target": "n3",
-          "label": null,
-          "kind": "flow"
-        }
-      ],
-      "tables": [
-        {
-          "nodeId": "n1",
-          "name": "users",
-          "alias": "u",
-          "scope": "main",
-          "known": true,
-          "columnsUsed": [
-            "id",
-            "email"
-          ],
-          "range": {
-            "start": 20,
-            "end": 25
-          }
-        }
-      ],
-      "columns": [
-        {
-          "name": "email",
-          "expression": "u.email",
-          "dataType": "TEXT",
-          "tsType": "string",
-          "nullable": true,
-          "sources": [
-            {
-              "table": "users",
-              "column": "email"
-            }
-          ]
-        }
-      ],
-      "parameters": [
-        {
-          "index": 1,
-          "placeholder": "?",
-          "dataType": "INTEGER",
-          "tsType": "number",
-          "nullable": false,
-          "context": "u.id = ?"
-        }
-      ],
-      "diagnostics": [
-        {
-          "severity": "warning",
-          "message": "Unknown column \"nmae\"",
-          "range": {
-            "start": 7,
-            "end": 11
-          }
-        }
-      ],
-      "rowType": "string",
-      "paramsType": "string"
-    }
-  ]
+  "statements": []
 }
 ```
 

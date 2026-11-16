@@ -319,6 +319,19 @@ export const StatementAnalysisSchema = z
       'paramsType',
     ],
     description: 'The analysis of one statement.',
+    example: {
+      kind: 'select',
+      text: 'SELECT id FROM users',
+      range: { start: 0, end: 20 },
+      nodes: [],
+      edges: [],
+      tables: [],
+      columns: [],
+      parameters: [],
+      diagnostics: [],
+      rowType: '{ id: number }',
+      paramsType: '[]',
+    },
   })
   .openapi('StatementAnalysis')
 
@@ -1392,6 +1405,7 @@ export const AnalysisSchema: z.ZodType<AnalysisType> = z
       .openapi({
         required: ['statements'],
         description: 'The analysis of every statement in the text.',
+        example: { statements: [] },
       }),
   )
   .openapi('Analysis')
@@ -3729,7 +3743,7 @@ export const getSchemaEventsRoute = createRoute({
   operationId: 'readSchemaEvents',
   responses: {
     200: {
-      description: 'The request has succeeded.',
+      description: 'The event stream, open until the client closes it',
       content: { 'text/event-stream': { schema: z.string() } },
     },
   },
@@ -3788,6 +3802,7 @@ export const getDbRowsModelNameRoute = createRoute({
           name: 'modelName',
           in: 'path',
           required: true,
+          description: 'The model whose table is read or written, as the schema declares it',
           schema: { $ref: '#/components/schemas/modelName' },
         },
       }),
@@ -3836,6 +3851,7 @@ export const postDbRowsModelNameRoute = createRoute({
           name: 'modelName',
           in: 'path',
           required: true,
+          description: 'The model whose table is read or written, as the schema declares it',
           schema: { $ref: '#/components/schemas/modelName' },
         },
       }),
@@ -3879,6 +3895,7 @@ export const deleteDbRowsModelNameRoute = createRoute({
           name: 'modelName',
           in: 'path',
           required: true,
+          description: 'The model whose table is read or written, as the schema declares it',
           schema: { $ref: '#/components/schemas/modelName' },
         },
       }),
@@ -3922,6 +3939,7 @@ export const patchDbRowsModelNameRoute = createRoute({
           name: 'modelName',
           in: 'path',
           required: true,
+          description: 'The model whose table is read or written, as the schema declares it',
           schema: { $ref: '#/components/schemas/modelName' },
         },
       }),
@@ -4840,7 +4858,13 @@ export const getMigrateMigrationsMigrationNameRoute = createRoute({
       migrationName: z
         .string()
         .openapi({
-          param: { name: 'migrationName', in: 'path', required: true, schema: { type: 'string' } },
+          param: {
+            name: 'migrationName',
+            in: 'path',
+            required: true,
+            description: 'The directory name of the migration, as `MigrationRecord.name` gives it',
+            schema: { type: 'string' },
+          },
         }),
     }),
   },
