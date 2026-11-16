@@ -65,7 +65,7 @@ describe('writeFile and makeDirectory', () => {
     await run(makeDirectory(nested))
     await run(writeFile(path.join(nested, 'text.txt'), 'hello'))
     await run(writeFile(path.join(nested, 'bytes.bin'), new Uint8Array([1, 2, 3])))
-    expect(readFileSync(path.join(nested, 'text.txt'), 'utf-8')).toBe('hello')
+    expect(readFileSync(path.join(nested, 'text.txt'), 'utf8')).toBe('hello')
     expect([...readFileSync(path.join(nested, 'bytes.bin'))]).toStrictEqual([1, 2, 3])
     expect(statSync(nested).isDirectory()).toBe(true)
   })

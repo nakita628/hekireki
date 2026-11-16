@@ -157,6 +157,30 @@ export default defineConfig({
       'jsdoc/require-property-description': 'error',
       'jsdoc/require-property-name': 'error',
       'jsdoc/require-returns-description': 'error',
+      // Code a reader should not have to trace: a block nested four deep is a function waiting to
+      // be named.
+      'max-depth': ['error', { max: 3 }],
+      // Old or risky APIs, and spellings that read as mistakes.
+      'no-alert': 'error',
+      'no-constructor-return': 'error',
+      'no-promise-executor-return': 'error',
+      'prefer-spread': 'error',
+      'symbol-description': 'error',
+      'import/no-amd': 'error',
+      'unicorn/no-instanceof-array': 'error',
+      'unicorn/number-literal-case': 'error',
+      'unicorn/prefer-date-now': 'error',
+      'unicorn/prefer-response-static-json': 'error',
+      'unicorn/text-encoding-identifier-case': 'error',
+      'unicorn/throw-new-error': 'error',
+      'typescript/adjacent-overload-signatures': 'error',
+      'typescript/ban-tslint-comment': 'error',
+      'typescript/unified-signatures': 'error',
+      // A promise is returned as it is; `return await` belongs only inside try / catch.
+      'typescript/return-await': 'error',
+      'typescript/use-unknown-in-catch-callback-variable': 'error',
+      // `unicorn/no-array-method-this-argument` stays off: it reads `Effect.forEach(xs, f, options)`
+      // and `Stream.map` as an array method given a `thisArg`.
       eqeqeq: 'error',
       'no-var': 'error',
       'prefer-const': 'error',
@@ -186,6 +210,8 @@ export default defineConfig({
       'jest/prefer-to-have-length': 'error',
       'jest/prefer-equality-matcher': 'error',
       'jest/prefer-comparison-matcher': 'error',
+      'jest/prefer-to-contain': 'error',
+      'jest/max-nested-describe': 'error',
       'jest/prefer-todo': 'error',
       'jest/no-restricted-matchers': [
         'error',
@@ -865,6 +891,14 @@ export default defineConfig({
           'react/no-unstable-nested-components': 'error',
           'react/void-dom-elements-no-children': 'error',
           'react/checked-requires-onchange-or-readonly': 'error',
+          // A component has a name in DevTools, a [value, setValue] pair, a PascalCase tag, and no
+          // React.Children / cloneElement, which are legacy APIs; a DOM attribute is spelt the React way.
+          'react/display-name': 'error',
+          'react/hook-use-state': 'error',
+          'react/jsx-pascal-case': 'error',
+          'react/no-clone-element': 'error',
+          'react/no-react-children': 'error',
+          'react/no-unknown-property': 'error',
           'react/iframe-missing-sandbox': 'error',
           'react/no-unescaped-entities': 'error',
           'react/no-namespace': 'error',

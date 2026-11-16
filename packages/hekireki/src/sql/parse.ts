@@ -644,23 +644,28 @@ function parseNameExpr(p: Parser): Expr {
   return { type: 'column', table: qualifier, name, range: rangeFrom(p, start) }
 }
 
+/** The arguments of a call up to its `ORDER BY` / `SEPARATOR` / `)`: `*`, or expressions. */
+function parseCallArguments(p: Parser, start: number): Expr[] {
+  if (atOp(p, '*')) {
+    advance(p)
+    return [{ type: 'star', table: null, range: rangeFrom(p, start) }]
+  }
+  const args = [parseOr(p)]
+  // `extract(year FROM d)`, `substring(s FROM 1 FOR 2)`, `trim(both 'x' FROM s)`
+  while (acceptPunct(p, ',') || atWord(p, 'FROM') || atWord(p, 'FOR')) {
+    if (atWord(p, 'FROM') || atWord(p, 'FOR')) advance(p)
+    args.push(parseOr(p))
+  }
+  return args
+}
+
 function parseCall(p: Parser, start: number, name: string): Expr {
   expectPunct(p, '(')
   const distinct = acceptWord(p, 'DISTINCT')
   if (!distinct) acceptWord(p, 'ALL')
   const args: Expr[] = []
   if (!atPunct(p, ')')) {
-    if (atOp(p, '*')) {
-      advance(p)
-      args.push({ type: 'star', table: null, range: rangeFrom(p, start) })
-    } else {
-      args.push(parseOr(p))
-      // `extract(year FROM d)`, `substring(s FROM 1 FOR 2)`, `trim(both 'x' FROM s)`
-      while (acceptPunct(p, ',') || atWord(p, 'FROM') || atWord(p, 'FOR')) {
-        if (atWord(p, 'FROM') || atWord(p, 'FOR')) advance(p)
-        args.push(parseOr(p))
-      }
-    }
+    args.push(...parseCallArguments(p, start))
     // `ORDER BY` inside an aggregate (`string_agg(x, ',' ORDER BY x)`) narrows nothing here.
     if (acceptWords(p, 'ORDER', 'BY')) parseOrderItems(p)
     if (acceptWord(p, 'SEPARATOR')) parseOr(p)
@@ -1115,19 +1120,21 @@ function parseInsert(p: Parser, start: number, ctes: readonly Cte[]): Statement 
 /** `ON CONFLICT ... DO NOTHING | DO UPDATE SET ...` and MySQL's `ON DUPLICATE KEY UPDATE ...`, kept as a range. */
 function skipConflictClause(p: Parser, start: number): Range {
   while (!atWord(p, 'RETURNING') && !atPunct(p, ';') && peek(p).kind !== 'eof') {
-    if (atPunct(p, '(')) {
-      advance(p)
-      let depth = 1
-      while (depth > 0 && peek(p).kind !== 'eof') {
-        if (atPunct(p, '(')) depth += 1
-        if (atPunct(p, ')')) depth -= 1
-        advance(p)
-      }
-    } else {
-      advance(p)
-    }
+    if (atPunct(p, '(')) skipParenthesized(p)
+    else advance(p)
   }
   return rangeFrom(p, start)
+}
+
+/** From an opening `(` past its matching `)`, whatever it holds. */
+function skipParenthesized(p: Parser) {
+  advance(p)
+  let depth = 1
+  while (depth > 0 && peek(p).kind !== 'eof') {
+    if (atPunct(p, '(')) depth += 1
+    if (atPunct(p, ')')) depth -= 1
+    advance(p)
+  }
 }
 
 function parseUpdate(p: Parser, start: number, ctes: readonly Cte[]): Statement {

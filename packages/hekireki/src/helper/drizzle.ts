@@ -576,7 +576,6 @@ const PRISMA_ACTION_MAP: { [k: string]: string } = {
 function makeColumn(
   field: DMMF.Field,
   model: DMMF.Model,
-  models: readonly DMMF.Model[],
   provider: DbProvider,
   imports: DrizzleImports,
   enums: readonly DMMF.DatamodelEnum[],
@@ -749,7 +748,7 @@ export function makeTable(
   const varName = resolveVarName(model)
   const tableName = resolveTableName(model)
   const entries = model.fields.flatMap((field) => {
-    const code = makeColumn(field, model, models, provider, imports, enums)
+    const code = makeColumn(field, model, provider, imports, enums)
     return code === null ? [] : [{ code, doc: stripAnnotations(field.documentation) }]
   })
   // A JSDoc block needs lines of its own, so a table with one lays its columns out one per line.

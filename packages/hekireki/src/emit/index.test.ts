@@ -24,7 +24,7 @@ describe('emit', () => {
   it('formats and writes a TS file', async () => {
     const file = path.join(TEST_DIR, 'out.ts')
     await run(emit('const x = "x";', TEST_DIR, file))
-    expect(await fsp.readFile(file, 'utf-8')).toBe(`const x = 'x'\n`)
+    expect(await fsp.readFile(file, 'utf8')).toBe(`const x = 'x'\n`)
   })
 
   it('fails with FormatError on invalid TS source', async () => {
@@ -52,7 +52,7 @@ describe('emitRaw', () => {
   it('writes plain string content without formatting', async () => {
     const file = path.join(TEST_DIR, 'plain.txt')
     await run(emitRaw('hello\nworld', TEST_DIR, file))
-    expect(await fsp.readFile(file, 'utf-8')).toBe('hello\nworld')
+    expect(await fsp.readFile(file, 'utf8')).toBe('hello\nworld')
   })
 
   it('writes bytes as binary', async () => {
@@ -73,7 +73,7 @@ describe('emitMany', () => {
         TEST_DIR,
       ),
     )
-    expect(await fsp.readFile(path.join(TEST_DIR, 'a.ts'), 'utf-8')).toBe('a')
-    expect(await fsp.readFile(path.join(TEST_DIR, 'b.ts'), 'utf-8')).toBe('b')
+    expect(await fsp.readFile(path.join(TEST_DIR, 'a.ts'), 'utf8')).toBe('a')
+    expect(await fsp.readFile(path.join(TEST_DIR, 'b.ts'), 'utf8')).toBe('b')
   })
 })

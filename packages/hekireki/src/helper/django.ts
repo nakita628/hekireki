@@ -599,6 +599,16 @@ export function collectFieldClasses(models: readonly DMMF.Model[], provider: str
   ].filter((c) => c !== null)
 }
 
+/** `{}`: an object, not an array, with no key. */
+function isEmptyObject(value: unknown) {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 0
+  )
+}
+
 function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, isPk: boolean, names: Names) {
   // Prisma's @updatedAt also sets the value on create, as auto_now does on every
   // save(). A bulk UPDATE is the model's AutoNowQuerySet's to stamp: auto_now
@@ -664,12 +674,8 @@ function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, isPk: boolean, 
     if (field.type === 'Bytes') return [`default=${pythonBytesLiteral(def)}`]
     if (field.type === 'Json') {
       const parsed: unknown = JSON.parse(def)
-      if (typeof parsed === 'object' && parsed !== null) {
-        const isEmpty = Array.isArray(parsed)
-          ? parsed.length === 0
-          : Object.keys(parsed).length === 0
-        if (isEmpty) return [Array.isArray(parsed) ? 'default=list' : 'default=dict']
-      }
+      if (Array.isArray(parsed) && parsed.length === 0) return ['default=list']
+      if (isEmptyObject(parsed)) return ['default=dict']
       return [`default=${helperNameOf(names, model, field)}`]
     }
     return [`default=${toPythonString(def)}`]
@@ -1083,10 +1089,7 @@ function compositePkLine(model: DMMF.Model, names: Names) {
 // class; the schema is reported rather than one of them silently dropped. A
 // Python identifier that collides is stepped aside instead, because that one
 // is losslessly renameable.
-export function findNameConflicts(
-  models: readonly DMMF.Model[],
-  enums?: readonly DMMF.DatamodelEnum[],
-) {
+export function findNameConflicts(enums?: readonly DMMF.DatamodelEnum[]) {
   // Two enums can only differ in a way PascalCase erases, and every field that
   // names one would then reference the wrong class.
   const byEnumClass = new Map<string, string[]>()

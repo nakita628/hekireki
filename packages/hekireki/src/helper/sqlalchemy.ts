@@ -1361,10 +1361,8 @@ export function collectGlobalImports(
   for (const model of models) {
     for (const field of model.fields) {
       if (field.kind === 'object') continue
-      if (field.kind === 'enum') {
-        if (provider !== 'sqlite') saImports.add('Enum')
-        continue
-      }
+      if (field.kind === 'enum' && provider !== 'sqlite') saImports.add('Enum')
+      if (field.kind === 'enum') continue
       // A scalar list wraps its element SA type in ARRAY(...), so that element
       // type needs importing too (e.g. ARRAY(String) needs String).
       if (field.isList || needsExplicitSaType(field, provider)) {

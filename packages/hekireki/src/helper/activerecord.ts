@@ -1146,6 +1146,26 @@ function rubyCall(method: string, positional: readonly string[], keywords: reado
 // blank nor another annotation is a problem. A call is not continued on the
 // next `///`: a field's call opens its parentheses and closes them on the
 // same line, and a model's line does not end in a comma.
+function arFieldCallProblem(call: string) {
+  if (call.includes('(') && !call.endsWith(')')) {
+    return `the @ar. call "${call}" does not close its parentheses on its line; an @ar. call is one /// line`
+  }
+  if (!/^[a-z_][a-z0-9_]*(?:\s*\([\s\S]*\))?$/u.test(call)) {
+    return `the @ar. call "${call}" is not name or name(arguments)`
+  }
+  return null
+}
+
+function arModelLineProblem(call: string) {
+  if (call.endsWith(',')) {
+    return `the @ar. line "${call}" ends in a comma as if it went on; an @ar. call is one /// line`
+  }
+  if (!/^[a-z_][a-z0-9_]*[!?]?(?:\s*\([\s\S]*\)|\s[\s\S]*)?$/u.test(call)) {
+    return `the @ar. line "${call}" is not a Ruby call, name, name(arguments) or name arguments`
+  }
+  return null
+}
+
 function arCalls(documentation: string | undefined, on: 'model' | 'field') {
   const calls: string[] = []
   const problems: string[] = []
@@ -1156,23 +1176,8 @@ function arCalls(documentation: string | undefined, on: 'model' | 'field') {
       annotated = true
       const call = line.slice('@ar.'.length).trim()
       calls.push(call)
-      if (on === 'field') {
-        if (call.includes('(') && !call.endsWith(')')) {
-          problems.push(
-            `the @ar. call "${call}" does not close its parentheses on its line; an @ar. call is one /// line`,
-          )
-        } else if (!/^[a-z_][a-z0-9_]*(?:\s*\([\s\S]*\))?$/u.test(call)) {
-          problems.push(`the @ar. call "${call}" is not name or name(arguments)`)
-        }
-      } else if (call.endsWith(',')) {
-        problems.push(
-          `the @ar. line "${call}" ends in a comma as if it went on; an @ar. call is one /// line`,
-        )
-      } else if (!/^[a-z_][a-z0-9_]*[!?]?(?:\s*\([\s\S]*\)|\s[\s\S]*)?$/u.test(call)) {
-        problems.push(
-          `the @ar. line "${call}" is not a Ruby call, name, name(arguments) or name arguments`,
-        )
-      }
+      const problem = on === 'field' ? arFieldCallProblem(call) : arModelLineProblem(call)
+      if (problem !== null) problems.push(problem)
     } else if (line !== '' && !isAnnotationLine(line) && annotated) {
       problems.push(`the line "${line}" comes after an @ar. call; write the description above them`)
     }

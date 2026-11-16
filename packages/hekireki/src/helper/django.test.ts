@@ -133,13 +133,13 @@ function makeModel(
 }
 
 describe('findNameConflicts', () => {
-  it('accepts a schema whose names stay distinct', () => {
-    const models = [
-      makeModel('User', [makeField({ name: 'id', type: 'Int', isId: true })]),
-      makeModel('Post', [makeField({ name: 'id', type: 'Int', isId: true })]),
+  it('accepts enums whose classes stay distinct', () => {
+    const enums: DMMF.DatamodelEnum[] = [
+      { name: 'Role', dbName: null, values: [{ name: 'A', dbName: null }] },
+      { name: 'Status', dbName: null, values: [{ name: 'B', dbName: null }] },
     ]
 
-    expect(findNameConflicts(models)).toStrictEqual([])
+    expect(findNameConflicts(enums)).toStrictEqual([])
   })
 
   it('reports two enums that produce one Python class', () => {
@@ -148,24 +148,9 @@ describe('findNameConflicts', () => {
       { name: 'UserRole', dbName: null, values: [{ name: 'B', dbName: null }] },
     ]
 
-    expect(findNameConflicts([], enums)).toStrictEqual([
+    expect(findNameConflicts(enums)).toStrictEqual([
       'enums user_role and UserRole both produce the Python class UserRole. Rename one of them.',
     ])
-  })
-
-  it('does not report a collision the schema resolved with @@map or @map', () => {
-    const models = [
-      makeModel('user_role', [makeField({ name: 'id', type: 'Int', isId: true })], {
-        dbName: 'user_role_legacy',
-      }),
-      makeModel('UserRole', [
-        makeField({ name: 'id', type: 'Int', isId: true }),
-        makeField({ name: 'myValue', type: 'String' }),
-        makeField({ name: 'my_value', type: 'String', dbName: 'my_value_legacy' }),
-      ]),
-    ]
-
-    expect(findNameConflicts(models)).toStrictEqual([])
   })
 })
 

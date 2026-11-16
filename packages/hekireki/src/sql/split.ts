@@ -17,13 +17,12 @@ export function splitStatements(text: string): readonly string[] {
         index += 1
       }
     } else if (mode === 'quoted') {
-      if (char === quote) {
-        if (next === quote) {
-          index += 1
-        } else {
-          mode = 'code'
-          quote = ''
-        }
+      // A doubled quote is the quote character itself and keeps the string open.
+      if (char === quote && next === quote) {
+        index += 1
+      } else if (char === quote) {
+        mode = 'code'
+        quote = ''
       }
     } else if (char === '-' && next === '-') {
       mode = 'line-comment'

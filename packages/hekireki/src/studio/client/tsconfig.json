@@ -8,6 +8,15 @@
     "jsx": "react-jsx",
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    // A case falls through, a method overrides without `override`, a parameter goes unused (name
+    // it `_x` to say so), a side-effect import names a file that is not there, a line can never
+    // run, a label is never used: each is an error.
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noUnusedParameters": true,
+    "noUncheckedSideEffectImports": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "noEmit": true,

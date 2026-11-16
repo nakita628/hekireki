@@ -108,7 +108,7 @@ describe('renderLiteral', () => {
   })
 
   it('writes bytes as hex in the dialect syntax', () => {
-    const bytes = Uint8Array.from([0xde, 0xad])
+    const bytes = Uint8Array.from([0xDE, 0xAD])
     expect(renderLiteral('postgresql', text, bytes)).toBe("'\\xdead'")
     expect(renderLiteral('mysql', text, bytes)).toBe("X'dead'")
     expect(renderLiteral('sqlite', text, bytes)).toBe("X'dead'")

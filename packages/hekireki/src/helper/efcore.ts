@@ -202,7 +202,7 @@ function csharpString(value: string) {
       if (char === '\t') return '\\t'
       if (char === '\0') return '\\0'
       // C0 and C1 controls and the Unicode line terminators cannot stand raw in a string literal.
-      if (code < 0x20 || (code >= 0x7f && code <= 0x9f) || code === 0x20_28 || code === 0x20_29) {
+      if (code < 0x20 || (code >= 0x7F && code <= 0x9F) || code === 0x20_28 || code === 0x20_29) {
         return `\\u${code.toString(16).toUpperCase().padStart(4, '0')}`
       }
       return char
