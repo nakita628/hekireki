@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import { RuleTester } from 'oxlint/plugins-dev'
 import { describe, expect, it, test } from 'vite-plus/test'
 
@@ -580,15 +582,20 @@ tester.run('domain-only-from-usecases', rule('domain-only-from-usecases'), {
   ],
 })
 
+// The rule looks for the test file on disk: the cases name real files of this package.
+function fromPackage(file: string) {
+  return path.resolve(import.meta.dirname, '..', file)
+}
+
 tester.run('domain-require-test', rule('domain-require-test'), {
   valid: [
-    tsCase('export const x = 1', 'src/migrate/domain/plan.ts'),
-    tsCase('export const x = 1', 'src/migrate/domain/plan.test.ts'),
-    tsCase("export * from './plan.js'", 'src/studio/server/domain/index.ts'),
+    tsCase('export const x = 1', fromPackage('src/migrate/domain/plan.ts')),
+    tsCase('export const x = 1', fromPackage('src/migrate/domain/plan.test.ts')),
+    tsCase("export * from './plan.js'", fromPackage('src/studio/server/domain/index.ts')),
   ],
   invalid: [
     {
-      ...tsCase('export const x = 1', 'src/migrate/domain/untested.ts'),
+      ...tsCase('export const x = 1', fromPackage('src/migrate/domain/untested.ts')),
       errors: [
         {
           message:
