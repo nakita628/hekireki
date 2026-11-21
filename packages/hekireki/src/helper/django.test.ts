@@ -827,7 +827,8 @@ class Shift(models.Model):
       }),
     ]
     const code = djangoCode([makeModel('Visit', fields)], [], [], 'postgresql')
-    expect(code).toContain(`class AutoNowDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+    expect(code)
+      .toContain(`class AutoNowDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
     def stamp(self) -> datetime:
         return now_milliseconds()`)
     expect(code).toContain('    seen = AutoNowDateTimeField(auto_now=True)\n')
