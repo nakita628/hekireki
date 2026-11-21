@@ -16,6 +16,14 @@ on:
   push:
     branches:
       - main
+  # Again once release.yml has finished: a push that lands while it runs (the merge of the bump
+  # pull request among them) finds the last bump pull request not yet released, and release-please
+  # opens nothing for it. This workflow runs no code from the triggering run; it reads and writes
+  # the repository through the API only.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: [release]
+    types: [completed]
+    branches: [main]
   workflow_dispatch: {}
 
 permissions: {}
@@ -33,8 +41,9 @@ jobs:
     steps:
       # release.yml tags and releases (`skip-github-release` below), so release-please never moves
       # its merged pull request from `autorelease: pending` to `autorelease: tagged`, and it opens
-      # no new one while a merged one is pending. Once release.yml has tagged the version of a
-      # merged one, mark it as tagged, as release-please does when it tags a release itself.
+      # no new one while a merged one is pending. Once release.yml has released the version of a
+      # merged one, mark it as tagged, as release-please does when it releases itself. The GitHub
+      # Release is what release.yml writes last, after the npm publish; the tag comes before it.
       - name: Mark released version pull requests as tagged
         env:
           GH_TOKEN: ${{ github.token }}
@@ -49,13 +58,13 @@ jobs:
                 echo "#$number: no version at the end of the title '$title'"
                 continue
               fi
-              if ! gh api "repos/$GH_REPO/git/ref/tags/v$version" >/dev/null 2>&1; then
-                echo "#$number: v$version is not tagged yet"
+              if ! gh release view "v$version" >/dev/null 2>&1; then
+                echo "#$number: v$version is not released yet"
                 continue
               fi
               gh api --method POST "repos/$GH_REPO/issues/$number/labels" -f 'labels[]=autorelease: tagged' >/dev/null
               gh api --method DELETE "repos/$GH_REPO/issues/$number/labels/autorelease:%20pending" >/dev/null
-              echo "#$number: v$version is tagged"
+              echo "#$number: v$version is released"
             done
 
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
