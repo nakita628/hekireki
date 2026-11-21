@@ -238,11 +238,22 @@ function primaryKeyTags(field: DMMF.Field, isPk: boolean) {
   ]
 }
 
-function columnTypeTag(field: DMMF.Field, isPk: boolean) {
+// Prisma Migrate makes a String with no native type VARCHAR(191) on MySQL; GORM would make it
+// longtext, which MySQL cannot index without a key length (a @unique String fails AutoMigrate).
+function isMysqlDefaultString(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
+  if (provider !== 'mysql' || field.type !== 'String' || field.kind !== 'scalar') return false
+  if (field.isList || field.nativeType) return false
+  const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
+  // primaryKeyTags gives a uuid() or ulid() key its own type.
+  return !(isPk && (defaultName === 'uuid' || defaultName === 'ulid'))
+}
+
+function columnTypeTag(field: DMMF.Field, isPk: boolean, provider?: string) {
   const nativeType = resolveNativeType(field)
   // A DateTime[] is a PostgreSQL array, `timestamp(3)[]` unless the native type says otherwise,
   // which the list type writes and reads as Prisma Client does.
   if (isDateTimeList(field)) return `type:${nativeType ?? 'timestamp(3)'}[]`
+  if (isMysqlDefaultString(field, isPk, provider)) return 'type:varchar(191)'
   const includeNativeType =
     nativeType !== null &&
     (!isPk || !isFunctionDefault(field.default) || field.default.name !== 'uuid')
@@ -278,7 +289,7 @@ export function buildGormTags(
     ...primaryKeyTags(field, isPk),
     field.isUnique ? 'uniqueIndex' : null,
     ...compositeIndexTags,
-    columnTypeTag(field, isPk),
+    columnTypeTag(field, isPk, provider),
     // Other scalar lists need a serializer so GORM can persist the slice; the built-in
     // json serializer works on every dialect without extra deps.
     field.isList && field.kind !== 'object' && !isDateTimeList(field) ? 'serializer:json' : null,
