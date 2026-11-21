@@ -82,6 +82,7 @@ enumtypid
 Excee
 exqlite
 FAVX
+fdrl
 fkey
 FLOA
 Fullwidth
@@ -224,6 +225,7 @@ stringbool
 subplan
 subsecs
 supabase
+svac
 Tabler
 takibi
 textbg

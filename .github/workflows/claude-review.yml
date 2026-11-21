@@ -6,12 +6,11 @@ name: Claude Review
 # (claude-implement.yml) turns on actually merge; a pull request opened by hand merges only when
 # someone turns auto-merge on or presses the button.
 #
-# The review is posted with GITHUB_TOKEN as github-actions[bot], which is never the author of the
-# pull request, so the approval counts. That needs "Allow GitHub Actions to create and approve
-# pull requests" under Settings → Actions → General. A pull request from a fork is skipped: the
-# secrets are not handed to it, and someone with write access reviews it.
-#
-# Needs: the secret CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`).
+# Claude reaches the API through workload identity federation, trading the job's OIDC token for a
+# short-lived token, so no credential is stored. The review is posted with GITHUB_TOKEN as
+# github-actions[bot], which is never the author of the pull request, so the approval counts. That
+# needs "Allow GitHub Actions to create and approve pull requests" under Settings → Actions →
+# General. A pull request from a fork is skipped, and someone with write access reviews it.
 #
 # Action versions are tracked by Renovate, which pins each one to its digest
 # (helpers:pinGitHubActionDigests) and keeps the @vX.Y.Z tag as a comment.
@@ -26,6 +25,13 @@ concurrency:
   group: claude-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# Identifiers of the Claude Console's workload identity federation (Settings → Workload identity),
+# not credentials. Duplicated in claude-implement.yml.
+env:
+  ANTHROPIC_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000000
+  ANTHROPIC_FEDERATION_RULE_ID: fdrl_REPLACE_ME
+  ANTHROPIC_SERVICE_ACCOUNT_ID: svac_REPLACE_ME
+
 jobs:
   review:
     if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
@@ -34,19 +40,45 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      # What Claude Implement must not do, held without asking a model: a branch it pushed may
+      # not touch .github/ or change a package's version, since a version bump on main publishes.
+      - name: Guard a Claude branch
+        if: startsWith(github.head_ref, 'claude/')
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE"...HEAD)
+          if grep -E '^\.github/' <<< "$changed"; then
+            echo "::error::A claude/ branch changed .github/"
+            exit 1
+          fi
+          for file in $(grep -E '(^|/)package\.json$' <<< "$changed" || true); do
+            before=$(git show "$BASE:$file" 2>/dev/null | jq -r .version || echo null)
+            if [ "$before" != "$(jq -r .version "$file")" ]; then
+              echo "::error::A claude/ branch changed the version in $file"
+              exit 1
+            fi
+          done
 
       - name: Review the pull request
         id: claude
         uses: anthropics/claude-code-action@acfe7992852970efb4fee683d63d628e3e52df67 # v1.0.286
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_organization_id: ${{ env.ANTHROPIC_ORGANIZATION_ID }}
+          anthropic_federation_rule_id: ${{ env.ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_service_account_id: ${{ env.ANTHROPIC_SERVICE_ACCOUNT_ID }}
           github_token: ${{ github.token }}
-          # The pull requests Claude Implement opens come from a GitHub App, and Renovate's from
-          # its own; a bot reaches this job only by pushing a branch here, which takes write access.
+          # The pull requests Claude Implement opens come from the Claude GitHub App, and
+          # Renovate's from its own; a bot reaches this job only by pushing a branch here, which
+          # takes write access.
           allowed_bots: '*'
           prompt: |
             REPO: ${{ github.repository }}
