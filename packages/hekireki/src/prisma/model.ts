@@ -91,6 +91,20 @@ export function isUlidDefault(field: DMMF.Field) {
   return isFunctionDefault(field.default) && field.default.name === 'ulid'
 }
 
+// The version `@default(cuid())` asks for, 1 unless `cuid(2)`; null for any other default.
+export function cuidDefaultVersion(field: DMMF.Field) {
+  if (!(isFunctionDefault(field.default) && field.default.name === 'cuid')) return null
+  return field.default.args[0] === 2 ? 2 : 1
+}
+
+// What `@default(nanoid())` asks for: the length `nanoid(16)` names, or a length of null where it
+// names none and Prisma's 21 stands. Null for any other default.
+export function nanoidDefault(field: DMMF.Field) {
+  if (!(isFunctionDefault(field.default) && field.default.name === 'nanoid')) return null
+  const [length] = field.default.args
+  return { length: typeof length === 'number' ? length : null }
+}
+
 // The other end of a relation field: the same relation, on the related model, and — which is what
 // tells the two ends of a self-relation apart — not the field itself.
 export function backRelation(field: DMMF.Field, owner: DMMF.Model, models: readonly DMMF.Model[]) {

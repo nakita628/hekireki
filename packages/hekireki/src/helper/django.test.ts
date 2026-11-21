@@ -394,11 +394,138 @@ class Beacon(models.Model):
     )
   })
 
-  it('pins a string primary key with no generator to None so an unset one fails loudly', () => {
+  it('makes cuid(), cuid(2), nanoid() and nanoid(n) in the client, on keys and other columns', () => {
+    const result = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+model Profile {
+  id   String @id @default(cuid())
+  slug String @default(cuid())
+}
+model Badge {
+  id    String @id @default(cuid(2))
+  token String @default(cuid(2))
+}
+model Link {
+  id   String @id @default(nanoid())
+  code String @default(nanoid())
+}
+model Coupon {
+  id   String @id @default(nanoid(10))
+  code String @default(nanoid(16))
+}
+`,
+        ],
+      ],
+    })
+    const { models, enums, indexes } = datamodelOf(result)
+
+    expect(djangoCode(models, enums, indexes)).toBe(
+      `from functools import partial
+
+import cuid  # type: ignore[import-untyped, unused-ignore]
+import cuid2
+import nanoid
+from django.db import models
+
+
+def cuid_str() -> str:
+    return str(cuid.cuid())
+
+
+def cuid2_str() -> str:
+    return cuid2.create_id()
+
+
+def nanoid_str(size: int = 21) -> str:
+    return nanoid.generate(size=size)
+
+
+class Profile(models.Model):
+    id = models.TextField(primary_key=True, default=cuid_str)
+    slug = models.TextField(default=cuid_str)
+
+    class Meta:
+        db_table = "Profile"
+
+
+class Badge(models.Model):
+    id = models.TextField(primary_key=True, default=cuid2_str)
+    token = models.TextField(default=cuid2_str)
+
+    class Meta:
+        db_table = "Badge"
+
+
+class Link(models.Model):
+    id = models.TextField(primary_key=True, default=nanoid_str)
+    code = models.TextField(default=nanoid_str)
+
+    class Meta:
+        db_table = "Link"
+
+
+class Coupon(models.Model):
+    id = models.TextField(primary_key=True, default=partial(nanoid_str, size=10))
+    code = models.TextField(default=partial(nanoid_str, size=16))
+
+    class Meta:
+        db_table = "Coupon"
+`,
+    )
+  })
+
+  it('renames a field that would hide the helper of an id a later line makes', () => {
+    const models = [
+      makeModel('Token', [
+        makeField({ name: 'id', type: 'String', isId: true, default: { name: 'cuid', args: [1] } }),
+        makeField({ name: 'cuidStr', type: 'String' }),
+        makeField({ name: 'nanoidStr', type: 'String' }),
+        makeField({ name: 'partial', type: 'String' }),
+        makeField({ name: 'code', type: 'String', default: { name: 'nanoid', args: [8] } }),
+        makeField({ name: 'ref', type: 'String', default: { name: 'cuid', args: [1] } }),
+      ]),
+    ]
+
+    expect(djangoCode(models)).toBe(
+      `from functools import partial
+
+import cuid  # type: ignore[import-untyped, unused-ignore]
+import nanoid
+from django.db import models
+
+
+def cuid_str() -> str:
+    return str(cuid.cuid())
+
+
+def nanoid_str(size: int = 21) -> str:
+    return nanoid.generate(size=size)
+
+
+class Token(models.Model):
+    id = models.TextField(primary_key=True, default=cuid_str)
+    cuid_str_field = models.TextField(db_column="cuidStr")
+    nanoid_str_field = models.TextField(db_column="nanoidStr")
+    partial_field = models.TextField(db_column="partial")
+    code = models.TextField(default=partial(nanoid_str, size=8))
+    ref = models.TextField(default=cuid_str)
+
+    class Meta:
+        db_table = "Token"
+`,
+    )
+  })
+
+  it('pins a string primary key the model gives no default to None so an unset one fails loudly', () => {
     const models = [
       makeModel('Badge', [
-        makeField({ name: 'id', type: 'String', isId: true, default: { name: 'cuid', args: [2] } }),
-        makeField({ name: 'code', type: 'String', default: { name: 'nanoid', args: [10] } }),
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({ name: 'code', type: 'String' }),
       ]),
     ]
 

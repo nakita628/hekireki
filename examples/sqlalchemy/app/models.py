@@ -5,6 +5,7 @@ from typing import Any, Optional
 from decimal import Decimal as DecimalType
 from datetime import datetime, timezone
 import uuid as uuid_mod
+import cuid  # type: ignore[import-untyped, unused-ignore]
 
 
 class UtcDateTime(TypeDecorator[datetime]):
@@ -110,7 +111,7 @@ class Profile(Base):
 
     __tablename__ = "profiles"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: cuid.cuid())
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE", onupdate="CASCADE", name="profiles_account_id_fkey"))
     bio: Mapped[Optional[str]]
     avatar: Mapped[Optional[bytes]]

@@ -7,8 +7,9 @@ Run as a script it also exercises the parts mypy cannot see: the system-check
 framework (field-name rules, choices, composite keys, related_name clashes),
 migration serialization (a lambda default or an unserializable db_default only
 fails here), offline PostgreSQL DDL compilation, model instantiation, which
-fires every client-side default (uuid4/uuid7/ulid string generators), and
-query compilation, which is the only check that resolves the joins."""
+fires every client-side default (the uuid4/uuid7/ulid/cuid/cuid2/nanoid string
+generators), and query compilation, which is the only check that resolves the
+joins."""
 
 import os
 
@@ -18,13 +19,16 @@ import django
 
 django.setup()
 
+import re
 import uuid
 
 from app.models import (
     Account,
+    Badge,
     Board,
     Category,
     Claim,
+    Coupon,
     Event,
     Inventory,
     Monarch,
@@ -85,6 +89,10 @@ def _runtime_smoke() -> None:
     uuid.UUID(Account().id)
     assert uuid.UUID(Event().id).version == 7
     assert len(Ticket().id) == 26
+    # cuid(), cuid(2) and nanoid(10), as Prisma Client makes them.
+    assert re.fullmatch(r"c[0-9a-z]{24}", Profile().id) is not None
+    assert re.fullmatch(r"[a-z][0-9a-z]{23}", Badge().id) is not None
+    assert re.fullmatch(r"[\w-]{10}", Coupon().id) is not None
 
 
 def _default_value_smoke() -> None:

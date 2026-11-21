@@ -10,10 +10,12 @@ import {
 import { makePascalCase, makeSnakeCase } from '../naming/case.js'
 import {
   backRelation,
+  cuidDefaultVersion,
   isAutoincrement,
   isFunctionDefault,
   isNowDefault,
   isUlidDefault,
+  nanoidDefault,
   primaryKeyFields,
   uuidDefaultVersion,
 } from '../prisma/model.js'
@@ -300,6 +302,10 @@ const MODULE_NAMES = new Set([
   'uuid4_str',
   'uuid7_str',
   'ulid_str',
+  'cuid_str',
+  'cuid2_str',
+  'nanoid_str',
+  'partial',
   'list',
   'dict',
 ])
@@ -336,10 +342,13 @@ function modelAttrNames(
     if (field.kind === 'object') {
       return field.isList && isDeclaringM2MSide(model, field, m2mTables) ? ['models'] : []
     }
-    const defaults = formatDefaultArgs(model, field, false, unresolved).map(
-      (arg) => /^\w+=([a-z_]\w*)/u.exec(arg)?.[1],
-    )
-    return ['models', ...defaults.filter((name) => name !== undefined)]
+    // `default=partial(nanoid_str, size=10)` reads both names.
+    const defaults = formatDefaultArgs(model, field, false, unresolved).flatMap((arg) => {
+      const match = /^\w+=(partial\()?([a-z_]\w*)/u.exec(arg)
+      if (match === null) return []
+      return match[1] === undefined ? [match[2]] : ['partial', match[2]]
+    })
+    return ['models', ...defaults]
   })
 
   for (const [i, field] of model.fields.entries()) {
@@ -384,7 +393,15 @@ export function resolveNames(
 
   // A helper is read in the class body by its name, so it steps aside from
   // every attribute a field took as well.
-  const takenHelpers = new Set(['uuid4_str', 'uuid7_str', 'ulid_str', ...attr.values()])
+  const takenHelpers = new Set([
+    'uuid4_str',
+    'uuid7_str',
+    'ulid_str',
+    'cuid_str',
+    'cuid2_str',
+    'nanoid_str',
+    ...attr.values(),
+  ])
   const helper = new Map<string, string>()
   for (const model of models) {
     for (const field of model.fields) {
@@ -484,7 +501,7 @@ export function collectDefaultHelpers(
   enums?: readonly DMMF.DatamodelEnum[],
 ) {
   const enumMap = new Map((enums ?? []).map((e) => [e.name, e]))
-  const uuidHelpers = [
+  const idHelpers = [
     models.some((m) =>
       m.fields.some((f) => uuidDefaultVersion(f) === 4 && f.nativeType?.[0] !== 'Uuid'),
     )
@@ -498,7 +515,24 @@ export function collectDefaultHelpers(
     models.some((m) => m.fields.some((f) => isUlidDefault(f)))
       ? ['def ulid_str() -> str:', '    return str(ULID())'].join('\n')
       : null,
+    // cuid ships no types, so mypy reads its call as Any: str() gives the helper the str it returns.
+    models.some((m) => m.fields.some((f) => cuidDefaultVersion(f) === 1))
+      ? ['def cuid_str() -> str:', '    return str(cuid.cuid())'].join('\n')
+      : null,
+    models.some((m) => m.fields.some((f) => cuidDefaultVersion(f) === 2))
+      ? ['def cuid2_str() -> str:', '    return cuid2.create_id()'].join('\n')
+      : null,
   ].filter((h) => h !== null)
+
+  // One helper for every length, so that a migration naming it still loads after
+  // a length changes. generate() takes the alphabet first: the length goes by name.
+  const nanoidHelpers = models.some((m) => m.fields.some((f) => nanoidDefault(f) !== null))
+    ? [
+        ['def nanoid_str(size: int = 21) -> str:', '    return nanoid.generate(size=size)'].join(
+          '\n',
+        ),
+      ]
+    : []
 
   // What now() and @updatedAt stamp on a date or a time column: the UTC date or
   // time of day, as Prisma Client writes them.
@@ -537,7 +571,7 @@ export function collectDefaultHelpers(
       .filter((h) => h !== null),
   )
 
-  return [...uuidHelpers, ...nowHelpers, ...fieldHelpers]
+  return [...idHelpers, ...nanoidHelpers, ...nowHelpers, ...fieldHelpers]
 }
 
 // cspell:ignore datetimefield
@@ -647,6 +681,12 @@ const NOW_DEFAULTS: { readonly [kind in 'date' | 'time' | 'datetime']: string } 
   datetime: 'default=now_milliseconds',
 }
 
+// The default a nanoid() column is made by: nanoid_str, or a partial of it for
+// nanoid(16), which a migration serializes as functools.partial.
+function nanoidDefaultArg(length: number | null) {
+  return length === null ? 'default=nanoid_str' : `default=partial(nanoid_str, size=${length})`
+}
+
 // The default of a field the server or a generator fills, or null for one
 // whose default is a literal or nothing.
 function generatedDefaultArgs(field: DMMF.Field) {
@@ -672,6 +712,12 @@ function generatedDefaultArgs(field: DMMF.Field) {
     return [uuidVersion === 7 ? 'default=uuid7_str' : 'default=uuid4_str']
   }
   if (isUlidDefault(field)) return ['default=ulid_str']
+  // cuid() is the cuid package's (version 1), cuid(2) cuid2's and nanoid() nanoid's, the ids
+  // Prisma Client makes.
+  const cuidVersion = cuidDefaultVersion(field)
+  if (cuidVersion !== null) return [cuidVersion === 2 ? 'default=cuid2_str' : 'default=cuid_str']
+  const nanoid = nanoidDefault(field)
+  if (nanoid !== null) return [nanoidDefaultArg(nanoid.length)]
   return null
 }
 
@@ -699,8 +745,8 @@ function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, isPk: boolean, 
 
   const def = field.default
   if (def === undefined || def === null) return []
-  // cuid()/nanoid()/autoincrement() and friends: no Python-side equivalent is
-  // emitted (autoincrement is the AutoField ctor, the rest stay assignable).
+  // autoincrement() and sequence() are the database's to fill: no Python-side
+  // default is emitted (an autoincrement key is the AutoField ctor).
   if (isFunctionDefault(def)) return []
 
   if (Array.isArray(def)) {
@@ -757,8 +803,8 @@ function generateScalarField(
   // Django fills an unset value of a string-backed field with "" rather than
   // None, and an empty-string primary key still counts as set: save() would
   // UPDATE the row that already holds "" instead of inserting. A primary key
-  // this generator cannot give a client-side default (cuid, nanoid) is pinned
-  // to None so an unassigned one fails loudly on INSERT.
+  // the model gives no default is pinned to None so an unassigned one fails
+  // loudly on INSERT.
   const emptyStringPk =
     isPk &&
     defaultArgs.length === 0 &&
@@ -1298,6 +1344,10 @@ type ImportNeeds = {
   readonly uuid: boolean
   readonly uuid6: boolean
   readonly ulid: boolean
+  readonly cuid: boolean
+  readonly cuid2: boolean
+  readonly nanoid: boolean
+  readonly partial: boolean
   readonly array: boolean
   readonly rawSql: boolean
   readonly utcField: boolean
@@ -1320,12 +1370,18 @@ function stdlibImports(needs: ImportNeeds) {
     needs.fromDatetime.length > 0 ? `from datetime import ${needs.fromDatetime.join(', ')}` : null,
     needs.utcField || needs.nowHelpers ? 'from datetime import timezone as dt_timezone' : null,
     needs.decimal ? 'from decimal import Decimal' : null,
+    needs.partial ? 'from functools import partial' : null,
     fromTyping.length > 0 ? `from typing import ${fromTyping.join(', ')}` : null,
   ].filter((l) => l !== null)
 }
 
 function thirdPartyImports(needs: ImportNeeds) {
   return [
+    // cuid ships no types, nor does typeshed have any; nanoid's are typeshed's types-nanoid.
+    // unused-ignore: a project with ignore_missing_imports has nothing for it to silence.
+    needs.cuid ? 'import cuid  # type: ignore[import-untyped, unused-ignore]' : null,
+    needs.cuid2 ? 'import cuid2' : null,
+    needs.nanoid ? 'import nanoid' : null,
     needs.uuid6 ? 'import uuid6' : null,
     needs.utcField ? 'from django.conf import settings' : null,
     needs.array ? 'from django.contrib.postgres.fields import ArrayField' : null,
@@ -1372,6 +1428,10 @@ export function collectGlobalImports(
     uuid: scalarFields.some((f) => uuidDefaultVersion(f) === 4),
     uuid6: scalarFields.some((f) => uuidDefaultVersion(f) === 7),
     ulid: scalarFields.some((f) => isUlidDefault(f)),
+    cuid: scalarFields.some((f) => cuidDefaultVersion(f) === 1),
+    cuid2: scalarFields.some((f) => cuidDefaultVersion(f) === 2),
+    nanoid: scalarFields.some((f) => nanoidDefault(f) !== null),
+    partial: scalarFields.some((f) => (nanoidDefault(f)?.length ?? null) !== null),
     array: scalarFields.some((f) => f.isList),
     rawSql: scalarFields.some((f) => dbGeneratedExpr(f) !== null),
     utcField: needsUtcField,

@@ -4,6 +4,7 @@ from datetime import timezone as dt_timezone
 from decimal import Decimal
 from typing import Any, TypeVar
 
+import cuid2
 import uuid6
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
@@ -65,6 +66,10 @@ def uuid7_str() -> str:
     return str(uuid6.uuid7())
 
 
+def cuid2_str() -> str:
+    return cuid2.create_id()
+
+
 def now_milliseconds() -> datetime:
     now = timezone.now()
     return now.replace(microsecond=now.microsecond // 1000 * 1000)
@@ -117,7 +122,7 @@ class Profile(models.Model):
     Pydantic model rejects unknown keys (extra='forbid').
     """
 
-    id = models.TextField(primary_key=True, default=None)
+    id = models.TextField(primary_key=True, default=cuid2_str)
     user = models.OneToOneField("User", on_delete=models.CASCADE, related_name="profile")
     bio = models.TextField(null=True)
     nickname = models.CharField(max_length=64, default="anonymous")

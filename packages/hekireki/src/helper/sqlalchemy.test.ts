@@ -1633,6 +1633,201 @@ class Ticket(Base):
   })
 })
 
+describe('cuid and nanoid default generation', () => {
+  it('names a join table that would hide a module an id default reads after its table', () => {
+    const result = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+model Link {
+  id   String @id @default(nanoid())
+  tags Tag[]  @relation("Nanoid")
+}
+model Tag {
+  id    Int    @id
+  links Link[] @relation("Nanoid")
+}`,
+        ],
+      ],
+    })
+    const { models, enums, indexes } = datamodelOf(result)
+    const code = generateSingleFile(models, enums, indexes)
+
+    expect(code).toContain('nanoid_table = Table(\n    "_Nanoid",')
+    expect(code).toContain('secondary=nanoid_table')
+    expect(code).not.toMatch(/^nanoid = /mu)
+  })
+
+  it('makes cuid(), cuid(2), nanoid() and nanoid(n) in the client, on keys and other columns', () => {
+    const result = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+model Profile {
+  id   String @id @default(cuid())
+  slug String @default(cuid())
+}
+model Badge {
+  id    String @id @default(cuid(2))
+  token String @default(cuid(2))
+}
+model Link {
+  id   String @id @default(nanoid())
+  code String @default(nanoid())
+}
+model Coupon {
+  id   String @id @default(nanoid(10))
+  code String @default(nanoid(16))
+}
+`,
+        ],
+      ],
+    })
+    const { models, enums, indexes } = datamodelOf(result)
+
+    expect(generateSingleFile(models, enums, indexes)).toBe(
+      `from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+import cuid  # type: ignore[import-untyped, unused-ignore]
+import cuid2
+import nanoid
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
+
+
+class Profile(Base):
+    __tablename__ = "Profile"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: cuid.cuid())
+    slug: Mapped[str] = mapped_column(default=lambda: cuid.cuid())
+
+class Badge(Base):
+    __tablename__ = "Badge"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: cuid2.create_id())
+    token: Mapped[str] = mapped_column(default=lambda: cuid2.create_id())
+
+class Link(Base):
+    __tablename__ = "Link"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: nanoid.generate())
+    code: Mapped[str] = mapped_column(default=lambda: nanoid.generate())
+
+class Coupon(Base):
+    __tablename__ = "Coupon"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: nanoid.generate(size=10))
+    code: Mapped[str] = mapped_column(default=lambda: nanoid.generate(size=16))
+`,
+    )
+  })
+
+  it('keeps a field named after the package: the lambda reads the module when it is called', () => {
+    const models = [
+      makeModel('Tag', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'cuid',
+          type: 'String',
+          hasDefaultValue: true,
+          default: { name: 'cuid', args: [1] },
+        }),
+        makeField({
+          name: 'cuid2',
+          type: 'String',
+          hasDefaultValue: true,
+          default: { name: 'cuid', args: [2] },
+        }),
+        makeField({
+          name: 'nanoid',
+          type: 'String',
+          hasDefaultValue: true,
+          default: { name: 'nanoid', args: [] },
+        }),
+        makeField({
+          name: 'code',
+          type: 'String',
+          hasDefaultValue: true,
+          default: { name: 'nanoid', args: [8] },
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(
+      `from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+import cuid  # type: ignore[import-untyped, unused-ignore]
+import cuid2
+import nanoid
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
+
+
+class Tag(Base):
+    __tablename__ = "Tag"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    cuid: Mapped[str] = mapped_column(default=lambda: cuid.cuid())
+    cuid2: Mapped[str] = mapped_column(default=lambda: cuid2.create_id())
+    nanoid: Mapped[str] = mapped_column(default=lambda: nanoid.generate())
+    code: Mapped[str] = mapped_column(default=lambda: nanoid.generate(size=8))
+`,
+    )
+  })
+
+  it('imports only the packages the defaults use', () => {
+    const models = [
+      makeModel('Coupon', [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'cuid', args: [2] },
+        }),
+        makeField({
+          name: 'code',
+          type: 'String',
+          hasDefaultValue: true,
+          default: { name: 'nanoid', args: [12] },
+        }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models)).toBe(
+      `from sqlalchemy import MetaData, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+import cuid2
+import nanoid
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
+
+
+class Coupon(Base):
+    __tablename__ = "Coupon"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: cuid2.create_id())
+    code: Mapped[str] = mapped_column(default=lambda: nanoid.generate(size=12))
+`,
+    )
+  })
+})
+
 describe('named implicit many-to-many', () => {
   it('names the association table after the Prisma relation name', () => {
     const models = [

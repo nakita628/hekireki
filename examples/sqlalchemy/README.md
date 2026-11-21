@@ -15,7 +15,7 @@ pnpm run demo
 `app/models.py` is committed as `prisma generate` writes it, so what the schema becomes can be read
 here without running anything. `demo` starts from nothing all the same: `prisma generate` writes
 `app/models.py`, `prisma db push` creates `dev.db`, `setup` makes a virtualenv in `.venv` and
-installs the pinned `requirements.txt` (SQLAlchemy and mypy), `typecheck` runs mypy with
+installs the pinned `requirements.txt` (SQLAlchemy, `cuid` and mypy), `typecheck` runs mypy with
 `mypy.ini`, and `verify` runs `check.py`, which prints one `ok:` line for each check and stops
 with what it saw otherwise. Python 3.10 or newer is needed for SQLAlchemy 2.1.
 
@@ -40,11 +40,10 @@ this run, so a relationship that overlaps another or a join the mapper had to gu
   `Bytes` with NUL in them. Optional fields left out are `None` and NULL in the table; an optional `Json`
   set to `None` is NULL as well, not the JSON text `null`. Literal defaults are on the row, `now()`
   and `@updatedAt` are the clock in UTC, and `@updatedAt` is bumped on UPDATE.
-- **Keys.** An `autoincrement()` key comes from the database, a `uuid()` key from the model. A
-  `cuid()` key has no Python default (no maintained library makes one), so a row without an id
-  stops at the flush instead of writing NULL. A composite `@@id` finds one row and refuses a
-  second; `@unique` and `@@unique` refuse a duplicate, and two roots with a NULL parent share a
-  name.
+- **Keys.** An `autoincrement()` key comes from the database; a `uuid()` key and a `cuid()` key
+  come from the model, the `cuid()` one made with the `cuid` package as Prisma Client makes it (a
+  `c` and 24 base-36 characters). A composite `@@id` finds one row and refuses a second; `@unique`
+  and `@@unique` refuse a duplicate, and two roots with a NULL parent share a name.
 - **Names.** `@map` and `@@map` put Python's case over the database's names; `metadata`,
   `registry` and `class` become `metadata_`, `registry_` and `class_` over columns of their own
   name while `Account.metadata` stays the `MetaData`; `query` and `type` stay what they are; the

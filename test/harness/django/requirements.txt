@@ -18,3 +18,7 @@ types-PyYAML==6.0.12.20260815
 typing_extensions==4.16.0
 python-ulid==4.0.1
 uuid6==2025.0.1
+cuid==0.4
+cuid2==3.0.0
+nanoid==2.0.0
+types-nanoid==2.0.0.20260508

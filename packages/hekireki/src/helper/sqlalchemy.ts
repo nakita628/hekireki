@@ -11,11 +11,13 @@ import { constraintName, makePascalCase, makeSnakeCase } from '../naming/case.js
 import { allocate } from '../naming/index.js'
 import {
   backRelation,
+  cuidDefaultVersion,
   fieldColumn,
   isAutoincrement,
   isFunctionDefault,
   isNowDefault,
   isUlidDefault,
+  nanoidDefault,
   primaryKeyFields,
   referentialActions,
   relationEnds,
@@ -493,7 +495,7 @@ export function collectManyToManyTables(allModels: readonly DMMF.Model[]) {
           info: {
             relationName,
             tableName: `_${relationName}`,
-            varName: makeSnakeCase(relationName),
+            varName: associationVarName(relationName),
             leftModel: leftName,
             leftTable: leftModelObj?.dbName ?? leftName,
             leftPkField: leftModelObj?.fields.find((f) => f.isId),
@@ -512,6 +514,26 @@ export function collectManyToManyTables(allModels: readonly DMMF.Model[]) {
     seen.add(relationName)
     return [info]
   })
+}
+
+// The module-level names an id default or a DateTime reads at insert time: a join
+// table under one of them (`@relation("Nanoid")`) would replace the module.
+const MODULE_LEVEL_NAMES = new Set([
+  'uuid',
+  'uuid6',
+  'cuid',
+  'cuid2',
+  'nanoid',
+  'datetime',
+  'date',
+  'timezone',
+  'text',
+  'func',
+])
+
+function associationVarName(relationName: string) {
+  const name = makeSnakeCase(relationName)
+  return MODULE_LEVEL_NAMES.has(name) ? `${name}_table` : name
 }
 
 export function generateAssociationTable(
@@ -919,6 +941,22 @@ function uuidDefaultArg(field: DMMF.Field, uuidVersion: number) {
     : 'default=lambda: str(uuid_mod.uuid4())'
 }
 
+// cuid() is the cuid package's (version 1), cuid(2) cuid2's and nanoid() nanoid's, the ids Prisma
+// Client makes. The lambda reads the module when it is called, so an attribute of the same name
+// earlier in the class body cannot stand in for it.
+function idDefaultArg(field: DMMF.Field) {
+  const cuidVersion = cuidDefaultVersion(field)
+  if (cuidVersion !== null) {
+    return cuidVersion === 2 ? 'default=lambda: cuid2.create_id()' : 'default=lambda: cuid.cuid()'
+  }
+  const nanoid = nanoidDefault(field)
+  if (nanoid === null) return null
+  // generate() takes the alphabet first: the length goes by name.
+  return nanoid.length === null
+    ? 'default=lambda: nanoid.generate()'
+    : `default=lambda: nanoid.generate(size=${nanoid.length})`
+}
+
 function literalDefaultArgs(
   field: DMMF.Field,
   isPk: boolean,
@@ -959,6 +997,8 @@ function defaultArgs(
   const uuidVersion = uuidDefaultVersion(field)
   if (uuidVersion !== null) return [uuidDefaultArg(field, uuidVersion)]
   if (isUlidDefault(field)) return ['default=lambda: str(ULID())']
+  const idArg = idDefaultArg(field)
+  if (idArg !== null) return [idArg]
   if (!isPk || isAutoincrement(field)) return literalDefaultArgs(field, isPk, enumMap, provider)
   return []
 }
@@ -1217,7 +1257,7 @@ function generateManyToManyRelationships(
     )
 
     const table = tableByRelation.get(assoc.relationName)
-    const secondaryVar = table?.varName ?? makeSnakeCase(assoc.relationName)
+    const secondaryVar = table?.varName ?? associationVarName(assoc.relationName)
 
     // Both columns of a self join table reference the same table, so the relationship is told
     // which one holds this row. Prisma orders the two fields by name: the one that sorts first
@@ -1404,6 +1444,9 @@ function importNeeds(models: readonly DMMF.Model[], provider: string) {
     uuid: someField(models, isUuidField),
     uuid7: someField(models, (f) => uuidDefaultVersion(f) === 7),
     ulid: someField(models, (f) => isUlidDefault(f)),
+    cuid: someField(models, (f) => cuidDefaultVersion(f) === 1),
+    cuid2: someField(models, (f) => cuidDefaultVersion(f) === 2),
+    nanoid: someField(models, (f) => nanoidDefault(f) !== null),
     date: usesNativeType(models, ['Date']),
     time: usesNativeType(models, ['Time', 'Timetz']),
   }
@@ -1496,6 +1539,19 @@ function dialectImportLines(saImports: ReadonlySet<string>, needs: ImportNeeds, 
   return [`from sqlalchemy.dialects.${dialect} import ${dialectTypes.toSorted().join(', ')}`]
 }
 
+// The packages from PyPI the ids Prisma Client makes are made with: uuid(7), ulid(), cuid(),
+// cuid(2) and nanoid(). cuid ships no types, nor does typeshed have any; nanoid's are typeshed's
+// types-nanoid.
+function idPackageImportLines(needs: ImportNeeds) {
+  return [
+    ...(needs.uuid7 ? ['import uuid6'] : []),
+    ...(needs.ulid ? ['from ulid import ULID'] : []),
+    ...(needs.cuid ? ['import cuid  # type: ignore[import-untyped, unused-ignore]'] : []),
+    ...(needs.cuid2 ? ['import cuid2'] : []),
+    ...(needs.nanoid ? ['import nanoid'] : []),
+  ]
+}
+
 function pythonImportLines(needs: ImportNeeds) {
   const typingImports = [needs.any ? 'Any' : null, needs.optional ? 'Optional' : null].filter(
     (i) => i !== null,
@@ -1511,8 +1567,7 @@ function pythonImportLines(needs: ImportNeeds) {
     ...(needs.decimal ? ['from decimal import Decimal as DecimalType'] : []),
     ...(dtParts.length > 0 ? [`from datetime import ${dtParts.join(', ')}`] : []),
     ...(needs.uuid ? ['import uuid as uuid_mod'] : []),
-    ...(needs.uuid7 ? ['import uuid6'] : []),
-    ...(needs.ulid ? ['from ulid import ULID'] : []),
+    ...idPackageImportLines(needs),
   ]
 }
 
