@@ -10,9 +10,10 @@ import { createLinter } from 'actionlint'
 
 const WORKFLOWS = '.github/workflows'
 
-// `concurrency.queue` is a GitHub Actions key newer than the schema actionlint knows; the
-// finding is noise until the schema catches up. This is the `-ignore` pattern of the binary.
-const IGNORED = [/unexpected key "queue" for "concurrency"/u]
+// `concurrency.queue` is a GitHub Actions key newer than the schema actionlint knows, and the
+// WebAssembly build predates the `vars` context (repository variables); the findings are noise
+// until the schema catches up. These are `-ignore` patterns of the binary.
+const IGNORED = [/unexpected key "queue" for "concurrency"/u, /undefined variable "vars"/u]
 
 // One linter per file: an instance keeps the memory of every file it has linted, and with eight
 // workflows the WebAssembly build runs out of it and aborts with `RuntimeError: unreachable`.
