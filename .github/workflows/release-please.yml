@@ -8,10 +8,10 @@ name: Release PR
 # it to npm and writes the GitHub Release once Test has passed on it.
 #
 # The pull request is opened and merged with the workflow's token, and GitHub starts no workflow
-# for what that token does except a workflow_dispatch. So nothing runs on the pull request, and
-# the merge starts no Test: the last step starts Test on main itself, and release.yml follows it
-# as after any push. The repository has to let GitHub Actions create pull requests (Settings →
-# Actions → General → Workflow permissions).
+# for what that token does except a workflow_dispatch, nor for the end of a run that started. So
+# nothing runs on the pull request, and the merge starts no Test: the last step starts release.yml
+# on main, which runs Test itself before it publishes. The repository has to let GitHub Actions
+# create pull requests (Settings → Actions → General → Workflow permissions).
 
 on:
   push:
@@ -87,17 +87,19 @@ jobs:
         with:
           skip-github-release: true
 
-      # Only release-please's own pull request: the label, its branch and the Actions bot as the
-      # author. A merge right after the pull request is opened can find GitHub still working out
-      # whether it is mergeable, so each one is tried a few times.
-      - name: Merge the bump pull request and start Test on main
+      # Only release-please's own pull request: its branch and its label, read from the list of
+      # open pull requests rather than through `--label` or `--author`, which go through search and
+      # can miss a pull request opened a moment ago. A merge right after the pull request is opened
+      # can find GitHub still working out whether it is mergeable, so each one is tried a few times.
+      - name: Merge the bump pull request and start the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          numbers=$(gh pr list --state open --label 'autorelease: pending' --author 'app/github-actions' \
-            --json number,headRefName --jq '.[] | select(.headRefName | startswith("release-please--")) | .number')
+          numbers=$(gh pr list --state open --json number,headRefName,labels --jq '.[]
+            | select((.headRefName | startswith("release-please--")) and any(.labels[]; .name == "autorelease: pending"))
+            | .number')
           if [ -z "$numbers" ]; then
             echo "no bump pull request to merge"
             exit 0
@@ -114,4 +116,4 @@ jobs:
               sleep 10
             done
           done
-          gh workflow run test.yml --ref main
+          gh workflow run release.yml --ref main
