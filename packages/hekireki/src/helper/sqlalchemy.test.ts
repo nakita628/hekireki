@@ -1634,6 +1634,33 @@ class Ticket(Base):
 })
 
 describe('cuid and nanoid default generation', () => {
+  it('names a join table that would hide a module an id default reads after its table', () => {
+    const result = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {
+  provider = "postgresql"
+}
+model Link {
+  id   String @id @default(nanoid())
+  tags Tag[]  @relation("Nanoid")
+}
+model Tag {
+  id    Int    @id
+  links Link[] @relation("Nanoid")
+}`,
+        ],
+      ],
+    })
+    const { models, enums, indexes } = datamodelOf(result)
+    const code = generateSingleFile(models, enums, indexes)
+
+    expect(code).toContain('nanoid_table = Table(\n    "_Nanoid",')
+    expect(code).toContain('secondary=nanoid_table')
+    expect(code).not.toMatch(/^nanoid = /mu)
+  })
+
   it('makes cuid(), cuid(2), nanoid() and nanoid(n) in the client, on keys and other columns', () => {
     const result = getDMMF({
       datamodel: [

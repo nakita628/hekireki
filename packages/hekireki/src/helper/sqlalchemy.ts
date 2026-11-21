@@ -495,7 +495,7 @@ export function collectManyToManyTables(allModels: readonly DMMF.Model[]) {
           info: {
             relationName,
             tableName: `_${relationName}`,
-            varName: makeSnakeCase(relationName),
+            varName: associationVarName(relationName),
             leftModel: leftName,
             leftTable: leftModelObj?.dbName ?? leftName,
             leftPkField: leftModelObj?.fields.find((f) => f.isId),
@@ -514,6 +514,26 @@ export function collectManyToManyTables(allModels: readonly DMMF.Model[]) {
     seen.add(relationName)
     return [info]
   })
+}
+
+// The module-level names an id default or a DateTime reads at insert time: a join
+// table under one of them (`@relation("Nanoid")`) would replace the module.
+const MODULE_LEVEL_NAMES = new Set([
+  'uuid',
+  'uuid6',
+  'cuid',
+  'cuid2',
+  'nanoid',
+  'datetime',
+  'date',
+  'timezone',
+  'text',
+  'func',
+])
+
+function associationVarName(relationName: string) {
+  const name = makeSnakeCase(relationName)
+  return MODULE_LEVEL_NAMES.has(name) ? `${name}_table` : name
 }
 
 export function generateAssociationTable(
@@ -1237,7 +1257,7 @@ function generateManyToManyRelationships(
     )
 
     const table = tableByRelation.get(assoc.relationName)
-    const secondaryVar = table?.varName ?? makeSnakeCase(assoc.relationName)
+    const secondaryVar = table?.varName ?? associationVarName(assoc.relationName)
 
     // Both columns of a self join table reference the same table, so the relationship is told
     // which one holds this row. Prisma orders the two fields by name: the one that sorts first
