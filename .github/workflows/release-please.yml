@@ -1,0 +1,63 @@
+name: Release PR
+
+# Keeps open the pull request that bumps packages/hekireki/package.json for the next release.
+# release-please works the version out from the Conventional Commits merged since the last tag
+# (release-please-config.json): `feat` raises the minor version, `fix` and `perf` the patch, and a
+# breaking change the minor while the version is 0.x. Merging that pull request is the release:
+# release.yml tags the commit, publishes it to npm and writes the GitHub Release once Test has
+# passed on it.
+#
+# The pull request is opened with the workflow's token, and GitHub starts no workflow for what
+# that token does, so Test, Lint and E2E do not run on it; they run on main after the merge, and
+# release.yml publishes nothing until Test passes there. The repository has to let GitHub Actions
+# create pull requests (Settings → Actions → General → Workflow permissions).
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: release-please
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      # release.yml tags and releases (`skip-github-release` below), so release-please never moves
+      # its merged pull request from `autorelease: pending` to `autorelease: tagged`, and it opens
+      # no new one while a merged one is pending. Once release.yml has tagged the version of a
+      # merged one, mark it as tagged, as release-please does when it tags a release itself.
+      - name: Mark released version pull requests as tagged
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh pr list --state merged --label 'autorelease: pending' --json number,title \
+            --jq '.[] | "\(.number) \(.title)"' |
+            while read -r number title; do
+              version=${title##* }
+              if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "#$number: no version at the end of the title '$title'"
+                continue
+              fi
+              if ! gh api "repos/$GH_REPO/git/ref/tags/v$version" >/dev/null 2>&1; then
+                echo "#$number: v$version is not tagged yet"
+                continue
+              fi
+              gh api --method POST "repos/$GH_REPO/issues/$number/labels" -f 'labels[]=autorelease: tagged' >/dev/null
+              gh api --method DELETE "repos/$GH_REPO/issues/$number/labels/autorelease:%20pending" >/dev/null
+              echo "#$number: v$version is tagged"
+            done
+
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          skip-github-release: true
