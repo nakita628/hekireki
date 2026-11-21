@@ -282,7 +282,7 @@ function claimName(preferred: string, taken: Set<string>) {
 }
 
 // The module-level names a model's class body reads while Python executes it:
-// `models` on every field line, and what a default names (`timezone.now`,
+// `models` on every field line, and what a default names (`now_milliseconds`,
 // `uuid.uuid4`, `date(...)`, `list`, a helper function). An attribute is
 // always lower snake_case, so the capitalised ones (`UtcDateTimeField`,
 // `ArrayField`, `Decimal`, an enum class) cannot be hidden by a field.
@@ -296,6 +296,7 @@ const MODULE_NAMES = new Set([
   'time',
   'utc_today',
   'utc_time',
+  'now_milliseconds',
   'uuid4_str',
   'uuid7_str',
   'ulid_str',
@@ -309,8 +310,8 @@ const MODULE_NAMES = new Set([
 // and claiming a name only for the fields that are actually emitted.
 //
 // A class attribute hides a module-level name of the same spelling from every
-// line after it in the class body: a field `timezone` followed by a column
-// whose default is `timezone.now` would read the field. Such a field takes
+// line after it in the class body: a field `uuid` followed by a column
+// whose default is `uuid.uuid4` would read the field. Such a field takes
 // inspectdb's `<name>_field`, as a reserved name does, and keeps its column
 // through db_column.
 // `pk` belongs to Django, whether or not this model declares a composite one.
@@ -506,7 +507,19 @@ export function collectDefaultHelpers(
       m.fields.filter((f) => isNowDefault(f) || f.isUpdatedAt === true).map((f) => dateTimeKind(f)),
     ),
   )
+  // A Prisma DateTime holds milliseconds: a now() default with microseconds would
+  // leave the instance (and a primary key it is part of) apart from its row.
+  const nowDefaultKinds = new Set(
+    models.flatMap((m) => m.fields.filter((f) => isNowDefault(f)).map((f) => dateTimeKind(f))),
+  )
   const nowHelpers = [
+    nowDefaultKinds.has('datetime')
+      ? [
+          'def now_milliseconds() -> datetime:',
+          '    now = timezone.now()',
+          '    return now.replace(microsecond=now.microsecond // 1000 * 1000)',
+        ].join('\n')
+      : null,
     nowKinds.has('date')
       ? ['def utc_today() -> date:', '    return datetime.now(dt_timezone.utc).date()'].join('\n')
       : null,
@@ -609,7 +622,7 @@ function isEmptyObject(value: unknown) {
 const NOW_DEFAULTS: { readonly [kind in 'date' | 'time' | 'datetime']: string } = {
   date: 'default=utc_today',
   time: 'default=utc_time',
-  datetime: 'default=timezone.now',
+  datetime: 'default=now_milliseconds',
 }
 
 // The default of a field the server or a generator fills, or null for one
@@ -1326,9 +1339,13 @@ export function collectGlobalImports(
   // utc_today() and utc_time() read the clock through datetime, as
   // UtcDateTimeField checks a value against it.
   const nowHelperKinds = nowKinds.filter((kind) => kind !== 'datetime')
+  const nowDefaultDatetime = scalarFields.some(
+    (f) => isNowDefault(f) && dateTimeKind(f) === 'datetime',
+  )
   const kinds = new Set([
     ...literalKinds,
     ...nowHelperKinds,
+    ...(nowDefaultDatetime ? ['datetime'] : []),
     ...(needsUtcField || nowHelperKinds.length > 0 ? ['datetime'] : []),
   ])
   const needs: ImportNeeds = {
