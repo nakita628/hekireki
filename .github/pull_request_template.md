@@ -28,7 +28,7 @@ person reading the release notes, not for the diff.
 
 ## When
 
-<!-- Release impact: `none` | `next release` | `version bumped to x.y.z`. -->
+<!-- Release impact: `none` | `next release`. The version is bumped by the release-please pull request, not here. -->
 
 ## How
 

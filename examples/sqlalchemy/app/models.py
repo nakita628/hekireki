@@ -40,7 +40,8 @@ def jsonb_ddl(type_: Jsonb, compiler: Any, **kw: Any) -> str:
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    return now.replace(microsecond=now.microsecond // 1000 * 1000)
 
 
 class Base(DeclarativeBase):

@@ -35,6 +35,18 @@ class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
         return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())
 
 
+class UtcAutoNowDateTimeField(UtcDateTimeField):
+    def stamp(self) -> datetime:
+        return now_milliseconds()
+
+    def pre_save(self, model_instance: models.Model, add: bool) -> Any:
+        if not self.auto_now:
+            return super().pre_save(model_instance, add)
+        value = self.stamp()
+        setattr(model_instance, self.attname, value)
+        return value
+
+
 _M = TypeVar("_M", bound=models.Model)
 
 
@@ -56,6 +68,11 @@ def uuid7_str() -> str:
 
 def cuid2_str() -> str:
     return cuid2.create_id()
+
+
+def now_milliseconds() -> datetime:
+    now = timezone.now()
+    return now.replace(microsecond=now.microsecond // 1000 * 1000)
 
 
 class Role(models.TextChoices):
@@ -91,8 +108,8 @@ class User(models.Model):
     """Display name"""
     role = models.TextField(choices=Role.choices, default=Role.VIEWER)
     interests = ArrayField(models.TextField(), default=list)
-    created_at = UtcDateTimeField(default=timezone.now)
-    updated_at = UtcDateTimeField(auto_now=True)
+    created_at = UtcDateTimeField(default=now_milliseconds)
+    updated_at = UtcAutoNowDateTimeField(auto_now=True)
     objects = AutoNowQuerySet.as_manager()
 
     class Meta:
@@ -135,7 +152,7 @@ class Post(models.Model):
     view_count = models.IntegerField(default=0)
     author = models.ForeignKey("User", on_delete=models.CASCADE, related_name="posts", db_index=False)
     tags: "models.ManyToManyField[Tag, PostToTag]" = models.ManyToManyField("Tag", through="PostToTag", related_name="posts")
-    created_at = UtcDateTimeField(default=timezone.now)
+    created_at = UtcDateTimeField(default=now_milliseconds)
 
     class Meta:
         db_table = "posts"
@@ -163,7 +180,7 @@ class Comment(models.Model):
     body = models.TextField()
     post = models.ForeignKey("Post", on_delete=models.CASCADE, related_name="comments", db_index=False)
     author = models.ForeignKey("User", on_delete=models.SET_NULL, related_name="comments", null=True, db_index=False)
-    created_at = UtcDateTimeField(default=timezone.now)
+    created_at = UtcDateTimeField(default=now_milliseconds)
 
     class Meta:
         db_table = "comments"
@@ -178,7 +195,7 @@ class Follow(models.Model):
     pk = models.CompositePrimaryKey("follower_id", "following_id")
     follower = models.ForeignKey("User", on_delete=models.CASCADE, related_name="following", db_index=False)
     following = models.ForeignKey("User", on_delete=models.CASCADE, related_name="followers", db_index=False)
-    since = UtcDateTimeField(default=timezone.now)
+    since = UtcDateTimeField(default=now_milliseconds)
 
     class Meta:
         db_table = "follows"
@@ -204,7 +221,7 @@ class Order(models.Model):
     id = models.BigAutoField(primary_key=True)
     user = models.ForeignKey("User", on_delete=models.RESTRICT, related_name="orders", db_index=False)
     total = models.DecimalField(max_digits=12, decimal_places=2)
-    placed_at = UtcDateTimeField(default=timezone.now)
+    placed_at = UtcDateTimeField(default=now_milliseconds)
 
     class Meta:
         db_table = "orders"
