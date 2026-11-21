@@ -582,13 +582,30 @@ from django.utils import timezone
 ${UTC_DATETIME_FIELD}
 
 
+class UtcAutoNowDateTimeField(UtcDateTimeField):
+    def stamp(self) -> datetime:
+        return now_milliseconds()
+
+    def pre_save(self, model_instance: models.Model, add: bool) -> Any:
+        if not self.auto_now:
+            return super().pre_save(model_instance, add)
+        value = self.stamp()
+        setattr(model_instance, self.attname, value)
+        return value
+
+
 ${AUTO_NOW_QUERY_SET}
+
+
+def now_milliseconds() -> datetime:
+    now = timezone.now()
+    return now.replace(microsecond=now.microsecond // 1000 * 1000)
 
 
 class Stamped(models.Model):
     id = models.AutoField(primary_key=True)
-    created_at = UtcDateTimeField(default=timezone.now)
-    updated_at = UtcDateTimeField(auto_now=True)
+    created_at = UtcDateTimeField(default=now_milliseconds)
+    updated_at = UtcAutoNowDateTimeField(auto_now=True)
     objects = AutoNowQuerySet.as_manager()
 
     class Meta:
@@ -696,7 +713,8 @@ def utc_today() -> date:
 
 
 def utc_time() -> time:
-    return datetime.now(dt_timezone.utc).time()
+    now = datetime.now(dt_timezone.utc)
+    return now.replace(microsecond=now.microsecond // 1000 * 1000).time()
 
 
 def opening_holidays_default() -> list[date]:
@@ -777,7 +795,8 @@ def utc_today() -> date:
 
 
 def utc_time() -> time:
-    return datetime.now(dt_timezone.utc).time()
+    now = datetime.now(dt_timezone.utc)
+    return now.replace(microsecond=now.microsecond // 1000 * 1000).time()
 
 
 class Shift(models.Model):
@@ -790,6 +809,30 @@ class Shift(models.Model):
         db_table = "Shift"
 `,
     )
+  })
+
+  it('stamps an @updatedAt timestamptz in milliseconds', () => {
+    const fields = [
+      makeField({
+        name: 'id',
+        type: 'Int',
+        isId: true,
+        default: { name: 'autoincrement', args: [] },
+      }),
+      makeField({
+        name: 'seen',
+        type: 'DateTime',
+        nativeType: ['Timestamptz', ['3']],
+        isUpdatedAt: true,
+      }),
+    ]
+    const code = djangoCode([makeModel('Visit', fields)], [], [], 'postgresql')
+    expect(code)
+      .toContain(`class AutoNowDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+    def stamp(self) -> datetime:
+        return now_milliseconds()`)
+    expect(code).toContain('    seen = AutoNowDateTimeField(auto_now=True)\n')
+    expect(code).not.toContain('UtcDateTimeField')
   })
 
   it('keeps a timestamptz as Django has it and holds every other DateTime in UTC', () => {
@@ -822,10 +865,15 @@ from django.utils import timezone
 ${UTC_DATETIME_FIELD}
 
 
+def now_milliseconds() -> datetime:
+    now = timezone.now()
+    return now.replace(microsecond=now.microsecond // 1000 * 1000)
+
+
 class Clock(models.Model):
     id = models.AutoField(primary_key=True)
     plain = UtcDateTimeField()
-    zoned = models.DateTimeField(default=timezone.now)
+    zoned = models.DateTimeField(default=now_milliseconds)
 
     class Meta:
         db_table = "Clock"
@@ -2261,7 +2309,7 @@ class RoleAssignment(models.Model):
       makeModel('Organization', [
         makeField({ name: 'id', type: 'String', isId: true, default: { name: 'uuid', args: [] } }),
         makeField({ name: 'models', type: 'String', isList: true }),
-        makeField({ name: 'timezone', type: 'String', isRequired: false }),
+        makeField({ name: 'nowMilliseconds', type: 'String', isRequired: false }),
         makeField({ name: 'uuid', type: 'String', default: { name: 'uuid', args: [] } }),
         makeField({ name: 'list', type: 'String', isList: true, default: [] }),
         makeField({ name: 'tags', type: 'String', isList: true, default: [] }),
@@ -2296,15 +2344,20 @@ def uuid4_str() -> str:
     return str(uuid.uuid4())
 
 
+def now_milliseconds() -> datetime:
+    now = timezone.now()
+    return now.replace(microsecond=now.microsecond // 1000 * 1000)
+
+
 class Organization(models.Model):
     id = models.TextField(primary_key=True, default=uuid4_str)
     models_field = ArrayField(models.TextField(), db_column="models")
-    timezone_field = models.TextField(null=True, db_column="timezone")
+    now_milliseconds_field = models.TextField(null=True, db_column="nowMilliseconds")
     uuid_field = models.TextField(db_column="uuid", default=uuid4_str)
     list_field = ArrayField(models.TextField(), db_column="list", default=list)
     tags = ArrayField(models.TextField(), default=list)
     external_id = models.UUIDField(db_column="externalId", default=uuid.uuid4)
-    created_at = UtcDateTimeField(db_column="createdAt", default=timezone.now)
+    created_at = UtcDateTimeField(db_column="createdAt", default=now_milliseconds)
     date = models.TextField()
 
     class Meta:

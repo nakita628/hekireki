@@ -1687,7 +1687,15 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
       ]
     : []
   const utcNow = models.some((m) => m.fields.some((f) => isNowDefault(f) || f.isUpdatedAt === true))
-    ? ['def utc_now() -> datetime:', '    return datetime.now(timezone.utc)', '', '']
+    ? [
+        // A Prisma DateTime holds milliseconds; a value with microseconds would differ from the
+        // row it is written to, and the session would keep an identity the row does not have.
+        'def utc_now() -> datetime:',
+        '    now = datetime.now(timezone.utc)',
+        '    return now.replace(microsecond=now.microsecond // 1000 * 1000)',
+        '',
+        '',
+      ]
     : []
   const annotations = annotationMapEntries(models, provider)
   const body = [
