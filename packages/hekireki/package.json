@@ -12,6 +12,7 @@
     "django",
     "docs",
     "documentation",
+    "drizzle",
     "ecto",
     "efcore",
     "effect",
@@ -21,6 +22,7 @@
     "faker",
     "go",
     "gorm",
+    "hono",
     "json-schema",
     "kotlin",
     "kysely",
@@ -35,6 +37,7 @@
     "ruby",
     "rust",
     "sea-orm",
+    "sqlalchemy",
     "typebox",
     "valibot",
     "zod"
