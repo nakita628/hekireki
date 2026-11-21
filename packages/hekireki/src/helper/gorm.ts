@@ -230,8 +230,9 @@ function gormDefault(
 function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
   if (!isPk) return []
   const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
-  // On MySQL such a key is a String like any other, VARCHAR(191) (isMysqlDefaultString).
-  const fixedType = provider !== 'mysql' || (field.nativeType ?? null) !== null
+  // A native type wins (columnTypeTag), and on MySQL such a key is a String like any other,
+  // VARCHAR(191) (isMysqlDefaultString).
+  const fixedType = provider !== 'mysql' && resolveNativeType(field) === null
   return [
     'primaryKey',
     ...(isAutoincrement(field) ? ['autoIncrement'] : []),
@@ -248,17 +249,13 @@ function isMysqlDefaultString(field: DMMF.Field, provider: string | undefined) {
   return !field.isList && !field.nativeType
 }
 
-function columnTypeTag(field: DMMF.Field, isPk: boolean, provider?: string) {
+function columnTypeTag(field: DMMF.Field, provider?: string) {
   const nativeType = resolveNativeType(field)
   // A DateTime[] is a PostgreSQL array, `timestamp(3)[]` unless the native type says otherwise,
   // which the list type writes and reads as Prisma Client does.
   if (isDateTimeList(field)) return `type:${nativeType ?? 'timestamp(3)'}[]`
   if (isMysqlDefaultString(field, provider)) return 'type:varchar(191)'
-  // primaryKeyTags gives a uuid() or ulid() key its own type.
-  const keyType =
-    isPk && isFunctionDefault(field.default) && ['uuid', 'ulid'].includes(field.default.name)
-  const includeNativeType = nativeType !== null && !keyType
-  return includeNativeType ? `type:${nativeType}` : null
+  return nativeType !== null ? `type:${nativeType}` : null
 }
 
 // GORM fills a field named CreatedAt or UpdatedAt on its own, a time with the application's
@@ -290,7 +287,7 @@ export function buildGormTags(
     ...primaryKeyTags(field, isPk, provider),
     field.isUnique ? 'uniqueIndex' : null,
     ...compositeIndexTags,
-    columnTypeTag(field, isPk, provider),
+    columnTypeTag(field, provider),
     // Other scalar lists need a serializer so GORM can persist the slice; the built-in
     // json serializer works on every dialect without extra deps.
     field.isList && field.kind !== 'object' && !isDateTimeList(field) ? 'serializer:json' : null,

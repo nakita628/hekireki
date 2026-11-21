@@ -197,7 +197,7 @@ describe('buildGormTags', () => {
     expect(buildGormTags(uuidKey, true, false, [], [], 'postgresql')).toBe(
       '`gorm:"column:id;primaryKey;type:char(36)" json:"id"`',
     )
-    // A ulid() key with a native type keeps one type tag.
+    // A ulid() key with a native type takes the native type, as Prisma Migrate does.
     const ulidKey = string({
       name: 'id',
       isId: true,
@@ -207,7 +207,7 @@ describe('buildGormTags', () => {
       default: { name: 'ulid', args: [] },
     })
     expect(buildGormTags(ulidKey, true, false, [], [], 'postgresql')).toBe(
-      '`gorm:"column:id;primaryKey;type:char(26)" json:"id"`',
+      '`gorm:"column:id;primaryKey;type:varchar(26)" json:"id"`',
     )
     // A native type wins, and other databases keep GORM's own string type.
     expect(buildGormTags(string({ nativeType: ['Text', []] }), false, false, [], [], 'mysql')).toBe(
