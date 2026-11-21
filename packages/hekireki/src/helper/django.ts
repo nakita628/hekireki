@@ -304,6 +304,7 @@ const MODULE_NAMES = new Set([
   'cuid_str',
   'cuid2_str',
   'nanoid_str',
+  'partial',
   'list',
   'dict',
 ])
@@ -340,19 +341,20 @@ function modelAttrNames(
     if (field.kind === 'object') {
       return field.isList && isDeclaringM2MSide(model, field, m2mTables) ? ['models'] : []
     }
-    const defaults = formatDefaultArgs(model, field, false, unresolved).map(
-      (arg) => /^\w+=([a-z_]\w*)/u.exec(arg)?.[1],
-    )
-    return ['models', ...defaults.filter((name) => name !== undefined)]
+    // `default=partial(nanoid_str, size=10)` reads both names.
+    const defaults = formatDefaultArgs(model, field, false, unresolved).flatMap((arg) => {
+      const match = /^\w+=(partial\()?([a-z_]\w*)/u.exec(arg)
+      if (match === null) return []
+      return match[1] === undefined ? [match[2]] : ['partial', match[2]]
+    })
+    return ['models', ...defaults]
   })
 
   for (const [i, field] of model.fields.entries()) {
     const readLater = new Set(reads.slice(i + 1).flat())
     const attrFor = (prismaName: string) => {
       const attr = djangoAttrName(makeSnakeCase(prismaName))
-      // A nanoid(n) default is made by a helper named for its length (nanoidHelperName).
-      const isModuleName = MODULE_NAMES.has(attr) || /^nanoid\d+_str$/u.test(attr)
-      return isModuleName && readLater.has(attr) ? `${attr}_field` : attr
+      return MODULE_NAMES.has(attr) && readLater.has(attr) ? `${attr}_field` : attr
     }
     if (field.kind === 'object') {
       if (field.isList && isDeclaringM2MSide(model, field, m2mTables)) {
@@ -521,22 +523,15 @@ export function collectDefaultHelpers(
       : null,
   ].filter((h) => h !== null)
 
-  // One helper for each length the nanoid() defaults name, in the order the schema first names it.
-  const nanoidLengths = new Set(
-    models.flatMap((m) =>
-      m.fields.flatMap((f) => {
-        const nanoid = nanoidDefault(f)
-        return nanoid === null ? [] : [nanoid.length]
-      }),
-    ),
-  )
-  // generate() takes the alphabet first: the length goes by name.
-  const nanoidHelpers = [...nanoidLengths].map((length) =>
-    [
-      `def ${nanoidHelperName(length)}() -> str:`,
-      `    return nanoid.generate(${length === null ? '' : `size=${length}`})`,
-    ].join('\n'),
-  )
+  // One helper for every length, so that a migration naming it still loads after
+  // a length changes. generate() takes the alphabet first: the length goes by name.
+  const nanoidHelpers = models.some((m) => m.fields.some((f) => nanoidDefault(f) !== null))
+    ? [
+        ['def nanoid_str(size: int = 21) -> str:', '    return nanoid.generate(size=size)'].join(
+          '\n',
+        ),
+      ]
+    : []
 
   // What now() and @updatedAt stamp on a date or a time column: the UTC date or
   // time of day, as Prisma Client writes them.
@@ -651,9 +646,10 @@ const NOW_DEFAULTS: { readonly [kind in 'date' | 'time' | 'datetime']: string } 
   datetime: 'default=timezone.now',
 }
 
-// The helper a nanoid() default is made by: nanoid_str, or nanoid16_str for nanoid(16).
-function nanoidHelperName(length: number | null) {
-  return length === null ? 'nanoid_str' : `nanoid${length}_str`
+// The default a nanoid() column is made by: nanoid_str, or a partial of it for
+// nanoid(16), which a migration serializes as functools.partial.
+function nanoidDefaultArg(length: number | null) {
+  return length === null ? 'default=nanoid_str' : `default=partial(nanoid_str, size=${length})`
 }
 
 // The default of a field the server or a generator fills, or null for one
@@ -686,7 +682,7 @@ function generatedDefaultArgs(field: DMMF.Field) {
   const cuidVersion = cuidDefaultVersion(field)
   if (cuidVersion !== null) return [cuidVersion === 2 ? 'default=cuid2_str' : 'default=cuid_str']
   const nanoid = nanoidDefault(field)
-  if (nanoid !== null) return [`default=${nanoidHelperName(nanoid.length)}`]
+  if (nanoid !== null) return [nanoidDefaultArg(nanoid.length)]
   return null
 }
 
@@ -1314,6 +1310,7 @@ type ImportNeeds = {
   readonly cuid: boolean
   readonly cuid2: boolean
   readonly nanoid: boolean
+  readonly partial: boolean
   readonly array: boolean
   readonly rawSql: boolean
   readonly utcField: boolean
@@ -1336,6 +1333,7 @@ function stdlibImports(needs: ImportNeeds) {
     needs.fromDatetime.length > 0 ? `from datetime import ${needs.fromDatetime.join(', ')}` : null,
     needs.utcField || needs.nowHelpers ? 'from datetime import timezone as dt_timezone' : null,
     needs.decimal ? 'from decimal import Decimal' : null,
+    needs.partial ? 'from functools import partial' : null,
     fromTyping.length > 0 ? `from typing import ${fromTyping.join(', ')}` : null,
   ].filter((l) => l !== null)
 }
@@ -1343,7 +1341,8 @@ function stdlibImports(needs: ImportNeeds) {
 function thirdPartyImports(needs: ImportNeeds) {
   return [
     // cuid ships no types, nor does typeshed have any; nanoid's are typeshed's types-nanoid.
-    needs.cuid ? 'import cuid  # type: ignore[import-untyped]' : null,
+    // unused-ignore: a project with ignore_missing_imports has nothing for it to silence.
+    needs.cuid ? 'import cuid  # type: ignore[import-untyped, unused-ignore]' : null,
     needs.cuid2 ? 'import cuid2' : null,
     needs.nanoid ? 'import nanoid' : null,
     needs.uuid6 ? 'import uuid6' : null,
@@ -1395,6 +1394,7 @@ export function collectGlobalImports(
     cuid: scalarFields.some((f) => cuidDefaultVersion(f) === 1),
     cuid2: scalarFields.some((f) => cuidDefaultVersion(f) === 2),
     nanoid: scalarFields.some((f) => nanoidDefault(f) !== null),
+    partial: scalarFields.some((f) => (nanoidDefault(f)?.length ?? null) !== null),
     array: scalarFields.some((f) => f.isList),
     rawSql: scalarFields.some((f) => dbGeneratedExpr(f) !== null),
     utcField: needsUtcField,

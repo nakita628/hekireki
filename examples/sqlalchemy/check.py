@@ -317,6 +317,16 @@ def _() -> str | None:
         return None if re.fullmatch(r"c[0-9a-z]{24}", profile.id) else f"id {profile.id!r}"
 
 
+@check("a cuid() key given by hand is kept")
+def _() -> str | None:
+    with Session(engine) as session:
+        session.add(Profile(id="profile-1", account=Account(email="kept@example.com")))
+        session.commit()
+    with Session(engine) as session:
+        profile = session.get(Profile, "profile-1")
+        return None if profile is not None and profile.id == "profile-1" else "profile-1 not found"
+
+
 @check("a composite @@id finds one row, and refuses a second with the same pair")
 def _() -> str | None:
     with Session(engine) as session:

@@ -5,7 +5,7 @@ from typing import Any, Optional
 from decimal import Decimal as DecimalType
 from datetime import datetime, timezone
 import uuid as uuid_mod
-import cuid  # type: ignore[import-untyped]
+import cuid  # type: ignore[import-untyped, unused-ignore]
 
 
 class UtcDateTime(TypeDecorator[datetime]):

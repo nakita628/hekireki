@@ -425,7 +425,9 @@ model Coupon {
     const { models, enums, indexes } = datamodelOf(result)
 
     expect(djangoCode(models, enums, indexes)).toBe(
-      `import cuid  # type: ignore[import-untyped]
+      `from functools import partial
+
+import cuid  # type: ignore[import-untyped, unused-ignore]
 import cuid2
 import nanoid
 from django.db import models
@@ -439,16 +441,8 @@ def cuid2_str() -> str:
     return cuid2.create_id()
 
 
-def nanoid_str() -> str:
-    return nanoid.generate()
-
-
-def nanoid10_str() -> str:
-    return nanoid.generate(size=10)
-
-
-def nanoid16_str() -> str:
-    return nanoid.generate(size=16)
+def nanoid_str(size: int = 21) -> str:
+    return nanoid.generate(size=size)
 
 
 class Profile(models.Model):
@@ -476,8 +470,8 @@ class Link(models.Model):
 
 
 class Coupon(models.Model):
-    id = models.TextField(primary_key=True, default=nanoid10_str)
-    code = models.TextField(default=nanoid16_str)
+    id = models.TextField(primary_key=True, default=partial(nanoid_str, size=10))
+    code = models.TextField(default=partial(nanoid_str, size=16))
 
     class Meta:
         db_table = "Coupon"
@@ -490,14 +484,17 @@ class Coupon(models.Model):
       makeModel('Token', [
         makeField({ name: 'id', type: 'String', isId: true, default: { name: 'cuid', args: [1] } }),
         makeField({ name: 'cuidStr', type: 'String' }),
-        makeField({ name: 'nanoid8Str', type: 'String' }),
+        makeField({ name: 'nanoidStr', type: 'String' }),
+        makeField({ name: 'partial', type: 'String' }),
         makeField({ name: 'code', type: 'String', default: { name: 'nanoid', args: [8] } }),
         makeField({ name: 'ref', type: 'String', default: { name: 'cuid', args: [1] } }),
       ]),
     ]
 
     expect(djangoCode(models)).toBe(
-      `import cuid  # type: ignore[import-untyped]
+      `from functools import partial
+
+import cuid  # type: ignore[import-untyped, unused-ignore]
 import nanoid
 from django.db import models
 
@@ -506,15 +503,16 @@ def cuid_str() -> str:
     return str(cuid.cuid())
 
 
-def nanoid8_str() -> str:
-    return nanoid.generate(size=8)
+def nanoid_str(size: int = 21) -> str:
+    return nanoid.generate(size=size)
 
 
 class Token(models.Model):
     id = models.TextField(primary_key=True, default=cuid_str)
     cuid_str_field = models.TextField(db_column="cuidStr")
-    nanoid8_str_field = models.TextField(db_column="nanoid8Str")
-    code = models.TextField(default=nanoid8_str)
+    nanoid_str_field = models.TextField(db_column="nanoidStr")
+    partial_field = models.TextField(db_column="partial")
+    code = models.TextField(default=partial(nanoid_str, size=8))
     ref = models.TextField(default=cuid_str)
 
     class Meta:

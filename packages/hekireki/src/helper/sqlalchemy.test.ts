@@ -1666,7 +1666,7 @@ model Coupon {
     expect(generateSingleFile(models, enums, indexes)).toBe(
       `from sqlalchemy import MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-import cuid  # type: ignore[import-untyped]
+import cuid  # type: ignore[import-untyped, unused-ignore]
 import cuid2
 import nanoid
 
@@ -1737,7 +1737,7 @@ class Coupon(Base):
     expect(generateSingleFile(models)).toBe(
       `from sqlalchemy import MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-import cuid  # type: ignore[import-untyped]
+import cuid  # type: ignore[import-untyped, unused-ignore]
 import cuid2
 import nanoid
 

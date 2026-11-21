@@ -1526,7 +1526,7 @@ function idPackageImportLines(needs: ImportNeeds) {
   return [
     ...(needs.uuid7 ? ['import uuid6'] : []),
     ...(needs.ulid ? ['from ulid import ULID'] : []),
-    ...(needs.cuid ? ['import cuid  # type: ignore[import-untyped]'] : []),
+    ...(needs.cuid ? ['import cuid  # type: ignore[import-untyped, unused-ignore]'] : []),
     ...(needs.cuid2 ? ['import cuid2'] : []),
     ...(needs.nanoid ? ['import nanoid'] : []),
   ]

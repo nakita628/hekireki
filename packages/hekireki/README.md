@@ -83,8 +83,10 @@ each other's rows alike.
 `hekireki-sqlalchemy` and `hekireki-django` give a `uuid()`, `cuid()`, `ulid()` or `nanoid()`
 default the value Prisma Client would make, with a package from PyPI where Python's standard
 library has none: `uuid6` for `uuid(7)`, `python-ulid` for `ulid()`, `cuid` for `cuid()`, `cuid2`
-for `cuid(2)` and `nanoid` for `nanoid()` (and `types-nanoid` for mypy). A module imports only
-the ones its schema uses.
+for `cuid(2)` (2.1 or later, for `create_id()`) and `nanoid` for `nanoid()` (and `types-nanoid`
+for mypy). A module imports only the ones its schema uses. With such a default on a Django primary
+key, `save()` on a new instance given an existing key inserts, as with `uuid()`: update with
+`update_or_create()` or `save(force_update=True)`.
 
 ### Database and documents
 
