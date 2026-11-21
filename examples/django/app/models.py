@@ -29,6 +29,18 @@ class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
         return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())
 
 
+class UtcAutoNowDateTimeField(UtcDateTimeField):
+    def stamp(self) -> datetime:
+        return now_milliseconds()
+
+    def pre_save(self, model_instance: models.Model, add: bool) -> Any:
+        if not self.auto_now:
+            return super().pre_save(model_instance, add)
+        value = self.stamp()
+        setattr(model_instance, self.attname, value)
+        return value
+
+
 _M = TypeVar("_M", bound=models.Model)
 
 
@@ -38,6 +50,11 @@ class AutoNowQuerySet(models.QuerySet[_M]):
             if getattr(field, "auto_now", False):
                 kwargs.setdefault(field.name, getattr(field, "stamp", timezone.now)())
         return super().update(**kwargs)
+
+
+def now_milliseconds() -> datetime:
+    now = timezone.now()
+    return now.replace(microsecond=now.microsecond // 1000 * 1000)
 
 
 class Status(models.TextChoices):
@@ -54,8 +71,8 @@ class Author(models.Model):
 
     id = models.AutoField(primary_key=True)
     email = models.TextField(unique=True)
-    created_at = UtcDateTimeField(default=timezone.now)
-    updated_at = UtcDateTimeField(auto_now=True)
+    created_at = UtcDateTimeField(default=now_milliseconds)
+    updated_at = UtcAutoNowDateTimeField(auto_now=True)
     objects = AutoNowQuerySet.as_manager()
 
     class Meta:
@@ -73,9 +90,9 @@ class Post(models.Model):
     author = models.ForeignKey("Author", on_delete=models.CASCADE, related_name="posts", db_index=False)
     published_at = UtcDateTimeField(null=True)
     embargo = UtcDateTimeField(default=datetime.fromisoformat("2020-01-01T00:00:00+00:00"))
-    created_at = UtcDateTimeField(default=timezone.now)
-    updated_at = UtcDateTimeField(auto_now=True)
-    indexed_at = UtcDateTimeField(auto_now=True)
+    created_at = UtcDateTimeField(default=now_milliseconds)
+    updated_at = UtcAutoNowDateTimeField(auto_now=True)
+    indexed_at = UtcAutoNowDateTimeField(auto_now=True)
     tags: "models.ManyToManyField[Tag, PostToTag]" = models.ManyToManyField("Tag", through="PostToTag", related_name="posts")
     objects = AutoNowQuerySet.as_manager()
 
@@ -120,7 +137,7 @@ class Clock(models.Model):
     day = UtcDateTimeField(null=True)
     time = UtcDateTimeField(null=True)
     zoned_time = UtcDateTimeField(null=True)
-    created_at = UtcDateTimeField(default=timezone.now)
+    created_at = UtcDateTimeField(default=now_milliseconds)
 
     class Meta:
         db_table = "clocks"
