@@ -4,6 +4,7 @@ adnum
 adrelid
 aeiou
 Amplication
+anthropics
 apikey
 AQID
 arktype

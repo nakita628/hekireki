@@ -1,0 +1,159 @@
+name: Claude Implement
+
+# An issue labelled `claude` becomes a pull request: Claude reads the issue, changes the working
+# tree and runs the checks, and this workflow — not Claude — commits, pushes and opens the pull
+# request with auto-merge turned on. Claude Review (claude-review.yml) and the other required
+# checks then decide whether it merges.
+#
+# Only someone with triage access or more can add a label, so the label is the gate that keeps a
+# stranger's issue from spending the API budget or steering Claude. Claude itself never holds a
+# token that can write to the repository: it runs with the job's read-only GITHUB_TOKEN, and the
+# GitHub App token that pushes is minted only after Claude has finished. The pull request is
+# opened by the App rather than by GITHUB_TOKEN because GitHub starts no workflow for events
+# GITHUB_TOKEN causes, so Test, Lint and Claude Review would never run on it, and the merge would
+# not start release.yml.
+#
+# Needs: the secret CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`), the secrets CLAUDE_APP_ID and
+# CLAUDE_APP_PRIVATE_KEY of a GitHub App installed on this repository with Contents,
+# Pull requests and Issues set to read and write.
+#
+# Action versions are tracked by Renovate, which pins each one to its digest
+# (helpers:pinGitHubActionDigests) and keeps the @vX.Y.Z tag as a comment.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions: {}
+
+concurrency:
+  group: claude-implement-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    if: github.event.label.name == 'claude' && github.event.issue.state == 'open'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: voidzero-dev/setup-vp@49c3e4e92c52e7f8392712a9267bbe71c5ab30e5 # v1.19.0
+        with:
+          node-version: '22'
+          cache: true
+
+      - run: vp install --frozen-lockfile
+
+      - name: Implement the issue
+        id: claude
+        uses: anthropics/claude-code-action@acfe7992852970efb4fee683d63d628e3e52df67 # v1.0.286
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            ISSUE NUMBER: ${{ github.event.issue.number }}
+
+            Read the issue and its comments with `gh issue view ${{ github.event.issue.number }} --comments`
+            and implement it in the working tree, which is a checkout of main.
+
+            - Follow CONTRIBUTING.md: run `pnpm check` and `pnpm test` from the repository root, and
+              `pnpm example` when a generator's output changes, and fix what they report.
+            - Keep the change to what the issue asks for. Do not commit, push or create branches;
+              the workflow does that from the working tree you leave.
+            - Do not change `.github/`, and do not change the `version` in any package.json:
+              a version bump on main publishes to npm. The workflow fails if either changes.
+            - If the issue is unclear or should not be done, change nothing and say why in
+              `summary`.
+
+            Answer with:
+            - `title`: the pull request title, `type(scope): summary` as in
+              .github/pull_request_template.md.
+            - `body`: the pull request body, filling the sections of
+              .github/pull_request_template.md, with `Closes #${{ github.event.issue.number }}` under Why
+              and only the checks you actually ran ticked.
+            - `summary`: one or two sentences on what you did, or why you changed nothing.
+          claude_args: |
+            --model claude-opus-5-5
+            --max-turns 200
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(pnpm:*),Bash(vp:*),Bash(node:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(gh issue view:*)"
+            --json-schema '{"type":"object","properties":{"title":{"type":"string"},"body":{"type":"string"},"summary":{"type":"string"}},"required":["title","body","summary"]}'
+
+      - name: Inspect the change
+        id: change
+        env:
+          OUTPUT: ${{ steps.claude.outputs.structured_output }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git status --porcelain | grep -E '^.. \.github/'; then
+            echo "::error::Claude changed .github/, which this workflow does not push"
+            exit 1
+          fi
+          git diff --name-only -- '*package.json' | while read -r file; do
+            if [ "$(git show "HEAD:$file" | jq -r .version)" != "$(jq -r .version "$file")" ]; then
+              echo "::error::Claude changed the version in $file"
+              exit 1
+            fi
+          done
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Say why nothing changed
+        if: steps.change.outputs.changed == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          OUTPUT: ${{ steps.claude.outputs.structured_output }}
+        run: |
+          printf 'Claude made no change for this issue.\n\n%s\n' "$(jq -r .summary <<< "$OUTPUT")" \
+            | gh issue comment "$ISSUE" --body-file -
+
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        if: steps.change.outputs.changed == 'true'
+        id: app
+        with:
+          app-id: ${{ secrets.CLAUDE_APP_ID }}
+          private-key: ${{ secrets.CLAUDE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Open the pull request
+        if: steps.change.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          ISSUE: ${{ github.event.issue.number }}
+          OUTPUT: ${{ steps.claude.outputs.structured_output }}
+        run: |
+          set -euo pipefail
+          branch="claude/issue-$ISSUE-$GITHUB_RUN_ID"
+          bot_id=$(gh api "/users/$APP_SLUG[bot]" --jq .id)
+          title=$(jq -r .title <<< "$OUTPUT")
+          git switch -c "$branch"
+          git add -A
+          git -c "user.name=$APP_SLUG[bot]" \
+            -c "user.email=$bot_id+$APP_SLUG[bot]@users.noreply.github.com" \
+            commit -m "$title" -m "Closes #$ISSUE" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+          git push "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$branch"
+          printf '%s\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n' "$(jq -r .body <<< "$OUTPUT")" > "$RUNNER_TEMP/body.md"
+          url=$(gh pr create --base main --head "$branch" --title "$title" --body-file "$RUNNER_TEMP/body.md" --label claude)
+          gh pr merge "$url" --auto --squash
+
+      - name: Report a failure on the issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment "$ISSUE" --body "Claude Implement failed: $RUN_URL"
