@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/v17.6.0/schemas/config.json",
+  "packages": {
+    "packages/hekireki": {
+      "release-type": "node",
+      "package-name": "hekireki",
+      "include-component-in-tag": false,
+      "bump-minor-pre-major": true,
+      "skip-changelog": true,
+      "pull-request-title-pattern": "chore: bump version to ${version}",
+      "pull-request-header": "Merging this pull request releases hekireki: once Test passes on main, release.yml tags the commit, publishes it to npm and writes the GitHub Release."
+    }
+  }
+}

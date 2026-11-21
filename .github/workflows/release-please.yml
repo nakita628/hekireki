@@ -1,0 +1,86 @@
+name: Release PR
+
+# Keeps open the pull request that bumps packages/hekireki/package.json for the next release.
+# release-please works the version out from the Conventional Commits merged since the last tag
+# (release-please-config.json): `feat` raises the minor version, `fix` and `perf` the patch, and a
+# breaking change the minor while the version is 0.x. Merging that pull request is the release:
+# release.yml tags the commit, publishes it to npm and writes the GitHub Release once Test has
+# passed on it.
+#
+# The pull request is opened with the workflow's token, and GitHub starts no workflow for what
+# that token does, so Test, Lint and E2E do not run on it; they run on main after the merge, and
+# release.yml publishes nothing until Test passes there. The repository has to let GitHub Actions
+# create pull requests (Settings → Actions → General → Workflow permissions).
+
+on:
+  push:
+    branches:
+      - main
+  # Again once release.yml has finished: a push that lands while it runs (the merge of the bump
+  # pull request among them) finds the last bump pull request not yet released, and release-please
+  # opens nothing for it. This workflow runs no code from the triggering run; it reads and writes
+  # the repository through the API only.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: [release]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: release-please
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      # release.yml tags and releases (`skip-github-release` below), so release-please never moves
+      # its merged pull request from `autorelease: pending` to `autorelease: tagged`, and it opens
+      # no new one while a merged one is pending. Mark a pending one as tagged once a GitHub Release
+      # at or above its version exists: release.yml writes the Release last, after the npm publish,
+      # and a bump by hand that recovers from a failed release counts too. A pending one above the
+      # version main is at was reverted, and only loses the label. Any error fails the step, so a
+      # stalled release-please does not pass unseen.
+      - name: Mark released version pull requests as tagged
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          semver='^[0-9]+\.[0-9]+\.[0-9]+$'
+          latest=$(gh release view --json tagName --jq .tagName)
+          latest=${latest#v}
+          current=$(gh api "repos/$GH_REPO/contents/.release-please-manifest.json" --jq .content |
+            base64 -d | jq -r '."packages/hekireki"')
+          if ! [[ $latest =~ $semver && $current =~ $semver ]]; then
+            echo "::error::Unexpected versions: latest release '$latest', manifest on main '$current'"
+            exit 1
+          fi
+          # Whether $1 is at or below $2.
+          at_most() { [[ $(printf '%s\n' "$1" "$2" | sort -V | tail -n 1) == "$2" ]]; }
+          gh pr list --state merged --label 'autorelease: pending' --json number,title \
+            --jq '.[] | "\(.number) \(.title)"' |
+            while read -r number title; do
+              version=${title##* }
+              if ! [[ $version =~ $semver ]]; then
+                echo "#$number: no version at the end of the title '$title'"
+              elif at_most "$version" "$latest"; then
+                gh api --method POST "repos/$GH_REPO/issues/$number/labels" -f 'labels[]=autorelease: tagged' >/dev/null
+                gh api --method DELETE "repos/$GH_REPO/issues/$number/labels/autorelease:%20pending" >/dev/null
+                echo "#$number: v$version is released (latest release v$latest)"
+              elif ! at_most "$version" "$current"; then
+                gh api --method DELETE "repos/$GH_REPO/issues/$number/labels/autorelease:%20pending" >/dev/null
+                echo "#$number: v$version is above v$current on main, so its bump was reverted"
+              else
+                echo "#$number: v$version is not released yet (latest release v$latest)"
+              fi
+            done
+
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          skip-github-release: true
