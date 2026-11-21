@@ -3,12 +3,14 @@ import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import {
+  cuidDefaultVersion,
   isAutoincrement,
   isFunctionDefault,
   isImplicitManyToMany,
   isJoinSideA,
   isNowDefault,
   isUlidDefault,
+  nanoidDefault,
   primaryKeyFields,
   relationEnds,
   uuidDefaultVersion,
@@ -66,49 +68,30 @@ describe('isFunctionDefault', () => {
 })
 
 describe('what a default asks for', () => {
+  const none = {
+    autoincrement: false,
+    now: false,
+    uuid: null,
+    ulid: false,
+    cuid: null,
+    nanoid: null,
+  }
   it.each([
-    [
-      'Int',
-      { name: 'autoincrement', args: [] },
-      { autoincrement: true, now: false, uuid: null, ulid: false },
-    ],
-    [
-      'DateTime',
-      { name: 'now', args: [] },
-      { autoincrement: false, now: true, uuid: null, ulid: false },
-    ],
+    ['Int', { name: 'autoincrement', args: [] }, { ...none, autoincrement: true }],
+    ['DateTime', { name: 'now', args: [] }, { ...none, now: true }],
     // `now()` is only the time of the insert on a DateTime.
-    [
-      'String',
-      { name: 'now', args: [] },
-      { autoincrement: false, now: false, uuid: null, ulid: false },
-    ],
-    [
-      'String',
-      { name: 'uuid', args: [] },
-      { autoincrement: false, now: false, uuid: 4, ulid: false },
-    ],
-    [
-      'String',
-      { name: 'uuid', args: [4] },
-      { autoincrement: false, now: false, uuid: 4, ulid: false },
-    ],
-    [
-      'String',
-      { name: 'uuid', args: [7] },
-      { autoincrement: false, now: false, uuid: 7, ulid: false },
-    ],
-    [
-      'String',
-      { name: 'ulid', args: [] },
-      { autoincrement: false, now: false, uuid: null, ulid: true },
-    ],
-    [
-      'String',
-      { name: 'cuid', args: [] },
-      { autoincrement: false, now: false, uuid: null, ulid: false },
-    ],
-    ['String', 'text', { autoincrement: false, now: false, uuid: null, ulid: false }],
+    ['String', { name: 'now', args: [] }, none],
+    ['String', { name: 'uuid', args: [] }, { ...none, uuid: 4 }],
+    ['String', { name: 'uuid', args: [4] }, { ...none, uuid: 4 }],
+    ['String', { name: 'uuid', args: [7] }, { ...none, uuid: 7 }],
+    ['String', { name: 'ulid', args: [] }, { ...none, ulid: true }],
+    // DMMF carries `cuid()` as `cuid(1)`.
+    ['String', { name: 'cuid', args: [] }, { ...none, cuid: 1 }],
+    ['String', { name: 'cuid', args: [1] }, { ...none, cuid: 1 }],
+    ['String', { name: 'cuid', args: [2] }, { ...none, cuid: 2 }],
+    ['String', { name: 'nanoid', args: [] }, { ...none, nanoid: { length: null } }],
+    ['String', { name: 'nanoid', args: [16] }, { ...none, nanoid: { length: 16 } }],
+    ['String', 'text', none],
   ])('%s @default(%j)', (type, def, expected) => {
     const field = fieldWith(type, def)
     expect({
@@ -116,6 +99,8 @@ describe('what a default asks for', () => {
       now: isNowDefault(field),
       uuid: uuidDefaultVersion(field),
       ulid: isUlidDefault(field),
+      cuid: cuidDefaultVersion(field),
+      nanoid: nanoidDefault(field),
     }).toStrictEqual(expected)
   })
 })

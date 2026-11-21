@@ -3,6 +3,7 @@ from schema.prisma. Nothing here creates a table: the metadata is first compared
 Prisma wrote, then every column, key and relationship is used on them. Each check prints one
 `ok:` line, or stops the run with what it saw instead."""
 
+import re
 import sqlite3
 import uuid
 import warnings
@@ -304,28 +305,16 @@ def _() -> str | None:
         return None if uuid.UUID(product.id).version == 4 else f"id {product.id!r}"
 
 
-@check("a cuid() key has no Python default: left out, the flush stops instead of writing NULL")
+@check("a cuid() key is made by the model as Prisma Client makes it: c and 24 base-36 characters")
 def _() -> str | None:
     with Session(engine) as session:
-        owner = Account(email="cuid@example.com")
-        session.add(owner)
+        profile = Profile(account=Account(email="cuid@example.com"))
+        session.add(profile)
         session.commit()
-        owner_id = owner.id
-
-    # SQLAlchemy stops it before the INSERT: a key with no default and no value (the warning is
-    # an error in this run); without that, SQLite's NOT NULL would.
-    with Session(engine) as session:
-        session.add(Profile(account_id=owner_id))
-        try:
-            session.flush()
-            return "a profile without an id was inserted"
-        except SAWarning as warning:
-            if "profiles.id" not in str(warning):
-                return f"warned about something else: {warning}"
-    with Session(engine) as session:
-        session.add(Profile(id="profile-1", account_id=owner_id))
-        session.commit()
-        return None if session.get(Profile, "profile-1") else "profile with an id not found"
+        stored = raw("SELECT id FROM profiles WHERE account_id = :id", id=profile.account_id)
+        if stored != [(profile.id,)]:
+            return f"stored {stored}, the model has {profile.id!r}"
+        return None if re.fullmatch(r"c[0-9a-z]{24}", profile.id) else f"id {profile.id!r}"
 
 
 @check("a composite @@id finds one row, and refuses a second with the same pair")

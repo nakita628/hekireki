@@ -6,6 +6,7 @@ from decimal import Decimal as DecimalType
 from datetime import datetime, timezone
 import uuid as uuid_mod
 import uuid6
+import cuid2
 
 
 class UtcDateTime(TypeDecorator[datetime]):
@@ -100,7 +101,7 @@ class Profile(Base):
 
     __tablename__ = "Profile"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: cuid2.create_id())
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE", name="Profile_user_id_fkey"))
     bio: Mapped[Optional[str]]
     nickname: Mapped[str] = mapped_column(String(64), default="anonymous", server_default=text("'anonymous'"))

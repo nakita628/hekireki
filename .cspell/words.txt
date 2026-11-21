@@ -244,6 +244,7 @@ typcollation
 typebot
 typebox
 typelem
+typeshed
 typespeclint
 typname
 typnamespace

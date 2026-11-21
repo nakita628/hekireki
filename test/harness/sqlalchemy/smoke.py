@@ -8,6 +8,7 @@ configuration, PostgreSQL DDL compilation, and real INSERTs on SQLite — the
 half mypy cannot see (a bare Mapped[dict[str, Any]] only fails when the mapper
 resolves it; a missing @updatedAt insert default only fails on INSERT)."""
 
+import re
 from typing import Any, Optional
 
 from sqlalchemy import create_engine
@@ -18,7 +19,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, configure_mappers
 from sqlalchemy.schema import CreateIndex, CreateTable
 
-from models import Account, Base, Board, Category, Profile, Torture
+from models import Account, Badge, Base, Board, Category, Coupon, Profile, Torture
 
 
 def _smoke(a: Account, p: Profile, b: Board) -> None:
@@ -50,7 +51,7 @@ def _runtime_smoke() -> None:
     # money, inet) or cannot make (a dbgenerated default: gen_random_uuid(),
     # interval arithmetic) is left out, and every other one runs against
     # in-memory SQLite so INSERTs exercise the client-side defaults
-    # (@updatedAt, uuid, ulid).
+    # (@updatedAt, uuid, ulid, cuid, nanoid).
     engine = create_engine("sqlite://")
     for table in Base.metadata.sorted_tables:
         try:
@@ -64,8 +65,17 @@ def _runtime_smoke() -> None:
         # byte-exact (escaping) and type-exact (BigInt as int, Json as dict).
         torture = Torture()
         session.add(torture)
+        # Keys left out are made as Prisma Client makes them: cuid(), cuid(2)
+        # and nanoid(10).
+        profile = Profile(account_id="a2")
+        badge = Badge(name="badge")
+        coupon = Coupon(name="coupon")
+        session.add_all([profile, badge, coupon])
         session.commit()
         assert session.get(Profile, "p1") is not None
+        assert re.fullmatch(r"c[0-9a-z]{24}", profile.id) is not None, profile.id
+        assert re.fullmatch(r"[a-z][0-9a-z]{23}", badge.id) is not None, badge.id
+        assert re.fullmatch(r"[\w-]{10}", coupon.id) is not None, coupon.id
         assert torture.quoted == 'it\'s a "quote" and a \\ backslash'
         assert torture.unicode == "日本語と🔥絵文字"
         assert torture.big_pos == 9007199254740993
