@@ -574,32 +574,26 @@ class AutoNowQuerySet(models.QuerySet[_M]):
 // Django's auto_now takes the local date or time of day, and an instant with
 // microseconds; Prisma's @updatedAt on a @db.Date or @db.Time column writes the
 // UTC one, and on a DateTime the instant in milliseconds.
-const STAMPED_FIELDS = {
-  UtcDateField: { base: 'models.DateField', type: 'date', helper: 'utc_today' },
-  UtcTimeField: { base: 'models.TimeField', type: 'time', helper: 'utc_time' },
-  UtcAutoNowDateTimeField: {
+const STAMPED_FIELDS = [
+  { name: 'UtcDateField', base: 'models.DateField', type: 'date', helper: 'utc_today' },
+  { name: 'UtcTimeField', base: 'models.TimeField', type: 'time', helper: 'utc_time' },
+  {
+    name: 'UtcAutoNowDateTimeField',
     base: 'UtcDateTimeField',
     type: 'datetime',
     helper: 'now_milliseconds',
   },
-  AutoNowDateTimeField: {
+  {
+    name: 'AutoNowDateTimeField',
     base: 'models.DateTimeField',
     type: 'datetime',
     helper: 'now_milliseconds',
   },
-} as const
+] as const
 
-type StampedFieldClass = keyof typeof STAMPED_FIELDS
+type StampedField = (typeof STAMPED_FIELDS)[number]
 
-const STAMPED_FIELD_NAMES: readonly StampedFieldClass[] = [
-  'UtcDateField',
-  'UtcTimeField',
-  'UtcAutoNowDateTimeField',
-  'AutoNowDateTimeField',
-]
-
-function utcStampedField(name: StampedFieldClass) {
-  const { base, type, helper } = STAMPED_FIELDS[name]
+function stampedField({ name, base, type, helper }: StampedField) {
   // UtcDateTimeField is already declared without type arguments.
   const ignore = base.startsWith('models.') ? '  # type: ignore[type-arg]' : ''
   return `class ${name}(${base}):${ignore}
@@ -615,7 +609,7 @@ function utcStampedField(name: StampedFieldClass) {
 }
 
 // The class an @updatedAt column is declared with.
-function stampedFieldClass(field: DMMF.Field, provider: string): StampedFieldClass | null {
+function stampedFieldClass(field: DMMF.Field, provider: string): StampedField['name'] | null {
   if (field.isUpdatedAt !== true) return null
   const kind = dateTimeKind(field)
   if (kind === 'date') return 'UtcDateField'
@@ -624,14 +618,14 @@ function stampedFieldClass(field: DMMF.Field, provider: string): StampedFieldCla
 }
 
 // The field every zoneless DateTime column is declared with, those of an
-// @updatedAt date or time, and the QuerySet a model with an @updatedAt field is
+// @updatedAt column, and the QuerySet a model with an @updatedAt field is
 // managed by, each written once per file.
 export function collectFieldClasses(models: readonly DMMF.Model[], provider: string) {
   const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
   const stamped = new Set(scalarFields.map((f) => stampedFieldClass(f, provider)))
   return [
     scalarFields.some((f) => holdsUtc(f, provider)) ? UTC_DATETIME_FIELD : null,
-    ...STAMPED_FIELD_NAMES.filter((name) => stamped.has(name)).map((name) => utcStampedField(name)),
+    ...STAMPED_FIELDS.filter((f) => stamped.has(f.name)).map((f) => stampedField(f)),
     scalarFields.some((f) => f.isUpdatedAt === true) ? AUTO_NOW_QUERY_SET : null,
   ].filter((c) => c !== null)
 }
@@ -1367,7 +1361,7 @@ export function collectGlobalImports(
     .filter((f) => isNowDefault(f) || f.isUpdatedAt === true)
     .map((f) => dateTimeKind(f))
   // utc_today() and utc_time() read the clock through datetime, as
-  // UtcDateTimeField checks a value against it.
+  // UtcDateTimeField checks a value against it and now_milliseconds() returns one.
   const nowHelperKinds = nowKinds.filter((kind) => kind !== 'datetime')
   const kinds = new Set([
     ...literalKinds,
