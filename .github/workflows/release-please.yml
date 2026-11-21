@@ -87,18 +87,23 @@ jobs:
         with:
           skip-github-release: true
 
-      # Only release-please's own pull request: its branch and its label, read from the list of
-      # open pull requests rather than through `--label` or `--author`, which go through search and
-      # can miss a pull request opened a moment ago. A merge right after the pull request is opened
-      # can find GitHub still working out whether it is mergeable, so each one is tried a few times.
+      # Only release-please's own pull request: opened by the Actions bot from a `release-please--`
+      # branch of this repository, not a fork's, and labelled `autorelease: pending`. They are read
+      # from the list of open pull requests rather than through `--label` or `--author`, which go
+      # through search and can miss a pull request opened a moment ago. A merge right after the pull
+      # request is opened can find GitHub still working out whether it is mergeable, so each one is
+      # tried a few times.
       - name: Merge the bump pull request and start the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          numbers=$(gh pr list --state open --json number,headRefName,labels --jq '.[]
-            | select((.headRefName | startswith("release-please--")) and any(.labels[]; .name == "autorelease: pending"))
+          numbers=$(gh pr list --state open --limit 1000 \
+            --json number,headRefName,labels,author,isCrossRepository --jq '.[]
+            | select((.isCrossRepository | not) and .author.login == "app/github-actions"
+              and (.headRefName | startswith("release-please--"))
+              and any(.labels[]; .name == "autorelease: pending"))
             | .number')
           if [ -z "$numbers" ]; then
             echo "no bump pull request to merge"
