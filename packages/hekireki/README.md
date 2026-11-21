@@ -80,6 +80,10 @@ The `provider` of the generator block picks the output. Every option is optional
 Every ORM generator stores a `DateTime` as Prisma Client stores it, so the ORM and Prisma read
 each other's rows alike.
 
+On MySQL, `hekireki-gorm` gives a `String` with no native type `VARCHAR(191)`, the column Prisma
+Migrate creates, whatever `mysql.Config{DefaultStringSize}` says. Tables an earlier `AutoMigrate`
+made `longtext` are altered to it: give a field that holds longer values `@db.Text`.
+
 `hekireki-sqlalchemy` and `hekireki-django` give a `uuid()`, `cuid()`, `ulid()` or `nanoid()`
 default the value Prisma Client would make, with a package from PyPI where Python's standard
 library has none: `uuid6` for `uuid(7)`, `python-ulid` for `ulid()`, `cuid` for `cuid()`, `cuid2`

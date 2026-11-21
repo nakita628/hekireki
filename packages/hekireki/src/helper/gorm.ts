@@ -227,25 +227,25 @@ function gormDefault(
   )
 }
 
-function primaryKeyTags(field: DMMF.Field, isPk: boolean) {
+function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
   if (!isPk) return []
   const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
+  // On MySQL such a key is a String like any other, VARCHAR(191) (isMysqlDefaultString).
+  const fixedType = provider !== 'mysql' || (field.nativeType ?? null) !== null
   return [
     'primaryKey',
     ...(isAutoincrement(field) ? ['autoIncrement'] : []),
-    ...(defaultName === 'uuid' ? ['type:char(36)'] : []),
-    ...(defaultName === 'ulid' ? ['type:char(26)'] : []),
+    ...(fixedType && defaultName === 'uuid' ? ['type:char(36)'] : []),
+    ...(fixedType && defaultName === 'ulid' ? ['type:char(26)'] : []),
   ]
 }
 
-// Prisma Migrate makes a String with no native type VARCHAR(191) on MySQL; GORM would make it
-// longtext, which MySQL cannot index without a key length (a @unique String fails AutoMigrate).
-function isMysqlDefaultString(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
+// Prisma Migrate makes a String with no native type VARCHAR(191) on MySQL, a uuid() or ulid()
+// key included; GORM would make it longtext, which MySQL cannot index without a key length (a
+// @unique String fails AutoMigrate).
+function isMysqlDefaultString(field: DMMF.Field, provider: string | undefined) {
   if (provider !== 'mysql' || field.type !== 'String' || field.kind !== 'scalar') return false
-  if (field.isList || field.nativeType) return false
-  const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
-  // primaryKeyTags gives a uuid() or ulid() key its own type.
-  return !(isPk && (defaultName === 'uuid' || defaultName === 'ulid'))
+  return !field.isList && !field.nativeType
 }
 
 function columnTypeTag(field: DMMF.Field, isPk: boolean, provider?: string) {
@@ -253,10 +253,11 @@ function columnTypeTag(field: DMMF.Field, isPk: boolean, provider?: string) {
   // A DateTime[] is a PostgreSQL array, `timestamp(3)[]` unless the native type says otherwise,
   // which the list type writes and reads as Prisma Client does.
   if (isDateTimeList(field)) return `type:${nativeType ?? 'timestamp(3)'}[]`
-  if (isMysqlDefaultString(field, isPk, provider)) return 'type:varchar(191)'
-  const includeNativeType =
-    nativeType !== null &&
-    (!isPk || !isFunctionDefault(field.default) || field.default.name !== 'uuid')
+  if (isMysqlDefaultString(field, provider)) return 'type:varchar(191)'
+  // primaryKeyTags gives a uuid() or ulid() key its own type.
+  const keyType =
+    isPk && isFunctionDefault(field.default) && ['uuid', 'ulid'].includes(field.default.name)
+  const includeNativeType = nativeType !== null && !keyType
   return includeNativeType ? `type:${nativeType}` : null
 }
 
@@ -286,7 +287,7 @@ export function buildGormTags(
 
   const parts = [
     `column:${columnName}`,
-    ...primaryKeyTags(field, isPk),
+    ...primaryKeyTags(field, isPk, provider),
     field.isUnique ? 'uniqueIndex' : null,
     ...compositeIndexTags,
     columnTypeTag(field, isPk, provider),

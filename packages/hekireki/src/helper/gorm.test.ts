@@ -173,7 +173,7 @@ describe('buildGormTags', () => {
     expect(buildGormTags(string({}), false, false, [], [], 'mysql')).toBe(
       '`gorm:"column:email;uniqueIndex;type:varchar(191)" json:"email"`',
     )
-    // A cuid() key is a String too; a uuid() key keeps its char(36).
+    // A cuid() or uuid() key is a String too, VARCHAR(191) as Prisma makes it on MySQL.
     const cuidKey = string({
       name: 'id',
       isId: true,
@@ -192,7 +192,22 @@ describe('buildGormTags', () => {
       default: { name: 'uuid', args: [] },
     })
     expect(buildGormTags(uuidKey, true, false, [], [], 'mysql')).toBe(
+      '`gorm:"column:id;primaryKey;type:varchar(191)" json:"id"`',
+    )
+    expect(buildGormTags(uuidKey, true, false, [], [], 'postgresql')).toBe(
       '`gorm:"column:id;primaryKey;type:char(36)" json:"id"`',
+    )
+    // A ulid() key with a native type keeps one type tag.
+    const ulidKey = string({
+      name: 'id',
+      isId: true,
+      isUnique: false,
+      isRequired: true,
+      nativeType: ['VarChar', ['26']],
+      default: { name: 'ulid', args: [] },
+    })
+    expect(buildGormTags(ulidKey, true, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:id;primaryKey;type:char(26)" json:"id"`',
     )
     // A native type wins, and other databases keep GORM's own string type.
     expect(buildGormTags(string({ nativeType: ['Text', []] }), false, false, [], [], 'mysql')).toBe(
