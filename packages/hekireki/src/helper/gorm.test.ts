@@ -156,6 +156,68 @@ describe('buildGormTags', () => {
     )
   })
 
+  it('gives a String with no native type VARCHAR(191) on MySQL, as Prisma Migrate does', () => {
+    const string = (over: object) =>
+      ({
+        name: 'email',
+        kind: 'scalar' as const,
+        type: 'String',
+        isRequired: false,
+        isId: false,
+        isUnique: true,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: false,
+        ...over,
+      }) as any
+    expect(buildGormTags(string({}), false, false, [], [], 'mysql')).toBe(
+      '`gorm:"column:email;uniqueIndex;type:varchar(191)" json:"email"`',
+    )
+    // A cuid() or uuid() key is a String too, VARCHAR(191) as Prisma makes it on MySQL.
+    const cuidKey = string({
+      name: 'id',
+      isId: true,
+      isUnique: false,
+      isRequired: true,
+      default: { name: 'cuid', args: [] },
+    })
+    expect(buildGormTags(cuidKey, true, false, [], [], 'mysql')).toBe(
+      '`gorm:"column:id;primaryKey;type:varchar(191)" json:"id"`',
+    )
+    const uuidKey = string({
+      name: 'id',
+      isId: true,
+      isUnique: false,
+      isRequired: true,
+      default: { name: 'uuid', args: [] },
+    })
+    expect(buildGormTags(uuidKey, true, false, [], [], 'mysql')).toBe(
+      '`gorm:"column:id;primaryKey;type:varchar(191)" json:"id"`',
+    )
+    expect(buildGormTags(uuidKey, true, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:id;primaryKey;type:char(36)" json:"id"`',
+    )
+    // A ulid() key with a native type takes the native type, as Prisma Migrate does.
+    const ulidKey = string({
+      name: 'id',
+      isId: true,
+      isUnique: false,
+      isRequired: true,
+      nativeType: ['VarChar', ['26']],
+      default: { name: 'ulid', args: [] },
+    })
+    expect(buildGormTags(ulidKey, true, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:id;primaryKey;type:varchar(26)" json:"id"`',
+    )
+    // A native type wins, and other databases keep GORM's own string type.
+    expect(buildGormTags(string({ nativeType: ['Text', []] }), false, false, [], [], 'mysql')).toBe(
+      '`gorm:"column:email;uniqueIndex;type:text" json:"email"`',
+    )
+    expect(buildGormTags(string({}), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:email;uniqueIndex" json:"email"`',
+    )
+  })
+
   it('generates uniqueIndex + not null tag', () => {
     const field = {
       name: 'email',
