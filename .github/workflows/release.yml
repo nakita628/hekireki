@@ -1,14 +1,18 @@
 name: release
 
-# Runs after Test has passed on main. `workflow_run` is the trigger zizmor warns about because
-# it hands a token to code from a pull request when misused; here every job checks out the
-# commit Test ran on (`head_sha`), only for a push to main or a Test run started there by hand
-# (release-please.yml does), and its token writes nothing but that commit's tag and release.
+# Runs after Test has passed on main, or when started on main by hand, where its `test` job runs
+# Test first. `workflow_run` is the trigger zizmor warns about because it hands a token to code
+# from a pull request when misused; here every job checks out the commit Test ran on (`head_sha`),
+# only for a push to main, a Test run started there by hand or a run of this workflow on main, and
+# its token writes nothing but that commit's tag and release.
 on:
   workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: [Test]
     types: [completed]
     branches: [main]
+  # release-please.yml starts it after merging the version bump. A run started with the workflow's
+  # token starts no workflow when it ends, so a Test run it started could not start this one.
+  workflow_dispatch: {}
 
 permissions: {}
 
@@ -17,9 +21,22 @@ concurrency:
   queue: max
 
 jobs:
+  test:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/test.yml
+    permissions:
+      contents: read
+
+  # `test` is skipped after a Test run, so this and every job after it states its own condition:
+  # a job left to the default would be skipped with it.
   check:
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')
+    needs: test
+    if: >-
+      ${{ !cancelled() && (
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
+          (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')) ||
+        (github.event_name == 'workflow_dispatch' && needs.test.result == 'success')) }}
     permissions:
       contents: read
     outputs:
@@ -28,7 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
       - name: Check version and npm publish state
@@ -54,6 +71,7 @@ jobs:
   tag:
     runs-on: ubuntu-latest
     needs: check
+    if: ${{ !cancelled() && needs.check.result == 'success' }}
     permissions:
       contents: write
     steps:
@@ -61,14 +79,14 @@ jobs:
       # excuses this one checkout from the artipacked audit).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Create or verify tag
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.check.outputs.version }}
           UNPUBLISHED: ${{ needs.check.outputs.unpublished }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           LS_STATUS=0
           git ls-remote --exit-code origin "refs/tags/v$VERSION" >/dev/null || LS_STATUS=$?
@@ -101,7 +119,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     needs: [check, tag]
-    if: needs.check.outputs.unpublished == 'true'
+    if: ${{ !cancelled() && needs.tag.result == 'success' && needs.check.outputs.unpublished == 'true' }}
     environment: release
     permissions:
       contents: read
@@ -109,7 +127,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
       - uses: voidzero-dev/setup-vp@49c3e4e92c52e7f8392712a9267bbe71c5ab30e5 # v1.19.0
@@ -133,7 +151,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
       - name: Create release if missing

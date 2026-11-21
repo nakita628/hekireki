@@ -5,4 +5,8 @@ rules:
   artipacked:
     ignore:
       # The tag job pushes the tag with the checkout's token, so the credentials have to persist.
-      - release.yml:62:9
+      - release.yml:80:9
+  self-repository:
+    ignore:
+      # The `$/` form it asks for is not one actionlint, which the Lint workflow also runs, accepts.
+      - release.yml:26:11

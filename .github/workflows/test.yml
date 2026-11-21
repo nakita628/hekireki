@@ -5,9 +5,10 @@ on:
     branches:
       - main
   pull_request:
-  # release-please.yml starts it on main after merging the version bump, which, merged with the
-  # workflow's token, starts nothing else; release.yml publishes once it passes.
+  # Started by hand on main, it is followed by release.yml as a push is.
   workflow_dispatch: {}
+  # release.yml runs it first when it is started by hand itself.
+  workflow_call: {}
 
 permissions:
   contents: read
