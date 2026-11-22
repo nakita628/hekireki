@@ -1402,6 +1402,37 @@ func (Account) TableName() string {
 }
 `)
   })
+
+  // GORM guesses a struct field onto its own schema as belongs-to first and finds SuccessorID
+  // there, so `Predecessor *User` would parse as a second belongs-to and load the successor.
+  // A slice is guessed as has-many on SuccessorID, which schema.Parse (gorm v1.31.2) confirms.
+  it('writes a 1:1 back side onto its own model as a slice, which GORM reads as has-many', () => {
+    expect(
+      gormFor(`
+model User {
+  id          String  @id
+  successorId String? @unique
+  successor   User?   @relation("Succession", fields: [successorId], references: [id])
+  /// Who this user succeeds.
+  predecessor User?   @relation("Succession")
+}
+`),
+    ).toBe(`package model
+
+type User struct {
+	ID          string  \`gorm:"column:id;primaryKey" json:"id"\`
+	SuccessorID *string \`gorm:"column:successorId;uniqueIndex:User_successorId_key" json:"successorId"\`
+	Successor   *User   \`gorm:"foreignKey:SuccessorID;belongsTo"\`
+	// Who this user succeeds.
+	// A 1:1 onto User itself: GORM would read *User as belongs-to on the same key, so this is a slice of at most one.
+	Predecessor []User \`gorm:"foreignKey:SuccessorID;constraint:User_successorId_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"\`
+}
+
+func (User) TableName() string {
+	return "User"
+}
+`)
+  })
 })
 
 describe('generateGormModels fields that become one Go name', () => {
