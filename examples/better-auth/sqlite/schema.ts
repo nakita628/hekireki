@@ -3,6 +3,7 @@ import {
   foreignKey,
   index,
   integer,
+  primaryKey,
   sqliteTable,
   text,
   uniqueIndex,
@@ -41,7 +42,7 @@ const utcNow = (() => {
 export const user = sqliteTable(
   'user',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     name: text('name').notNull(),
     email: text('email').notNull(),
     emailVerified: integer('emailVerified', { mode: 'boolean' }).notNull().default(false),
@@ -62,6 +63,7 @@ export const user = sqliteTable(
     stripeCustomerId: text('stripeCustomerId'),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     uniqueIndex('user_email_key').on(table.email),
     uniqueIndex('user_username_key').on(table.username),
     uniqueIndex('user_phoneNumber_key').on(table.phoneNumber),
@@ -71,7 +73,7 @@ export const user = sqliteTable(
 export const session = sqliteTable(
   'session',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     expiresAt: utcDateTime('expiresAt').notNull(),
     token: text('token').notNull(),
     createdAt: utcDateTime('createdAt').notNull().$defaultFn(utcNow),
@@ -84,6 +86,7 @@ export const session = sqliteTable(
     activeTeamId: text('activeTeamId'),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('session_userId_idx').on(table.userId),
     uniqueIndex('session_token_key').on(table.token),
     foreignKey({ name: 'session_userId_fkey', columns: [table.userId], foreignColumns: [user.id] })
@@ -95,7 +98,7 @@ export const session = sqliteTable(
 export const account = sqliteTable(
   'account',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     accountId: text('accountId').notNull(),
     providerId: text('providerId').notNull(),
     userId: text('userId').notNull(),
@@ -110,6 +113,7 @@ export const account = sqliteTable(
     updatedAt: utcDateTime('updatedAt').notNull().$onUpdate(utcNow),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('account_userId_idx').on(table.userId),
     foreignKey({ name: 'account_userId_fkey', columns: [table.userId], foreignColumns: [user.id] })
       .onDelete('cascade')
@@ -120,20 +124,23 @@ export const account = sqliteTable(
 export const verification = sqliteTable(
   'verification',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     identifier: text('identifier').notNull(),
     value: text('value').notNull(),
     expiresAt: utcDateTime('expiresAt').notNull(),
     createdAt: utcDateTime('createdAt').notNull().$defaultFn(utcNow),
     updatedAt: utcDateTime('updatedAt').notNull().$onUpdate(utcNow),
   },
-  (table) => [index('verification_identifier_idx').on(table.identifier)],
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    index('verification_identifier_idx').on(table.identifier),
+  ],
 )
 
 export const twoFactor = sqliteTable(
   'twoFactor',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     secret: text('secret').notNull(),
     backupCodes: text('backupCodes').notNull(),
     userId: text('userId').notNull(),
@@ -142,6 +149,7 @@ export const twoFactor = sqliteTable(
     lockedUntil: utcDateTime('lockedUntil'),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('twoFactor_secret_idx').on(table.secret),
     index('twoFactor_userId_idx').on(table.userId),
     foreignKey({
@@ -157,7 +165,7 @@ export const twoFactor = sqliteTable(
 export const passkey = sqliteTable(
   'passkey',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     name: text('name'),
     publicKey: text('publicKey').notNull(),
     userId: text('userId').notNull(),
@@ -170,6 +178,7 @@ export const passkey = sqliteTable(
     aaguid: text('aaguid'),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('passkey_userId_idx').on(table.userId),
     index('passkey_credentialID_idx').on(table.credentialID),
     foreignKey({ name: 'passkey_userId_fkey', columns: [table.userId], foreignColumns: [user.id] })
@@ -181,7 +190,7 @@ export const passkey = sqliteTable(
 export const apikey = sqliteTable(
   'apikey',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     configId: text('configId').notNull().default('default'),
     name: text('name'),
     start: text('start'),
@@ -205,6 +214,7 @@ export const apikey = sqliteTable(
     metadata: text('metadata'),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('apikey_configId_idx').on(table.configId),
     index('apikey_referenceId_idx').on(table.referenceId),
     index('apikey_key_idx').on(table.key),
@@ -214,20 +224,23 @@ export const apikey = sqliteTable(
 export const organization = sqliteTable(
   'organization',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     name: text('name').notNull(),
     slug: text('slug').notNull(),
     logo: text('logo'),
     createdAt: utcDateTime('createdAt').notNull(),
     metadata: text('metadata'),
   },
-  (table) => [uniqueIndex('organization_slug_key').on(table.slug)],
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    uniqueIndex('organization_slug_key').on(table.slug),
+  ],
 )
 
 export const organizationRole = sqliteTable(
   'organizationRole',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     organizationId: text('organizationId').notNull(),
     role: text('role').notNull(),
     permission: text('permission').notNull(),
@@ -235,6 +248,7 @@ export const organizationRole = sqliteTable(
     updatedAt: utcDateTime('updatedAt').$onUpdate(utcNow),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('organizationRole_organizationId_idx').on(table.organizationId),
     index('organizationRole_role_idx').on(table.role),
     foreignKey({
@@ -250,7 +264,7 @@ export const organizationRole = sqliteTable(
 export const team = sqliteTable(
   'team',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     name: text('name').notNull(),
     memberCount: integer('memberCount').notNull().default(0),
     organizationId: text('organizationId').notNull(),
@@ -258,6 +272,7 @@ export const team = sqliteTable(
     updatedAt: utcDateTime('updatedAt').$onUpdate(utcNow),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('team_organizationId_idx').on(table.organizationId),
     foreignKey({
       name: 'team_organizationId_fkey',
@@ -272,13 +287,14 @@ export const team = sqliteTable(
 export const teamMember = sqliteTable(
   'teamMember',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     teamId: text('teamId').notNull(),
     userId: text('userId').notNull(),
     membershipKey: text('membershipKey'),
     createdAt: utcDateTime('createdAt'),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('teamMember_teamId_idx').on(table.teamId),
     index('teamMember_userId_idx').on(table.userId),
     uniqueIndex('teamMember_membershipKey_key').on(table.membershipKey),
@@ -302,13 +318,14 @@ export const teamMember = sqliteTable(
 export const member = sqliteTable(
   'member',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     organizationId: text('organizationId').notNull(),
     userId: text('userId').notNull(),
     role: text('role').notNull().default('member'),
     createdAt: utcDateTime('createdAt').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('member_organizationId_idx').on(table.organizationId),
     index('member_userId_idx').on(table.userId),
     foreignKey({
@@ -327,7 +344,7 @@ export const member = sqliteTable(
 export const invitation = sqliteTable(
   'invitation',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     organizationId: text('organizationId').notNull(),
     email: text('email').notNull(),
     role: text('role'),
@@ -338,6 +355,7 @@ export const invitation = sqliteTable(
     inviterId: text('inviterId').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('invitation_organizationId_idx').on(table.organizationId),
     index('invitation_email_idx').on(table.email),
     foreignKey({
@@ -357,20 +375,24 @@ export const invitation = sqliteTable(
   ],
 )
 
-export const jwks = sqliteTable('jwks', {
-  id: text('id').primaryKey(),
-  publicKey: text('publicKey').notNull(),
-  privateKey: text('privateKey').notNull(),
-  createdAt: utcDateTime('createdAt').notNull(),
-  expiresAt: utcDateTime('expiresAt'),
-  alg: text('alg'),
-  crv: text('crv'),
-})
+export const jwks = sqliteTable(
+  'jwks',
+  {
+    id: text('id').notNull(),
+    publicKey: text('publicKey').notNull(),
+    privateKey: text('privateKey').notNull(),
+    createdAt: utcDateTime('createdAt').notNull(),
+    expiresAt: utcDateTime('expiresAt'),
+    alg: text('alg'),
+    crv: text('crv'),
+  },
+  (table) => [primaryKey({ columns: [table.id] })],
+)
 
 export const oauthClient = sqliteTable(
   'oauthClient',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     clientId: text('clientId').notNull(),
     clientSecret: text('clientSecret'),
     clientDiscoveryId: text('clientDiscoveryId'),
@@ -410,6 +432,7 @@ export const oauthClient = sqliteTable(
     metadata: text('metadata'),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('oauthClient_userId_idx').on(table.userId),
     uniqueIndex('oauthClient_clientId_key').on(table.clientId),
     foreignKey({
@@ -425,7 +448,7 @@ export const oauthClient = sqliteTable(
 export const oauthResource = sqliteTable(
   'oauthResource',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     identifier: text('identifier').notNull(),
     name: text('name').notNull(),
     accessTokenTtl: integer('accessTokenTtl'),
@@ -443,19 +466,23 @@ export const oauthResource = sqliteTable(
     policyVersion: integer('policyVersion').default(1),
     metadata: text('metadata'),
   },
-  (table) => [uniqueIndex('oauthResource_identifier_key').on(table.identifier)],
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    uniqueIndex('oauthResource_identifier_key').on(table.identifier),
+  ],
 )
 
 export const oauthClientResource = sqliteTable(
   'oauthClientResource',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     clientId: text('clientId').notNull(),
     resourceId: text('resourceId').notNull(),
     metadata: text('metadata'),
     createdAt: utcDateTime('createdAt'),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('oauthClientResource_clientId_idx').on(table.clientId),
     index('oauthClientResource_resourceId_idx').on(table.resourceId),
     uniqueIndex('oauthClientResource_clientId_resourceId_uidx').on(
@@ -482,7 +509,7 @@ export const oauthClientResource = sqliteTable(
 export const oauthRefreshToken = sqliteTable(
   'oauthRefreshToken',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     token: text('token').notNull(),
     clientId: text('clientId').notNull(),
     sessionId: text('sessionId'),
@@ -502,6 +529,7 @@ export const oauthRefreshToken = sqliteTable(
     scopes: text('scopes').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('oauthRefreshToken_clientId_idx').on(table.clientId),
     index('oauthRefreshToken_sessionId_idx').on(table.sessionId),
     index('oauthRefreshToken_userId_idx').on(table.userId),
@@ -534,7 +562,7 @@ export const oauthRefreshToken = sqliteTable(
 export const oauthAccessToken = sqliteTable(
   'oauthAccessToken',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     token: text('token').notNull(),
     clientId: text('clientId').notNull(),
     sessionId: text('sessionId'),
@@ -551,6 +579,7 @@ export const oauthAccessToken = sqliteTable(
     scopes: text('scopes').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('oauthAccessToken_clientId_idx').on(table.clientId),
     index('oauthAccessToken_sessionId_idx').on(table.sessionId),
     index('oauthAccessToken_userId_idx').on(table.userId),
@@ -591,7 +620,7 @@ export const oauthAccessToken = sqliteTable(
 export const oauthConsent = sqliteTable(
   'oauthConsent',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     clientId: text('clientId').notNull(),
     userId: text('userId'),
     referenceId: text('referenceId'),
@@ -602,6 +631,7 @@ export const oauthConsent = sqliteTable(
     updatedAt: utcDateTime('updatedAt').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('oauthConsent_clientId_idx').on(table.clientId),
     index('oauthConsent_userId_idx').on(table.userId),
     foreignKey({
@@ -621,15 +651,16 @@ export const oauthConsent = sqliteTable(
   ],
 )
 
-export const oauthClientAssertion = sqliteTable('oauthClientAssertion', {
-  id: text('id').primaryKey(),
-  expiresAt: utcDateTime('expiresAt').notNull(),
-})
+export const oauthClientAssertion = sqliteTable(
+  'oauthClientAssertion',
+  { id: text('id').notNull(), expiresAt: utcDateTime('expiresAt').notNull() },
+  (table) => [primaryKey({ columns: [table.id] })],
+)
 
 export const deviceCode = sqliteTable(
   'deviceCode',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     deviceCode: text('deviceCode').notNull(),
     userCode: text('userCode').notNull(),
     userId: text('userId'),
@@ -641,6 +672,7 @@ export const deviceCode = sqliteTable(
     scope: text('scope'),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     uniqueIndex('deviceCode_deviceCode_uidx').on(table.deviceCode),
     uniqueIndex('deviceCode_userCode_uidx').on(table.userCode),
   ],
@@ -649,7 +681,7 @@ export const deviceCode = sqliteTable(
 export const ssoProvider = sqliteTable(
   'ssoProvider',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     issuer: text('issuer').notNull(),
     oidcConfig: text('oidcConfig'),
     samlConfig: text('samlConfig'),
@@ -659,6 +691,7 @@ export const ssoProvider = sqliteTable(
     domain: text('domain').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     uniqueIndex('ssoProvider_providerId_key').on(table.providerId),
     foreignKey({
       name: 'ssoProvider_userId_fkey',
@@ -673,7 +706,7 @@ export const ssoProvider = sqliteTable(
 export const scimManagedConnection = sqliteTable(
   'scimManagedConnection',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     creationRequestId: text('creationRequestId').notNull(),
     connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
@@ -687,6 +720,7 @@ export const scimManagedConnection = sqliteTable(
     decommissionedBy: text('decommissionedBy'),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('scimManagedConnection_provisioningDomainId_idx').on(table.provisioningDomainId),
     uniqueIndex('scimManagedConnection_creationRequestId_key').on(table.creationRequestId),
     uniqueIndex('scimManagedConnection_connectionId_key').on(table.connectionId),
@@ -696,7 +730,7 @@ export const scimManagedConnection = sqliteTable(
 export const scimManagedCredential = sqliteTable(
   'scimManagedCredential',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     connectionRecordId: text('connectionRecordId').notNull(),
     credentialId: text('credentialId').notNull(),
     tokenDigest: text('tokenDigest').notNull(),
@@ -713,6 +747,7 @@ export const scimManagedCredential = sqliteTable(
     decommissionedAt: utcDateTime('decommissionedAt'),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('scimManagedCredential_connectionRecordId_idx').on(table.connectionRecordId),
     uniqueIndex('scimManagedCredential_credentialId_key').on(table.credentialId),
     uniqueIndex('scimManagedCredential_activeSlotKey_key').on(table.activeSlotKey),
@@ -729,7 +764,7 @@ export const scimManagedCredential = sqliteTable(
 export const scimManagedConnectionEvent = sqliteTable(
   'scimManagedConnectionEvent',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     connectionRecordId: text('connectionRecordId').notNull(),
     eventKey: text('eventKey').notNull(),
     sequence: integer('sequence').notNull(),
@@ -739,6 +774,7 @@ export const scimManagedConnectionEvent = sqliteTable(
     createdAt: utcDateTime('createdAt').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('scimManagedConnectionEvent_connectionRecordId_idx').on(table.connectionRecordId),
     uniqueIndex('scimManagedConnectionEvent_eventKey_key').on(table.eventKey),
     foreignKey({
@@ -754,7 +790,7 @@ export const scimManagedConnectionEvent = sqliteTable(
 export const scimConnectionBinding = sqliteTable(
   'scimConnectionBinding',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     connectionId: text('connectionId').notNull(),
     connectionKey: text('connectionKey').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
@@ -772,6 +808,7 @@ export const scimConnectionBinding = sqliteTable(
     decommissionLeaseExpiresAt: utcDateTime('decommissionLeaseExpiresAt'),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('scimConnectionBinding_connectionId_idx').on(table.connectionId),
     uniqueIndex('scimConnectionBinding_connectionKey_key').on(table.connectionKey),
   ],
@@ -780,7 +817,7 @@ export const scimConnectionBinding = sqliteTable(
 export const scimIdentityTombstone = sqliteTable(
   'scimIdentityTombstone',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
     externalId: text('externalId').notNull(),
@@ -790,6 +827,7 @@ export const scimIdentityTombstone = sqliteTable(
     deletedAt: utcDateTime('deletedAt').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('scimIdentityTombstone_connectionId_idx').on(table.connectionId),
     index('scimIdentityTombstone_provisioningDomainId_idx').on(table.provisioningDomainId),
     index('scimIdentityTombstone_userId_idx').on(table.userId),
@@ -807,7 +845,7 @@ export const scimIdentityTombstone = sqliteTable(
 export const scimSubject = sqliteTable(
   'scimSubject',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     userId: text('userId').notNull(),
     profileSourceId: text('profileSourceId'),
     revision: integer('revision').notNull(),
@@ -815,6 +853,7 @@ export const scimSubject = sqliteTable(
     updatedAt: utcDateTime('updatedAt').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('scimSubject_profileSourceId_idx').on(table.profileSourceId),
     uniqueIndex('scimSubject_userId_key').on(table.userId),
     foreignKey({
@@ -830,7 +869,7 @@ export const scimSubject = sqliteTable(
 export const scimUser = sqliteTable(
   'scimUser',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
     userId: text('userId').notNull(),
@@ -854,6 +893,7 @@ export const scimUser = sqliteTable(
     updatedAt: utcDateTime('updatedAt').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('scimUser_connectionId_idx').on(table.connectionId),
     index('scimUser_provisioningDomainId_idx').on(table.provisioningDomainId),
     index('scimUser_userId_idx').on(table.userId),
@@ -870,7 +910,7 @@ export const scimUser = sqliteTable(
 export const scimProjectionGrant = sqliteTable(
   'scimProjectionGrant',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
     scimUserId: text('scimUserId').notNull(),
@@ -884,6 +924,7 @@ export const scimProjectionGrant = sqliteTable(
     updatedAt: utcDateTime('updatedAt').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('scimProjectionGrant_connectionId_idx').on(table.connectionId),
     index('scimProjectionGrant_provisioningDomainId_idx').on(table.provisioningDomainId),
     index('scimProjectionGrant_scimUserId_idx').on(table.scimUserId),
@@ -909,7 +950,7 @@ export const scimProjectionGrant = sqliteTable(
 export const scimGroup = sqliteTable(
   'scimGroup',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     connectionId: text('connectionId').notNull(),
     provisioningDomainId: text('provisioningDomainId').notNull(),
     revision: integer('revision').notNull().default(0),
@@ -922,6 +963,7 @@ export const scimGroup = sqliteTable(
     updatedAt: utcDateTime('updatedAt').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('scimGroup_connectionId_idx').on(table.connectionId),
     index('scimGroup_provisioningDomainId_idx').on(table.provisioningDomainId),
     uniqueIndex('scimGroup_displayNameKey_key').on(table.displayNameKey),
@@ -933,7 +975,7 @@ export const scimGroup = sqliteTable(
 export const scimGroupMember = sqliteTable(
   'scimGroupMember',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     connectionId: text('connectionId').notNull(),
     groupId: text('groupId').notNull(),
     scimUserId: text('scimUserId').notNull(),
@@ -941,6 +983,7 @@ export const scimGroupMember = sqliteTable(
     createdAt: utcDateTime('createdAt').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('scimGroupMember_connectionId_idx').on(table.connectionId),
     index('scimGroupMember_groupId_idx').on(table.groupId),
     index('scimGroupMember_scimUserId_idx').on(table.scimUserId),
@@ -965,7 +1008,7 @@ export const scimGroupMember = sqliteTable(
 export const walletAddress = sqliteTable(
   'walletAddress',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     userId: text('userId').notNull(),
     address: text('address').notNull(),
     chainId: integer('chainId').notNull(),
@@ -973,6 +1016,7 @@ export const walletAddress = sqliteTable(
     createdAt: utcDateTime('createdAt').notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index('walletAddress_userId_idx').on(table.userId),
     foreignKey({
       name: 'walletAddress_userId_fkey',
@@ -984,35 +1028,39 @@ export const walletAddress = sqliteTable(
   ],
 )
 
-export const subscription = sqliteTable('subscription', {
-  id: text('id').primaryKey(),
-  plan: text('plan').notNull(),
-  referenceId: text('referenceId').notNull(),
-  stripeCustomerId: text('stripeCustomerId'),
-  stripeSubscriptionId: text('stripeSubscriptionId'),
-  status: text('status').notNull().default('incomplete'),
-  periodStart: utcDateTime('periodStart'),
-  periodEnd: utcDateTime('periodEnd'),
-  trialStart: utcDateTime('trialStart'),
-  trialEnd: utcDateTime('trialEnd'),
-  cancelAtPeriodEnd: integer('cancelAtPeriodEnd', { mode: 'boolean' }).default(false),
-  cancelAt: utcDateTime('cancelAt'),
-  canceledAt: utcDateTime('canceledAt'),
-  endedAt: utcDateTime('endedAt'),
-  seats: integer('seats'),
-  billingInterval: text('billingInterval'),
-  stripeScheduleId: text('stripeScheduleId'),
-})
+export const subscription = sqliteTable(
+  'subscription',
+  {
+    id: text('id').notNull(),
+    plan: text('plan').notNull(),
+    referenceId: text('referenceId').notNull(),
+    stripeCustomerId: text('stripeCustomerId'),
+    stripeSubscriptionId: text('stripeSubscriptionId'),
+    status: text('status').notNull().default('incomplete'),
+    periodStart: utcDateTime('periodStart'),
+    periodEnd: utcDateTime('periodEnd'),
+    trialStart: utcDateTime('trialStart'),
+    trialEnd: utcDateTime('trialEnd'),
+    cancelAtPeriodEnd: integer('cancelAtPeriodEnd', { mode: 'boolean' }).default(false),
+    cancelAt: utcDateTime('cancelAt'),
+    canceledAt: utcDateTime('canceledAt'),
+    endedAt: utcDateTime('endedAt'),
+    seats: integer('seats'),
+    billingInterval: text('billingInterval'),
+    stripeScheduleId: text('stripeScheduleId'),
+  },
+  (table) => [primaryKey({ columns: [table.id] })],
+)
 
 export const rateLimit = sqliteTable(
   'rateLimit',
   {
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     key: text('key').notNull(),
     count: integer('count').notNull(),
     lastRequest: bigInteger('lastRequest').notNull(),
   },
-  (table) => [uniqueIndex('rateLimit_key_key').on(table.key)],
+  (table) => [primaryKey({ columns: [table.id] }), uniqueIndex('rateLimit_key_key').on(table.key)],
 )
 
 export const relations = defineRelations(

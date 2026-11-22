@@ -612,8 +612,9 @@ function arrayChain(field: DMMF.Field, provider: DbProvider) {
  * Whether a field is a single primary key SQLite lets hold NULL: any key but an INTEGER (the rowid)
  * does, where Prisma makes it `TEXT NOT NULL PRIMARY KEY`. drizzle-kit drops `.notNull()` from a
  * column declared `.primaryKey()`, so such a key is declared on the table instead, which it writes
- * inline with NOT NULL. drizzle-kit still leaves NOT NULL off a key whose SQL type is an integer, so
- * a Boolean key (`integer({ mode: 'boolean' })`) remains a rowid there.
+ * inline with NOT NULL. A Boolean key is left as it was: it is `integer({ mode: 'boolean' })`, and
+ * drizzle-kit leaves NOT NULL off any single key whose SQL type is an integer, so it is a rowid
+ * either way.
  */
 function isNullableSqliteKey(field: DMMF.Field, model: DMMF.Model, provider: DbProvider) {
   return (
@@ -621,7 +622,8 @@ function isNullableSqliteKey(field: DMMF.Field, model: DMMF.Model, provider: DbP
     field.isId &&
     field.kind !== 'unsupported' &&
     model.primaryKey === null &&
-    field.type !== 'Int'
+    field.type !== 'Int' &&
+    field.type !== 'Boolean'
   )
 }
 

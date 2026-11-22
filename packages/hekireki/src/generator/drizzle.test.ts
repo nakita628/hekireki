@@ -197,6 +197,21 @@ describe('drizzleSchema', () => {
       expect(code).not.toContain('primaryKey(')
     })
 
+    it('leaves a Boolean key on the column, a rowid either way', () => {
+      const code = drizzleSchema(
+        makeDatamodel([
+          makeModel({
+            name: 'Flag',
+            fields: [makeField({ name: 'on', type: 'Boolean', isId: true })],
+          }),
+        ]),
+        'sqlite',
+        [],
+      )
+      expect(code).toContain("on: integer('on', { mode: 'boolean' }).primaryKey()")
+      expect(code).not.toContain('primaryKey({')
+    })
+
     it('needs no NOT NULL on PostgreSQL, where PRIMARY KEY implies it', () => {
       const code = drizzleSchema(datamodel, 'postgresql', [])
       expect(code).toContain("id: text('id').primaryKey(),")
