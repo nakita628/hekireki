@@ -31,6 +31,7 @@ import {
   sqlTimestamp,
 } from '../prisma/postgres.js'
 import type { IndexInfo } from '../prisma/postgres.js'
+import { prismaBlocks, viewNames } from '../prisma/schema-text.js'
 
 // Generated C# names a framework type through a placeholder, `\0T|System.DateTime\0` in a type
 // position or `\0E|...\0` in an expression. Only once a whole file is assembled is it known which
@@ -1025,6 +1026,8 @@ type EfCorePlan = {
   readonly names: Names
   readonly models: readonly DMMF.Model[]
   readonly enums: readonly DMMF.DatamodelEnum[]
+  /** The names of the models that are a `view` in the schema. */
+  readonly views: ReadonlySet<string>
   readonly indexesOf: (model: DMMF.Model) => readonly IndexInfo[]
   readonly foreignKeys: readonly ForeignKey[]
   readonly manyToMany: readonly ManyToMany[]
@@ -1086,7 +1089,8 @@ function enumConverters(plan: EfCorePlan) {
  * Reads the schema into what the files are written from.
  *
  * @param datamodel - The DMMF datamodel.
- * @param options - The namespace, the DbContext class name and the datasource provider.
+ * @param options - The namespace, the DbContext class name, the datasource provider and the
+ *   schema as written, which is where a `view` can be told from a `model`.
  * @returns The plan the file writers take.
  */
 export function planEfCore(
@@ -1099,6 +1103,7 @@ export function planEfCore(
     readonly namespace: string
     readonly context: string
     readonly provider: Provider
+    readonly source?: string
   },
 ): EfCorePlan {
   // DMMF leaves an `@ignore` field out of the model, but not out of an index that lists it: the
@@ -1113,6 +1118,7 @@ export function planEfCore(
     provider: options.provider,
     models: datamodel.models,
     enums: datamodel.enums,
+    views: viewNames(prismaBlocks(options.source ?? '')),
     indexesOf,
     foreignKeys: foreignKeys(datamodel.models, indexesOf),
     manyToMany: manyToManyRelations(datamodel.models),
@@ -1520,10 +1526,13 @@ function entityConfig(plan: EfCorePlan, model: DMMF.Model) {
         '            ',
       )
     : ['            entity.HasNoKey();']
+  // A view is the database's own: mapped with ToView, the entity has no table for EnsureCreated or
+  // a migration to create.
+  const mapTo = plan.views.has(model.name) ? 'ToView' : 'ToTable'
   const table =
     model.schema !== null
-      ? `            entity.ToTable(${csharpString(tableName(model))}, ${csharpString(model.schema)});`
-      : `            entity.ToTable(${csharpString(tableName(model))});`
+      ? `            entity.${mapTo}(${csharpString(tableName(model))}, ${csharpString(model.schema)});`
+      : `            entity.${mapTo}(${csharpString(tableName(model))});`
   // A unique criterion another model's foreign key references is an alternate key to EF Core,
   // which enforces it with a unique constraint of that name in place of the unique index.
   const referencedKeys = new Set(

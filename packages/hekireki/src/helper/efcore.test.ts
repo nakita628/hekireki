@@ -3434,3 +3434,84 @@ model Event {
     )
   })
 })
+
+// DMMF lists a view among the models; the schema's text is what tells them apart. (#200)
+describe('a Prisma view', () => {
+  const VIEWS = `datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "stats"]
+}
+
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["views"]
+}
+
+model Booking {
+  id Int @id
+
+  @@schema("public")
+}
+
+view BookingTimeStatus {
+  id          Int     @unique
+  uid         String?
+  eventTypeId Int?
+
+  @@schema("public")
+}
+
+view DailyTotal {
+  day   DateTime @db.Date
+  total Int
+
+  @@map("daily_totals")
+  @@schema("stats")
+}
+`
+
+  it('is mapped with ToView, and has no key without a unique', () => {
+    const { plan } = fixture(VIEWS, { ...DEFAULT_OPTIONS, source: VIEWS })
+    expect(contextFile(plan).code).toContain(`        modelBuilder.Entity<Booking>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("Booking_pkey");
+
+            entity.ToTable("Booking", "public");
+
+            entity.Property(e => e.Id)
+                .ValueGeneratedNever()
+                .HasColumnName("id");
+        });
+
+        modelBuilder.Entity<BookingTimeStatus>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("BookingTimeStatus_id_key");
+
+            entity.ToView("BookingTimeStatus", "public");
+
+            entity.Property(e => e.Id)
+                .ValueGeneratedNever()
+                .HasColumnName("id");
+            entity.Property(e => e.Uid).HasColumnName("uid");
+            entity.Property(e => e.EventTypeId).HasColumnName("eventTypeId");
+        });
+
+        modelBuilder.Entity<DailyTotal>(entity =>
+        {
+            entity.HasNoKey();
+
+            entity.ToView("daily_totals", "stats");
+
+            entity.Property(e => e.Day).HasColumnName("day");
+            entity.Property(e => e.Total).HasColumnName("total");
+        });
+`)
+  })
+
+  it('stays a table when the schema text is not given', () => {
+    const { plan } = fixture(VIEWS)
+    const context = contextFile(plan).code
+    expect(context).toContain('entity.ToTable("BookingTimeStatus", "public");')
+    expect(context).not.toContain('ToView')
+  })
+})

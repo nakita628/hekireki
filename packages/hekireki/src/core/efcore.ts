@@ -29,7 +29,12 @@ export function efcore(options: GeneratorOptions) {
         message: `context for Hekireki-EFCore must be a C# class name such as "AppDbContext": ${context}`,
       })
     }
-    const files = efcoreFiles(options.dmmf.datamodel, { namespace, context, provider })
+    const files = efcoreFiles(options.dmmf.datamodel, {
+      namespace,
+      context,
+      provider,
+      source: options.datamodel,
+    })
     return yield* emitMany(files, output)
   })
 }

@@ -9,7 +9,13 @@ export function efcoreFiles(
     readonly enums: readonly DMMF.DatamodelEnum[]
     readonly indexes?: readonly DMMF.Index[]
   },
-  options: { readonly namespace: string; readonly context: string; readonly provider: Provider },
+  options: {
+    readonly namespace: string
+    readonly context: string
+    readonly provider: Provider
+    /** The schema as written: DMMF does not tell a `view` from a `model`. */
+    readonly source?: string
+  },
 ) {
   const plan = planEfCore(datamodel, options)
   return [
