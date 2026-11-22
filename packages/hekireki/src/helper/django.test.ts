@@ -3282,8 +3282,14 @@ class FooBar(models.Model):
     ]
 
     expect(djangoCode(models, enums)).toBe(
-      `from django.contrib.postgres.fields import ArrayField
+      `from typing import Any
+
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+
+
+${ENUM_ARRAY_FIELD}
 
 
 def b_vs_default() -> list[str]:
@@ -3297,7 +3303,7 @@ class V(models.TextChoices):
 
 class B(models.Model):
     id = models.AutoField(primary_key=True)
-    vs = ArrayField(models.TextField(choices=V.choices), default=b_vs_default)
+    vs = EnumArrayField(models.TextField(choices=V.choices), db_enum="\\"V\\"", default=b_vs_default)
 
     class Meta:
         db_table = "B"
@@ -3512,7 +3518,7 @@ describe('djangoCode on what PostgreSQL types differently', () => {
     return djangoCode(models, enums, indexes, provider, source)
   }
 
-  // calcom's App.categories: PostgreSQL has no implicit cast from text[] to "AppCategories"[], and
+  // Cal.com's App.categories: PostgreSQL has no implicit cast from text[] to "AppCategories"[], and
   // psycopg knows no loader for the enum's array.
   it('binds and reads an enum list as the array of the enum type', () => {
     const code = djangoFor(`
@@ -3587,7 +3593,8 @@ model User {
     const { models, enums, indexes } = datamodelOf(result)
     const code = djangoCode(models, enums, indexes, 'postgresql', source)
 
-    expect(code.slice(code.indexOf('def user_roles_default'))).toBe(`def user_roles_default() -> list[str]:
+    expect(code.slice(code.indexOf('def user_roles_default')))
+      .toBe(`def user_roles_default() -> list[str]:
     return [Role.MEMBER]
 
 

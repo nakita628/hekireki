@@ -7,8 +7,7 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "audit_logs")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    #[sea_orm(column_type = "Uuid")]
-    pub id: String,
+    pub id: Uuid,
     pub action: String,
     #[sea_orm(default_value = "{}")]
     pub payload: Json,

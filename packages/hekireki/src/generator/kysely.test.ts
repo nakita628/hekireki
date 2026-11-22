@@ -135,7 +135,7 @@ describe('kyselySchema', () => {
     const result = kyselySchema(datamodel)
 
     expect(result).toBe(
-      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Account {\n  id: string\n  bigNum: bigint\n  price: string\n  data: unknown\n  meta: unknown\n  raw: Buffer\n  ratio: number\n  flag: boolean\n  count: number\n  created_at: Generated<Timestamp>\n  tags: string[]\n}\n\nexport interface DB {\n  accounts: Account\n}",
+      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Account {\n  id: string\n  bigNum: ColumnType<string, bigint | number | string, bigint | number | string>\n  price: string\n  data: unknown\n  meta: unknown\n  raw: Buffer\n  ratio: number\n  flag: boolean\n  count: number\n  created_at: Generated<Timestamp>\n  tags: string[]\n}\n\nexport interface DB {\n  accounts: Account\n}",
     )
   })
 
@@ -180,7 +180,7 @@ describe('kyselySchema', () => {
     const result = kyselySchema(datamodel)
 
     expect(result).toBe(
-      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Visibility = 'public' | 'private' | 'link_only'\n\nexport interface Board {\n  id: Generated<number>\n  visibility: Generated<Visibility>\n  fallback: Visibility | null\n  audiences: Visibility[]\n}\n\nexport interface DB {\n  Board: Board\n}",
+      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Visibility = 'public' | 'private' | 'link_only'\n\nexport interface Board {\n  id: Generated<number>\n  visibility: Generated<Visibility>\n  fallback: Visibility | null\n  audiences: ColumnType<string, Visibility[], Visibility[]>\n}\n\nexport interface DB {\n  Board: Board\n}",
     )
   })
 

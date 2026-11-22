@@ -2237,7 +2237,7 @@ describe('keys and references Ecto names differently from Prisma', () => {
   @primary_key false
 
   @type t :: %__MODULE__{
-          order_number: term(),
+          order_number: integer(),
           sku: String.t(),
           order: App.Order.t() | nil
         }
@@ -3357,7 +3357,7 @@ function parsed(schema: string) {
   return datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
 }
 
-// Ecto.NoPrimaryKeyFieldError on every Repo.update and Repo.delete of calcom's CalVideoSettings.
+// Ecto.NoPrimaryKeyFieldError on every Repo.update and Repo.delete of Cal.com's CalVideoSettings.
 describe('an @id that is also a foreign key', () => {
   it('is a field with primary_key: true beside its belongs_to', () => {
     const { models, enums, indexes } = parsed(`datasource db {
@@ -3378,8 +3378,8 @@ model CalVideoSettings {
 `)
     const settings = models.filter((model) => model.name === 'CalVideoSettings')
 
-    expect(ectoSchemas(settings, 'Calcom', models, enums, { provider: 'postgresql', indexes }))
-      .toBe(`defmodule Calcom.CalVideoSettings do
+    expect(ectoSchemas(settings, 'App', models, enums, { provider: 'postgresql', indexes }))
+      .toBe(`defmodule App.CalVideoSettings do
   use Ecto.Schema
 
   @primary_key false
@@ -3387,13 +3387,13 @@ model CalVideoSettings {
   @type t :: %__MODULE__{
           event_type_id: integer(),
           disable_recording_for_organizer: boolean(),
-          event_type: Calcom.EventType.t() | nil
+          event_type: App.EventType.t() | nil
         }
 
   schema "CalVideoSettings" do
     field(:disable_recording_for_organizer, :boolean, default: false, source: :disableRecordingForOrganizer)
     field(:event_type_id, :id, primary_key: true, source: :eventTypeId)
-    belongs_to(:event_type, Calcom.EventType, foreign_key: :event_type_id, define_field: false)
+    belongs_to(:event_type, App.EventType, foreign_key: :event_type_id, define_field: false)
   end
 end`)
   })

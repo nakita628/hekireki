@@ -43,8 +43,7 @@ export function djangoCode(
     ...collectDefaultHelpers(emitted, names, enums),
     ...(enums ?? []).map((e) => generateEnumClass(e)),
     ...emitted
-      .map((model) => generateModelBody(model, models, idx, m2mTables, names, provider, enumTypes),
-      )
+      .map((model) => generateModelBody(model, models, idx, m2mTables, names, provider, enumTypes))
       .filter((body) => body !== null),
     ...m2mTables.map((t) => generateThroughModel(t)),
   ]

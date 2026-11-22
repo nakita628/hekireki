@@ -1297,11 +1297,7 @@ function castOf(f: DMMF.Field, enumNames: ReadonlySet<string>) {
   return cast === null ? null : `'${cast}'`
 }
 
-function castEntries(
-  f: DMMF.Field,
-  enumNames: ReadonlySet<string>,
-  provider: string | undefined,
-) {
+function castEntries(f: DMMF.Field, enumNames: ReadonlySet<string>, provider: string | undefined) {
   const column = phpString(f.dbName ?? f.name)
   // A DateTime[] is a list of Carbon, through AsPrismaDateList; its argument is the
   // native type of the items.

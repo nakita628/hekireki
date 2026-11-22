@@ -1294,7 +1294,13 @@ describe('@db.Uuid', () => {
       default: { name: 'uuid', args: [4] },
       ...uuid,
     }),
-    field({ name: 'items', type: 'Item', kind: 'object', isList: true, relationName: 'ItemToOwner' }),
+    field({
+      name: 'items',
+      type: 'Item',
+      kind: 'object',
+      isList: true,
+      relationName: 'ItemToOwner',
+    }),
   ])
   const item = model('Item', [
     field({
@@ -1464,7 +1470,8 @@ impl ActiveModelBehavior for ActiveModel {
 
   it('gives the join table of an implicit many-to-many the Uuid of each key', () => {
     const tag = model('Tag', [field({ name: 'id', type: 'Int', isId: true })])
-    expect(generateM2MEntity('Owner', 'Tag', 'OwnerToTag', [owner, tag])).toContain(`pub struct Model {
+    expect(generateM2MEntity('Owner', 'Tag', 'OwnerToTag', [owner, tag]))
+      .toContain(`pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, column_name = "A")]
     pub owner_id: Uuid,
     #[sea_orm(primary_key, auto_increment = false, column_name = "B")]

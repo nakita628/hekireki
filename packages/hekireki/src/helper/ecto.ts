@@ -983,7 +983,7 @@ function typeSpecLines(
     .map((a) => {
       const snakeFk = makeSnakeCase(a.foreignKey)
       const fkType = a.fkType ?? 'id'
-      return `${snakeFk}: ${ectoTypeToTypespec(fkType)}`
+      return `${snakeFk}: ${fkType === 'id' ? 'integer()' : ectoTypeToTypespec(fkType)}`
     })
   const typeSpecFields = [
     ...(pk.omitIdFieldInSchema ? [`id: ${pk.typeSpec}`] : []),
@@ -1208,19 +1208,10 @@ function ectoSchema(model: DMMF.Model, ctx: EctoContext) {
       : [`  @foreign_key_type ${formatEctoType(pk.foreignKeyType)}`]),
     ...(timestamps.attribute === null ? [] : [timestamps.attribute]),
     '',
-    ...typeSpecLines(
-      appName,
-      pk,
-      keyFieldNames,
-      schemaFieldsRaw,
-      timestamps.types,
-      associations,
-    ),
+    ...typeSpecLines(appName, pk, keyFieldNames, schemaFieldsRaw, timestamps.types, associations),
     '',
     `  schema "${model.dbName ?? model.name}" do`,
-    ...schemaFieldsRaw.flatMap((f) =>
-      schemaFieldLines(f, keyFieldNames, ctx.enumMap, appName),
-    ),
+    ...schemaFieldsRaw.flatMap((f) => schemaFieldLines(f, keyFieldNames, ctx.enumMap, appName)),
     ...keys.flatMap(({ a, key }) => keyFieldLines(a, key)),
     ...keys.flatMap(({ a, key }) => belongsToLines(a, key, pk, appName, relationComments(a.name))),
     ...associations.hasOne.flatMap((a) =>

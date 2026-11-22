@@ -40,6 +40,7 @@ class User extends Model
 
     protected $casts = [
         'role' => Role::class,
+        'interests' => AsPrismaList::class,
     ];
 
     public function profile(): HasOne

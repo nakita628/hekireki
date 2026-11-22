@@ -3167,8 +3167,6 @@ model VerificationToken {
       .toBe(`class VerificationToken < ApplicationRecord
   self.primary_key = "token"
 
-  attribute :expires, :datetime, precision: 3
-
   validates :identifier, presence: true, uniqueness: { scope: :token }
   validates :token, presence: true, uniqueness: true
   validates :expires, presence: true

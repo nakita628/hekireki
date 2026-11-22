@@ -804,7 +804,7 @@ function generateRelationFields(
   // from creating the view it points at as a table first (GORM 1.31, `Migrator.ReorderModels`
   // adds the model a foreign key references) and from adding the constraint.
   const viewEnd = (targetModel: string) => views.has(model.name) || views.has(targetModel)
-  const unmigrated = (targetModel: string) => (viewEnd(targetModel) ? ['-:migration'] : [])
+  const noMigration = (targetModel: string) => (viewEnd(targetModel) ? ['-:migration'] : [])
   // A relation and the keys it names are written as the struct that holds each field names it.
   const of = (modelName: string) => (name: string) => goFieldNameIn(allModels, modelName, name)
   const own = of(model.name)
@@ -837,7 +837,7 @@ function generateRelationFields(
       // relation field (`User.CreatedBy`), or a key whose column is the snake-cased key name
       // (`User.ID` in `user_id`). `belongsTo` skips the guess (GORM 1.31, `schema.parseRelation`).
       'belongsTo',
-      ...unmigrated(assoc.targetModel),
+      ...noMigration(assoc.targetModel),
     ].filter((p) => p !== null)
     // A belongs-to is a pointer, as GORM writes a self-reference (`Manager *User`): by value,
     // two models that point at each other (or one at itself) embed each other, an illegal
@@ -854,7 +854,7 @@ function generateRelationFields(
         ? [`references:${assoc.referencesList.map(own).join(',')}`]
         : []),
       ...(viewEnd(assoc.targetModel)
-        ? unmigrated(assoc.targetModel)
+        ? noMigration(assoc.targetModel)
         : [
             constraintTag(
               foreignKeyNames.get(`${assoc.targetModel}.${assoc.fkFieldName}`) ??
@@ -878,7 +878,7 @@ function generateRelationFields(
         ? [`references:${assoc.referencesList.map(own).join(',')}`]
         : []),
       ...(viewEnd(assoc.targetModel)
-        ? unmigrated(assoc.targetModel)
+        ? noMigration(assoc.targetModel)
         : [
             constraintTag(
               foreignKeyNames.get(`${assoc.targetModel}.${assoc.fkFieldName}`) ??

@@ -6,12 +6,7 @@ import { camelize, pluralize, singularize, underscore } from '../naming/active-s
 import { makePascalCase, makeSnakeCase } from '../naming/case.js'
 import { allocate } from '../naming/index.js'
 import type { RelationEnd } from '../prisma/model.js'
-import {
-  fieldColumn,
-  primaryKeyFields,
-  referentialActions,
-  relationEnds,
-} from '../prisma/model.js'
+import { fieldColumn, primaryKeyFields, referentialActions, relationEnds } from '../prisma/model.js'
 import { ACTIVE_RECORD_INSTANCE_METHODS, RUBY_TOP_LEVEL_CONSTANTS } from './activerecord-names.js'
 
 // cspell:disable
