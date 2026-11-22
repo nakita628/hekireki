@@ -182,8 +182,25 @@ describe('drizzleSchema', () => {
       expect(code).not.toContain("integer('id').primaryKey().notNull()")
     })
 
+    it('names no key whose column is not written, as an Unsupported one', () => {
+      const code = drizzleSchema(
+        makeDatamodel([
+          makeModel({
+            name: 'Shape',
+            fields: [makeField({ name: 'geom', type: 'point', kind: 'unsupported', isId: true })],
+          }),
+        ]),
+        'sqlite',
+        [],
+      )
+      expect(code).toContain('// unsupported type: geom')
+      expect(code).not.toContain('primaryKey(')
+    })
+
     it('needs no NOT NULL on PostgreSQL, where PRIMARY KEY implies it', () => {
-      expect(drizzleSchema(datamodel, 'postgresql', [])).not.toContain('primaryKey().notNull()')
+      const code = drizzleSchema(datamodel, 'postgresql', [])
+      expect(code).toContain("id: text('id').primaryKey(),")
+      expect(code).not.toContain('primaryKey({')
     })
   })
 
