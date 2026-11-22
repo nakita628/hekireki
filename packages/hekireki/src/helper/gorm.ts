@@ -825,18 +825,18 @@ function generateRelationFields(
     const tagParts = [
       isAmbiguous || isComposite || !isGuessed ? `foreignKey:${fkFieldName}` : null,
       isComposite || needsReferencesTag(assoc.references) ? `references:${refsFieldName}` : null,
+      // GORM guesses a struct field's relation as has-one first, and takes it when the referenced
+      // model has a field the key resolves to: a column named alike (`BackgroundJob.JobID`), a
+      // relation field (`User.CreatedBy`), or a key whose column is the snake-cased key name
+      // (`User.ID` in `user_id`). `belongsTo` skips the guess (GORM 1.31, `schema.parseRelation`).
+      'belongsTo',
     ].filter((p) => p !== null)
     // A belongs-to is a pointer, as GORM writes a self-reference (`Manager *User`): by value,
     // two models that point at each other (or one at itself) embed each other, an illegal
     // recursive type in Go, and a relation that is not loaded or not set would read as a row of
     // zero values.
     const targetType = `*${goModelName(assoc.targetModel)}`
-    return withDoc(
-      assoc.name,
-      tagParts.length > 0
-        ? [fieldName, targetType, buildRelationTag(tagParts)]
-        : [fieldName, targetType],
-    )
+    return withDoc(assoc.name, [fieldName, targetType, buildRelationTag(tagParts)])
   })
 
   const hasManyLines = associations.hasMany.flatMap((assoc) => {
