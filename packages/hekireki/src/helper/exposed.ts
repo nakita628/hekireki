@@ -36,6 +36,7 @@ import {
   prismaString,
   relationMaps,
   relationMode,
+  viewNames,
 } from '../prisma/schema-text.js'
 import type { PrismaBlock } from '../prisma/schema-text.js'
 
@@ -275,17 +276,6 @@ export function enumSchemas(blocks: readonly PrismaBlock[]) {
       )
       .map(({ name, schema }) => [name, schema]),
   )
-}
-
-/**
- * The names of the `view` blocks. DMMF lists a view among the models, with nothing to tell it
- * apart; Prisma Migrate creates no table for it.
- *
- * @param blocks - The blocks of the Prisma schema as written (all of its files, merged).
- * @returns The name of each view.
- */
-function viewNames(blocks: readonly PrismaBlock[]) {
-  return new Set(blocks.filter((block) => block.keyword === 'view').map((block) => block.name))
 }
 
 const ATTRIBUTE_TOKEN = new RegExp(String.raw`${PRISMA_STRING}|[()[\]{}:,]|[^\s()[\]{}:,"]+`, 'gu')
