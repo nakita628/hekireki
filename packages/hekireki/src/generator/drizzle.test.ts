@@ -152,8 +152,38 @@ describe('drizzleSchema', () => {
   fromDriver: (value) => BigInt(value),
 })`)
       expect(code).toContain(
-        "export const sequence = sqliteTable('Sequence', { id: bigInteger('id').primaryKey(), big: bigInteger('big').notNull() })",
+        "export const sequence = sqliteTable('Sequence', { id: bigInteger('id').notNull(), big: bigInteger('big').notNull() }, (table) => [primaryKey({ columns: [table.id] })])",
       )
+    })
+  })
+
+  describe('a primary key that is not the rowid', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'User',
+        fields: [
+          makeField({ name: 'id', type: 'String', isId: true }),
+          makeField({ name: 'email', type: 'String' }),
+        ],
+      }),
+      makeModel({
+        name: 'Post',
+        fields: [makeField({ name: 'id', type: 'Int', isId: true })],
+      }),
+    ])
+
+    // SQLite lets a key that is not INTEGER hold NULL; Prisma makes it TEXT NOT NULL PRIMARY KEY.
+    it('is NOT NULL on SQLite, and an INTEGER key is left to the rowid', () => {
+      const code = drizzleSchema(datamodel, 'sqlite', [])
+      expect(code).toContain(
+        "export const user = sqliteTable('User', { id: text('id').notNull(), email: text('email').notNull() }, (table) => [primaryKey({ columns: [table.id] })])",
+      )
+      expect(code).toContain("id: integer('id').primaryKey()")
+      expect(code).not.toContain("integer('id').primaryKey().notNull()")
+    })
+
+    it('needs no NOT NULL on PostgreSQL, where PRIMARY KEY implies it', () => {
+      expect(drizzleSchema(datamodel, 'postgresql', [])).not.toContain('primaryKey().notNull()')
     })
   })
 
@@ -1869,10 +1899,10 @@ export const relations = defineRelations({ user, subscription, invoice }, (r) =>
 
   it('states what the callbacks on the cycle return, on SQLite', () => {
     expect(schema('sqlite'))
-      .toBe(`import { type SQLiteTableExtraConfigValue, foreignKey, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+      .toBe(`import { type SQLiteTableExtraConfigValue, foreignKey, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { defineRelations } from 'drizzle-orm'
 
-export const user = sqliteTable('User', { id: text('id').primaryKey(), parentSubscriptionId: integer('parentSubscriptionId') }, (table): SQLiteTableExtraConfigValue[] => [foreignKey({ name: 'User_parentSubscriptionId_fkey', columns: [table.parentSubscriptionId], foreignColumns: [subscription.id] }).onDelete('set null').onUpdate('cascade')])
+export const user = sqliteTable('User', { id: text('id').notNull(), parentSubscriptionId: integer('parentSubscriptionId') }, (table): SQLiteTableExtraConfigValue[] => [primaryKey({ columns: [table.id] }), foreignKey({ name: 'User_parentSubscriptionId_fkey', columns: [table.parentSubscriptionId], foreignColumns: [subscription.id] }).onDelete('set null').onUpdate('cascade')])
 
 export const subscription = sqliteTable('Subscription', { id: integer('id').primaryKey(), userId: text('userId').notNull() }, (table): SQLiteTableExtraConfigValue[] => [uniqueIndex('Subscription_userId_key').on(table.userId), foreignKey({ name: 'Subscription_userId_fkey', columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict').onUpdate('cascade')])
 
