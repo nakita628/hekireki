@@ -36,6 +36,128 @@ function enumOf(datamodel: DMMF.Datamodel, name: string) {
   return found
 }
 
+// The classes the context file ends with when a column is a numeric of more than 28 decimal
+// places: the resolver factory MapEnums hands Npgsql, and its converter.
+const WIDE_NUMERIC_CLASSES = `#pragma warning disable NPG9001
+file sealed class WideNumericResolverFactory : PgTypeInfoResolverFactory
+{
+    public override IPgTypeInfoResolver CreateResolver() => new Resolver(false);
+
+    public override IPgTypeInfoResolver CreateArrayResolver() => new Resolver(true);
+
+    private sealed class Resolver : IPgTypeInfoResolver
+    {
+        private readonly TypeInfoMappingCollection _mappings = new();
+
+        public Resolver(bool arrays)
+        {
+            _mappings.AddStructType<decimal>("pg_catalog.numeric", static (options, mapping, _) => mapping.CreateInfo(options, new WideNumericConverter()), isDefault: true);
+            if (arrays)
+            {
+                _mappings.AddStructArrayType<decimal>("pg_catalog.numeric");
+            }
+        }
+
+        public PgTypeInfo? GetTypeInfo(Type? type, DataTypeName? dataTypeName, PgSerializerOptions options) => _mappings.Find(type, dataTypeName, options);
+    }
+}
+
+file sealed class WideNumericConverter : PgBufferedConverter<decimal>
+{
+    // The largest 96-bit integer, which is what a decimal holds its digits in.
+    private static readonly BigInteger MaxMantissa = (BigInteger.One << 96) - 1;
+
+    public override bool CanConvert(DataFormat format, out BufferRequirements bufferRequirements)
+    {
+        bufferRequirements = BufferRequirements.Value;
+        return format is DataFormat.Binary;
+    }
+
+    public override Size GetSize(SizeContext context, decimal value, ref object? writeState) => 8 + (2 * Digits(value, out _).Count);
+
+    // A numeric on the wire: the number of base-10000 digits, the weight of the first of them, the
+    // sign, the number of decimal places the value is shown with, and the digits.
+    protected override decimal ReadCore(PgReader reader)
+    {
+        var count = reader.ReadInt16();
+        var weight = reader.ReadInt16();
+        var sign = reader.ReadUInt16();
+        var scale = Math.Min((int)reader.ReadInt16(), 28);
+        if (sign is not (0x0000 or 0x4000))
+        {
+            throw new InvalidCastException("Numeric NaN and Infinity are not supported by System.Decimal");
+        }
+
+        var mantissa = BigInteger.Zero;
+        for (var i = 0; i < count; i++)
+        {
+            mantissa = (mantissa * 10000) + reader.ReadInt16();
+        }
+
+        // The value as an integer of that many decimal places, rounded half up where it has more.
+        var shift = ((weight + 1 - count) * 4) + scale;
+        mantissa = shift >= 0 ? mantissa * BigInteger.Pow(10, shift) : Rounded(mantissa, BigInteger.Pow(10, -shift));
+        while (mantissa > MaxMantissa && scale > 0)
+        {
+            mantissa = Rounded(mantissa, 10);
+            scale--;
+        }
+
+        if (mantissa > MaxMantissa)
+        {
+            throw new OverflowException("Numeric value does not fit in a System.Decimal");
+        }
+
+        return new decimal((int)(uint)(mantissa & uint.MaxValue), (int)(uint)((mantissa >> 32) & uint.MaxValue), (int)(uint)(mantissa >> 64), sign == 0x4000, (byte)scale);
+    }
+
+    protected override void WriteCore(PgWriter writer, decimal value)
+    {
+        var digits = Digits(value, out var weight);
+        writer.WriteInt16((short)digits.Count);
+        writer.WriteInt16(weight);
+        writer.WriteInt16((short)(value < 0 ? 0x4000 : 0x0000));
+        writer.WriteInt16((short)value.Scale);
+        foreach (var digit in digits)
+        {
+            writer.WriteInt16(digit);
+        }
+    }
+
+    private static BigInteger Rounded(BigInteger value, BigInteger divisor)
+    {
+        var quotient = BigInteger.DivRem(value, divisor, out var remainder);
+        return remainder * 2 >= divisor ? quotient + 1 : quotient;
+    }
+
+    // The base-10000 digits of a decimal, the first one first, without the zeros that end them.
+    private static List<short> Digits(decimal value, out short weight)
+    {
+        Span<int> bits = stackalloc int[4];
+        decimal.GetBits(value, bits);
+        var padding = (4 - (value.Scale % 4)) % 4;
+        var mantissa = ((((BigInteger)(uint)bits[2]) << 64) | (((BigInteger)(uint)bits[1]) << 32) | (uint)bits[0]) * BigInteger.Pow(10, padding);
+        var digits = new List<short>();
+        while (!mantissa.IsZero)
+        {
+            mantissa = BigInteger.DivRem(mantissa, 10000, out var digit);
+            digits.Add((short)digit);
+        }
+
+        weight = (short)(digits.Count == 0 ? 0 : digits.Count - ((value.Scale + padding) / 4) - 1);
+        var zeros = 0;
+        while (zeros < digits.Count && digits[zeros] == 0)
+        {
+            zeros++;
+        }
+
+        digits.RemoveRange(0, zeros);
+        digits.Reverse();
+        return digits;
+    }
+}
+#pragma warning restore NPG9001`
+
 describe('isCSharpIdentifier', () => {
   it.each(['Models', 'My', '_private', 'App1', 'AppDbContext'])('accepts %s', (name) => {
     expect(isCSharpIdentifier(name)).toBe(true)
@@ -604,12 +726,16 @@ public partial class Natives
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
+using Npgsql.Internal;
+using Npgsql.Internal.Postgres;
 
 namespace Models;
 
@@ -626,10 +752,28 @@ public partial class AppDbContext : DbContext
 
     public static void MapEnums(NpgsqlDbContextOptionsBuilder npgsql)
     {
+        // Reads a numeric of more than 28 decimal places, such as numeric(65,30), into a decimal.
+        // An NpgsqlDataSource passed to UseNpgsql is given the converter by the other MapEnums.
+        foreach (var extension in ((IRelationalDbContextOptionsBuilderInfrastructure)npgsql).OptionsBuilder.Options.Extensions)
+        {
+            if (extension is RelationalOptionsExtension { ConnectionString: not null })
+            {
+                npgsql.ConfigureDataSource(dataSource =>
+                {
+#pragma warning disable NPG9001
+                    dataSource.AddTypeInfoResolverFactory(new WideNumericResolverFactory());
+#pragma warning restore NPG9001
+                });
+            }
+        }
     }
 
     public static void MapEnums(NpgsqlDataSourceBuilder dataSource)
     {
+        // Reads a numeric of more than 28 decimal places, such as numeric(65,30), into a decimal.
+#pragma warning disable NPG9001
+        dataSource.AddTypeInfoResolverFactory(new WideNumericResolverFactory());
+#pragma warning restore NPG9001
     }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -813,6 +957,8 @@ file sealed class DateTimeListComparer : ValueComparer<List<DateTime>>
     {
     }
 }
+
+${WIDE_NUMERIC_CLASSES}
 `,
     })
   })
@@ -957,15 +1103,19 @@ public partial class Plain
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using Npgsql.Internal;
+using Npgsql.Internal.Postgres;
 using Visus.Cuid;
 
 namespace Models;
@@ -987,10 +1137,28 @@ public partial class AppDbContext : DbContext
 
     public static void MapEnums(NpgsqlDbContextOptionsBuilder npgsql)
     {
+        // Reads a numeric of more than 28 decimal places, such as numeric(65,30), into a decimal.
+        // An NpgsqlDataSource passed to UseNpgsql is given the converter by the other MapEnums.
+        foreach (var extension in ((IRelationalDbContextOptionsBuilderInfrastructure)npgsql).OptionsBuilder.Options.Extensions)
+        {
+            if (extension is RelationalOptionsExtension { ConnectionString: not null })
+            {
+                npgsql.ConfigureDataSource(dataSource =>
+                {
+#pragma warning disable NPG9001
+                    dataSource.AddTypeInfoResolverFactory(new WideNumericResolverFactory());
+#pragma warning restore NPG9001
+                });
+            }
+        }
     }
 
     public static void MapEnums(NpgsqlDataSourceBuilder dataSource)
     {
+        // Reads a numeric of more than 28 decimal places, such as numeric(65,30), into a decimal.
+#pragma warning disable NPG9001
+        dataSource.AddTypeInfoResolverFactory(new WideNumericResolverFactory());
+#pragma warning restore NPG9001
     }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -1293,6 +1461,8 @@ file sealed class DateTimeListComparer : ValueComparer<List<DateTime>>
     {
     }
 }
+
+${WIDE_NUMERIC_CLASSES}
 `,
     })
   })
@@ -2904,12 +3074,17 @@ public partial class Odd
     expect(contextFile(plan).code).toBe(`#nullable enable
 
 using System;
+using System.Collections.Generic;
+using System.Numerics;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using Npgsql.Internal;
+using Npgsql.Internal.Postgres;
 
 namespace Models;
 
@@ -2925,11 +3100,29 @@ public partial class AppDbContext : DbContext
     public static void MapEnums(NpgsqlDbContextOptionsBuilder npgsql)
     {
         npgsql.MapEnum<Kind>("Kind");
+        // Reads a numeric of more than 28 decimal places, such as numeric(65,30), into a decimal.
+        // An NpgsqlDataSource passed to UseNpgsql is given the converter by the other MapEnums.
+        foreach (var extension in ((IRelationalDbContextOptionsBuilderInfrastructure)npgsql).OptionsBuilder.Options.Extensions)
+        {
+            if (extension is RelationalOptionsExtension { ConnectionString: not null })
+            {
+                npgsql.ConfigureDataSource(dataSource =>
+                {
+#pragma warning disable NPG9001
+                    dataSource.AddTypeInfoResolverFactory(new WideNumericResolverFactory());
+#pragma warning restore NPG9001
+                });
+            }
+        }
     }
 
     public static void MapEnums(NpgsqlDataSourceBuilder dataSource)
     {
         dataSource.MapEnum<Kind>("Kind");
+        // Reads a numeric of more than 28 decimal places, such as numeric(65,30), into a decimal.
+#pragma warning disable NPG9001
+        dataSource.AddTypeInfoResolverFactory(new WideNumericResolverFactory());
+#pragma warning restore NPG9001
     }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -2996,6 +3189,8 @@ file sealed class UtcClockConverter : ValueConverter<DateTime, DateTime>
     {
     }
 }
+
+${WIDE_NUMERIC_CLASSES}
 `)
   })
 
@@ -3513,5 +3708,175 @@ view DailyTotal {
     const context = contextFile(plan).code
     expect(context).toContain('entity.ToTable("BookingTimeStatus", "public");')
     expect(context).not.toContain('ToView')
+  })
+})
+
+// Npgsql refuses to read a numeric of more than 28 decimal places into a decimal, whatever the
+// value: "Numeric value does not fit in a System.Decimal". (#202)
+describe('a numeric System.Decimal cannot hold as it is', () => {
+  const WIDE = `datasource db {
+  provider = "postgresql"
+}
+
+model Field {
+  id        Int       @id @default(autoincrement())
+  positionX Decimal   @default(0)
+  positionY Decimal   @default(0)
+  ratio     Decimal?  @db.Decimal(40, 30)
+  amounts   Decimal[]
+  price     Decimal   @db.Decimal(12, 2)
+}
+`
+
+  it('hands Npgsql a converter that reads it, through MapEnums', () => {
+    const { datamodel, plan } = fixture(WIDE)
+    expect(contextFile(plan).code).toBe(`#nullable enable
+
+using System;
+using System.Collections.Generic;
+using System.Numerics;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
+using Npgsql.Internal;
+using Npgsql.Internal.Postgres;
+
+namespace Models;
+
+public partial class AppDbContext : DbContext
+{
+    public AppDbContext(DbContextOptions<AppDbContext> options)
+        : base(options)
+    {
+    }
+
+    public virtual DbSet<Field> Fields { get; set; }
+
+    public static void MapEnums(NpgsqlDbContextOptionsBuilder npgsql)
+    {
+        // Reads a numeric of more than 28 decimal places, such as numeric(65,30), into a decimal.
+        // An NpgsqlDataSource passed to UseNpgsql is given the converter by the other MapEnums.
+        foreach (var extension in ((IRelationalDbContextOptionsBuilderInfrastructure)npgsql).OptionsBuilder.Options.Extensions)
+        {
+            if (extension is RelationalOptionsExtension { ConnectionString: not null })
+            {
+                npgsql.ConfigureDataSource(dataSource =>
+                {
+#pragma warning disable NPG9001
+                    dataSource.AddTypeInfoResolverFactory(new WideNumericResolverFactory());
+#pragma warning restore NPG9001
+                });
+            }
+        }
+    }
+
+    public static void MapEnums(NpgsqlDataSourceBuilder dataSource)
+    {
+        // Reads a numeric of more than 28 decimal places, such as numeric(65,30), into a decimal.
+#pragma warning disable NPG9001
+        dataSource.AddTypeInfoResolverFactory(new WideNumericResolverFactory());
+#pragma warning restore NPG9001
+    }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Conventions.Remove<ForeignKeyIndexConvention>();
+        ConfigureConventionsPartial(configurationBuilder);
+    }
+
+    partial void ConfigureConventionsPartial(ModelConfigurationBuilder configurationBuilder);
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Field>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("Field_pkey");
+
+            entity.ToTable("Field");
+
+            entity.Property(e => e.Id)
+                .UseSerialColumn()
+                .HasColumnName("id");
+            entity.Property(e => e.PositionX)
+                .ValueGeneratedNever()
+                .HasPrecision(65, 30)
+                .HasDefaultValue(0m)
+                .HasColumnName("positionX");
+            entity.Property(e => e.PositionY)
+                .ValueGeneratedNever()
+                .HasPrecision(65, 30)
+                .HasDefaultValue(0m)
+                .HasColumnName("positionY");
+            entity.Property(e => e.Ratio)
+                .HasPrecision(40, 30)
+                .HasColumnName("ratio");
+            entity.Property(e => e.Amounts)
+                .HasColumnType("numeric(65,30)[]")
+                .HasColumnName("amounts");
+            entity.Property(e => e.Price)
+                .HasPrecision(12, 2)
+                .HasColumnName("price");
+        });
+
+        OnModelCreatingPartial(modelBuilder);
+    }
+
+    partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+}
+
+${WIDE_NUMERIC_CLASSES}
+`)
+    expect(entityFile(plan, model(datamodel, 'Field')).code).toBe(`#nullable enable
+
+using System.Collections.Generic;
+
+namespace Models;
+
+public partial class Field
+{
+    public int Id { get; set; }
+
+    public decimal PositionX { get; set; } = 0m;
+
+    public decimal PositionY { get; set; } = 0m;
+
+    public decimal? Ratio { get; set; }
+
+    public List<decimal>? Amounts { get; set; }
+
+    public decimal Price { get; set; }
+}
+`)
+  })
+
+  it('writes no converter where every scale fits, or on another provider', () => {
+    const narrow = `
+model Field {
+  id    Int      @id
+  price Decimal  @db.Decimal(38, 28)
+  bare  Decimal? @db.Decimal
+  money Decimal  @db.Money
+}
+`
+    const postgres = contextFile(
+      fixture(`datasource db {\n  provider = "postgresql"\n}\n${narrow}`).plan,
+    ).code
+    expect(postgres).not.toContain('NPG9001')
+    expect(postgres).not.toContain('Npgsql.Internal')
+    const wide = `
+model Field {
+  id        Int     @id
+  positionX Decimal @default(0)
+}
+`
+    for (const provider of ['mysql', 'sqlite'] as const) {
+      const { plan } = fixture(`datasource db {\n  provider = "${provider}"\n}\n${wide}`, {
+        ...DEFAULT_OPTIONS,
+        provider,
+      })
+      expect(contextFile(plan).code).not.toContain('WideNumeric')
+    }
   })
 })

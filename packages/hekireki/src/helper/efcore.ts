@@ -41,12 +41,16 @@ import { prismaBlocks, viewNames } from '../prisma/schema-text.js'
 // literals escape it — so a placeholder cannot collide with user data.
 
 const CS = {
+  BigInteger: 'System.Numerics.BigInteger',
   BitArray: 'System.Collections.BitArray',
+  BufferRequirements: 'Npgsql.Internal.BufferRequirements',
   CancellationToken: 'System.Threading.CancellationToken',
   Convert: 'System.Convert',
   CultureInfo: 'System.Globalization.CultureInfo',
   Cuid: 'Visus.Cuid.Cuid',
   Cuid2: 'Visus.Cuid.Cuid2',
+  DataFormat: 'Npgsql.Internal.DataFormat',
+  DataTypeName: 'Npgsql.Internal.Postgres.DataTypeName',
   DateOnly: 'System.DateOnly',
   DateTime: 'System.DateTime',
   DateTimeKind: 'System.DateTimeKind',
@@ -65,7 +69,12 @@ const CS = {
   Guid: 'System.Guid',
   HashCode: 'System.HashCode',
   ICollection: 'System.Collections.Generic.ICollection',
+  IPgTypeInfoResolver: 'Npgsql.Internal.IPgTypeInfoResolver',
+  IRelationalDbContextOptionsBuilderInfrastructure:
+    'Microsoft.EntityFrameworkCore.Infrastructure.IRelationalDbContextOptionsBuilderInfrastructure',
+  InvalidCastException: 'System.InvalidCastException',
   List: 'System.Collections.Generic.List',
+  Math: 'System.Math',
   ModelBuilder: 'Microsoft.EntityFrameworkCore.ModelBuilder',
   ModelConfigurationBuilder: 'Microsoft.EntityFrameworkCore.ModelConfigurationBuilder',
   NpgsqlDataSourceBuilder: 'Npgsql.NpgsqlDataSourceBuilder',
@@ -74,11 +83,25 @@ const CS = {
   NpgsqlInet: 'NpgsqlTypes.NpgsqlInet',
   NpgsqlValueGenerationStrategy:
     'Npgsql.EntityFrameworkCore.PostgreSQL.Metadata.NpgsqlValueGenerationStrategy',
+  OverflowException: 'System.OverflowException',
+  PgBufferedConverter: 'Npgsql.Internal.PgBufferedConverter',
   PgName: 'NpgsqlTypes.PgName',
+  PgReader: 'Npgsql.Internal.PgReader',
+  PgSerializerOptions: 'Npgsql.Internal.PgSerializerOptions',
+  PgTypeInfo: 'Npgsql.Internal.PgTypeInfo',
+  PgTypeInfoResolverFactory: 'Npgsql.Internal.PgTypeInfoResolverFactory',
+  PgWriter: 'Npgsql.Internal.PgWriter',
   RandomNumberGenerator: 'System.Security.Cryptography.RandomNumberGenerator',
+  RelationalOptionsExtension:
+    'Microsoft.EntityFrameworkCore.Infrastructure.RelationalOptionsExtension',
+  Size: 'Npgsql.Internal.Size',
+  SizeContext: 'Npgsql.Internal.SizeContext',
+  Span: 'System.Span',
   Task: 'System.Threading.Tasks.Task',
   TimeOnly: 'System.TimeOnly',
   TimeSpan: 'System.TimeSpan',
+  Type: 'System.Type',
+  TypeInfoMappingCollection: 'Npgsql.Internal.TypeInfoMappingCollection',
   Ulid: 'System.Ulid',
   ValueComparer: 'Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer',
   ValueConverter: 'Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter',
@@ -1079,6 +1102,172 @@ function dateConverters(plan: EfCorePlan) {
   ]
 }
 
+/**
+ * Whether a field is a PostgreSQL `numeric` of more decimal places than `System.Decimal` has (28):
+ * Prisma's default Decimal, `numeric(65,30)`, or a `@db.Decimal(p, s)` with `s` past 28. PostgreSQL
+ * sends every value of such a column with the column's scale, and Npgsql refuses to read a scale
+ * past 28 into a `decimal` — a 0 included — while it has no other type to read a fraction into.
+ *
+ * @param field - The field.
+ * @param provider - The datasource provider.
+ * @returns Whether reading the column takes the context's own numeric converter.
+ */
+function isWideNumeric(field: DMMF.Field, provider: Provider) {
+  if (provider !== 'postgresql' || field.kind !== 'scalar' || field.type !== 'Decimal') return false
+  if (!field.nativeType) return true
+  const [name, args] = field.nativeType
+  return name === 'Decimal' && Number(args[1] ?? '0') > 28
+}
+
+function hasWideNumeric(plan: Pick<EfCorePlan, 'models' | 'provider'>) {
+  return plan.models.some((model) =>
+    scalarFields(model).some((field) => isWideNumeric(field, plan.provider)),
+  )
+}
+
+/**
+ * The `file` classes that let Npgsql read a `numeric` of more than 28 decimal places into a
+ * `decimal`: a type info resolver factory, which `MapEnums` adds to the data source, and the
+ * converter it resolves `numeric` to. The converter reads what `System.Decimal` can hold of the
+ * value — the decimal places past 28 rounded off, and further ones when the digits before them
+ * leave less room — and fails as Npgsql's own does on a value too large, NaN or an infinity; it
+ * writes a `decimal` digit for digit. `Npgsql.Internal` is the API Npgsql's own plugins are written
+ * against, marked experimental (NPG9001).
+ *
+ * @param factory - The class name of the resolver factory.
+ * @param converter - The class name of the converter.
+ * @returns The two classes, each as its lines.
+ */
+function wideNumericClasses(factory: string, converter: string) {
+  const bigInteger = exprRef(CS.BigInteger)
+  const resolver = typeRef(CS.IPgTypeInfoResolver)
+  const mappings = typeRef(CS.TypeInfoMappingCollection)
+  return [
+    [
+      '#pragma warning disable NPG9001',
+      `file sealed class ${factory} : ${typeRef(CS.PgTypeInfoResolverFactory)}`,
+      '{',
+      `    public override ${resolver} CreateResolver() => new Resolver(false);`,
+      '',
+      `    public override ${resolver} CreateArrayResolver() => new Resolver(true);`,
+      '',
+      `    private sealed class Resolver : ${resolver}`,
+      '    {',
+      `        private readonly ${mappings} _mappings = new();`,
+      '',
+      '        public Resolver(bool arrays)',
+      '        {',
+      `            _mappings.AddStructType<decimal>("pg_catalog.numeric", static (options, mapping, _) => mapping.CreateInfo(options, new ${converter}()), isDefault: true);`,
+      '            if (arrays)',
+      '            {',
+      '                _mappings.AddStructArrayType<decimal>("pg_catalog.numeric");',
+      '            }',
+      '        }',
+      '',
+      `        public ${typeRef(CS.PgTypeInfo)}? GetTypeInfo(${typeRef(CS.Type)}? type, ${typeRef(CS.DataTypeName)}? dataTypeName, ${typeRef(CS.PgSerializerOptions)} options) => _mappings.Find(type, dataTypeName, options);`,
+      '    }',
+      '}',
+    ],
+    [
+      `file sealed class ${converter} : ${typeRef(CS.PgBufferedConverter)}<decimal>`,
+      '{',
+      '    // The largest 96-bit integer, which is what a decimal holds its digits in.',
+      `    private static readonly ${typeRef(CS.BigInteger)} MaxMantissa = (${bigInteger}.One << 96) - 1;`,
+      '',
+      `    public override bool CanConvert(${typeRef(CS.DataFormat)} format, out ${typeRef(CS.BufferRequirements)} bufferRequirements)`,
+      '    {',
+      `        bufferRequirements = ${exprRef(CS.BufferRequirements)}.Value;`,
+      `        return format is ${exprRef(CS.DataFormat)}.Binary;`,
+      '    }',
+      '',
+      `    public override ${typeRef(CS.Size)} GetSize(${typeRef(CS.SizeContext)} context, decimal value, ref object? writeState) => 8 + (2 * Digits(value, out _).Count);`,
+      '',
+      '    // A numeric on the wire: the number of base-10000 digits, the weight of the first of them, the',
+      '    // sign, the number of decimal places the value is shown with, and the digits.',
+      `    protected override decimal ReadCore(${typeRef(CS.PgReader)} reader)`,
+      '    {',
+      '        var count = reader.ReadInt16();',
+      '        var weight = reader.ReadInt16();',
+      '        var sign = reader.ReadUInt16();',
+      `        var scale = ${exprRef(CS.Math)}.Min((int)reader.ReadInt16(), 28);`,
+      '        if (sign is not (0x0000 or 0x4000))',
+      '        {',
+      `            throw new ${typeRef(CS.InvalidCastException)}("Numeric NaN and Infinity are not supported by System.Decimal");`,
+      '        }',
+      '',
+      `        var mantissa = ${bigInteger}.Zero;`,
+      '        for (var i = 0; i < count; i++)',
+      '        {',
+      '            mantissa = (mantissa * 10000) + reader.ReadInt16();',
+      '        }',
+      '',
+      '        // The value as an integer of that many decimal places, rounded half up where it has more.',
+      '        var shift = ((weight + 1 - count) * 4) + scale;',
+      `        mantissa = shift >= 0 ? mantissa * ${bigInteger}.Pow(10, shift) : Rounded(mantissa, ${bigInteger}.Pow(10, -shift));`,
+      '        while (mantissa > MaxMantissa && scale > 0)',
+      '        {',
+      '            mantissa = Rounded(mantissa, 10);',
+      '            scale--;',
+      '        }',
+      '',
+      '        if (mantissa > MaxMantissa)',
+      '        {',
+      `            throw new ${typeRef(CS.OverflowException)}("Numeric value does not fit in a System.Decimal");`,
+      '        }',
+      '',
+      '        return new decimal((int)(uint)(mantissa & uint.MaxValue), (int)(uint)((mantissa >> 32) & uint.MaxValue), (int)(uint)(mantissa >> 64), sign == 0x4000, (byte)scale);',
+      '    }',
+      '',
+      `    protected override void WriteCore(${typeRef(CS.PgWriter)} writer, decimal value)`,
+      '    {',
+      '        var digits = Digits(value, out var weight);',
+      '        writer.WriteInt16((short)digits.Count);',
+      '        writer.WriteInt16(weight);',
+      '        writer.WriteInt16((short)(value < 0 ? 0x4000 : 0x0000));',
+      '        writer.WriteInt16((short)value.Scale);',
+      '        foreach (var digit in digits)',
+      '        {',
+      '            writer.WriteInt16(digit);',
+      '        }',
+      '    }',
+      '',
+      `    private static ${typeRef(CS.BigInteger)} Rounded(${typeRef(CS.BigInteger)} value, ${typeRef(CS.BigInteger)} divisor)`,
+      '    {',
+      `        var quotient = ${bigInteger}.DivRem(value, divisor, out var remainder);`,
+      '        return remainder * 2 >= divisor ? quotient + 1 : quotient;',
+      '    }',
+      '',
+      '    // The base-10000 digits of a decimal, the first one first, without the zeros that end them.',
+      `    private static ${typeRef(CS.List)}<short> Digits(decimal value, out short weight)`,
+      '    {',
+      `        ${typeRef(CS.Span)}<int> bits = stackalloc int[4];`,
+      '        decimal.GetBits(value, bits);',
+      '        var padding = (4 - (value.Scale % 4)) % 4;',
+      `        var mantissa = ((((${typeRef(CS.BigInteger)})(uint)bits[2]) << 64) | (((${typeRef(CS.BigInteger)})(uint)bits[1]) << 32) | (uint)bits[0]) * ${bigInteger}.Pow(10, padding);`,
+      `        var digits = new ${typeRef(CS.List)}<short>();`,
+      '        while (!mantissa.IsZero)',
+      '        {',
+      `            mantissa = ${bigInteger}.DivRem(mantissa, 10000, out var digit);`,
+      '            digits.Add((short)digit);',
+      '        }',
+      '',
+      '        weight = (short)(digits.Count == 0 ? 0 : digits.Count - ((value.Scale + padding) / 4) - 1);',
+      '        var zeros = 0;',
+      '        while (zeros < digits.Count && digits[zeros] == 0)',
+      '        {',
+      '            zeros++;',
+      '        }',
+      '',
+      '        digits.RemoveRange(0, zeros);',
+      '        digits.Reverse();',
+      '        return digits;',
+      '    }',
+      '}',
+      '#pragma warning restore NPG9001',
+    ],
+  ]
+}
+
 // Npgsql maps an enum to the PostgreSQL enum type; MySQL and SQLite hold its label as text, which
 // EF Core reads and writes through a converter of each enum.
 function enumConverters(plan: EfCorePlan) {
@@ -1134,6 +1323,7 @@ export function planEfCore(
     ...valueGenerators(preliminary).map(([key]) => key),
     ...converters,
     ...(converters.some((key) => key.endsWith('ListConverter')) ? ['DateTimeListComparer'] : []),
+    ...(hasWideNumeric(preliminary) ? ['WideNumericResolverFactory', 'WideNumericConverter'] : []),
   ].map((key) => ({ key, candidate: key }))
   const enumClasses = enumConverters(preliminary).map((e) => ({
     key: `enum:${e.name}`,
@@ -1779,20 +1969,51 @@ export function contextFile(plan: EfCorePlan) {
   const enumType = (e: DMMF.DatamodelEnum) => typeRef(generatedRef(names, enumName(names, e.name)))
   // EF Core rejects an OnConfiguring that changes the options of a pooled context
   // (AddDbContextPool), so the enum mappings Npgsql needs are handed to the code that configures it.
-  const mapEnums = (parameter: string, type: string) => [
+  const fileClassName = (key: string) => names.fileClasses.get(key) ?? key
+  // The same two methods hand Npgsql the converter of a numeric System.Decimal cannot hold as it
+  // is (see `wideNumericClasses`), so the code that already passes MapEnums reads such a column.
+  const wideNumeric = hasWideNumeric(plan)
+  const mapEnums = (parameter: string, type: string, numeric: readonly string[]) => [
     `    public static void MapEnums(${typeRef(type)} ${parameter})`,
     '    {',
     ...plan.enums.map(
       (e) => `        ${parameter}.MapEnum<${enumType(e)}>(${csharpString(e.dbName ?? e.name)});`,
     ),
+    ...(wideNumeric ? numeric : []),
     '    }',
   ]
+  const addResolver = (indent: string) => [
+    '#pragma warning disable NPG9001',
+    `${indent}dataSource.AddTypeInfoResolverFactory(new ${fileClassName('WideNumericResolverFactory')}());`,
+    '#pragma warning restore NPG9001',
+  ]
+  const numericComment =
+    '        // Reads a numeric of more than 28 decimal places, such as numeric(65,30), into a decimal.'
   const isPostgres = plan.provider === 'postgresql'
   const enumMappings = isPostgres
     ? [
-        ...mapEnums('npgsql', CS.NpgsqlDbContextOptionsBuilder),
+        // EF Core builds the data source itself only from a connection string, and refuses
+        // ConfigureDataSource beside an NpgsqlDataSource the caller built — that one is configured
+        // with the other MapEnums.
+        ...mapEnums('npgsql', CS.NpgsqlDbContextOptionsBuilder, [
+          numericComment,
+          '        // An NpgsqlDataSource passed to UseNpgsql is given the converter by the other MapEnums.',
+          `        foreach (var extension in ((${typeRef(CS.IRelationalDbContextOptionsBuilderInfrastructure)})npgsql).OptionsBuilder.Options.Extensions)`,
+          '        {',
+          `            if (extension is ${typeRef(CS.RelationalOptionsExtension)} { ConnectionString: not null })`,
+          '            {',
+          '                npgsql.ConfigureDataSource(dataSource =>',
+          '                {',
+          ...addResolver('                    '),
+          '                });',
+          '            }',
+          '        }',
+        ]),
         '',
-        ...mapEnums('dataSource', CS.NpgsqlDataSourceBuilder),
+        ...mapEnums('dataSource', CS.NpgsqlDataSourceBuilder, [
+          numericComment,
+          ...addResolver('        '),
+        ]),
         '',
       ]
     : []
@@ -1841,7 +2062,6 @@ export function contextFile(plan: EfCorePlan) {
     '}',
     '',
   ].join('\n')
-  const fileClassName = (key: string) => names.fileClasses.get(key) ?? key
   const converters = dateConverters(plan)
   const lists = converters.some((key) => key.endsWith('ListConverter'))
   const fileClasses = [
@@ -1870,6 +2090,12 @@ export function contextFile(plan: EfCorePlan) {
           ),
         ]
       : []),
+    ...(wideNumeric
+      ? wideNumericClasses(
+          fileClassName('WideNumericResolverFactory'),
+          fileClassName('WideNumericConverter'),
+        )
+      : []),
     ...enumConverters(plan).map((e) => enumConverter(plan, fileClassName(`enum:${e.name}`), e)),
   ].map((lines) => lines.join('\n'))
   const body = fileClasses.length > 0 ? `${classBody}\n${fileClasses.join('\n\n')}\n` : classBody
@@ -1886,7 +2112,12 @@ export function contextFile(plan: EfCorePlan) {
       // The extension methods — UseNpgsql, HasPostgresEnum, ToTable, HasColumnType, ... — live in
       // this namespace, whether or not a type from it is named here.
       // Select, ToList and the rest of LINQ, for a converter of a list.
-      usings: ['Microsoft.EntityFrameworkCore', ...(lists ? ['System.Linq'] : [])],
+      // CreateInfo, which the numeric resolver calls, is an extension method of Npgsql.Internal.
+      usings: [
+        'Microsoft.EntityFrameworkCore',
+        ...(lists ? ['System.Linq'] : []),
+        ...(wideNumeric ? ['Npgsql.Internal'] : []),
+      ],
       membersAt: (offset) => (offset < classBody.length ? contextMembers : new Map()),
     }),
   }

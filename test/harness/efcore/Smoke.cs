@@ -46,7 +46,7 @@ public static class Smoke
         return value is DBNull ? null : value;
     }
 
-    public static int Run(DbContextOptions<AppDbContext> options)
+    public static int Run(DbContextOptions<AppDbContext> options, DbContextOptions<AppDbContext> onDataSource)
     {
         AppDbContext open() => new(options);
         Accounts(open);
@@ -62,6 +62,7 @@ public static class Smoke
         EnumsAndLists(open);
         DatabaseDefaults(open);
         Pooling(options);
+        ExternalDataSource(onDataSource);
         Console.WriteLine($"ok: {checks} checks against the Prisma-created database");
         return 0;
     }
@@ -95,10 +96,13 @@ public static class Smoke
         using (var context = open())
         {
             // Prisma's default Decimal column is numeric(65,30): every value in it carries 30 decimal
-            // places, more than System.Decimal's 28, and Npgsql refuses to read any of them. The
-            // README tells users to declare @db.Decimal(p, s) with s <= 28; this pins that limit.
-            Throws<OverflowException>(() => context.Accounts.Single(a => a.Id == id), "Npgsql cannot read numeric(65,30) into System.Decimal");
+            // places, more than System.Decimal's 28, and Npgsql's own converter refuses to read any
+            // of them. The converter MapEnums hands Npgsql reads what a decimal can hold of each.
             Check((string?)Scalar(context, $"SELECT trim_scale(price)::text FROM accounts WHERE id = '{id}'") == "12345.678901234567890123456789", "Decimal(65,30) stores every digit written");
+            Check(context.Accounts.Single(a => a.Id == id).Price == 12345.678901234567890123456789m, "Decimal(65,30) reads back into System.Decimal");
+            Scalar(context, $"UPDATE accounts SET price = 0.123456789012345678901234567895 WHERE id = '{id}'");
+            Check(context.Accounts.Where(a => a.Id == id).Select(a => a.Price).Single() == 0.1234567890123456789012345679m, "the 29th and 30th decimal places are rounded off");
+            Scalar(context, $"UPDATE accounts SET price = 12345.678901234567890123456789 WHERE id = '{id}'");
             var read = context.Accounts.Where(a => a.Id == id).Select(a => new { a.BigNum, a.Raw, a.Status }).Single();
             Check(read.BigNum == 9_007_199_254_740_993L, "BigInt past 2^53 round-trips");
             Check(read.Raw.SequenceEqual(new byte[] { 1, 2, 3 }), "Bytes round-trips");
@@ -481,7 +485,8 @@ public static class Smoke
             Check(Equals(Scalar(context, $"SELECT {column}::text FROM \"Inventory\" WHERE id = {inventory.Id}"), Scalar(context, $"SELECT {column}::text FROM \"Inventory\" WHERE id = {dbDefault}")), $"list default {column}");
         }
         using var fresh = open();
-        var read = fresh.Inventories.Where(i => i.Id == inventory.Id).Select(i => new { i.Stamps, i.Codes }).Single();
+        var read = fresh.Inventories.Where(i => i.Id == inventory.Id).Select(i => new { i.Stamps, i.Codes, i.Decs }).Single();
+        Check(read.Decs!.Single() == 0.0000000000000000000000000001m, "decimal(65,30)[] round-trips");
         Check(read.Stamps!.Single() == new DateTime(2024, 1, 1, 0, 0, 0, 123), "timestamp(3)[] round-trips");
         Check((string?)Scalar(context, $"SELECT trim_scale(decs[1])::text FROM \"Inventory\" WHERE id = {inventory.Id}") == "0.0000000000000000000000000001", "decimal(65,30)[] stores every digit");
         Check(read.Codes!.SequenceEqual(new[] { 1, 2, 3 }), "Int[] @default([1, 2, 3])");
@@ -499,6 +504,20 @@ public static class Smoke
             context.SaveChanges();
             Check(context.Boards.Any(b => b.Audiences!.Contains(Visibility.Private)), $"a pooled context maps the enums, use {round}");
         }
+    }
+
+    // An NpgsqlDataSource the caller builds takes its own MapEnums, and UseNpgsql the other one
+    // beside it: EF Core refuses ConfigureDataSource there, so that MapEnums must leave it alone.
+    static void ExternalDataSource(DbContextOptions<AppDbContext> options)
+    {
+        var account = NewAccount();
+        using (var context = new AppDbContext(options))
+        {
+            context.Accounts.Add(account);
+            context.SaveChanges();
+        }
+        using var fresh = new AppDbContext(options);
+        Check(fresh.Accounts.Single(a => a.Id == account.Id).Price == account.Price, "a context on the caller's data source reads Decimal(65,30)");
     }
 
     static void DatabaseDefaults(Func<AppDbContext> open)

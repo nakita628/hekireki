@@ -95,6 +95,21 @@ for mypy). A module imports only the ones its schema uses. With such a default o
 key, `save()` on a new instance given an existing key inserts, as with `uuid()`: update with
 `update_or_create()` or `save(force_update=True)`.
 
+On PostgreSQL, hand the `MapEnums` of the `DbContext` `hekireki-efcore` writes to Npgsql:
+`UseNpgsql(connectionString, AppDbContext.MapEnums)`, or `AppDbContext.MapEnums(builder)` on your
+own `NpgsqlDataSourceBuilder` as well when you pass `UseNpgsql` the data source it builds. It maps
+the enums, and it is also what reads a `Decimal` with no native type: that column is
+`numeric(65,30)`, every value of which has 30 decimal places, and Npgsql refuses to read more than
+the 28 of `System.Decimal` into a `decimal`, whatever the value ("Numeric value does not fit in a
+System.Decimal"). For a schema with such a column (or a `@db.Decimal(p, s)` with `s` over 28) the
+context carries a converter of its own, which `MapEnums` registers: the property stays a `decimal`
+and reads what a `decimal` can hold of the value, the decimal places past the 28th rounded off, and
+still fails on a value too large for it. The converter is written against `Npgsql.Internal`, the
+API of Npgsql's own plugins, which Npgsql marks experimental (`NPG9001`; checked against Npgsql 10). With a
+`DbConnection` passed to `UseNpgsql`, EF Core uses no data source and the converter is not
+applied. `@db.Decimal(p, s)` with `s` up to 28 needs none of this. A Prisma `view` is mapped with
+`ToView`, so `EnsureCreated()` and migrations leave it alone.
+
 ### Database and documents
 
 | Provider           | Writes                              | Options                                                                                         |
