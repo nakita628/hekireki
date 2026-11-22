@@ -343,7 +343,7 @@ function modelAttrNames(
       return field.isList && isDeclaringM2MSide(model, field, m2mTables) ? ['models'] : []
     }
     // `default=partial(nanoid_str, size=10)` reads both names.
-    const defaults = formatDefaultArgs(model, field, false, unresolved).flatMap((arg) => {
+    const defaults = formatDefaultArgs(model, field, unresolved).flatMap((arg) => {
       const match = /^\w+=(partial\()?([a-z_]\w*)/u.exec(arg)
       if (match === null) return []
       return match[1] === undefined ? [match[2]] : ['partial', match[2]]
@@ -739,7 +739,7 @@ function stringDefaultArgs(model: DMMF.Model, field: DMMF.Field, def: string, na
   return [`default=${toPythonString(def)}`]
 }
 
-function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, isPk: boolean, names: Names) {
+function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, names: Names) {
   const generated = generatedDefaultArgs(field)
   if (generated !== null) return generated
 
@@ -757,9 +757,6 @@ function formatDefaultArgs(model: DMMF.Model, field: DMMF.Field, isPk: boolean, 
   if (field.kind === 'enum' && typeof def === 'string') {
     return [`default=${makePascalCase(field.type)}.${enumMemberName(def)}`]
   }
-  // Literal defaults on a primary key are a DDL artifact, not something a
-  // Django model should re-assert.
-  if (isPk) return []
   if (typeof def === 'boolean') return [def ? 'default=True' : 'default=False']
   if (typeof def === 'number') {
     return field.type === 'Decimal' ? [`default=Decimal("${def}")`] : [`default=${def}`]
@@ -780,6 +777,18 @@ function scalarFieldClass(field: DMMF.Field, provider: string, ctor: string) {
   )
 }
 
+// The field class of a scalar column. Prisma makes a String with no native
+// type VARCHAR(191) on MySQL: a TextField would be longtext there, which MySQL
+// cannot use in a key, a unique constraint or an index without a key length.
+function columnDjangoField(field: DMMF.Field, provider: string) {
+  if (field.kind === 'enum') {
+    return { ctor: 'TextField', typeArgs: [`choices=${makePascalCase(field.type)}.choices`] }
+  }
+  return provider === 'mysql' && field.type === 'String' && !field.nativeType
+    ? { ctor: 'CharField', typeArgs: ['max_length=191'] }
+    : resolveDjangoField(field)
+}
+
 function generateScalarField(
   model: DMMF.Model,
   field: DMMF.Field,
@@ -790,15 +799,12 @@ function generateScalarField(
   const columnName = fieldColumnName(field)
   const attrName = attrNameOf(names, model, field)
 
-  const resolved =
-    field.kind === 'enum'
-      ? { ctor: 'TextField', typeArgs: [`choices=${makePascalCase(field.type)}.choices`] }
-      : resolveDjangoField(field)
+  const resolved = columnDjangoField(field, provider)
 
   const ctorResolved =
     isPk && isAutoincrement(field) ? { ctor: autoFieldCtor(field), typeArgs: [] } : resolved
 
-  const defaultArgs = formatDefaultArgs(model, field, isPk, names)
+  const defaultArgs = formatDefaultArgs(model, field, names)
 
   // Django fills an unset value of a string-backed field with "" rather than
   // None, and an empty-string primary key still counts as set: save() would
@@ -898,7 +904,7 @@ function generateForeignKeyField(
     // schema actually declares arrives through Meta.indexes instead, so leaving
     // this on would add one or two indexes the database does not have.
     ctor === 'ForeignKey' ? 'db_index=False' : null,
-    ...formatDefaultArgs(model, scalarField, isPk, names),
+    ...formatDefaultArgs(model, scalarField, names),
   ].filter((a) => a !== null)
 
   return `    ${attrName} = models.${ctor}(${args.join(', ')})`

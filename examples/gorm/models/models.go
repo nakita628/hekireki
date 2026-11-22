@@ -20,21 +20,21 @@ var NamingStrategy = schema.NamingStrategy{SingularTable: true, NoLowerCase: tru
 // A person who writes. `active` defaults to true, which is not Go's zero value: a user made
 // inactive on purpose has to stay inactive, not take the default because false looked unset.
 type User struct {
-	ID    int    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	Email string `gorm:"column:email;uniqueIndex;not null" json:"email"`
+	ID    int    `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
+	Email string `gorm:"column:email;uniqueIndex:users_email_key;not null" json:"email"`
 	// Optional, so a pointer: nil is NULL, not "".
 	DisplayName *string   `gorm:"column:display_name" json:"display_name"`
 	Role        string    `gorm:"column:role;default:'member';not null" json:"role"`
 	Active      *bool     `gorm:"column:active;default:true;not null" json:"active"`
 	CreatedAt   DateTime  `gorm:"column:created_at;autoCreateTime:false;not null" json:"created_at"`
 	UpdatedAt   DateTime  `gorm:"column:updated_at;autoUpdateTime:false;not null" json:"updated_at"`
-	Posts       []Post    `gorm:"foreignKey:AuthorID;constraint:OnDelete:SET NULL"`
-	Comments    []Comment `gorm:"foreignKey:AuthorID;constraint:OnDelete:RESTRICT"`
+	Posts       []Post    `gorm:"foreignKey:AuthorID;constraint:posts_author_id_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"`
+	Comments    []Comment `gorm:"foreignKey:AuthorID;constraint:comments_author_id_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	// Both sides of a self many-to-many written out as a model: who follows whom.
-	Following []Follow   `gorm:"foreignKey:FollowerID;constraint:OnDelete:CASCADE"`
-	Followers []Follow   `gorm:"foreignKey:FolloweeID;constraint:OnDelete:CASCADE"`
-	AuditLogs []AuditLog `gorm:"foreignKey:UserEmail;references:Email;constraint:OnUpdate:CASCADE,OnDelete:NO ACTION"`
-	Profile   *Profile   `gorm:"foreignKey:OwnerID;constraint:OnDelete:CASCADE"`
+	Following []Follow   `gorm:"foreignKey:FollowerID;constraint:follows_follower_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Followers []Follow   `gorm:"foreignKey:FolloweeID;constraint:follows_followee_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
+	AuditLogs []AuditLog `gorm:"foreignKey:UserEmail;references:Email;constraint:audit_logs_user_email_fkey,OnUpdate:CASCADE,OnDelete:NO ACTION"`
+	Profile   *Profile   `gorm:"foreignKey:OwnerID;constraint:profiles_owner_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 func (User) TableName() string {
@@ -64,13 +64,13 @@ func (*User) BeforeUpdate(tx *gorm.DB) error {
 // while its key is `ownerId`: GORM's own guess would be `UserID`, so the key has to be named.
 // `websiteURL` is a Go initialism as a person writes it in camelCase.
 type Profile struct {
-	ID         int     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	OwnerID    int     `gorm:"column:owner_id;uniqueIndex;not null" json:"owner_id"`
+	ID         int     `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
+	OwnerID    int     `gorm:"column:owner_id;uniqueIndex:profiles_owner_id_key;size:32;not null" json:"owner_id"`
 	Bio        *string `gorm:"column:bio" json:"bio"`
 	WebsiteURL *string `gorm:"column:website_url" json:"website_url"`
 	// A picture as bytes: a nil slice is NULL.
 	Avatar []byte `gorm:"column:avatar" json:"avatar"`
-	User   *User  `gorm:"foreignKey:OwnerID"`
+	User   *User  `gorm:"foreignKey:OwnerID;belongsTo"`
 }
 
 func (Profile) TableName() string {
@@ -79,9 +79,9 @@ func (Profile) TableName() string {
 
 // The key the posts of a deleted category fall back to: row 1, which the check creates first.
 type Category struct {
-	ID    int    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	Name  string `gorm:"column:name;uniqueIndex;not null" json:"name"`
-	Posts []Post `gorm:"foreignKey:CategoryID;constraint:OnDelete:SET DEFAULT"`
+	ID    int    `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
+	Name  string `gorm:"column:name;uniqueIndex:categories_name_key;not null" json:"name"`
+	Posts []Post `gorm:"foreignKey:CategoryID;constraint:posts_category_id_fkey,OnUpdate:CASCADE,OnDelete:SET DEFAULT"`
 }
 
 func (Category) TableName() string {
@@ -91,19 +91,19 @@ func (Category) TableName() string {
 // Every onDelete a relation of a post can take, one per foreign key: the author may go and leave
 // the post (SetNull), the category may go and hand the post to the default one (SetDefault).
 type Post struct {
-	ID    int    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ID    int    `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
 	Title string `gorm:"column:title;not null" json:"title"`
 	// A non-empty default: "" set on purpose must be stored as "", not replaced by it.
-	Slug       *string  `gorm:"column:slug;default:'untitled';not null" json:"slug"`
-	Status     string   `gorm:"column:status;index:posts_author_id_status_idx;default:'DRAFT';not null" json:"status"`
-	Views      int      `gorm:"column:views;default:0;not null" json:"views"`
-	AuthorID   *int     `gorm:"column:author_id;index:posts_author_id_status_idx" json:"author_id"`
-	CategoryID *int     `gorm:"column:category_id;default:1;not null" json:"category_id"`
-	CreatedAt  DateTime `gorm:"column:created_at;autoCreateTime:false;not null" json:"created_at"`
-	UpdatedAt  DateTime `gorm:"column:updated_at;autoUpdateTime:false;not null" json:"updated_at"`
-	Author     *User    `gorm:"foreignKey:AuthorID"`
-	Category   *Category
-	Comments   []Comment `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE"`
+	Slug       *string   `gorm:"column:slug;default:'untitled';not null" json:"slug"`
+	Status     string    `gorm:"column:status;index:posts_author_id_status_idx;default:'DRAFT';not null" json:"status"`
+	Views      int       `gorm:"column:views;size:32;default:0;not null" json:"views"`
+	AuthorID   *int      `gorm:"column:author_id;index:posts_author_id_status_idx;size:32" json:"author_id"`
+	CategoryID *int      `gorm:"column:category_id;size:32;default:1;not null" json:"category_id"`
+	CreatedAt  DateTime  `gorm:"column:created_at;autoCreateTime:false;not null" json:"created_at"`
+	UpdatedAt  DateTime  `gorm:"column:updated_at;autoUpdateTime:false;not null" json:"updated_at"`
+	Author     *User     `gorm:"foreignKey:AuthorID;belongsTo"`
+	Category   *Category `gorm:"belongsTo"`
+	Comments   []Comment `gorm:"foreignKey:PostID;constraint:comments_post_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
 	// An implicit many-to-many: Prisma's own join table, _PostToTag, with columns A (Post) and B
 	// (Tag), named after the models in alphabetical order.
 	Tags []Tag `gorm:"many2many:_PostToTag;joinForeignKey:A;joinReferences:B"`
@@ -136,7 +136,7 @@ func (*Post) BeforeUpdate(tx *gorm.DB) error {
 // has to make one before it is inserted.
 type Tag struct {
 	ID    string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
-	Name  string `gorm:"column:name;uniqueIndex;not null" json:"name"`
+	Name  string `gorm:"column:name;uniqueIndex:tags_name_key;not null" json:"name"`
 	Posts []Post `gorm:"many2many:_PostToTag;joinForeignKey:B;joinReferences:A"`
 }
 
@@ -154,16 +154,16 @@ func (m *Tag) BeforeCreate(_ *gorm.DB) error {
 // A `cuid()` key, a self relation for replies, and a unique pair: a comment's `slot` is unique
 // within its post. The author cannot be deleted while a comment of theirs stands (Restrict).
 type Comment struct {
-	ID       string  `gorm:"column:id;primaryKey" json:"id"`
-	Body     string  `gorm:"column:body;not null" json:"body"`
-	Slot     int     `gorm:"column:slot;uniqueIndex:comments_post_id_slot_key;not null" json:"slot"`
-	PostID   int     `gorm:"column:post_id;uniqueIndex:comments_post_id_slot_key;not null" json:"post_id"`
-	AuthorID int     `gorm:"column:author_id;not null" json:"author_id"`
-	ParentID *string `gorm:"column:parent_id" json:"parent_id"`
-	Post     *Post
-	Author   *User     `gorm:"foreignKey:AuthorID"`
-	Parent   *Comment  `gorm:"foreignKey:ParentID"`
-	Replies  []Comment `gorm:"foreignKey:ParentID;constraint:OnDelete:SET NULL"`
+	ID       string    `gorm:"column:id;primaryKey" json:"id"`
+	Body     string    `gorm:"column:body;not null" json:"body"`
+	Slot     int       `gorm:"column:slot;uniqueIndex:comments_post_id_slot_key;size:32;not null" json:"slot"`
+	PostID   int       `gorm:"column:post_id;uniqueIndex:comments_post_id_slot_key;size:32;not null" json:"post_id"`
+	AuthorID int       `gorm:"column:author_id;size:32;not null" json:"author_id"`
+	ParentID *string   `gorm:"column:parent_id" json:"parent_id"`
+	Post     *Post     `gorm:"belongsTo"`
+	Author   *User     `gorm:"foreignKey:AuthorID;belongsTo"`
+	Parent   *Comment  `gorm:"foreignKey:ParentID;belongsTo"`
+	Replies  []Comment `gorm:"foreignKey:ParentID;constraint:comments_parent_id_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"`
 }
 
 func (Comment) TableName() string {
@@ -180,11 +180,11 @@ func (m *Comment) BeforeCreate(_ *gorm.DB) error {
 // A composite primary key, and the join model of an explicit self many-to-many: two relations
 // to the same model, each named, each gone with either user.
 type Follow struct {
-	FollowerID int      `gorm:"column:follower_id;primaryKey" json:"follower_id"`
-	FolloweeID int      `gorm:"column:followee_id;primaryKey" json:"followee_id"`
+	FollowerID int      `gorm:"column:follower_id;primaryKey;size:32" json:"follower_id"`
+	FolloweeID int      `gorm:"column:followee_id;primaryKey;size:32" json:"followee_id"`
 	Since      DateTime `gorm:"column:since;not null" json:"since"`
-	Follower   *User    `gorm:"foreignKey:FollowerID"`
-	Followee   *User    `gorm:"foreignKey:FolloweeID"`
+	Follower   *User    `gorm:"foreignKey:FollowerID;belongsTo"`
+	Followee   *User    `gorm:"foreignKey:FolloweeID;belongsTo"`
 }
 
 func (Follow) TableName() string {
@@ -204,11 +204,11 @@ func (m *Follow) BeforeCreate(tx *gorm.DB) error {
 // (onUpdate: Cascade). The key is an Int: on SQLite, Prisma writes a BigInt autoincrement key as
 // `BIGINT PRIMARY KEY`, which is not the rowid, so the database never fills it.
 type AuditLog struct {
-	ID        int      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ID        int      `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
 	UserEmail string   `gorm:"column:user_email;not null" json:"user_email"`
 	Action    string   `gorm:"column:action;not null" json:"action"`
 	At        DateTime `gorm:"column:at;not null" json:"at"`
-	User      *User    `gorm:"references:Email"`
+	User      *User    `gorm:"references:Email;belongsTo"`
 }
 
 func (AuditLog) TableName() string {
@@ -227,7 +227,7 @@ func (m *AuditLog) BeforeCreate(tx *gorm.DB) error {
 // column beside it, which is not a key at all and is made all the same.
 type Invite struct {
 	ID        string    `gorm:"column:id;primaryKey" json:"id"`
-	Code      string    `gorm:"column:code;uniqueIndex;not null" json:"code"`
+	Code      string    `gorm:"column:code;uniqueIndex:invites_code_key;not null" json:"code"`
 	Email     string    `gorm:"column:email;not null" json:"email"`
 	ExpiresAt *DateTime `gorm:"column:expires_at" json:"expires_at"`
 }
@@ -250,7 +250,7 @@ func (m *Invite) BeforeCreate(_ *gorm.DB) error {
 type Country struct {
 	Code      string    `gorm:"column:code;primaryKey" json:"code"`
 	Name      string    `gorm:"column:name;not null" json:"name"`
-	Addresses []Address `gorm:"foreignKey:CountryCode;references:Code;constraint:OnDelete:RESTRICT"`
+	Addresses []Address `gorm:"foreignKey:CountryCode;references:Code;constraint:addresses_country_code_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (Country) TableName() string {
@@ -258,11 +258,11 @@ func (Country) TableName() string {
 }
 
 type Address struct {
-	ID          int      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ID          int      `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
 	CountryCode string   `gorm:"column:country_code;not null" json:"country_code"`
 	Line1       string   `gorm:"column:line1;not null" json:"line1"`
 	Line2       *string  `gorm:"column:line2" json:"line2"`
-	Country     *Country `gorm:"references:Code"`
+	Country     *Country `gorm:"references:Code;belongsTo"`
 }
 
 func (Address) TableName() string {
@@ -273,9 +273,9 @@ func (Address) TableName() string {
 // are Go keywords, Go initialisms or a method the generator writes itself. Nothing refers to it:
 // it is here to be written and read back exactly.
 type Sample struct {
-	ID          int            `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	Int         int            `gorm:"column:int;not null" json:"int"`
-	IntOpt      *int           `gorm:"column:int_opt" json:"int_opt"`
+	ID          int            `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
+	Int         int            `gorm:"column:int;size:32;not null" json:"int"`
+	IntOpt      *int           `gorm:"column:int_opt;size:32" json:"int_opt"`
 	BigInt      int64          `gorm:"column:big_int;not null" json:"big_int"`
 	BigIntOpt   *int64         `gorm:"column:big_int_opt" json:"big_int_opt"`
 	Float       float64        `gorm:"column:float;not null" json:"float"`
@@ -297,11 +297,11 @@ type Sample struct {
 	// Go keywords as field names: `type`, `func`, `range`, `map`, `select`.
 	Type   *string `gorm:"column:type;default:'plain';not null" json:"type"`
 	Func   *string `gorm:"column:func" json:"func"`
-	Range  *int    `gorm:"column:range" json:"range"`
+	Range  *int    `gorm:"column:range;size:32" json:"range"`
 	Map    *string `gorm:"column:map" json:"map"`
 	Select bool    `gorm:"column:select;default:false;not null" json:"select"`
 	// Initialisms, and a snake_case field beside a camelCase one.
-	UserID   *int    `gorm:"column:user_id" json:"user_id"`
+	UserID   *int    `gorm:"column:user_id;size:32" json:"user_id"`
 	URL      *string `gorm:"column:url" json:"url"`
 	HTMLBody *string `gorm:"column:html_body" json:"html_body"`
 	// A method GORM calls on the struct: the field cannot share its Go name.

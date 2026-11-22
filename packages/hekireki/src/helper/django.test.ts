@@ -1019,6 +1019,28 @@ class Clock(models.Model):
     )
   })
 
+  it('writes a String with no native type as CharField(max_length=191) on MySQL', () => {
+    // Prisma creates VARCHAR(191) there; a TextField is longtext, which MySQL
+    // refuses in a key without a key length.
+    const fields = [
+      makeField({ name: 'id', type: 'String', isId: true }),
+      makeField({ name: 'email', type: 'String', isRequired: false, isUnique: true }),
+      makeField({ name: 'bio', type: 'String', nativeType: ['Text', []] }),
+      makeField({ name: 'code', type: 'String', nativeType: ['VarChar', ['8']] }),
+    ]
+    const body = `    id = models.CharField(max_length=191, primary_key=True, default=None)
+    email = models.CharField(max_length=191, null=True, unique=True)
+    bio = models.TextField()
+    code = models.CharField(max_length=8)
+`
+    expect(djangoCode([makeModel('User', fields)], [], [], 'mysql')).toContain(body)
+    expect(djangoCode([makeModel('User', fields)], [], [], 'postgresql')).toContain(
+      `    id = models.TextField(primary_key=True, default=None)
+    email = models.TextField(null=True, unique=True)
+`,
+    )
+  })
+
   it('handles BigInt, Decimal, DateTime and escaped string defaults', () => {
     const models = [
       makeModel('Torture', [
@@ -2522,9 +2544,14 @@ class OrderLineItem(models.Model):
     )
   })
 
-  it('does not re-assert a literal default on a primary key', () => {
+  it('writes the literal default of a primary key, as Prisma creates the column with it', () => {
     const models = [
       makeModel('Fixed', [makeField({ name: 'id', type: 'Int', isId: true, default: 1 })]),
+      makeModel('SsoConfig', [
+        makeField({ name: 'id', type: 'String', isId: true, default: 'sso_config' }),
+        makeField({ name: 'enabled', type: 'Boolean', default: false }),
+      ]),
+      makeModel('Blank', [makeField({ name: 'id', type: 'String', isId: true, default: '' })]),
     ]
 
     expect(djangoCode(models)).toBe(
@@ -2532,12 +2559,129 @@ class OrderLineItem(models.Model):
 
 
 class Fixed(models.Model):
-    id = models.IntegerField(primary_key=True)
+    id = models.IntegerField(primary_key=True, default=1)
 
     class Meta:
         db_table = "Fixed"
+
+
+class SsoConfig(models.Model):
+    id = models.TextField(primary_key=True, default="sso_config")
+    enabled = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "SsoConfig"
+
+
+class Blank(models.Model):
+    id = models.TextField(primary_key=True, default="")
+
+    class Meta:
+        db_table = "Blank"
 `,
     )
+  })
+
+  it('writes the literal default of a one-column @@id and of a composite key column', () => {
+    const models = [
+      makeModel('Setting', [makeField({ name: 'key', type: 'String', default: 'main' })], {
+        primaryKey: { name: null, fields: ['key'] } as unknown as DMMF.PrimaryKey,
+      }),
+      makeModel(
+        'Membership',
+        [
+          makeField({ name: 'teamId', type: 'String', default: '' }),
+          makeField({ name: 'userId', type: 'Int' }),
+        ],
+        { primaryKey: { name: null, fields: ['teamId', 'userId'] } as unknown as DMMF.PrimaryKey },
+      ),
+    ]
+
+    expect(djangoCode(models)).toBe(
+      `from django.db import models
+
+
+class Setting(models.Model):
+    key = models.TextField(primary_key=True, default="main")
+
+    class Meta:
+        db_table = "Setting"
+
+
+class Membership(models.Model):
+    pk = models.CompositePrimaryKey("team_id", "user_id")
+    team_id = models.TextField(db_column="teamId", default="")
+    user_id = models.IntegerField(db_column="userId")
+
+    class Meta:
+        db_table = "Membership"
+`,
+    )
+  })
+
+  it('writes the literal default of a primary key that is also a foreign key', () => {
+    const models = [
+      makeModel('Org', [
+        makeField({ name: 'id', type: 'String', isId: true }),
+        makeField({
+          name: 'profile',
+          type: 'OrgProfile',
+          kind: 'object',
+          relationName: 'OrgProfile',
+          isRequired: false,
+        }),
+      ]),
+      makeModel('OrgProfile', [
+        makeField({ name: 'orgId', type: 'String', isId: true, default: 'default' }),
+        makeField({
+          name: 'org',
+          type: 'Org',
+          kind: 'object',
+          relationName: 'OrgProfile',
+          relationFromFields: ['orgId'],
+          relationToFields: ['id'],
+        }),
+      ]),
+    ]
+
+    expect(djangoCode(models)).toBe(
+      `from django.db import models
+
+
+class Org(models.Model):
+    id = models.TextField(primary_key=True, default=None)
+
+    class Meta:
+        db_table = "Org"
+
+
+class OrgProfile(models.Model):
+    org = models.OneToOneField("Org", on_delete=models.RESTRICT, related_name="profile", primary_key=True, db_column="orgId", default="default")
+
+    class Meta:
+        db_table = "OrgProfile"
+`,
+    )
+  })
+
+  it('leaves the function default of a primary key to the database or the generator', () => {
+    const models = [
+      makeModel('Counter', [
+        makeField({
+          name: 'id',
+          type: 'Int',
+          isId: true,
+          default: { name: 'autoincrement', args: [] },
+        }),
+      ]),
+      makeModel('Token', [
+        makeField({ name: 'id', type: 'String', isId: true, default: { name: 'cuid', args: [] } }),
+      ]),
+    ]
+
+    const code = djangoCode(models)
+    expect(code).toContain('    id = models.AutoField(primary_key=True)\n')
+    expect(code).toContain('    id = models.TextField(primary_key=True, default=cuid_str)\n')
   })
 
   it('escapes keywords used as enum value names with a trailing underscore', () => {
