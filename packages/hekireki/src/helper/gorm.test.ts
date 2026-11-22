@@ -1422,7 +1422,7 @@ model User {
 type User struct {
 	ID          string  \`gorm:"column:id;primaryKey" json:"id"\`
 	SuccessorID *string \`gorm:"column:successorId;uniqueIndex:User_successorId_key" json:"successorId"\`
-	Successor   *User   \`gorm:"foreignKey:SuccessorID"\`
+	Successor   *User   \`gorm:"foreignKey:SuccessorID;belongsTo"\`
 	// Who this user succeeds.
 	// A 1:1 onto User itself: GORM would read *User as belongs-to on the same key, so this is a slice of at most one.
 	Predecessor []User \`gorm:"foreignKey:SuccessorID;constraint:User_successorId_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"\`
