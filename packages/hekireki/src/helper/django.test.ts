@@ -3518,6 +3518,61 @@ describe('djangoCode on what PostgreSQL types differently', () => {
     return djangoCode(models, enums, indexes, provider, source)
   }
 
+  // A notes.metadata column: psycopg 3 loads a json column itself, and JSONField.from_db_value would
+  // pass the dict to json.loads.
+  it('declares a @db.Json column with a field that keeps what psycopg loaded', () => {
+    const code = djangoFor(`
+model Note {
+  id       Int   @id @default(autoincrement())
+  metadata Json? @db.Json
+  data     Json  @db.JsonB
+  tags     Json[] @db.Json
+}
+`)
+
+    expect(code).toBe(`from typing import Any
+
+from django.contrib.postgres.fields import ArrayField
+from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+
+
+class PlainJSONField(models.JSONField):
+    def db_type(self, connection: BaseDatabaseWrapper) -> str:
+        return "json"
+
+    def from_db_value(self, value: Any, expression: Any, connection: BaseDatabaseWrapper) -> Any:
+        if isinstance(value, str):
+            return super().from_db_value(value, expression, connection)
+        return value
+
+
+class Note(models.Model):
+    id = models.AutoField(primary_key=True)
+    metadata = PlainJSONField(null=True)
+    data = models.JSONField()
+    tags = ArrayField(PlainJSONField())
+
+    class Meta:
+        db_table = "Note"
+`)
+  })
+
+  it('keeps a plain JSONField for @db.Json on MySQL, whose driver returns the text', () => {
+    const code = djangoFor(
+      `
+model Note {
+  id       Int   @id @default(autoincrement())
+  metadata Json? @db.Json
+}
+`,
+      'mysql',
+    )
+
+    expect(code).toContain('    metadata = models.JSONField(null=True)')
+    expect(code).not.toContain('PlainJSONField')
+  })
+
   // Cal.com's App.categories: PostgreSQL has no implicit cast from text[] to "AppCategories"[], and
   // psycopg knows no loader for the enum's array.
   it('binds and reads an enum list as the array of the enum type', () => {

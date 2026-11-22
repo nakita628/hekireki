@@ -658,6 +658,24 @@ const ENUM_ARRAY_FIELD = `class EnumArrayField(ArrayField):  # type: ignore[type
     def select_format(self, compiler: Any, sql: str, params: Any) -> Any:
         return f"{sql}::text[]", params`
 
+// A @db.Json column is PostgreSQL's json, which psycopg 3 loads into Python values itself (Django
+// registers a text loader for jsonb only): JSONField.from_db_value would hand the dict to
+// json.loads. A value the driver has already loaded is kept, and db_type is the column Prisma
+// creates, so that migrate makes json rather than jsonb.
+const PLAIN_JSON_FIELD = `class PlainJSONField(models.JSONField):
+    def db_type(self, connection: BaseDatabaseWrapper) -> str:
+        return "json"
+
+    def from_db_value(self, value: Any, expression: Any, connection: BaseDatabaseWrapper) -> Any:
+        if isinstance(value, str):
+            return super().from_db_value(value, expression, connection)
+        return value`
+
+/** A `@db.Json` column on PostgreSQL: the field PlainJSONField declares. */
+function isPlainJson(field: DMMF.Field, provider: string) {
+  return field.type === 'Json' && field.nativeType?.[0] === 'Json' && provider === 'postgresql'
+}
+
 /** An enum list on a database that has enum types: the field EnumArrayField declares. */
 function isEnumArray(field: DMMF.Field, provider: string) {
   return field.kind === 'enum' && field.isList && hasEnumTypes(provider)
@@ -719,6 +737,7 @@ export function collectFieldClasses(models: readonly DMMF.Model[], provider: str
     scalarFields.some((f) => holdsUtc(f, provider)) ? UTC_DATETIME_FIELD : null,
     ...STAMPED_FIELDS.filter((f) => stamped.has(f.name)).map((f) => stampedField(f)),
     scalarFields.some((f) => isEnumArray(f, provider)) ? ENUM_ARRAY_FIELD : null,
+    scalarFields.some((f) => isPlainJson(f, provider)) ? PLAIN_JSON_FIELD : null,
     scalarFields.some((f) => f.isUpdatedAt === true) ? AUTO_NOW_QUERY_SET : null,
   ].filter((c) => c !== null)
 }
@@ -830,10 +849,10 @@ function autoFieldCtor(field: DMMF.Field) {
 }
 
 function scalarFieldClass(field: DMMF.Field, provider: string, ctor: string) {
-  return (
-    stampedFieldClass(field, provider) ??
-    (holdsUtc(field, provider) ? 'UtcDateTimeField' : `models.${ctor}`)
-  )
+  const stamped = stampedFieldClass(field, provider)
+  if (stamped !== null) return stamped
+  if (holdsUtc(field, provider)) return 'UtcDateTimeField'
+  return isPlainJson(field, provider) ? 'PlainJSONField' : `models.${ctor}`
 }
 
 // The field class of a scalar column. Prisma makes a String with no native
@@ -1424,6 +1443,8 @@ type ImportNeeds = {
   readonly rawSql: boolean
   readonly utcField: boolean
   readonly enumArray: boolean
+  readonly plainJson: boolean
+  readonly databaseWrapper: boolean
   readonly autoNow: boolean
   readonly decimal: boolean
   readonly any: boolean
@@ -1435,7 +1456,9 @@ type ImportNeeds = {
 
 function stdlibImports(needs: ImportNeeds) {
   const fromTyping = [
-    needs.any || needs.utcField || needs.autoNow || needs.enumArray ? 'Any' : null,
+    needs.any || needs.utcField || needs.autoNow || needs.enumArray || needs.plainJson
+      ? 'Any'
+      : null,
     needs.autoNow ? 'TypeVar' : null,
   ].filter((name) => name !== null)
   return [
@@ -1462,9 +1485,7 @@ function thirdPartyImports(needs: ImportNeeds) {
       ? `from django.contrib.postgres.indexes import ${needs.indexClasses.join(', ')}`
       : null,
     'from django.db import models',
-    needs.utcField || needs.enumArray
-      ? 'from django.db.backends.base.base import BaseDatabaseWrapper'
-      : null,
+    needs.databaseWrapper ? 'from django.db.backends.base.base import BaseDatabaseWrapper' : null,
     needs.rawSql ? 'from django.db.models.expressions import RawSQL' : null,
     needs.utcField || needs.autoNow || needs.nowDatetime
       ? 'from django.utils import timezone'
@@ -1511,6 +1532,11 @@ export function collectGlobalImports(
     rawSql: scalarFields.some((f) => dbGeneratedExpr(f) !== null),
     utcField: needsUtcField,
     enumArray: scalarFields.some((f) => isEnumArray(f, provider)),
+    plainJson: scalarFields.some((f) => isPlainJson(f, provider)),
+    // The field classes that take a connection: UtcDateTimeField, EnumArrayField, PlainJSONField.
+    databaseWrapper:
+      needsUtcField ||
+      scalarFields.some((f) => isEnumArray(f, provider) || isPlainJson(f, provider)),
     autoNow: scalarFields.some((f) => f.isUpdatedAt === true),
     decimal: needsDecimalImport(scalarFields),
     any: needsAnyImport(scalarFields),
