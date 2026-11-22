@@ -1019,6 +1019,28 @@ class Clock(models.Model):
     )
   })
 
+  it('writes a String with no native type as CharField(max_length=191) on MySQL', () => {
+    // Prisma creates VARCHAR(191) there; a TextField is longtext, which MySQL
+    // refuses in a key without a key length.
+    const fields = [
+      makeField({ name: 'id', type: 'String', isId: true }),
+      makeField({ name: 'email', type: 'String', isRequired: false, isUnique: true }),
+      makeField({ name: 'bio', type: 'String', nativeType: ['Text', []] }),
+      makeField({ name: 'code', type: 'String', nativeType: ['VarChar', ['8']] }),
+    ]
+    const body = `    id = models.CharField(max_length=191, primary_key=True, default=None)
+    email = models.CharField(max_length=191, null=True, unique=True)
+    bio = models.TextField()
+    code = models.CharField(max_length=8)
+`
+    expect(djangoCode([makeModel('User', fields)], [], [], 'mysql')).toContain(body)
+    expect(djangoCode([makeModel('User', fields)], [], [], 'postgresql')).toContain(
+      `    id = models.TextField(primary_key=True, default=None)
+    email = models.TextField(null=True, unique=True)
+`,
+    )
+  })
+
   it('handles BigInt, Decimal, DateTime and escaped string defaults', () => {
     const models = [
       makeModel('Torture', [

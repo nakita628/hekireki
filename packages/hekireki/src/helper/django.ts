@@ -777,6 +777,18 @@ function scalarFieldClass(field: DMMF.Field, provider: string, ctor: string) {
   )
 }
 
+// The field class of a scalar column. Prisma makes a String with no native
+// type VARCHAR(191) on MySQL: a TextField would be longtext there, which MySQL
+// cannot use in a key, a unique constraint or an index without a key length.
+function columnDjangoField(field: DMMF.Field, provider: string) {
+  if (field.kind === 'enum') {
+    return { ctor: 'TextField', typeArgs: [`choices=${makePascalCase(field.type)}.choices`] }
+  }
+  return provider === 'mysql' && field.type === 'String' && !field.nativeType
+    ? { ctor: 'CharField', typeArgs: ['max_length=191'] }
+    : resolveDjangoField(field)
+}
+
 function generateScalarField(
   model: DMMF.Model,
   field: DMMF.Field,
@@ -787,10 +799,7 @@ function generateScalarField(
   const columnName = fieldColumnName(field)
   const attrName = attrNameOf(names, model, field)
 
-  const resolved =
-    field.kind === 'enum'
-      ? { ctor: 'TextField', typeArgs: [`choices=${makePascalCase(field.type)}.choices`] }
-      : resolveDjangoField(field)
+  const resolved = columnDjangoField(field, provider)
 
   const ctorResolved =
     isPk && isAutoincrement(field) ? { ctor: autoFieldCtor(field), typeArgs: [] } : resolved
