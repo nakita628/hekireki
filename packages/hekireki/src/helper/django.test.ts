@@ -3542,8 +3542,6 @@ class PlainJSONField(models.JSONField):
         return "json"
 
     def from_db_value(self, value: Any, expression: Any, connection: BaseDatabaseWrapper) -> Any:
-        if isinstance(value, str):
-            return super().from_db_value(value, expression, connection)
         return value
 
 
