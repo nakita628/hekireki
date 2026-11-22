@@ -846,6 +846,48 @@ model Box {
   })
 })
 
+// GORM guesses a struct field's relation as has-one first, and takes it when the referenced model
+// has a field the key resolves to; `belongsTo` makes each belongs-to one whatever the names.
+describe('generateGormModels belongs-to that GORM would take for has-one', () => {
+  it('marks every belongs-to, as the Website and BackgroundJobTask relations of umami and documenso need', () => {
+    const code = gormFor(
+      `
+model User {
+  id        String    @id @map("user_id")
+  websites  Website[] @relation("user")
+  createdBy Website[] @relation("createUser")
+}
+
+model Website {
+  id         String  @id @map("website_id")
+  userId     String? @map("user_id")
+  createdBy  String? @map("created_by")
+  user       User?   @relation("user", fields: [userId], references: [id])
+  createUser User?   @relation("createUser", fields: [createdBy], references: [id])
+}
+
+model BackgroundJob {
+  id    String              @id
+  jobId String
+  tasks BackgroundJobTask[]
+}
+
+model BackgroundJobTask {
+  id            String        @id
+  jobId         String
+  backgroundJob BackgroundJob @relation(fields: [jobId], references: [id])
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain('\tUser       *User   `gorm:"foreignKey:UserID;belongsTo"`')
+    expect(code).toContain('\tCreateUser *User   `gorm:"foreignKey:CreatedBy;belongsTo"`')
+    expect(code).toContain('\tBackgroundJob *BackgroundJob `gorm:"foreignKey:JobID;belongsTo"`')
+    // A has-many is a slice, which GORM never takes for a belongs-to.
+    expect(code).not.toMatch(/\[\][A-Za-z]+ +`gorm:"[^"]*belongsTo/u)
+  })
+})
+
 // What these write was checked against GORM 1.31 on the tables `prisma db push` makes, in
 // examples/gorm; each was a runtime error or a wrong row before.
 describe('generateGormModels against the tables Prisma makes', () => {
@@ -884,10 +926,10 @@ import (
 )
 
 type Post struct {
-	ID        int      \`gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"\`
-	UserID    *string  \`gorm:"column:userId" json:"userId"\`
-	CreatedAt DateTime \`gorm:"column:createdAt;autoCreateTime:false;not null" json:"createdAt"\`
-	User      *User
+	ID        int       \`gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"\`
+	UserID    *string   \`gorm:"column:userId" json:"userId"\`
+	CreatedAt DateTime  \`gorm:"column:createdAt;autoCreateTime:false;not null" json:"createdAt"\`
+	User      *User     \`gorm:"belongsTo"\`
 	Comments  []Comment \`gorm:"foreignKey:PostID;constraint:Comment_postId_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"\`
 }
 
@@ -920,9 +962,9 @@ func (m *User) BeforeCreate(_ *gorm.DB) error {
 }
 
 type Comment struct {
-	ID     int \`gorm:"column:id;primaryKey;size:32" json:"id"\`
-	PostID int \`gorm:"column:postId;size:32;not null" json:"postId"\`
-	Post   *Post
+	ID     int   \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	PostID int   \`gorm:"column:postId;size:32;not null" json:"postId"\`
+	Post   *Post \`gorm:"belongsTo"\`
 }
 
 func (Comment) TableName() string {
@@ -1010,7 +1052,7 @@ func (User) TableName() string {
 type Profile struct {
 	ID      int   \`gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"\`
 	OwnerID int   \`gorm:"column:ownerId;uniqueIndex:Profile_ownerId_key;size:32;not null" json:"ownerId"\`
-	User    *User \`gorm:"foreignKey:OwnerID"\`
+	User    *User \`gorm:"foreignKey:OwnerID;belongsTo"\`
 }
 
 func (Profile) TableName() string {
@@ -1299,7 +1341,7 @@ func (User) TableName() string {
 type Session struct {
 	SessionToken string \`gorm:"column:sessionToken;primaryKey;uniqueIndex:Session_sessionToken_key" json:"sessionToken"\`
 	UserID       string \`gorm:"column:userId;not null" json:"userId"\`
-	User         *User
+	User         *User  \`gorm:"belongsTo"\`
 }
 
 func (Session) TableName() string {
@@ -1338,9 +1380,9 @@ model Account {
     ).toBe(`package model
 
 type User struct {
-	ID        string  \`gorm:"column:id;primaryKey" json:"id"\`
-	AccountID *string \`gorm:"column:accountId" json:"accountId"\`
-	Account   *Account
+	ID        string   \`gorm:"column:id;primaryKey" json:"id"\`
+	AccountID *string  \`gorm:"column:accountId" json:"accountId"\`
+	Account   *Account \`gorm:"belongsTo"\`
 	Current   *Account \`gorm:"foreignKey:CurrentUserID;constraint:Account_currentUserId_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"\`
 }
 
@@ -1351,7 +1393,7 @@ func (User) TableName() string {
 type Account struct {
 	ID            string  \`gorm:"column:id;primaryKey" json:"id"\`
 	CurrentUserID *string \`gorm:"column:currentUserId;uniqueIndex:Account_currentUserId_key" json:"currentUserId"\`
-	CurrentUser   *User   \`gorm:"foreignKey:CurrentUserID"\`
+	CurrentUser   *User   \`gorm:"foreignKey:CurrentUserID;belongsTo"\`
 	Users         []User  \`gorm:"foreignKey:AccountID;constraint:User_accountId_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"\`
 }
 
@@ -1420,7 +1462,9 @@ model Post {
     expect(code).toContain(
       '\tPosts   []Post `gorm:"foreignKey:UserID1;references:UserID;constraint:Post_userId_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`',
     )
-    expect(code).toContain('\tUser    *User  `gorm:"foreignKey:UserID1;references:UserID"`')
+    expect(code).toContain(
+      '\tUser    *User  `gorm:"foreignKey:UserID1;references:UserID;belongsTo"`',
+    )
   })
 })
 
@@ -1507,7 +1551,7 @@ type Post struct {
 	// Who wrote it.
 	AuthorID int \`gorm:"column:authorId;size:32;not null" json:"authorId"\`
 	// The author.
-	Author *User \`gorm:"foreignKey:AuthorID"\`
+	Author *User \`gorm:"foreignKey:AuthorID;belongsTo"\`
 }
 
 func (Post) TableName() string {
