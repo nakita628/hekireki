@@ -352,3 +352,31 @@ enum Tone: string
 }`)
   })
 })
+
+// A single-row Deployment (Cal.com's): the database writes the key's default, and Eloquent, not
+// incrementing, keeps the key the new model had, so the default is in $attributes.
+describe('a primary key with a literal default', () => {
+  it('carries the default in $attributes, so the saved model has its key', () => {
+    const deployment = datamodelOf(
+      getDMMF({
+        datamodel: [
+          [
+            'schema.prisma',
+            `datasource db {
+  provider = "postgresql"
+}
+model Deployment {
+  id   Int    @id @default(1)
+  logo String?
+}`,
+          ],
+        ],
+      }),
+    )
+    const [file] = eloquentModelFiles(deployment.models, 'App', deployment.enums, {
+      provider: 'postgresql',
+    })
+    expect(file?.code).toContain("    protected $attributes = [\n        'id' => 1,\n    ];")
+    expect(file?.code).toContain('    public $incrementing = false;')
+  })
+})
