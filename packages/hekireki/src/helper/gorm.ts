@@ -355,6 +355,13 @@ export function buildGormTags(
   return `\`gorm:"${parts.join(';')}" json:"${columnName}"\``
 }
 
+// A name the schema gives an index, unless the struct tag cannot hold it: GORM reads past a `,` as
+// settings and splits at a `;`, and a `"` or a backtick ends the tag. Such a name is left for
+// Prisma's default.
+function readableTagName(name: string | undefined) {
+  return name !== undefined && !/[,;"`]/u.test(name) ? name : undefined
+}
+
 function collectCompositeIndexTags(
   model: DMMF.Model,
   indexes: readonly DMMF.Index[],
@@ -368,11 +375,12 @@ function collectCompositeIndexTags(
 
   const columnsOf = (fields: readonly string[]) =>
     fields.map((f) => fieldByName.get(f)?.dbName ?? f)
-  // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it.
+  // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it, unless the
+  // struct tag cannot hold it (readableTagName).
   const mappedUniques = new Map(
     indexes
       .filter((idx) => idx.model === model.name && idx.type === 'unique')
-      .map((idx) => [idx.fields.map((f) => f.name).join(','), idx.dbName]),
+      .map((idx) => [idx.fields.map((f) => f.name).join(','), readableTagName(idx.dbName)]),
   )
   const singleUniqueTags = model.fields
     .filter((f) => f.isUnique)
@@ -397,8 +405,8 @@ function collectCompositeIndexTags(
     .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
     .flatMap((idx) => {
       const idxName =
-        idx.dbName ??
-        idx.name ??
+        readableTagName(idx.dbName) ??
+        readableTagName(idx.name) ??
         constraintName(tableName, columnsOf(idx.fields.map((f) => f.name)), 'idx', provider ?? '')
       return idx.fields.map((f): [string, string] => [f.name, `index:${idxName}`])
     })

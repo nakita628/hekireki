@@ -695,6 +695,29 @@ model Post {
     expect(code).not.toContain('size:32')
   })
 
+  it("cuts names at 128 on SQL Server and leaves a name the tag cannot hold to Prisma's default", () => {
+    const code = gormFor(
+      `
+model customer_order_line_items {
+  id                        Int    @id
+  warehouse_location_code   String
+  supplier_reference_number String
+  a                         Int
+  b                         Int
+
+  @@unique([warehouse_location_code, supplier_reference_number])
+  @@unique([a, b], map: "pair,v2")
+}
+`,
+      'sqlserver',
+    )
+    expect(code).toContain(
+      'uniqueIndex:customer_order_line_items_warehouse_location_code_supplier_reference_number_key',
+    )
+    expect(code).toContain('uniqueIndex:customer_order_line_items_a_b_key')
+    expect(code).not.toContain('pair,v2')
+  })
+
   it('falls back to NO ACTION for a required relation on SQL Server, which has no RESTRICT', () => {
     const code = gormFor(
       `

@@ -11,7 +11,11 @@ export function makePascalCase(name: string) {
 }
 
 // The longest identifier each database keeps; the rest truncate at PostgreSQL's 63.
-const IDENTIFIER_LIMITS: { readonly [provider: string]: number } = { sqlite: Infinity, mysql: 64 }
+const IDENTIFIER_LIMITS: { readonly [provider: string]: number } = {
+  sqlite: Infinity,
+  mysql: 64,
+  sqlserver: 128,
+}
 
 /** The text with its first character in lower case: a model's Prisma Client delegate, a label. */
 export function lowerFirst(text: string) {
@@ -21,7 +25,7 @@ export function lowerFirst(text: string) {
 /**
  * The name Prisma Migrate gives a key, index or constraint the schema does not name: the table,
  * the columns and a suffix, the first two cut to the database's longest identifier (63 on
- * PostgreSQL, 64 on MySQL).
+ * PostgreSQL, 64 on MySQL, 128 on SQL Server).
  *
  * @example
  * ```sql
