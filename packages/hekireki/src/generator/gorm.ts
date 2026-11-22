@@ -6,6 +6,7 @@ import {
   generateDateTypes,
   generateModelStruct,
   generateNamingStrategy,
+  generateScalarListType,
 } from '../helper/gorm.js'
 
 export function generateGormModels(
@@ -24,11 +25,12 @@ export function generateGormModels(
 
   return [
     `package ${packageName}`,
-    ...formatImports(collectImports(models)),
+    ...formatImports(collectImports(models, provider)),
     ...generateNamingStrategy(models),
     '',
     modelBodies.join('\n\n'),
     ...generateDateTypes(models, provider),
+    ...generateScalarListType(models, provider),
     '',
   ].join('\n')
 }

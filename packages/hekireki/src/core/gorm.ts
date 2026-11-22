@@ -12,7 +12,10 @@ import { outputFile, requireOutput } from './output.js'
 export function gorm(options: GeneratorOptions) {
   return Effect.gen(function* () {
     const output = yield* requireOutput(options, 'Hekireki-GORM')
-    const problems = gormProblems(options.dmmf.datamodel.models)
+    const problems = gormProblems(
+      options.dmmf.datamodel.models,
+      options.datasources[0]?.activeProvider,
+    )
     if (problems.length > 0) {
       return yield* new GeneratorConfigError({
         message: `Hekireki-GORM cannot write this schema:\n${problems.map((p) => `  - ${p}`).join('\n')}`,

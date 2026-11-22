@@ -283,7 +283,63 @@ const POSTGRES_DEFAULT_TYPES: { readonly [type: string]: string } = {
   DateTime: 'timestamp(3)',
 }
 
+// The element type of the array column Prisma Migrate makes for a scalar list on PostgreSQL.
+const SCALAR_LIST_ELEMENTS: { readonly [type: string]: string } = {
+  String: 'text',
+  Int: 'integer',
+  BigInt: 'bigint',
+  Float: 'double precision',
+  Decimal: 'decimal(65,30)',
+  Boolean: 'boolean',
+}
+
+/**
+ * Whether a field is a scalar list held in ScalarList: a PostgreSQL array column, which Prisma makes
+ * for every scalar list (Prisma has lists on no other SQL database). A DateTime[] has its own list
+ * types, and a Json[] or Bytes[] keeps the json serializer.
+ */
+function isScalarList(field: DMMF.Field, provider: string | undefined) {
+  return (
+    isPostgresFamily(provider) &&
+    field.isList &&
+    // PostgreSQL prints money with its currency symbol and separators, which no float reads.
+    field.nativeType?.[0] !== 'Money' &&
+    (field.kind === 'enum' ||
+      (field.kind === 'scalar' && SCALAR_LIST_ELEMENTS[field.type] !== undefined))
+  )
+}
+
+// A native type's name as PostgreSQL (and CockroachDB) write it, where it is not the lower-cased
+// Prisma name.
+const LIST_NATIVE_NAMES: { readonly [name: string]: string } = {
+  DoublePrecision: 'double precision',
+  // CockroachDB's single-byte "char", quoted as the struct tag holds it.
+  CatalogSingleChar: '\\"char\\"',
+}
+
+/**
+ * The array column Prisma makes for a scalar list: of the native type the schema names, as Prisma
+ * writes it (`@db.Uuid` is `uuid[]`, `@db.Char(2)` `char(2)[]`), or else of the element's default
+ * type. CockroachDB reads `integer` as INT8, so an Int list there is `int4[]`, as Prisma makes it.
+ * An enum list is read and written as text, as an enum is.
+ */
+function scalarListColumnType(field: DMMF.Field, provider: string | undefined) {
+  if (field.nativeType) {
+    const [name, args] = field.nativeType
+    const params = (args ?? []).length > 0 ? `(${(args ?? []).join(',')})` : ''
+    return `${LIST_NATIVE_NAMES[name] ?? name.toLowerCase()}${params}[]`
+  }
+  if (field.kind === 'enum') return 'text[]'
+  if (provider === 'cockroachdb' && field.type === 'Int') return 'int4[]'
+  return `${SCALAR_LIST_ELEMENTS[field.type] ?? 'text'}[]`
+}
+
+function usesScalarList(models: readonly DMMF.Model[], provider: string | undefined) {
+  return models.some((m) => m.fields.some((f) => isScalarList(f, provider)))
+}
+
 function columnTypeTag(field: DMMF.Field, provider?: string) {
+  if (isScalarList(field, provider)) return `type:${scalarListColumnType(field, provider)}`
   const nativeType = resolveNativeType(field)
   // A DateTime[] is a PostgreSQL array, `timestamp(3)[]` unless the native type says otherwise,
   // which the list type writes and reads as Prisma Client does.
@@ -344,12 +400,18 @@ export function buildGormTags(
     ...compositeIndexTags,
     columnTypeTag(field, provider),
     sizeTag(field, provider),
-    // Other scalar lists need a serializer so GORM can persist the slice; the built-in
-    // json serializer works on every dialect without extra deps.
-    field.isList && field.kind !== 'object' && !isDateTimeList(field) ? 'serializer:json' : null,
+    // A list ScalarList and the DateTime list types do not hold (a Json[] or a Bytes[]) is kept
+    // with the built-in json serializer.
+    field.isList &&
+    field.kind !== 'object' &&
+    !isDateTimeList(field) &&
+    !isScalarList(field, provider)
+      ? 'serializer:json'
+      : null,
     defaultVal !== null ? `default:${defaultVal}` : null,
     ...trackedTimeTags(field, fieldName),
-    field.isRequired && !isPk ? 'not null' : null,
+    // A scalar list is a nullable array column in the table Prisma makes.
+    field.isRequired && !isPk && !field.isList ? 'not null' : null,
   ].filter((p) => p !== null)
 
   return `\`gorm:"${parts.join(';')}" json:"${columnName}"\``
@@ -644,12 +706,14 @@ function hasNonZeroDefault(field: DMMF.Field, isPk: boolean) {
   )
 }
 
-function structFieldGoType(field: DMMF.Field, isPk: boolean) {
+function structFieldGoType(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
   if (isDateTimeList(field)) return dateTimeGoType(field)
   // A scalar list (e.g. `tags String[]`) is a collection, not a scalar; collapse
-  // it to a single value loses data. Emit a slice of the element type.
+  // it to a single value loses data. Emit a slice of the element type, a ScalarList where the
+  // column is a PostgreSQL array.
   if (field.isList) {
-    return `[]${field.kind === 'enum' ? 'string' : prismaTypeToGoType(field.type, true)}`
+    const element = field.kind === 'enum' ? 'string' : prismaTypeToGoType(field.type, true)
+    return isScalarList(field, provider) ? `ScalarList[${element}]` : `[]${element}`
   }
   if (isDateTimeScalar(field)) return `${field.isRequired ? '' : '*'}${dateTimeGoType(field)}`
   if (field.kind === 'enum') return field.isRequired ? 'string' : '*string'
@@ -667,7 +731,7 @@ function generateStructField(
 ) {
   return [
     fieldName,
-    structFieldGoType(field, isPk),
+    structFieldGoType(field, isPk, provider),
     buildGormTags(field, isPk, isCompositePk, compositeIndexTags, enums, provider, fieldName),
   ]
 }
@@ -1205,36 +1269,50 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
 
 /**
  * What keeps the schema from becoming models that compile: a model whose Go name is that of a
- * time type written beside the models, where the schema needs that type.
+ * type or function written beside the models, where the schema needs it.
  */
-export function gormProblems(models: readonly DMMF.Model[]) {
-  const types = new Set(dateTypes(models))
-  return models
-    .filter((model) => types.has(goModelName(model.name)))
-    .map(
-      (model) =>
-        `model ${model.name}: its Go name is ${goModelName(model.name)}, the type the models hold a DateTime in; rename the model and keep its table with @@map`,
-    )
+export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
+  const held = new Map<string, string>([
+    ...dateTypes(models).map((name): [string, string] => [
+      name,
+      'the type the models hold a DateTime in',
+    ]),
+    ...(usesScalarList(models, provider) ? ['ScalarList'] : []).map((name): [string, string] => [
+      name,
+      'what the models hold a scalar list in',
+    ]),
+  ])
+  return models.flatMap((model) => {
+    const name = goModelName(model.name)
+    const holds = held.get(name)
+    return holds === undefined
+      ? []
+      : [
+          `model ${model.name}: its Go name is ${name}, ${holds}; rename the model and keep its table with @@map`,
+        ]
+  })
 }
 
 function standardImports(
   types: readonly string[],
   generators: ReadonlySet<string>,
   needsTime: boolean,
+  scalarList: boolean,
 ) {
   const lists = types.some((name) => name.endsWith('List'))
+  const valuers = types.length > 0 || scalarList
   return [
     generators.has('ulid') ? '"crypto/rand"' : null,
     lists ? '"database/sql"' : null,
-    types.length > 0 ? '"database/sql/driver"' : null,
-    types.length > 0 ? '"fmt"' : null,
-    types.length > 0 ? '"strconv"' : null,
-    types.includes('TimeOfDay') || lists ? '"strings"' : null,
+    valuers ? '"database/sql/driver"' : null,
+    valuers ? '"fmt"' : null,
+    valuers ? '"strconv"' : null,
+    types.includes('TimeOfDay') || lists || scalarList ? '"strings"' : null,
     needsTime ? '"time"' : null,
   ]
 }
 
-export function collectImports(models: readonly DMMF.Model[]) {
+export function collectImports(models: readonly DMMF.Model[], provider?: string) {
   const needsTime = models.some((m) =>
     m.fields.some((f) => f.kind !== 'object' && f.type === 'DateTime'),
   )
@@ -1258,7 +1336,7 @@ export function collectImports(models: readonly DMMF.Model[]) {
   )
   // Standard library first, then the modules, each group sorted by path, as
   // gofmt keeps them.
-  const standard = standardImports(types, generators, needsTime)
+  const standard = standardImports(types, generators, needsTime, usesScalarList(models, provider))
   const modules = [
     generators.has('uuid') ? '"github.com/google/uuid"' : null,
     generators.has('cuid') ? '"github.com/lucsky/cuid"' : null,
@@ -1286,5 +1364,142 @@ export function formatImports(groups: readonly (readonly string[])[]) {
       .join('\n\n')
       .split('\n'),
     ')',
+  ]
+}
+
+/**
+ * The type a scalar list is held in on PostgreSQL, where Prisma makes it an array column: written
+ * as the array's text form (`{"a","b"}`), which the server casts to the column's type, and read
+ * from it, as pgx returns an array it has no Go type for. A nil list is written as `{}` and a NULL
+ * column read as an empty list, as Prisma Client reads it.
+ */
+export function generateScalarListType(models: readonly DMMF.Model[], provider?: string) {
+  if (!usesScalarList(models, provider)) return []
+  return [
+    '',
+    'type ScalarList[T string | int | int64 | float64 | bool] []T',
+    '',
+    'func (list ScalarList[T]) Value() (driver.Value, error) {',
+    '\titems := make([]string, len(list))',
+    '\tfor i, item := range list {',
+    '\t\tswitch value := any(item).(type) {',
+    '\t\tcase string:',
+    '\t\t\titems[i] = `"` + strings.NewReplacer(`\\`, `\\\\`, `"`, `\\"`).Replace(value) + `"`',
+    '\t\tcase int:',
+    '\t\t\titems[i] = strconv.FormatInt(int64(value), 10)',
+    '\t\tcase int64:',
+    '\t\t\titems[i] = strconv.FormatInt(value, 10)',
+    '\t\tcase float64:',
+    '\t\t\titems[i] = strings.NewReplacer("+Inf", "Infinity", "-Inf", "-Infinity").Replace(strconv.FormatFloat(value, \'g\', -1, 64))',
+    '\t\tcase bool:',
+    '\t\t\titems[i] = strconv.FormatBool(value)',
+    '\t\t}',
+    '\t}',
+    '\treturn "{" + strings.Join(items, ",") + "}", nil',
+    '}',
+    '',
+    'func (list *ScalarList[T]) Scan(src any) error {',
+    '\tvar text string',
+    '\tswitch value := src.(type) {',
+    '\tcase nil:',
+    '\t\t*list = ScalarList[T]{}',
+    '\t\treturn nil',
+    '\tcase []byte:',
+    '\t\ttext = string(value)',
+    '\tcase string:',
+    '\t\ttext = value',
+    '\tdefault:',
+    '\t\treturn fmt.Errorf("an array column held %T", src)',
+    '\t}',
+    '\titems, err := arrayItems(text)',
+    '\tif err != nil {',
+    '\t\treturn err',
+    '\t}',
+    '\tread := make(ScalarList[T], len(items))',
+    '\tfor i, item := range items {',
+    '\t\tvar value any',
+    '\t\tvar parseErr error',
+    '\t\tswitch any(read[i]).(type) {',
+    '\t\tcase string:',
+    '\t\t\tvalue = item',
+    '\t\tcase int:',
+    '\t\t\tvalue, parseErr = strconv.Atoi(item)',
+    '\t\tcase int64:',
+    '\t\t\tvalue, parseErr = strconv.ParseInt(item, 10, 64)',
+    '\t\tcase float64:',
+    '\t\t\tvalue, parseErr = strconv.ParseFloat(item, 64)',
+    '\t\tcase bool:',
+    '\t\t\tswitch item {',
+    '\t\t\tcase "t", "true":',
+    '\t\t\t\tvalue = true',
+    '\t\t\tcase "f", "false":',
+    '\t\t\t\tvalue = false',
+    '\t\t\tdefault:',
+    '\t\t\t\tparseErr = fmt.Errorf("%q is not a boolean", item)',
+    '\t\t\t}',
+    '\t\t}',
+    '\t\tif parseErr != nil {',
+    '\t\t\treturn fmt.Errorf("an array column held %q: %w", text, parseErr)',
+    '\t\t}',
+    '\t\tread[i] = value.(T)',
+    '\t}',
+    '\t*list = read',
+    '\treturn nil',
+    '}',
+    '',
+    '// arrayItems splits the text form of a one-dimensional PostgreSQL array into its elements,',
+    '// unquoted. A NULL element (an unquoted NULL) is an error: a Prisma list holds none, and the',
+    '// string "NULL" is written quoted.',
+    'func arrayItems(text string) ([]string, error) {',
+    '\t// An array whose lower bound is not 1 is printed with its bounds first: [0:1]={x,a}.',
+    '\tif strings.HasPrefix(text, "[") {',
+    '\t\tif eq := strings.Index(text, "="); eq >= 0 {',
+    '\t\t\ttext = text[eq+1:]',
+    '\t\t}',
+    '\t}',
+    "\tif len(text) < 2 || text[0] != '{' || text[len(text)-1] != '}' {",
+    '\t\treturn nil, fmt.Errorf("an array column held %q", text)',
+    '\t}',
+    '\tbody := text[1 : len(text)-1]',
+    '\titems := []string{}',
+    '\tif body == "" {',
+    '\t\treturn items, nil',
+    '\t}',
+    '\tvar item strings.Builder',
+    '\tquoted, escaped, wasQuoted := false, false, false',
+    '\tend := func() error {',
+    '\t\tif !wasQuoted && item.String() == "NULL" {',
+    '\t\t\treturn fmt.Errorf("an array column held a NULL element: %q", text)',
+    '\t\t}',
+    '\t\titems = append(items, item.String())',
+    '\t\titem.Reset()',
+    '\t\twasQuoted = false',
+    '\t\treturn nil',
+    '\t}',
+    '\t// Every delimiter is ASCII, so the text is walked byte by byte and any other byte kept as it is.',
+    '\tfor i := 0; i < len(body); i++ {',
+    '\t\tr := body[i]',
+    '\t\tswitch {',
+    '\t\tcase escaped:',
+    '\t\t\titem.WriteByte(r)',
+    '\t\t\tescaped = false',
+    "\t\tcase r == '\\\\':",
+    '\t\t\tescaped = true',
+    "\t\tcase r == '\"':",
+    '\t\t\tquoted = !quoted',
+    '\t\t\twasQuoted = true',
+    "\t\tcase r == ',' && !quoted:",
+    '\t\t\tif err := end(); err != nil {',
+    '\t\t\t\treturn nil, err',
+    '\t\t\t}',
+    '\t\tdefault:',
+    '\t\t\titem.WriteByte(r)',
+    '\t\t}',
+    '\t}',
+    '\tif err := end(); err != nil {',
+    '\t\treturn nil, err',
+    '\t}',
+    '\treturn items, nil',
+    '}',
   ]
 }
