@@ -794,7 +794,7 @@ model Team {
     // A Json[] has no ScalarList element and keeps the json serializer.
     expect(code).toContain('`gorm:"column:blobs;serializer:json" json:"blobs"`')
     expect(code).toContain('type ScalarList[T string | int | int64 | float64 | bool] []T')
-    expect(code).toContain('func ArrayItems(text string) ([]string, error) {')
+    expect(code).toContain('func arrayItems(text string) ([]string, error) {')
     expect(code).toMatch(/^\t"strings"$/mu)
   })
 
@@ -822,14 +822,23 @@ model Box {
     expect(native).toContain('`gorm:"column:ratio;type:real[]" json:"ratio"`')
     expect(native).toContain('`gorm:"column:tags;type:char(2)[]" json:"tags"`')
     expect(native).toContain('`gorm:"column:wide;type:double precision[]" json:"wide"`')
-    const cockroach = gormFor('model A {\n  id Int @id\n  n  Int[]\n}\n', 'cockroachdb')
+    const cockroach = gormFor(
+      'model A {\n  id Int @id\n  n  Int[]\n  c  String[] @db.CatalogSingleChar\n}\n',
+      'cockroachdb',
+    )
     expect(cockroach).toContain('`gorm:"column:n;type:int4[]" json:"n"`')
+    expect(cockroach).toContain('`gorm:"column:c;type:\\"char\\"[]" json:"c"`')
+    // PostgreSQL prints money with a currency symbol, which a float list cannot read.
+    expect(
+      gormFor('model M {\n  id Int @id\n  m  Decimal[] @db.Money\n}\n', 'postgresql'),
+    ).toContain('`gorm:"column:m;type:decimal;serializer:json" json:"m"`')
   })
 
   it('refuses a NULL element and a token that is not a boolean, as no Prisma list holds one', () => {
     const code = gormFor(schema, 'postgresql')
     expect(code).toContain('return fmt.Errorf("an array column held a NULL element: %q", text)')
     expect(code).toContain('parseErr = fmt.Errorf("%q is not a boolean", item)')
+    expect(code).toContain('\tif strings.HasPrefix(text, "[") {')
   })
 
   it('writes no ScalarList for a schema without lists', () => {

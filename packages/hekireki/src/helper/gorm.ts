@@ -302,6 +302,8 @@ function isScalarList(field: DMMF.Field, provider: string | undefined) {
   return (
     isPostgresFamily(provider) &&
     field.isList &&
+    // PostgreSQL prints money with its currency symbol and separators, which no float reads.
+    field.nativeType?.[0] !== 'Money' &&
     (field.kind === 'enum' ||
       (field.kind === 'scalar' && SCALAR_LIST_ELEMENTS[field.type] !== undefined))
   )
@@ -311,6 +313,8 @@ function isScalarList(field: DMMF.Field, provider: string | undefined) {
 // Prisma name.
 const LIST_NATIVE_NAMES: { readonly [name: string]: string } = {
   DoublePrecision: 'double precision',
+  // CockroachDB's single-byte "char", quoted as the struct tag holds it.
+  CatalogSingleChar: '\\"char\\"',
 }
 
 /**
@@ -1273,9 +1277,10 @@ export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
       name,
       'the type the models hold a DateTime in',
     ]),
-    ...(usesScalarList(models, provider) ? ['ScalarList', 'ArrayItems'] : []).map(
-      (name): [string, string] => [name, 'what the models hold a scalar list in'],
-    ),
+    ...(usesScalarList(models, provider) ? ['ScalarList'] : []).map((name): [string, string] => [
+      name,
+      'what the models hold a scalar list in',
+    ]),
   ])
   return models.flatMap((model) => {
     const name = goModelName(model.name)
@@ -1406,7 +1411,7 @@ export function generateScalarListType(models: readonly DMMF.Model[], provider?:
     '\tdefault:',
     '\t\treturn fmt.Errorf("an array column held %T", src)',
     '\t}',
-    '\titems, err := ArrayItems(text)',
+    '\titems, err := arrayItems(text)',
     '\tif err != nil {',
     '\t\treturn err',
     '\t}',
@@ -1442,10 +1447,16 @@ export function generateScalarListType(models: readonly DMMF.Model[], provider?:
     '\treturn nil',
     '}',
     '',
-    '// ArrayItems splits the text form of a one-dimensional PostgreSQL array into its elements,',
+    '// arrayItems splits the text form of a one-dimensional PostgreSQL array into its elements,',
     '// unquoted. A NULL element (an unquoted NULL) is an error: a Prisma list holds none, and the',
     '// string "NULL" is written quoted.',
-    'func ArrayItems(text string) ([]string, error) {',
+    'func arrayItems(text string) ([]string, error) {',
+    '\t// An array whose lower bound is not 1 is printed with its bounds first: [0:1]={x,a}.',
+    '\tif strings.HasPrefix(text, "[") {',
+    '\t\tif eq := strings.Index(text, "="); eq >= 0 {',
+    '\t\t\ttext = text[eq+1:]',
+    '\t\t}',
+    '\t}',
     "\tif len(text) < 2 || text[0] != '{' || text[len(text)-1] != '}' {",
     '\t\treturn nil, fmt.Errorf("an array column held %q", text)',
     '\t}',

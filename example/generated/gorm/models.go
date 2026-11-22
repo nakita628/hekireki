@@ -348,7 +348,7 @@ func (list *ScalarList[T]) Scan(src any) error {
 	default:
 		return fmt.Errorf("an array column held %T", src)
 	}
-	items, err := ArrayItems(text)
+	items, err := arrayItems(text)
 	if err != nil {
 		return err
 	}
@@ -384,10 +384,16 @@ func (list *ScalarList[T]) Scan(src any) error {
 	return nil
 }
 
-// ArrayItems splits the text form of a one-dimensional PostgreSQL array into its elements,
+// arrayItems splits the text form of a one-dimensional PostgreSQL array into its elements,
 // unquoted. A NULL element (an unquoted NULL) is an error: a Prisma list holds none, and the
 // string "NULL" is written quoted.
-func ArrayItems(text string) ([]string, error) {
+func arrayItems(text string) ([]string, error) {
+	// An array whose lower bound is not 1 is printed with its bounds first: [0:1]={x,a}.
+	if strings.HasPrefix(text, "[") {
+		if eq := strings.Index(text, "="); eq >= 0 {
+			text = text[eq+1:]
+		}
+	}
 	if len(text) < 2 || text[0] != '{' || text[len(text)-1] != '}' {
 		return nil, fmt.Errorf("an array column held %q", text)
 	}
