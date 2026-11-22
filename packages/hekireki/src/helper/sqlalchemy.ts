@@ -1393,7 +1393,10 @@ function hasServerDefaultText(model: DMMF.Model) {
     (f) =>
       f.default !== undefined &&
       f.default !== null &&
-      (!isFunctionDefault(f.default) || ['now', 'dbgenerated'].includes(f.default.name)),
+      (!isFunctionDefault(f.default) ||
+        f.default.name === 'now' ||
+        // defaultArgs writes a dbgenerated() only with its SQL text.
+        (f.default.name === 'dbgenerated' && typeof f.default.args[0] === 'string')),
   )
 }
 

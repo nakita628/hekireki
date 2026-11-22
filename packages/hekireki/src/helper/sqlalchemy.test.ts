@@ -3201,3 +3201,26 @@ model DailyErrors {
     expect(code).toMatch(/^from sqlalchemy import .*\btext\b/mu)
   })
 })
+
+describe('the text import', () => {
+  it('is left out for a dbgenerated() with no SQL, which writes no server_default', () => {
+    const { models, enums, indexes } = datamodelOf(
+      getDMMF({
+        datamodel: [
+          [
+            'schema.prisma',
+            `datasource db {
+  provider = "postgresql"
+}
+model Row {
+  id Int @id @default(dbgenerated())
+}`,
+          ],
+        ],
+      }),
+    )
+    const code = generateSingleFile(models, enums, indexes, 'postgresql')
+    expect(code).not.toMatch(/^from sqlalchemy import .*\btext\b/mu)
+    expect(code).not.toContain('server_default')
+  })
+})
