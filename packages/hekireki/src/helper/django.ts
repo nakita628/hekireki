@@ -605,6 +605,64 @@ class AutoNowQuerySet(models.QuerySet[_M]):
                 kwargs.setdefault(field.name, getattr(field, "stamp", timezone.now)())
         return super().update(**kwargs)`
 
+/** PostgreSQL and CockroachDB, where Prisma makes an enum a type of its own and a list an array. */
+function hasEnumTypes(provider: string) {
+  return provider === 'postgresql' || provider === 'cockroachdb'
+}
+
+/** `"Name"`, as PostgreSQL quotes an identifier. */
+function quotedIdentifier(name: string) {
+  return `"${name.replaceAll('"', '""')}"`
+}
+
+/**
+ * The SQL type Prisma creates for each enum: its `@@map` name, in its `@@schema` when it names one.
+ *
+ * @param enums - The enums of the datamodel.
+ * @param schemas - The `@@schema` of each enum that names one, which DMMF does not carry.
+ * @returns The quoted type name of each enum, by its Prisma name.
+ */
+export function enumSqlTypes(
+  enums: readonly DMMF.DatamodelEnum[],
+  schemas: ReadonlyMap<string, string>,
+) {
+  return new Map(
+    enums.map((e) => {
+      const schema = schemas.get(e.name)
+      const type = quotedIdentifier(e.dbName ?? e.name)
+      return [e.name, schema === undefined ? type : `${quotedIdentifier(schema)}.${type}`]
+    }),
+  )
+}
+
+// An enum list is a column of the enum's array type, which PostgreSQL will not take a text[] for:
+// ArrayField's placeholder casts to db_type, so the parameter is bound as the enum's array, and a
+// lookup's right-hand side through cast_db_type. The driver knows no loader for the enum, and would
+// hand the array back as its text ('{a,b}'), so it is selected as text[].
+const ENUM_ARRAY_FIELD = `class EnumArrayField(ArrayField):  # type: ignore[type-arg]
+    def __init__(self, base_field: Any, db_enum: str, **kwargs: Any) -> None:
+        self.db_enum = db_enum
+        super().__init__(base_field, **kwargs)
+
+    def deconstruct(self) -> Any:
+        name, path, args, kwargs = super().deconstruct()
+        kwargs["db_enum"] = self.db_enum
+        return name, path, args, kwargs
+
+    def db_type(self, connection: BaseDatabaseWrapper) -> str:
+        return f"{self.db_enum}[]"
+
+    def cast_db_type(self, connection: BaseDatabaseWrapper) -> str:
+        return self.db_type(connection)
+
+    def select_format(self, compiler: Any, sql: str, params: Any) -> Any:
+        return f"{sql}::text[]", params`
+
+/** An enum list on a database that has enum types: the field EnumArrayField declares. */
+function isEnumArray(field: DMMF.Field, provider: string) {
+  return field.kind === 'enum' && field.isList && hasEnumTypes(provider)
+}
+
 // Django's auto_now takes the local date or time of day, and an instant with
 // microseconds; Prisma's @updatedAt on a @db.Date or @db.Time column writes the
 // UTC one, and on a DateTime the instant in milliseconds.
@@ -652,7 +710,7 @@ function stampedFieldClass(field: DMMF.Field, provider: string): StampedField['n
 }
 
 // The field every zoneless DateTime column is declared with, those of an
-// @updatedAt column, and the QuerySet a model with an @updatedAt field is
+// @updatedAt column, the one an enum list is declared with, and the QuerySet a model with an @updatedAt field is
 // managed by, each written once per file.
 export function collectFieldClasses(models: readonly DMMF.Model[], provider: string) {
   const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
@@ -660,6 +718,7 @@ export function collectFieldClasses(models: readonly DMMF.Model[], provider: str
   return [
     scalarFields.some((f) => holdsUtc(f, provider)) ? UTC_DATETIME_FIELD : null,
     ...STAMPED_FIELDS.filter((f) => stamped.has(f.name)).map((f) => stampedField(f)),
+    scalarFields.some((f) => isEnumArray(f, provider)) ? ENUM_ARRAY_FIELD : null,
     scalarFields.some((f) => f.isUpdatedAt === true) ? AUTO_NOW_QUERY_SET : null,
   ].filter((c) => c !== null)
 }
@@ -795,6 +854,7 @@ function generateScalarField(
   isPk: boolean,
   names: Names,
   provider: string,
+  enumTypes: ReadonlyMap<string, string>,
 ) {
   const columnName = fieldColumnName(field)
   const attrName = attrNameOf(names, model, field)
@@ -831,6 +891,11 @@ function generateScalarField(
   const fieldClass = scalarFieldClass(field, provider, ctorResolved.ctor)
   if (field.isList) {
     const inner = `${fieldClass}(${ctorResolved.typeArgs.join(', ')})`
+    if (isEnumArray(field, provider)) {
+      const sqlType = enumTypes.get(field.type) ?? quotedIdentifier(field.type)
+      const dbEnum = `db_enum=${toPythonString(sqlType)}`
+      return `    ${attrName} = EnumArrayField(${[inner, dbEnum, ...outerArgs].join(', ')})`
+    }
     return `    ${attrName} = ArrayField(${[inner, ...outerArgs].join(', ')})`
   }
   return `    ${attrName} = ${fieldClass}(${[...ctorResolved.typeArgs, ...outerArgs].join(', ')})`
@@ -1242,6 +1307,7 @@ export function generateModelBody(
   }[],
   names: Names,
   provider: string,
+  enumTypes: ReadonlyMap<string, string> = new Map(),
 ) {
   const pkFields = primaryKeyFields(model)
   if (pkFields.length === 0) return null
@@ -1276,7 +1342,7 @@ export function generateModelBody(
       ]
     }
     return [
-      generateScalarField(model, field, isPk, names, provider),
+      generateScalarField(model, field, isPk, names, provider, enumTypes),
       ...pythonDocstringLines(stripAnnotations(field.documentation), '    '),
     ]
   })
@@ -1357,6 +1423,7 @@ type ImportNeeds = {
   readonly array: boolean
   readonly rawSql: boolean
   readonly utcField: boolean
+  readonly enumArray: boolean
   readonly autoNow: boolean
   readonly decimal: boolean
   readonly any: boolean
@@ -1368,7 +1435,7 @@ type ImportNeeds = {
 
 function stdlibImports(needs: ImportNeeds) {
   const fromTyping = [
-    needs.any || needs.utcField || needs.autoNow ? 'Any' : null,
+    needs.any || needs.utcField || needs.autoNow || needs.enumArray ? 'Any' : null,
     needs.autoNow ? 'TypeVar' : null,
   ].filter((name) => name !== null)
   return [
@@ -1395,7 +1462,9 @@ function thirdPartyImports(needs: ImportNeeds) {
       ? `from django.contrib.postgres.indexes import ${needs.indexClasses.join(', ')}`
       : null,
     'from django.db import models',
-    needs.utcField ? 'from django.db.backends.base.base import BaseDatabaseWrapper' : null,
+    needs.utcField || needs.enumArray
+      ? 'from django.db.backends.base.base import BaseDatabaseWrapper'
+      : null,
     needs.rawSql ? 'from django.db.models.expressions import RawSQL' : null,
     needs.utcField || needs.autoNow || needs.nowDatetime
       ? 'from django.utils import timezone'
@@ -1441,6 +1510,7 @@ export function collectGlobalImports(
     array: scalarFields.some((f) => f.isList),
     rawSql: scalarFields.some((f) => dbGeneratedExpr(f) !== null),
     utcField: needsUtcField,
+    enumArray: scalarFields.some((f) => isEnumArray(f, provider)),
     autoNow: scalarFields.some((f) => f.isUpdatedAt === true),
     decimal: needsDecimalImport(scalarFields),
     any: needsAnyImport(scalarFields),

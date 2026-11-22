@@ -973,24 +973,21 @@ function typeSpecField(f: DMMF.Field) {
 function typeSpecLines(
   appName: string,
   pk: EctoPrimaryKey,
-  compositePkFieldNames: ReadonlySet<string> | null,
+  keyFieldNames: ReadonlySet<string>,
   schemaFields: readonly DMMF.Field[],
   timestampTypes: readonly string[],
   associations: EctoAssociations,
 ) {
-  const compositePkFkTypeSpecs =
-    compositePkFieldNames === null
-      ? []
-      : associations.belongsTo
-          .filter((a) => compositePkFieldNames.has(a.foreignKey))
-          .map((a) => {
-            const snakeFk = makeSnakeCase(a.foreignKey)
-            const fkType = a.fkType ?? 'id'
-            return `${snakeFk}: ${ectoTypeToTypespec(fkType)}`
-          })
+  const keyFkTypeSpecs = associations.belongsTo
+    .filter((a) => keyFieldNames.has(a.foreignKey))
+    .map((a) => {
+      const snakeFk = makeSnakeCase(a.foreignKey)
+      const fkType = a.fkType ?? 'id'
+      return `${snakeFk}: ${ectoTypeToTypespec(fkType)}`
+    })
   const typeSpecFields = [
     ...(pk.omitIdFieldInSchema ? [`id: ${pk.typeSpec}`] : []),
-    ...compositePkFkTypeSpecs,
+    ...keyFkTypeSpecs,
     ...schemaFields.map(typeSpecField),
     ...timestampTypes,
     ...associations.belongsTo.map(
@@ -1038,8 +1035,7 @@ function enumSchemaFieldLines(
 
 function schemaFieldLines(
   f: DMMF.Field,
-  pk: EctoPrimaryKey,
-  compositePkFieldNames: ReadonlySet<string>,
+  keyFieldNames: ReadonlySet<string>,
   enumMap: EnumValues,
   appName: string,
 ) {
@@ -1049,10 +1045,7 @@ function schemaFieldLines(
   if (f.kind === 'enum') {
     return enumSchemaFieldLines(f, snakeName, sourceOpt, enumMap.get(f.type) ?? [])
   }
-  const primary =
-    (f.isId && !pk.omitIdFieldInSchema) || compositePkFieldNames.has(f.name)
-      ? ', primary_key: true'
-      : ''
+  const primary = keyFieldNames.has(f.name) ? ', primary_key: true' : ''
   const type =
     f.type === 'DateTime' ? `${appName}.${dateTimeModule(f)}` : `:${prismaTypeToEctoType(f.type)}`
   const ectoType = f.isList ? `{:array, ${type}}` : type
@@ -1064,7 +1057,7 @@ function schemaFieldLines(
   ]
 }
 
-// A belongs_to's key as a field: where it maps another column, is part of the primary key, or
+// A belongs_to's key as a field: where it maps another column, is the primary key or part of it, or
 // has a default (belongs_to takes no :default), it is a field of its own and belongs_to does not
 // define it.
 function belongsToKey(
@@ -1169,10 +1162,13 @@ function ectoSchema(model: DMMF.Model, ctx: EctoContext) {
   // A model with no @id or @@id is keyed by its first unique fields, as a composite key is,
   // so the associations of the other models that name it have a schema to load.
   const idField = model.fields.find((f) => f.isId)
-  const compositePkFieldNames = new Set(idField ? [] : primaryKeyFields(model))
-  const isCompositePk = !idField && compositePkFieldNames.size > 0
-
   const pk = idField ? getPrimaryKeyConfig(idField) : NO_PRIMARY_KEY
+  // The fields that are the key where @primary_key declares none: an @id Ecto does not generate,
+  // or each field of a composite key. Each is a `field(..., primary_key: true)`, a foreign key
+  // among them too, or Ecto sees no primary key and refuses to update or delete a row.
+  const keyFieldNames = new Set(
+    idField ? (pk.omitIdFieldInSchema ? [] : [idField.name]) : primaryKeyFields(model),
+  )
   const fields = model.fields.map((f) => ({ ...f }))
   const fieldsByName = new Map(fields.map((f) => [f.name, f]))
   const timestamps = makeTimestampsLines(fields, appName)
@@ -1192,7 +1188,7 @@ function ectoSchema(model: DMMF.Model, ctx: EctoContext) {
 
   const keys = associations.belongsTo.map((a) => ({
     a,
-    key: belongsToKey(a, fieldsByName.get(a.foreignKey), compositePkFieldNames.has(a.foreignKey)),
+    key: belongsToKey(a, fieldsByName.get(a.foreignKey), keyFieldNames.has(a.foreignKey)),
   }))
 
   // The prose of a relation field, above the association it becomes.
@@ -1215,7 +1211,7 @@ function ectoSchema(model: DMMF.Model, ctx: EctoContext) {
     ...typeSpecLines(
       appName,
       pk,
-      isCompositePk ? compositePkFieldNames : null,
+      keyFieldNames,
       schemaFieldsRaw,
       timestamps.types,
       associations,
@@ -1223,7 +1219,7 @@ function ectoSchema(model: DMMF.Model, ctx: EctoContext) {
     '',
     `  schema "${model.dbName ?? model.name}" do`,
     ...schemaFieldsRaw.flatMap((f) =>
-      schemaFieldLines(f, pk, compositePkFieldNames, ctx.enumMap, appName),
+      schemaFieldLines(f, keyFieldNames, ctx.enumMap, appName),
     ),
     ...keys.flatMap(({ a, key }) => keyFieldLines(a, key)),
     ...keys.flatMap(({ a, key }) => belongsToLines(a, key, pk, appName, relationComments(a.name))),

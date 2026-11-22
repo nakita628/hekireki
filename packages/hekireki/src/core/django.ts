@@ -20,7 +20,13 @@ export function django(options: GeneratorOptions) {
       })
     }
     const provider = options.datasources[0]?.activeProvider
-    const code = djangoCode(options.dmmf.datamodel.models, enums, indexes, provider)
+    const code = djangoCode(
+      options.dmmf.datamodel.models,
+      enums,
+      indexes,
+      provider,
+      options.datamodel,
+    )
     return yield* emitRaw(code, resolved.dir, resolved.file)
   })
 }

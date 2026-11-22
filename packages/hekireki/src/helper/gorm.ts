@@ -797,7 +797,14 @@ function generateRelationFields(
   associations: ReturnType<typeof getAssociations>,
   provider: string | undefined,
   foreignKeyNames: ReadonlyMap<string, string>,
+  views: ReadonlySet<string>,
 ) {
+  // The database holds no foreign key to or from a view. GORM has no way for a model to opt out
+  // of AutoMigrate, only a field (`-:migration`): on the relation, it keeps AutoMigrate of a table
+  // from creating the view it points at as a table first (GORM 1.31, `Migrator.ReorderModels`
+  // adds the model a foreign key references) and from adding the constraint.
+  const viewEnd = (targetModel: string) => views.has(model.name) || views.has(targetModel)
+  const unmigrated = (targetModel: string) => (viewEnd(targetModel) ? ['-:migration'] : [])
   // A relation and the keys it names are written as the struct that holds each field names it.
   const of = (modelName: string) => (name: string) => goFieldNameIn(allModels, modelName, name)
   const own = of(model.name)
@@ -830,6 +837,7 @@ function generateRelationFields(
       // relation field (`User.CreatedBy`), or a key whose column is the snake-cased key name
       // (`User.ID` in `user_id`). `belongsTo` skips the guess (GORM 1.31, `schema.parseRelation`).
       'belongsTo',
+      ...unmigrated(assoc.targetModel),
     ].filter((p) => p !== null)
     // A belongs-to is a pointer, as GORM writes a self-reference (`Manager *User`): by value,
     // two models that point at each other (or one at itself) embed each other, an illegal
@@ -845,14 +853,16 @@ function generateRelationFields(
       ...(assoc.foreignKeys.length > 1 || needsReferencesTag(assoc.references)
         ? [`references:${assoc.referencesList.map(own).join(',')}`]
         : []),
-      ...[
-        constraintTag(
-          foreignKeyNames.get(`${assoc.targetModel}.${assoc.fkFieldName}`) ??
-            foreignKeyName(allModels, assoc.targetModel, assoc.foreignKeys, provider),
-          assoc.onDelete,
-          assoc.onUpdate,
-        ),
-      ].filter((c) => c !== null),
+      ...(viewEnd(assoc.targetModel)
+        ? unmigrated(assoc.targetModel)
+        : [
+            constraintTag(
+              foreignKeyNames.get(`${assoc.targetModel}.${assoc.fkFieldName}`) ??
+                foreignKeyName(allModels, assoc.targetModel, assoc.foreignKeys, provider),
+              assoc.onDelete,
+              assoc.onUpdate,
+            ),
+          ].filter((c) => c !== null)),
     ]
     return withDoc(assoc.name, [
       own(assoc.name),
@@ -867,14 +877,16 @@ function generateRelationFields(
       ...(assoc.foreignKeys.length > 1 || needsReferencesTag(assoc.references)
         ? [`references:${assoc.referencesList.map(own).join(',')}`]
         : []),
-      ...[
-        constraintTag(
-          foreignKeyNames.get(`${assoc.targetModel}.${assoc.fkFieldName}`) ??
-            foreignKeyName(allModels, assoc.targetModel, assoc.foreignKeys, provider),
-          assoc.onDelete,
-          assoc.onUpdate,
-        ),
-      ].filter((c) => c !== null),
+      ...(viewEnd(assoc.targetModel)
+        ? unmigrated(assoc.targetModel)
+        : [
+            constraintTag(
+              foreignKeyNames.get(`${assoc.targetModel}.${assoc.fkFieldName}`) ??
+                foreignKeyName(allModels, assoc.targetModel, assoc.foreignKeys, provider),
+              assoc.onDelete,
+              assoc.onUpdate,
+            ),
+          ].filter((c) => c !== null)),
     ]
     // A has-one is a pointer for the same reason, and Prisma requires the 1:1 back side to be
     // optional anyway. A has-one onto its own model is a slice instead: GORM guesses a struct
@@ -950,6 +962,18 @@ function alignFields(rows: readonly (readonly string[])[]) {
   )
 }
 
+/**
+ * What a struct of a Prisma `view` says of itself. Prisma Migrate never creates a view (its SQL
+ * is written by hand), and `AutoMigrate` has no notion of one: given the struct, it finds no
+ * table of that name and creates one. Nothing in GORM lets a model refuse, so the struct says it.
+ */
+function viewCommentLines(structName: string) {
+  return [
+    `// ${structName} is a database view: read it, do not write to it, and do not pass it to`,
+    '// AutoMigrate, which would create a table of that name.',
+  ]
+}
+
 export function generateModelStruct(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
@@ -957,6 +981,7 @@ export function generateModelStruct(
   indexes: readonly DMMF.Index[],
   provider?: string,
   foreignKeyNames: ReadonlyMap<string, string> = new Map(),
+  views: ReadonlySet<string> = new Set(),
 ) {
   // A model with no @id or @@id is keyed by its first unique fields, as a composite key is: GORM
   // needs a primary key to load an association, and the other models name this one.
@@ -996,6 +1021,7 @@ export function generateModelStruct(
     associations,
     provider,
     foreignKeyNames,
+    views,
   )
 
   // GORM would pluralise the snake_cased struct name (Warehouse -> warehouses);
@@ -1007,8 +1033,12 @@ export function generateModelStruct(
     '}',
   ]
 
+  const doc = goCommentLines(stripAnnotations(model.documentation))
   return [
-    ...goCommentLines(stripAnnotations(model.documentation)),
+    ...doc,
+    ...(views.has(model.name)
+      ? [...(doc.length > 0 ? ['//'] : []), ...viewCommentLines(goModelName(model.name))]
+      : []),
     `type ${goModelName(model.name)} struct {`,
     ...alignFields([...fieldLines, ...relationLines]),
     '}',

@@ -13,6 +13,8 @@ import hekireki.edge.DefaultsEntity
 import hekireki.edge.DefaultsTable
 import hekireki.edge.DottedEntity
 import hekireki.edge.EggEntity
+import hekireki.edge.GradedEntity
+import hekireki.edge.GradedTable
 import hekireki.edge.Größe
 import hekireki.edge.HenEntity
 import hekireki.edge.IndexedTable
@@ -57,6 +59,7 @@ import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.insertReturning
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalTime
@@ -277,6 +280,26 @@ object EdgeSmoke {
         val owner = WalletOwnerEntity.new(wallet.id.value) { name = "o" }
         flushCache()
         check(wallet.owner?.id == owner.id && owner.wallet.id == wallet.id, "a one-to-one that shares its key")
+
+        GradedTable.insert {
+            it[name] = "g"
+            it[level] = Level.FooBar
+            it[shade] = Shade.DARK
+        }
+        check(scalar("SELECT level || ' ' || shade FROM \"Graded\"") == "say \"hi\" DARK", "enums in a composite key are bound as their types")
+        val graded =
+            GradedEntity.new(
+                CompositeID {
+                    it[GradedTable.name] = "h"
+                    it[GradedTable.level] = Level.IN
+                    it[GradedTable.shade] = Shade.LIGHT
+                },
+            ) { note = "n" }
+        flushCache()
+        val found = GradedEntity.find { (GradedTable.level eq Level.IN) and (GradedTable.shade eq Shade.LIGHT) }.single()
+        check(found.id == graded.id && found.level.value == Level.IN && found.shade.value == Shade.LIGHT, "and compared and read back as their constants")
+        GradedTable.update({ GradedTable.level eq Level.IN }) { it[note] = "m" }
+        check(GradedTable.deleteWhere { (GradedTable.name eq "h") and (GradedTable.level eq Level.IN) } == 1 && scalar("SELECT count(*) FROM \"Graded\"") == "1", "in an update and a delete too")
 
         val tiny = TinyTable.insertReturning(listOf(TinyTable.id)) { it[name] = "t" }.single()[TinyTable.id]
         TinyRefTable.insert { it[tinyId] = tiny.value }

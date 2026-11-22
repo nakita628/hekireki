@@ -3351,3 +3351,87 @@ defmodule App.Post do
 end`)
   })
 })
+
+/** The datamodel of a schema, parsed by Prisma as a generator is handed it. */
+function parsed(schema: string) {
+  return datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
+}
+
+// Ecto.NoPrimaryKeyFieldError on every Repo.update and Repo.delete of calcom's CalVideoSettings.
+describe('an @id that is also a foreign key', () => {
+  it('is a field with primary_key: true beside its belongs_to', () => {
+    const { models, enums, indexes } = parsed(`datasource db {
+  provider = "postgresql"
+}
+
+model EventType {
+  id       Int               @id @default(autoincrement())
+  settings CalVideoSettings?
+}
+
+model CalVideoSettings {
+  eventTypeId Int       @id
+  eventType   EventType @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+
+  disableRecordingForOrganizer Boolean @default(false)
+}
+`)
+    const settings = models.filter((model) => model.name === 'CalVideoSettings')
+
+    expect(ectoSchemas(settings, 'Calcom', models, enums, { provider: 'postgresql', indexes }))
+      .toBe(`defmodule Calcom.CalVideoSettings do
+  use Ecto.Schema
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          event_type_id: integer(),
+          disable_recording_for_organizer: boolean(),
+          event_type: Calcom.EventType.t() | nil
+        }
+
+  schema "CalVideoSettings" do
+    field(:disable_recording_for_organizer, :boolean, default: false, source: :disableRecordingForOrganizer)
+    field(:event_type_id, :id, primary_key: true, source: :eventTypeId)
+    belongs_to(:event_type, Calcom.EventType, foreign_key: :event_type_id, define_field: false)
+  end
+end`)
+  })
+
+  it('is one where its column has the name Ecto gives the field', () => {
+    const { models } = parsed(`datasource db {
+  provider = "postgresql"
+}
+
+model Team {
+  id    Int        @id @default(autoincrement())
+  email TeamEmail?
+}
+
+model TeamEmail {
+  team_id Int    @id
+  team    Team   @relation(fields: [team_id], references: [id])
+  email   String
+}
+`)
+    const email = models.filter((model) => model.name === 'TeamEmail')
+
+    expect(ectoSchemas(email, 'App', models)).toBe(`defmodule App.TeamEmail do
+  use Ecto.Schema
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          team_id: integer(),
+          email: String.t(),
+          team: App.Team.t() | nil
+        }
+
+  schema "TeamEmail" do
+    field(:email, :string)
+    field(:team_id, :id, primary_key: true)
+    belongs_to(:team, App.Team, foreign_key: :team_id, define_field: false)
+  end
+end`)
+  })
+})

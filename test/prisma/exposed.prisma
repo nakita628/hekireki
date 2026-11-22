@@ -619,6 +619,18 @@ model Stamp {
   @@schema("public")
 }
 
+// Enums in a composite key, whose columns Exposed binds through EntityIDColumnType: one mapped to
+// a lower-case name in another schema, one in a schema named in mixed case.
+model Graded {
+  name  String
+  level Level
+  shade Shade
+  note  String @default("")
+
+  @@id([name, level, shade])
+  @@schema("public")
+}
+
 // Named like the class ColumnTypes.kt compiles into.
 enum ColumnTypesKt {
   A

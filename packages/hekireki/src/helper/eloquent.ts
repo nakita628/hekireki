@@ -26,8 +26,27 @@ function phpString(value: string) {
   return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
 }
 
+// PostgreSQL and CockroachDB are the providers whose column holds a scalar list as an array, and
+// whose driver hands it over as the array's literal (`{a,b}`).
+function hasArrayColumns(provider: string | undefined) {
+  return provider === 'postgresql' || provider === 'cockroachdb'
+}
+
+// What AsPrismaList reads the items of a list as, where they are not strings: the argument of
+// the cast, and the type of an item for the `@property` tag.
+const LIST_ITEM_TYPES: { readonly [prismaType: string]: readonly [string, string] } = {
+  Int: ['int', 'int'],
+  BigInt: ['int', 'int'],
+  Float: ['float', 'float'],
+  Boolean: ['bool', 'bool'],
+  Decimal: ['decimal', 'string'],
+  Bytes: ['bytes', 'string'],
+  Json: ['json', 'mixed'],
+}
+
 // The type an attribute reads as through its cast, for the `@property` tag that carries a field's
-// prose. A list other than DateTime[] has no cast and reads as the driver hands it over.
+// prose. A list other than DateTime[] has a cast where the column is an array, and elsewhere
+// reads as the driver hands it over.
 const PHP_SCALAR_TYPES: { readonly [prismaType: string]: string } = {
   Int: 'int',
   BigInt: 'int',
@@ -37,14 +56,27 @@ const PHP_SCALAR_TYPES: { readonly [prismaType: string]: string } = {
   Json: 'mixed',
 }
 
-function phpValueType(field: DMMF.Field, enumNames: ReadonlySet<string>) {
-  if (field.isList) return field.type === 'DateTime' ? 'list<\\Carbon\\CarbonInterface>' : 'mixed'
+function phpValueType(
+  field: DMMF.Field,
+  enumNames: ReadonlySet<string>,
+  provider: string | undefined,
+) {
+  if (field.isList && field.type === 'DateTime') return 'list<\\Carbon\\CarbonInterface>'
+  if (field.isList && !hasArrayColumns(provider)) return 'mixed'
+  if (field.isList && field.kind === 'enum') {
+    return `list<${enumNames.has(field.type) ? field.type : 'string'}>`
+  }
+  if (field.isList) return `list<${LIST_ITEM_TYPES[field.type]?.[1] ?? 'string'}>`
   if (field.kind === 'enum' && enumNames.has(field.type)) return field.type
   return PHP_SCALAR_TYPES[field.type] ?? 'string'
 }
 
-function phpPropertyType(field: DMMF.Field, enumNames: ReadonlySet<string>) {
-  const type = phpValueType(field, enumNames)
+function phpPropertyType(
+  field: DMMF.Field,
+  enumNames: ReadonlySet<string>,
+  provider: string | undefined,
+) {
+  const type = phpValueType(field, enumNames, provider)
   return type === 'mixed' || field.isRequired ? type : `${type}|null`
 }
 
@@ -793,8 +825,104 @@ class AsPrismaDateList implements CastsAttributes
 }`
 }
 
+/**
+ * The cast of a PostgreSQL scalar list other than `DateTime[]` (`String[]`, `Int[]`, an enum
+ * list): a PHP list, read from the array literal the column holds (`{a,"b c",NULL}`) and written
+ * as one. Without a cast Eloquent binds the array as the string `Array`, which PostgreSQL
+ * refuses. Its argument is what an item reads as: `int`, `float`, `bool`, `decimal` (the string
+ * `AsDecimal` reads), `bytes` (the string of its bytes, base64 in `toArray()` as `AsBytes` has
+ * it), `json` (decoded as Eloquent's `array` cast decodes a `Json`), the class of an enum, or
+ * none for a string. Every item is written quoted, so that none of its characters (a comma, a
+ * brace, a quote, a backslash, the word NULL) is read as the literal's own; a null item is NULL,
+ * and in a `Json[]` the JSON `null`. A string is written as it is, as the literal the column
+ * takes.
+ */
+export function eloquentListCast(namespace: string) {
+  return `<?php
+
+namespace ${namespace};
+
+use Illuminate\\Contracts\\Database\\Eloquent\\CastsAttributes;
+use Illuminate\\Contracts\\Database\\Eloquent\\SerializesCastableAttributes;
+use Illuminate\\Database\\Eloquent\\Model;
+
+class AsPrismaList implements CastsAttributes, SerializesCastableAttributes
+{
+    public function __construct(private string $type = 'string')
+    {
+    }
+
+    public function get(Model $model, string $key, mixed $value, array $attributes): ?array
+    {
+        if ($value === null) {
+            return null;
+        }
+        preg_match_all('/"((?:[^"\\\\\\\\]++|\\\\\\\\.)*+)"|[^,]+/s', substr((string) $value, 1, -1), $items, PREG_SET_ORDER);
+
+        return array_map(fn (array $item) => match (true) {
+            isset($item[1]) => $this->read(preg_replace('/\\\\\\\\(.)/s', '$1', $item[1])),
+            strtoupper($item[0]) === 'NULL' => null,
+            default => $this->read($item[0]),
+        }, $items);
+    }
+
+    public function set(Model $model, string $key, mixed $value, array $attributes): ?string
+    {
+        if ($value === null || is_string($value)) {
+            return $value;
+        }
+
+        return '{' . implode(',', array_map(fn ($item) => $item === null && $this->type !== 'json'
+            ? 'NULL'
+            : '"' . addcslashes($this->write($item), '"\\\\') . '"', $value)) . '}';
+    }
+
+    public function serialize(Model $model, string $key, mixed $value, array $attributes): ?array
+    {
+        return $value === null ? null : array_map(fn ($item) => match (true) {
+            $item instanceof \\BackedEnum => $item->value,
+            $this->type === 'bytes' && $item !== null => base64_encode($item),
+            default => $item,
+        }, $value);
+    }
+
+    private function read(string $item): mixed
+    {
+        return match ($this->type) {
+            'string' => $item,
+            'int' => (int) $item,
+            'float' => match ($item) {
+                'NaN' => NAN,
+                'Infinity' => INF,
+                '-Infinity' => -INF,
+                default => (float) $item,
+            },
+            'bool' => $item === 't',
+            'decimal' => str_contains($item, '.') ? rtrim(rtrim($item, '0'), '.') : $item,
+            'bytes' => str_starts_with($item, '\\\\x') ? hex2bin(substr($item, 2)) : stripcslashes($item),
+            'json' => json_decode($item, true),
+            default => $this->type::from($item),
+        };
+    }
+
+    private function write(mixed $item): string
+    {
+        return match (true) {
+            $item instanceof \\BackedEnum => (string) $item->value,
+            $this->type === 'json' => json_encode($item),
+            $this->type === 'bytes' => '\\\\x' . bin2hex((string) $item),
+            $this->type === 'bool' => $item ? 'true' : 'false',
+            is_float($item) && is_nan($item) => 'NaN',
+            is_float($item) && is_infinite($item) => $item > 0 ? 'Infinity' : '-Infinity',
+            is_float($item) => json_encode($item),
+            default => (string) $item,
+        };
+    }
+}`
+}
+
 // The classes written beside the models, each where a model needs it.
-function supportClasses(models: readonly DMMF.Model[]) {
+function supportClasses(models: readonly DMMF.Model[], provider: string | undefined) {
   const fields = models.flatMap((model) => model.fields.filter((f) => !f.isList))
   return [
     ...(fields.some((f) => f.type === 'DateTime')
@@ -829,6 +957,10 @@ function supportClasses(models: readonly DMMF.Model[]) {
           },
         ]
       : []),
+    ...(hasArrayColumns(provider) &&
+    models.some((model) => model.fields.some((f) => listCastOf(f, new Set()) !== null))
+      ? [{ name: 'AsPrismaList', why: 'the cast of scalar list columns', code: eloquentListCast }]
+      : []),
     ...(fields.some((f) => f.type === 'Bytes')
       ? [{ name: 'AsBytes', why: 'the cast of Bytes columns', code: eloquentBytesCast }]
       : []),
@@ -858,7 +990,7 @@ export function eloquentSupportFiles(
   namespace: string,
   provider?: string,
 ) {
-  return supportClasses(models).map(({ name, code }) => ({
+  return supportClasses(models, provider).map(({ name, code }) => ({
     fileName: `${name}.php`,
     code: code(namespace, provider),
   }))
@@ -877,6 +1009,7 @@ export function eloquentSupportFiles(
 export function eloquentProblems(
   models: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[] = [],
+  provider?: string,
 ) {
   const classes = [
     ...models.map((model) => ({
@@ -886,7 +1019,9 @@ export function eloquentProblems(
     })),
     ...enums.map((enumDef) => ({ what: 'enum', name: enumDef.name, className: enumDef.name })),
   ]
-  const supportByName = Map.groupBy(supportClasses(models), (written) => written.name.toLowerCase())
+  const supportByName = Map.groupBy(supportClasses(models, provider), (written) =>
+    written.name.toLowerCase(),
+  )
   // PHP compares class names without regard to case: the classes grouped by the name they share.
   const sameClass = Map.groupBy(classes, ({ className }) => className.toLowerCase())
   const classProblems = [
@@ -1135,6 +1270,19 @@ const DATE_LIST_ARGUMENTS: { readonly [nativeType: string]: string } = {
   Timetz: " . ':time'",
 }
 
+// The cast of a scalar list other than DateTime[] where the column is an array: AsPrismaList,
+// with what its items read as for its argument, an enum by its class as a field of one is cast.
+function listCastOf(f: DMMF.Field, enumNames: ReadonlySet<string>) {
+  if (!f.isList || f.type === 'DateTime' || (f.kind !== 'scalar' && f.kind !== 'enum')) return null
+  if (f.kind === 'enum') {
+    return enumNames.has(f.type)
+      ? `AsPrismaList::class . ':' . ${f.type}::class`
+      : 'AsPrismaList::class'
+  }
+  const item = LIST_ITEM_TYPES[f.type]?.[0]
+  return item === undefined ? 'AsPrismaList::class' : `AsPrismaList::class . ':${item}'`
+}
+
 // The cast of a field that is not a list.
 function castOf(f: DMMF.Field, enumNames: ReadonlySet<string>) {
   const native = f.nativeType?.[0]
@@ -1149,7 +1297,11 @@ function castOf(f: DMMF.Field, enumNames: ReadonlySet<string>) {
   return cast === null ? null : `'${cast}'`
 }
 
-function castEntries(f: DMMF.Field, enumNames: ReadonlySet<string>) {
+function castEntries(
+  f: DMMF.Field,
+  enumNames: ReadonlySet<string>,
+  provider: string | undefined,
+) {
   const column = phpString(f.dbName ?? f.name)
   // A DateTime[] is a list of Carbon, through AsPrismaDateList; its argument is the
   // native type of the items.
@@ -1157,10 +1309,13 @@ function castEntries(f: DMMF.Field, enumNames: ReadonlySet<string>) {
     const argument = DATE_LIST_ARGUMENTS[f.nativeType?.[0] ?? ''] ?? ''
     return [`        ${column} => AsPrismaDateList::class${argument},`]
   }
-  // Other Prisma scalar lists are native arrays (e.g. text[] on PostgreSQL),
-  // not serialized JSON: Laravel's 'array' cast would json_decode/encode
-  // and break both reads and writes, so they get no cast.
-  if (f.isList) return []
+  // Other Prisma scalar lists are native arrays (e.g. text[] on PostgreSQL), not serialized
+  // JSON: Laravel's 'array' cast would json_decode/encode and break both reads and writes.
+  // Where the column is an array they go through AsPrismaList, and elsewhere get no cast.
+  if (f.isList) {
+    const list = hasArrayColumns(provider) ? listCastOf(f, enumNames) : null
+    return list === null ? [] : [`        ${column} => ${list},`]
+  }
   const cast = castOf(f, enumNames)
   return cast === null ? [] : [`        ${column} => ${cast},`]
 }
@@ -1244,7 +1399,7 @@ function propertyBlocks(
     ...listedBlock('    protected $attributes = [', defaultEntries),
     ...listedBlock(
       '    protected $casts = [',
-      attributeFields.flatMap((f) => castEntries(f, ctx.enumNames)),
+      attributeFields.flatMap((f) => castEntries(f, ctx.enumNames, ctx.provider)),
     ),
   ]
 }
@@ -1387,13 +1542,17 @@ function classImports(
 
 // Eloquent reads a column through `__get`, so a field's prose is the description of its
 // `@property` tag, the form IDEs and Larastan read.
-function classDocOf(model: DMMF.Model, enumNames: ReadonlySet<string>) {
+function classDocOf(
+  model: DMMF.Model,
+  enumNames: ReadonlySet<string>,
+  provider: string | undefined,
+) {
   const propertyTags = model.fields.flatMap((f) => {
     const text =
       f.kind === 'scalar' || f.kind === 'enum' ? stripAnnotations(f.documentation) : undefined
     return text === undefined
       ? []
-      : [`@property ${phpPropertyType(f, enumNames)} $${f.dbName ?? f.name} ${text}`]
+      : [`@property ${phpPropertyType(f, enumNames, provider)} $${f.dbName ?? f.name} ${text}`]
   })
   return [stripAnnotations(model.documentation), propertyTags.join('\n')]
     .filter((part) => part !== undefined && part !== '')
@@ -1461,7 +1620,7 @@ function eloquentModelCode(model: DMMF.Model, ctx: EloquentContext) {
     ...propertyBlocks(model, ctx, key, timestamps, attributeFields),
     ...methodBlocks,
   ]
-  const classDoc = classDocOf(model, ctx.enumNames)
+  const classDoc = classDocOf(model, ctx.enumNames, ctx.provider)
 
   const lines = [
     '<?php',
@@ -1503,7 +1662,7 @@ export function eloquentModelCodes(
     [
       ...contextModels.map((m) => makePascalCase(m.name)),
       ...enumNames,
-      ...supportClasses(contextModels).map((written) => written.name),
+      ...supportClasses(contextModels, options.provider).map((written) => written.name),
     ].map((name) => name.toLowerCase()),
   )
   const ref = (fqcn: string) => {

@@ -6,7 +6,12 @@ import { camelize, pluralize, singularize, underscore } from '../naming/active-s
 import { makePascalCase, makeSnakeCase } from '../naming/case.js'
 import { allocate } from '../naming/index.js'
 import type { RelationEnd } from '../prisma/model.js'
-import { fieldColumn, referentialActions, relationEnds } from '../prisma/model.js'
+import {
+  fieldColumn,
+  primaryKeyFields,
+  referentialActions,
+  relationEnds,
+} from '../prisma/model.js'
 import { ACTIVE_RECORD_INSTANCE_METHODS, RUBY_TOP_LEVEL_CONSTANTS } from './activerecord-names.js'
 
 // cspell:disable
@@ -1054,11 +1059,6 @@ function railsNames(models: readonly DMMF.Model[]) {
   }
 }
 
-function primaryKeyFields(model: DMMF.Model) {
-  const idField = model.fields.find((f) => f.isId)
-  return idField ? [idField.name] : (model.primaryKey?.fields ?? [])
-}
-
 // A Ruby array literal as RuboCop's defaults and rubocop-rails-omakase both
 // accept it: %i[] for symbols, %w[] for plain words, and otherwise brackets
 // with a space inside (none in an empty pair).
@@ -1642,17 +1642,21 @@ function tableNameLines(model: DMMF.Model, modelSnake: string) {
   return tableName === pluralize(modelSnake) ? [] : [`self.table_name = "${tableName}"`]
 }
 
+// Rails reads the primary key from the table, and a model Prisma keys by a unique alone (no `@id`,
+// no `@@id`) has none there: without one named here `update` and `destroy` have no column to find
+// the row by. The key is the unique the other generators take (`primaryKeyFields`), a compound one
+// as the array a composite key is.
 function primaryKeyLines(model: DMMF.Model, idField: DMMF.Field | undefined) {
   if (idField !== undefined) {
     const column = idField.dbName ?? idField.name
     return column !== 'id' ? [`self.primary_key = "${column}"`] : []
   }
-  const compositePkColumns = (model.primaryKey?.fields ?? []).map((name) =>
-    fieldColumn(model, name),
-  )
-  return compositePkColumns.length > 0
-    ? [`self.primary_key = ${rubyArray(compositePkColumns.map((c) => `"${c}"`))}`]
-    : []
+  const columns = primaryKeyFields(model).map((name) => fieldColumn(model, name))
+  const [column] = columns
+  if (column === undefined) return []
+  return model.primaryKey === null && columns.length === 1
+    ? [`self.primary_key = "${column}"`]
+    : [`self.primary_key = ${rubyArray(columns.map((c) => `"${c}"`))}`]
 }
 
 // A column named "type" triggers Rails single-table inheritance: reading
@@ -1693,16 +1697,43 @@ function updatedAtField(model: DMMF.Model) {
   )
 }
 
-// The `alias_attribute` pointing Rails' timestamp at the field, unless the
-// field's column is one Rails already reads.
-function timestampAlias(
+// What points Rails' timestamp at the field. 'none' where the field's column is one Rails already
+// reads; else 'alias', an `alias_attribute`; else, where another field has a column of the
+// timestamp's own name (documenso's `Account.created_at`, an Int the OAuth provider sends, beside
+// `createdAt`), 'list': the alias would hide that column behind the field's, so the field's column
+// joins the list Rails fills instead, and the other column leaves it unless it is a DateTime
+// too. Left on the list, Rails would write the time into it, an Int as seconds.
+function timestampTarget(
+  model: DMMF.Model,
   timestamp: 'created_at' | 'updated_at',
   field: DMMF.Field | undefined,
   railsColumns: readonly string[],
 ) {
-  if (field === undefined) return []
-  const column = field.dbName ?? field.name
-  return railsColumns.includes(column) ? [] : [`alias_attribute :${timestamp}, :${column}`]
+  const column = field === undefined ? timestamp : (field.dbName ?? field.name)
+  if (railsColumns.includes(column)) return { kind: 'none' as const, column, removed: [] }
+  const other = model.fields.find(
+    (f) => f !== field && f.kind !== 'object' && (f.dbName ?? f.name) === timestamp,
+  )
+  if (other === undefined) return { kind: 'alias' as const, column, removed: [] }
+  const keepsTime = other.kind === 'scalar' && other.type === 'DateTime' && !other.isList
+  return { kind: 'list' as const, column, removed: keepsTime ? [] : [timestamp] }
+}
+
+// An override of the columns Rails fills on create, or on create, update and `touch`.
+function timestampListLines(
+  event: 'create' | 'update',
+  removed: readonly string[],
+  added: readonly string[],
+) {
+  if (removed.length === 0 && added.length === 0) return []
+  const minus = removed.length === 0 ? '' : ` - ${rubyArray(removed.map((c) => `"${c}"`))}`
+  const plus = added.length === 0 ? '' : ` + ${rubyArray(added.map((c) => `"${c}"`))}`
+  return [
+    `def self.timestamp_attributes_for_${event}`,
+    `  super${minus}${plus}`,
+    'end',
+    `private_class_method :timestamp_attributes_for_${event}`,
+  ]
 }
 
 function timestampLines(
@@ -1710,6 +1741,8 @@ function timestampLines(
   createdField: DMMF.Field | undefined,
   updatedField: DMMF.Field | undefined,
 ) {
+  const created = timestampTarget(model, 'created_at', createdField, ['created_at', 'created_on'])
+  const updated = timestampTarget(model, 'updated_at', updatedField, ['updated_at', 'updated_on'])
   // Prisma bumps every @updatedAt column; Active Record only updated_at
   // and updated_on (or the column aliased to updated_at), so the rest are added
   // to the list it fills on create and bumps on update and `touch`.
@@ -1720,18 +1753,17 @@ function timestampLines(
         f !== updatedField &&
         !['updated_at', 'updated_on'].includes(f.dbName ?? f.name),
     )
-    .map((f) => `"${f.dbName ?? f.name}"`)
+    .map((f) => f.dbName ?? f.name)
   return [
-    ...timestampAlias('created_at', createdField, ['created_at', 'created_on']),
-    ...timestampAlias('updated_at', updatedField, ['updated_at', 'updated_on']),
-    ...(otherUpdatedColumns.length > 0
-      ? [
-          'def self.timestamp_attributes_for_update',
-          `  super + ${rubyArray(otherUpdatedColumns)}`,
-          'end',
-          'private_class_method :timestamp_attributes_for_update',
-        ]
+    ...(created.kind === 'alias' ? [`alias_attribute :created_at, :${created.column}`] : []),
+    ...(updated.kind === 'alias' ? [`alias_attribute :updated_at, :${updated.column}`] : []),
+    ...(created.kind === 'list'
+      ? timestampListLines('create', created.removed, [created.column])
       : []),
+    ...timestampListLines('update', updated.removed, [
+      ...(updated.kind === 'list' ? [updated.column] : []),
+      ...otherUpdatedColumns,
+    ]),
   ]
 }
 

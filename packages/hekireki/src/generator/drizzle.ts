@@ -11,10 +11,15 @@ import {
   resolveDbProvider,
 } from '../helper/drizzle.js'
 
+/**
+ * The drizzle schema of a datamodel: its enums, tables and relations. A model named in `views` is
+ * a Prisma `view`, written as the dialect's view marked `.existing()`.
+ */
 export function drizzleSchema(
   datamodel: DMMF.Datamodel,
   provider: 'postgresql' | 'cockroachdb' | 'mysql' | 'sqlite',
   indexes: readonly DMMF.Index[],
+  views: ReadonlySet<string> = new Set(),
 ) {
   const db = resolveDbProvider(provider)
   const imports = createImports()
@@ -22,7 +27,7 @@ export function drizzleSchema(
   const enumLines = makeEnumDeclarations(datamodel.models, datamodel.enums, db, imports)
   const tableLines = [
     ...datamodel.models.map((model) =>
-      makeTable(model, datamodel.models, db, imports, datamodel.enums, indexes),
+      makeTable(model, datamodel.models, db, imports, datamodel.enums, indexes, views),
     ),
     ...makeM2MJoinTables(datamodel.models, db, imports),
   ]

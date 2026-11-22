@@ -101,6 +101,26 @@ class AutoNowQuerySet(models.QuerySet[_M]):
                 kwargs.setdefault(field.name, getattr(field, "stamp", timezone.now)())
         return super().update(**kwargs)`
 
+// The field an enum list is declared with on PostgreSQL, as the generator writes it once per file.
+const ENUM_ARRAY_FIELD = `class EnumArrayField(ArrayField):  # type: ignore[type-arg]
+    def __init__(self, base_field: Any, db_enum: str, **kwargs: Any) -> None:
+        self.db_enum = db_enum
+        super().__init__(base_field, **kwargs)
+
+    def deconstruct(self) -> Any:
+        name, path, args, kwargs = super().deconstruct()
+        kwargs["db_enum"] = self.db_enum
+        return name, path, args, kwargs
+
+    def db_type(self, connection: BaseDatabaseWrapper) -> str:
+        return f"{self.db_enum}[]"
+
+    def cast_db_type(self, connection: BaseDatabaseWrapper) -> str:
+        return self.db_type(connection)
+
+    def select_format(self, compiler: Any, sql: str, params: Any) -> Any:
+        return f"{sql}::text[]", params`
+
 /** The datamodel `getDMMF` parsed, or its parse error thrown. */
 function datamodelOf(result: ReturnType<typeof getDMMF>) {
   if ('type' in result) throw new Error(result.error.message)
@@ -1231,8 +1251,14 @@ class Inventory(models.Model):
     ]
 
     expect(djangoCode(models, enums)).toBe(
-      `from django.contrib.postgres.fields import ArrayField
+      `from typing import Any
+
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+
+
+${ENUM_ARRAY_FIELD}
 
 
 class Visibility(models.TextChoices):
@@ -1245,7 +1271,7 @@ class Board(models.Model):
     id = models.AutoField(primary_key=True)
     visibility = models.TextField(choices=Visibility.choices, default=Visibility.LINK_ONLY)
     fallback = models.TextField(choices=Visibility.choices, null=True)
-    audiences = ArrayField(models.TextField(choices=Visibility.choices))
+    audiences = EnumArrayField(models.TextField(choices=Visibility.choices), db_enum="\\"visibility_level\\"")
 
     class Meta:
         db_table = "Board"
@@ -3474,6 +3500,115 @@ class Post(models.Model):
 
     class Meta:
         db_table = "Post"
+`)
+  })
+})
+
+describe('djangoCode on what PostgreSQL types differently', () => {
+  const djangoFor = (schema: string, provider = 'postgresql') => {
+    const source = `datasource db {\n  provider = "${provider}"\n}\n${schema}`
+    const result = getDMMF({ datamodel: [['schema.prisma', source]] })
+    const { models, enums, indexes } = datamodelOf(result)
+    return djangoCode(models, enums, indexes, provider, source)
+  }
+
+  // calcom's App.categories: PostgreSQL has no implicit cast from text[] to "AppCategories"[], and
+  // psycopg knows no loader for the enum's array.
+  it('binds and reads an enum list as the array of the enum type', () => {
+    const code = djangoFor(`
+enum AppCategories {
+  calendar
+  messaging
+  other
+}
+
+model App {
+  slug       String          @id
+  categories AppCategories[]
+}
+`)
+
+    expect(code).toBe(`from typing import Any
+
+from django.contrib.postgres.fields import ArrayField
+from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+
+
+${ENUM_ARRAY_FIELD}
+
+
+class AppCategories(models.TextChoices):
+    calendar = "calendar"
+    messaging = "messaging"
+    other = "other"
+
+
+class App(models.Model):
+    slug = models.TextField(primary_key=True, default=None)
+    categories = EnumArrayField(models.TextField(choices=AppCategories.choices), db_enum="\\"AppCategories\\"")
+
+    class Meta:
+        db_table = "App"
+`)
+  })
+
+  it('names the enum type by its @@map and its @@schema', () => {
+    const source = `datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "auth"]
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+
+  @@map("user_role")
+  @@schema("auth")
+}
+
+enum Scope {
+  READ
+  WRITE
+
+  @@schema("public")
+}
+
+model User {
+  id     Int     @id
+  roles  Role[]  @default([MEMBER])
+  scopes Scope[]
+  role   Role
+
+  @@schema("public")
+}
+`
+    const result = getDMMF({ datamodel: [['schema.prisma', source]] })
+    const { models, enums, indexes } = datamodelOf(result)
+    const code = djangoCode(models, enums, indexes, 'postgresql', source)
+
+    expect(code.slice(code.indexOf('def user_roles_default'))).toBe(`def user_roles_default() -> list[str]:
+    return [Role.MEMBER]
+
+
+class Role(models.TextChoices):
+    ADMIN = "ADMIN"
+    MEMBER = "MEMBER"
+
+
+class Scope(models.TextChoices):
+    READ = "READ"
+    WRITE = "WRITE"
+
+
+class User(models.Model):
+    id = models.IntegerField(primary_key=True)
+    roles = EnumArrayField(models.TextField(choices=Role.choices), db_enum="\\"auth\\".\\"user_role\\"", default=user_roles_default)
+    scopes = EnumArrayField(models.TextField(choices=Scope.choices), db_enum="\\"public\\".\\"Scope\\"")
+    role = models.TextField(choices=Role.choices)
+
+    class Meta:
+        db_table = "User"
 `)
   })
 })

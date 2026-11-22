@@ -1069,7 +1069,10 @@ function generateTableArgs(
   allModels: readonly DMMF.Model[],
   indexes: readonly DMMF.Index[],
   provider: string,
+  views: ReadonlySet<string>,
 ) {
+  // A view has no index, no foreign key and no table option: its SQL is written by hand.
+  if (views.has(model.name)) return []
   const tableName = model.dbName ?? model.name
 
   // Prisma Migrate makes every unique a unique index, named `<table>_<columns>_key`, and every
@@ -1089,7 +1092,8 @@ function generateTableArgs(
         f.kind === 'object' &&
         f.relationFromFields !== undefined &&
         f.relationFromFields.length > 1 &&
-        f.relationToFields !== undefined,
+        f.relationToFields !== undefined &&
+        !views.has(f.type),
     )
     .map((f) => {
       const target = modelByName.get(f.type)
@@ -1130,10 +1134,40 @@ function deleteClause(onDelete: string) {
   return 'passive_deletes="all", '
 }
 
+/**
+ * The arguments of a relationship one of whose ends is a view. A view is in a `MetaData` of its
+ * own and the database holds no foreign key to or from it, so the mapped tables have none either:
+ * the join is spelled out, `foreign()` marking the columns of the model that names them in
+ * `@relation(fields:)`. The relationship only reads (`viewonly=True`): a view takes no write, and
+ * a flush has no key to copy.
+ *
+ * @example
+ * ```python
+ * user: Mapped["User"] = relationship(primaryjoin="foreign(UserStat.user_id) == User.id", viewonly=True)
+ * ```
+ */
+function viewJoinArgs(
+  holdingModelName: string,
+  foreignKeys: readonly string[],
+  targetModelName: string,
+  references: readonly string[],
+  allModels: readonly DMMF.Model[],
+) {
+  const holding = allModels.find((m) => m.name === holdingModelName)
+  const target = allModels.find((m) => m.name === targetModelName)
+  const pairs = foreignKeys.map(
+    (fk, i) =>
+      `foreign(${className(holdingModelName)}.${attributeName(holding, fk)}) == ${className(targetModelName)}.${attributeName(target, references[i] ?? 'id')}`,
+  )
+  const join = pairs.length === 1 ? pairs.join('') : `and_(${pairs.join(', ')})`
+  return `primaryjoin="${join}", viewonly=True`
+}
+
 function generateBelongsToRelationships(
   associations: ReturnType<typeof getAssociations>,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
+  views: ReadonlySet<string>,
 ) {
   const fieldByName = new Map(model.fields.map((f) => [f.name, f]))
   return associations.belongsTo.map((assoc) => {
@@ -1157,6 +1191,16 @@ function generateBelongsToRelationships(
         : ''
     const target = className(assoc.targetModel)
     const mappedType = assoc.optional ? `Optional["${target}"]` : `"${target}"`
+    if (views.has(model.name) || views.has(assoc.targetModel)) {
+      const join = viewJoinArgs(
+        model.name,
+        assoc.foreignKeys,
+        assoc.targetModel,
+        assoc.referencesList,
+        allModels,
+      )
+      return `    ${snakeName}: Mapped[${mappedType}] = relationship(${remoteClause}${join})`
+    }
     const relation = fieldByName.get(assoc.name)
     const overlaps = relation ? overlapsClause(model.name, relation, allModels) : ''
     return `    ${snakeName}: Mapped[${mappedType}] = relationship(${remoteClause}${fkClause}${overlaps}back_populates="${backPop}")`
@@ -1181,9 +1225,20 @@ function generateHasManyRelationships(
   associations: ReturnType<typeof getAssociations>,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
+  views: ReadonlySet<string>,
 ) {
   return associations.hasMany.map((assoc) => {
     const snakeName = attributeName(model, assoc.name)
+    if (views.has(model.name) || views.has(assoc.targetModel)) {
+      const join = viewJoinArgs(
+        assoc.targetModel,
+        assoc.foreignKeys,
+        model.name,
+        assoc.inverse.relationToFields ?? [],
+        allModels,
+      )
+      return `    ${snakeName}: Mapped[list["${className(assoc.targetModel)}"]] = relationship(${join})`
+    }
     const backPop = findBackPopulates(
       assoc.targetModel,
       model.name,
@@ -1203,9 +1258,22 @@ function generateHasOneRelationships(
   associations: ReturnType<typeof getAssociations>,
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
+  views: ReadonlySet<string>,
 ) {
   return associations.hasOne.map((assoc) => {
     const snakeName = attributeName(model, assoc.name)
+    if (views.has(model.name) || views.has(assoc.targetModel)) {
+      const join = viewJoinArgs(
+        assoc.targetModel,
+        assoc.foreignKeys,
+        model.name,
+        assoc.inverse.relationToFields ?? [],
+        allModels,
+      )
+      const one = className(assoc.targetModel)
+      const hint = assoc.optional ? `Optional["${one}"]` : `"${one}"`
+      return `    ${snakeName}: Mapped[${hint}] = relationship(${join})`
+    }
     const backPop = findBackPopulates(
       assoc.targetModel,
       model.name,
@@ -1273,6 +1341,30 @@ function generateManyToManyRelationships(
   })
 }
 
+/**
+ * The many-to-one relations of `model` the database holds a foreign key for: none of a view's,
+ * and none that points at a view.
+ */
+function realForeignKeys(
+  model: DMMF.Model,
+  associations: ReturnType<typeof getAssociations>,
+  views: ReadonlySet<string>,
+) {
+  return views.has(model.name)
+    ? []
+    : associations.belongsTo.filter((assoc) => !views.has(assoc.targetModel))
+}
+
+// A Prisma `view` is a database view, whose SQL is written by hand and which Prisma Migrate never
+// creates. Its class is mapped as any other and shares the registry of `Base`, so it is queried
+// and related by name; its table is in a `MetaData` of its own, so nothing that walks
+// `Base.metadata` takes it for a table to create, drop, empty or migrate.
+const VIEW_METADATA_LINES = [
+  '    # A database view: its own MetaData keeps it out of Base.metadata, so create_all(), drop_all()',
+  "    # and Alembic's autogenerate leave it alone. Read it; do not write to it.",
+  '    metadata = MetaData()',
+]
+
 export function generateModelBody(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
@@ -1290,6 +1382,7 @@ export function generateModelBody(
     rightPkField: DMMF.Field | undefined
   }[],
   provider: string,
+  views: ReadonlySet<string> = new Set(),
 ) {
   const idField = model.fields.find((f) => f.isId)
   const compositePkFieldNames = new Set(model.primaryKey?.fields)
@@ -1298,7 +1391,9 @@ export function generateModelBody(
   if (identity.length === 0) return null
 
   const associations = getAssociations(model, allModels)
-  const belongsToFkFields = new Set(associations.belongsTo.map((a) => a.foreignKey))
+  const belongsToFkFields = new Set(
+    realForeignKeys(model, associations, views).map((a) => a.foreignKey),
+  )
 
   const enumMap = new Map<string, DMMF.DatamodelEnum>((enums ?? []).map((e) => [e.name, e]))
 
@@ -1328,7 +1423,7 @@ export function generateModelBody(
     return lines
   })
 
-  const tableArgsLines = generateTableArgs(model, allModels, indexes, provider)
+  const tableArgsLines = generateTableArgs(model, allModels, indexes, provider, views)
   // A table with no key is mapped by its first unique: the mapper is told, the table is not.
   const mapperArgsLines = isKeyless
     ? [
@@ -1346,9 +1441,9 @@ export function generateModelBody(
     ...associations.manyToMany,
   ].map((assoc) => assoc.name)
   const relationLines = [
-    ...generateBelongsToRelationships(associations, model, allModels),
-    ...generateHasManyRelationships(associations, model, allModels),
-    ...generateHasOneRelationships(associations, model, allModels),
+    ...generateBelongsToRelationships(associations, model, allModels, views),
+    ...generateHasManyRelationships(associations, model, allModels, views),
+    ...generateHasOneRelationships(associations, model, allModels, views),
     ...generateManyToManyRelationships(associations, model, allModels, m2mTables),
   ].flatMap((line, index) => {
     const relationName = relationNames[index]
@@ -1368,6 +1463,7 @@ export function generateModelBody(
     ...docstring,
     ...(docstring.length > 0 ? [''] : []),
     `    __tablename__ = "${tableName}"`,
+    ...(views.has(model.name) ? VIEW_METADATA_LINES : []),
     '',
     ...columnLines,
     ...tableArgsLines,
@@ -1469,13 +1565,18 @@ function modelSaImports(
   models: readonly DMMF.Model[],
   indexes: readonly DMMF.Index[],
   provider: string,
+  views: ReadonlySet<string>,
 ) {
+  const columns = model.fields.flatMap((field) => fieldSaImports(field, provider))
+  // A view is written with its columns alone, in a MetaData of its own.
+  if (views.has(model.name)) {
+    return primaryKeyFields(model).length > 0 ? [...columns, 'MetaData'] : columns
+  }
+  const foreignKeys = realForeignKeys(model, getAssociations(model, models), views)
   return [
-    ...model.fields.flatMap((field) => fieldSaImports(field, provider)),
-    ...(getAssociations(model, models).belongsTo.length > 0 ? ['ForeignKey'] : []),
-    ...(model.fields.some((f) => f.kind === 'object' && (f.relationFromFields?.length ?? 0) > 1)
-      ? ['ForeignKeyConstraint']
-      : []),
+    ...columns,
+    ...(foreignKeys.length > 0 ? ['ForeignKey'] : []),
+    ...(foreignKeys.some((assoc) => assoc.foreignKeys.length > 1) ? ['ForeignKeyConstraint'] : []),
     ...(modelIndexes(model, indexes).length > 0 ? ['Index'] : []),
   ]
 }
@@ -1586,10 +1687,11 @@ export function collectGlobalImports(
     rightPkField: DMMF.Field | undefined
   }[],
   provider: string,
+  views: ReadonlySet<string> = new Set(),
 ) {
   const needs = importNeeds(models, provider)
   const saImports = new Set([
-    ...models.flatMap((model) => modelSaImports(model, models, indexes, provider)),
+    ...models.flatMap((model) => modelSaImports(model, models, indexes, provider, views)),
     ...joinTableSaImports(m2mTables, provider),
     ...supportSaImports(needs, provider),
     ...annotationMapEntries(models, provider).map((entry) =>
