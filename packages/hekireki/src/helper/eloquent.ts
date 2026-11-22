@@ -837,7 +837,7 @@ class AsPrismaDateList implements CastsAttributes
  * and in a `Json[]` the JSON `null`. A string is written as it is, as the literal the column
  * takes.
  */
-export function eloquentListCast(namespace: string) {
+function eloquentListCast(namespace: string) {
   return `<?php
 
 namespace ${namespace};

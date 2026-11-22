@@ -1166,9 +1166,8 @@ function ectoSchema(model: DMMF.Model, ctx: EctoContext) {
   // The fields that are the key where @primary_key declares none: an @id Ecto does not generate,
   // or each field of a composite key. Each is a `field(..., primary_key: true)`, a foreign key
   // among them too, or Ecto sees no primary key and refuses to update or delete a row.
-  const keyFieldNames = new Set(
-    idField ? (pk.omitIdFieldInSchema ? [] : [idField.name]) : primaryKeyFields(model),
-  )
+  const idKeyFieldNames = idField && !pk.omitIdFieldInSchema ? [idField.name] : []
+  const keyFieldNames = new Set(idField ? idKeyFieldNames : primaryKeyFields(model))
   const fields = model.fields.map((f) => ({ ...f }))
   const fieldsByName = new Map(fields.map((f) => [f.name, f]))
   const timestamps = makeTimestampsLines(fields, appName)

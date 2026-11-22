@@ -842,7 +842,8 @@ function makeViewColumn(
 ) {
   if (field.kind === 'object') return null
   if (field.kind === 'unsupported') return `// unsupported type: ${field.name}`
-  const colExpr = makeColumnExpr({ ...field, default: undefined }, provider, imports, enums)
+  const { default: _default, ...plain } = field
+  const colExpr = makeColumnExpr(plain, provider, imports, enums)
   const notNull = field.isRequired && !field.isList ? '.notNull()' : ''
   return `${field.name}: ${colExpr}${arrayChain(field, provider)}${notNull}`
 }
