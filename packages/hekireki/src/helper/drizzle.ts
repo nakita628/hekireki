@@ -608,11 +608,36 @@ function arrayChain(field: DMMF.Field, provider: DbProvider) {
     : ''
 }
 
-// A scalar list is a nullable array column in the table Prisma makes.
-function notNullChain(field: DMMF.Field, isAutoincrement: boolean, provider: DbProvider) {
+/**
+ * Whether a field is a single primary key SQLite lets hold NULL: any key but an INTEGER (the rowid)
+ * does, where Prisma makes it `TEXT NOT NULL PRIMARY KEY`. drizzle-kit drops `.notNull()` from a
+ * column declared `.primaryKey()`, so such a key is declared on the table instead, which it writes
+ * inline with NOT NULL. A Boolean key is left as it was: it is `integer({ mode: 'boolean' })`, and
+ * drizzle-kit leaves NOT NULL off any single key whose SQL type is an integer, so it is a rowid
+ * either way.
+ */
+function isNullableSqliteKey(field: DMMF.Field, model: DMMF.Model, provider: DbProvider) {
+  return (
+    provider === 'sqlite' &&
+    field.isId &&
+    field.kind !== 'unsupported' &&
+    model.primaryKey === null &&
+    field.type !== 'Int' &&
+    field.type !== 'Boolean'
+  )
+}
+
+// A scalar list is a nullable array column in the table Prisma makes. A primary key is NOT NULL by
+// itself, but for the SQLite keys isNullableSqliteKey names.
+function notNullChain(
+  field: DMMF.Field,
+  model: DMMF.Model,
+  isAutoincrement: boolean,
+  provider: DbProvider,
+) {
   return field.isRequired &&
     !field.isList &&
-    !field.isId &&
+    (!field.isId || isNullableSqliteKey(field, model, provider)) &&
     !(isAutoincrement && provider === 'postgresql')
     ? '.notNull()'
     : ''
@@ -653,8 +678,10 @@ function makeColumn(
     // .array() must wrap the base column before any modifier: chained after
     // .notNull() it produces a nullable array column (string[] | null).
     arrayChain(field, provider),
-    field.isId && !hasCompositePK ? primaryKeyChain(field, isAutoincrement, provider) : '',
-    notNullChain(field, isAutoincrement, provider),
+    field.isId && !hasCompositePK && !isNullableSqliteKey(field, model, provider)
+      ? primaryKeyChain(field, isAutoincrement, provider)
+      : '',
+    notNullChain(field, model, isAutoincrement, provider),
     isAutoincrement
       ? autoincrementChain(provider)
       : makeDefaultChain(field, provider, imports, enums),
@@ -678,16 +705,14 @@ function makeTableConstraints(
   indexes: readonly DMMF.Index[],
   tableName: string,
 ) {
-  const pkLine = model.primaryKey
-    ? (() => {
-        imports.core.add('primaryKey')
-        const columns = model.primaryKey.fields.map((f) => `table.${f}`).join(', ')
-        // MySQL's primary key is always named PRIMARY, and drizzle's `primaryKey` there takes no name.
-        return provider === 'mysql'
-          ? `primaryKey({ columns: [${columns}] })`
-          : `primaryKey({ name: '${tableName}_pkey', columns: [${columns}] })`
-      })()
-    : null
+  const sqliteKey = model.fields.find((field) => isNullableSqliteKey(field, model, provider))
+  const keyColumns = sqliteKey ? [sqliteKey.name] : model.primaryKey?.fields
+  if (keyColumns) imports.core.add('primaryKey')
+  const columns = keyColumns?.map((f) => `table.${f}`).join(', ')
+  // MySQL's primary key is always named PRIMARY, and drizzle's `primaryKey` there takes no name; a
+  // single SQLite key goes unnamed, so drizzle-kit writes it inline as Prisma does.
+  const pkName = provider === 'mysql' || sqliteKey ? '' : `name: '${tableName}_pkey', `
+  const pkLine = columns === undefined ? null : `primaryKey({ ${pkName}columns: [${columns}] })`
 
   // DMMF leaves an `@ignore` field out of the model, but not out of an index that lists it: the
   // table has no column for such an index to name, so it is left out with the field.
