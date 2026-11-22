@@ -3319,7 +3319,7 @@ model Event {
     const context = contextFile(plan).code
     expect(context).toContain(`            entity.Property(e => e.At)
                 .HasValueGenerator<UtcNowGenerator>()
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP(3)")
                 .HasConversion<UtcClockConverter>()
                 .HasColumnType("datetime(3)")
                 .HasColumnName("at");
@@ -3343,6 +3343,57 @@ model Event {
     {
     }
 }`)
+  })
+
+  // MySQL refuses DEFAULT CURRENT_TIMESTAMP on a DATETIME(3): "Invalid default value". (#196)
+  it('gives a MySQL now() default the precision of its column', () => {
+    const { plan } = fixture(
+      `
+datasource db {
+  provider = "mysql"
+}
+
+model Account {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now()) @map(name: "created_at")
+  micros    DateTime  @default(now()) @db.DateTime(6)
+  seconds   DateTime  @default(now()) @db.DateTime(0)
+  stamp     DateTime  @default(now()) @db.Timestamp(2)
+  maybe     DateTime? @default(now())
+}
+`,
+      { ...DEFAULT_OPTIONS, provider: 'mysql' },
+    )
+    expect(contextFile(plan).code).toContain(`            entity.Property(e => e.CreatedAt)
+                .HasValueGenerator<UtcNowGenerator>()
+                .HasDefaultValueSql("CURRENT_TIMESTAMP(3)")
+                .HasConversion<UtcClockConverter>()
+                .HasColumnType("datetime(3)")
+                .HasColumnName("created_at");
+            entity.Property(e => e.Micros)
+                .HasValueGenerator<UtcNowGenerator>()
+                .HasDefaultValueSql("CURRENT_TIMESTAMP(6)")
+                .HasConversion<UtcClockConverter>()
+                .HasColumnType("datetime(6)")
+                .HasColumnName("micros");
+            entity.Property(e => e.Seconds)
+                .HasValueGenerator<UtcNowGenerator>()
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasConversion<UtcClockConverter>()
+                .HasColumnType("datetime(0)")
+                .HasColumnName("seconds");
+            entity.Property(e => e.Stamp)
+                .HasValueGenerator<UtcNowGenerator>()
+                .HasDefaultValueSql("CURRENT_TIMESTAMP(2)")
+                .HasConversion<UtcClockConverter>()
+                .HasColumnType("timestamp(2)")
+                .HasColumnName("stamp");
+            entity.Property(e => e.Maybe)
+                .ValueGeneratedNever()
+                .HasDefaultValueSql("CURRENT_TIMESTAMP(3)")
+                .HasConversion<UtcClockConverter>()
+                .HasColumnType("datetime(3)")
+                .HasColumnName("maybe");`)
   })
 
   it('writes a SQLite DateTime as the text Prisma writes, and a literal default as the UTC instant', () => {

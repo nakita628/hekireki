@@ -845,10 +845,20 @@ type DefaultPlan =
       readonly sql: string | null
     }
 
+// The DEFAULT Prisma Migrate writes for now(). MySQL takes CURRENT_TIMESTAMP as the default of a
+// DATETIME(n) or TIMESTAMP(n) column only with the column's own precision — 3 for a DateTime with
+// no native type — and refuses the bare form for any n but 0.
+function nowSql(field: DMMF.Field, clr: ClrMapping, provider: Provider) {
+  if (provider !== 'mysql' || clr.temporal !== 'timestamp') return 'CURRENT_TIMESTAMP'
+  const precision = field.nativeType ? (lengthArg(field.nativeType[1]) ?? '0') : '3'
+  return precision === '0' ? 'CURRENT_TIMESTAMP' : `CURRENT_TIMESTAMP(${precision})`
+}
+
 function functionDefaultPlan(
   def: { readonly name: string; readonly args: readonly (string | number)[] },
   field: DMMF.Field,
   clr: ClrMapping,
+  provider: Provider,
 ): DefaultPlan | null {
   const [arg] = def.args
   if (def.name === 'autoincrement') return { kind: 'autoincrement' }
@@ -858,7 +868,7 @@ function functionDefaultPlan(
       : { kind: 'generated' }
   }
   // now() keeps the DEFAULT Prisma Migrate writes, for a row inserted some other way.
-  const sql = def.name === 'now' ? 'CURRENT_TIMESTAMP' : null
+  const sql = def.name === 'now' ? nowSql(field, clr, provider) : null
   const generator = valueGeneratorOf(field, clr)
   if (!generator) return sql === null ? null : { kind: 'sql', sql }
   // A value generator fires for a property left null. That is what leaving a required field out
@@ -896,10 +906,11 @@ function defaultPlan(
   clr: ClrMapping,
   names: Names,
   enums: readonly DMMF.DatamodelEnum[],
+  provider: Provider,
 ): DefaultPlan | null {
   const def = field.default
   if (def === undefined || def === null) return null
-  if (isFunctionDefault(def)) return functionDefaultPlan(def, field, clr)
+  if (isFunctionDefault(def)) return functionDefaultPlan(def, field, clr, provider)
   // A timestamp literal means one thing to Prisma Client and another to the DEFAULT clause Prisma
   // Migrate writes for it, so the column keeps the literal verbatim while the property holds what
   // Prisma Client would write.
@@ -1034,7 +1045,7 @@ function summaryLines(text: string | undefined, indent: string) {
 
 function fieldPlan(plan: EfCorePlan, field: DMMF.Field) {
   const clr = fieldMapping(field, plan.names, plan.provider)
-  return { clr, def: defaultPlan(field, clr, plan.names, plan.enums) }
+  return { clr, def: defaultPlan(field, clr, plan.names, plan.enums, plan.provider) }
 }
 
 function valueGenerators(plan: EfCorePlan) {
