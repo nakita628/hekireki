@@ -54,7 +54,7 @@ type Equal<A, B> =
 
 export type Cases = [
   Expect<Equal<Account['tags'], string[]>>,
-  Expect<Equal<Account['bigNum'], bigint>>,
+  Expect<Equal<Account['bigNum'], string>>,
   Expect<Equal<Account['status'], 'ACTIVE' | 'INACTIVE' | 'PENDING_REVIEW'>>,
   Expect<Equal<Account['created_at'], Date>>,
   Expect<Equal<Account['raw'], Buffer>>,
@@ -62,14 +62,14 @@ export type Cases = [
   Expect<Equal<Profile['age'], number | null>>,
   Expect<Equal<Board['visibility'], 'public' | 'private' | 'link_only'>>,
   Expect<Equal<Board['fallback'], 'public' | 'private' | 'link_only' | null>>,
-  Expect<Equal<Board['audiences'], ('public' | 'private' | 'link_only')[]>>,
-  Expect<Equal<Sequence['id'], bigint>>,
+  Expect<Equal<Board['audiences'], string>>,
+  Expect<Equal<Sequence['id'], string>>,
   Expect<Equal<Torture['born'], Date>>,
   Expect<Equal<Inventory['codes'], number[]>>,
 
   // autoincrement() and dbgenerated() are evaluated by the database, so the
   // column carries a DDL default and the insert may omit it.
-  Expect<Equal<Insertable<t.Sequence>['id'], bigint | undefined>>,
+  Expect<Equal<Insertable<t.Sequence>['id'], bigint | number | string | undefined>>,
   Expect<Equal<Insertable<t.Computed>['id'], string | undefined>>,
   // uuid()/uuid(7)/ulid()/cuid(2)/nanoid(10) are evaluated by prisma's client,
   // which leaves the column without a DDL default — a raw kysely insert has to

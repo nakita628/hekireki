@@ -135,7 +135,7 @@ describe('kyselySchema', () => {
     const result = kyselySchema(datamodel)
 
     expect(result).toBe(
-      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Account {\n  id: string\n  bigNum: bigint\n  price: string\n  data: unknown\n  meta: unknown\n  raw: Buffer\n  ratio: number\n  flag: boolean\n  count: number\n  created_at: Generated<Timestamp>\n  tags: string[]\n}\n\nexport interface DB {\n  accounts: Account\n}",
+      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Timestamp = ColumnType<Date, Date | string, Date | string>\n\nexport interface Account {\n  id: string\n  bigNum: ColumnType<string, bigint | number | string, bigint | number | string>\n  price: string\n  data: unknown\n  meta: unknown\n  raw: Buffer\n  ratio: number\n  flag: boolean\n  count: number\n  created_at: Generated<Timestamp>\n  tags: string[]\n}\n\nexport interface DB {\n  accounts: Account\n}",
     )
   })
 
@@ -180,7 +180,7 @@ describe('kyselySchema', () => {
     const result = kyselySchema(datamodel)
 
     expect(result).toBe(
-      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Visibility = 'public' | 'private' | 'link_only'\n\nexport interface Board {\n  id: Generated<number>\n  visibility: Generated<Visibility>\n  fallback: Visibility | null\n  audiences: Visibility[]\n}\n\nexport interface DB {\n  Board: Board\n}",
+      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Visibility = 'public' | 'private' | 'link_only'\n\nexport interface Board {\n  id: Generated<number>\n  visibility: Generated<Visibility>\n  fallback: Visibility | null\n  audiences: ColumnType<string, Visibility[], Visibility[]>\n}\n\nexport interface DB {\n  Board: Board\n}",
     )
   })
 
@@ -604,6 +604,99 @@ describe('kyselySchema', () => {
     expect(result).toBe(
       "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport interface Sample {\n  id: ColumnType<number, number | bigint, number | bigint>\n  flag: number\n  enabled: Generated<number>\n  amount: ColumnType<number, number | string, number | string> | null\n  doc: ColumnType<string | number, string, string>\n  raw: Buffer\n  createdAt: string\n  seenAt: string | null\n}\n\nexport interface Related {\n  A: ColumnType<number, number | bigint, number | bigint>\n  B: ColumnType<number, number | bigint, number | bigint>\n}\n\nexport interface DB {\n  Sample: Sample\n  _related: Related\n}",
     )
+  })
+
+  // #188: pg reads an int8 as text and an enum[] as the array's text; mysql2 reads a BIGINT and
+  // a TINYINT(1) as numbers.
+  describe('types the default driver returns', () => {
+    const datamodel = makeDatamodel(
+      [
+        makeModel({
+          name: 'Passkey',
+          fields: [
+            makeField({
+              name: 'id',
+              type: 'BigInt',
+              isId: true,
+              hasDefaultValue: true,
+              default: { name: 'autoincrement', args: [] },
+            }),
+            makeField({ name: 'counter', type: 'BigInt' }),
+            makeField({ name: 'lastSeen', type: 'BigInt', isRequired: false }),
+            makeField({ name: 'enabled', type: 'Boolean', hasDefaultValue: true, default: false }),
+            makeField({ name: 'verified', type: 'Boolean', isRequired: false }),
+            makeField({ name: 'role', type: 'Role', kind: 'enum' }),
+          ],
+        }),
+      ],
+      [
+        {
+          name: 'Role',
+          dbName: null,
+          values: [
+            { name: 'ADMIN', dbName: null },
+            { name: 'USER', dbName: null },
+          ],
+        },
+      ],
+    )
+    const lists = makeDatamodel(
+      [
+        makeModel({
+          name: 'Membership',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'roles', type: 'Role', kind: 'enum', isList: true }),
+            makeField({
+              name: 'granted',
+              type: 'Role',
+              kind: 'enum',
+              isList: true,
+              hasDefaultValue: true,
+              default: [],
+            }),
+            makeField({ name: 'counters', type: 'BigInt', isList: true }),
+            makeField({ name: 'flags', type: 'Boolean', isList: true }),
+          ],
+        }),
+      ],
+      [
+        {
+          name: 'Role',
+          dbName: null,
+          values: [
+            { name: 'ADMIN', dbName: null },
+            { name: 'USER', dbName: null },
+          ],
+        },
+      ],
+    )
+    const header =
+      "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Role = 'ADMIN' | 'USER'\n\n"
+
+    it('should type a PostgreSQL BigInt as the text pg reads, and leave Boolean a boolean', () => {
+      const expected = `${header}export interface Passkey {\n  id: Generated<ColumnType<string, bigint | number | string, bigint | number | string>>\n  counter: ColumnType<string, bigint | number | string, bigint | number | string>\n  lastSeen: ColumnType<string, bigint | number | string, bigint | number | string> | null\n  enabled: Generated<boolean>\n  verified: boolean | null\n  role: Role\n}\n\nexport interface DB {\n  Passkey: Passkey\n}`
+      expect(kyselySchema(datamodel, 'postgresql')).toBe(expected)
+      expect(kyselySchema(datamodel, 'cockroachdb')).toBe(expected)
+    })
+
+    it('should type a MySQL BigInt and Boolean as the numbers mysql2 reads', () => {
+      expect(kyselySchema(datamodel, 'mysql')).toBe(
+        `${header}export interface Passkey {\n  id: Generated<ColumnType<number, bigint | number | string, bigint | number | string>>\n  counter: ColumnType<number, bigint | number | string, bigint | number | string>\n  lastSeen: ColumnType<number, bigint | number | string, bigint | number | string> | null\n  enabled: Generated<ColumnType<number, boolean | number, boolean | number>>\n  verified: ColumnType<number, boolean | number, boolean | number> | null\n  role: Role\n}\n\nexport interface DB {\n  Passkey: Passkey\n}`,
+      )
+    })
+
+    it('should type a PostgreSQL enum list as the text pg reads, and a BigInt list as one ColumnType', () => {
+      expect(kyselySchema(lists, 'postgresql')).toBe(
+        `${header}export interface Membership {\n  id: number\n  roles: ColumnType<string, Role[], Role[]>\n  granted: Generated<ColumnType<string, Role[], Role[]>>\n  counters: ColumnType<string[], (bigint | number | string)[], (bigint | number | string)[]>\n  flags: boolean[]\n}\n\nexport interface DB {\n  Membership: Membership\n}`,
+      )
+    })
+
+    it('should leave SQL Server, whose driver was not measured, with the plain types', () => {
+      expect(kyselySchema(datamodel, 'sqlserver')).toBe(
+        "import type { ColumnType } from 'kysely'\n\nexport type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>\n\nexport type Role = 'ADMIN' | 'USER'\n\nexport interface Passkey {\n  id: Generated<bigint>\n  counter: bigint\n  lastSeen: bigint | null\n  enabled: Generated<boolean>\n  verified: boolean | null\n  role: Role\n}\n\nexport interface DB {\n  Passkey: Passkey\n}",
+      )
+    })
   })
 
   it('should import ColumnType on SQLite for a ColumnType column even without Generated', () => {

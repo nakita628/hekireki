@@ -1034,7 +1034,7 @@ const NATIVE_TYPES: readonly (readonly [
   ['Decimal', '@db.Decimal(10, 2)', ['Decimal', ['10', '2']], 'Decimal(Some((10, 2)))'],
   ['Decimal', '@db.Decimal', ['Decimal', []], 'Decimal(None)'],
   ['Decimal', '@db.Money(10, 2)', ['Money', ['10', '2']], 'Decimal(Some((10, 2)))'],
-  ['String', '@db.Uuid', ['Uuid', []], 'Uuid'],
+  ['String', '@db.Uuid', ['Uuid', []], null],
   ['DateTime', '@db.Timestamp', ['Timestamp', []], null],
   ['DateTime', '@db.Timestamptz', ['Timestamptz', []], 'TimestampWithTimeZone'],
   ['DateTime', '@db.Date', ['Date', []], 'Date'],
@@ -1258,5 +1258,225 @@ describe('generatePreludeRs', () => {
     expect(generatePreludeRs([model('Resource'), model('Entity')])).toBe(
       'pub use super::entity::Entity;\npub use super::resource::Entity as Resource;\n',
     )
+  })
+})
+
+// A `uuid` column: sqlx-postgres binds a String as `text`, which PostgreSQL does not cast to
+// `uuid`, and does not decode a `uuid` into a String.
+describe('@db.Uuid', () => {
+  const field = (o: Record<string, unknown>): any => ({
+    kind: 'scalar',
+    type: 'String',
+    isList: false,
+    isRequired: true,
+    isUnique: false,
+    isId: false,
+    isReadOnly: false,
+    isGenerated: false,
+    isUpdatedAt: false,
+    hasDefaultValue: false,
+    ...o,
+  })
+  const uuid = { nativeType: ['Uuid', []] }
+  const model = (name: string, fields: readonly unknown[]): any => ({
+    name,
+    dbName: null,
+    primaryKey: null,
+    uniqueFields: [],
+    uniqueIndexes: [],
+    fields,
+  })
+  const owner = model('Owner', [
+    field({
+      name: 'id',
+      isId: true,
+      hasDefaultValue: true,
+      default: { name: 'uuid', args: [4] },
+      ...uuid,
+    }),
+    field({
+      name: 'items',
+      type: 'Item',
+      kind: 'object',
+      isList: true,
+      relationName: 'ItemToOwner',
+    }),
+  ])
+  const item = model('Item', [
+    field({
+      name: 'id',
+      isId: true,
+      hasDefaultValue: true,
+      default: { name: 'dbgenerated', args: ['gen_random_uuid()'] },
+      ...uuid,
+    }),
+    field({ name: 'ownerId', ...uuid }),
+    field({ name: 'reviewerId', isRequired: false, ...uuid }),
+    field({ name: 'refs', isList: true, ...uuid }),
+    field({
+      name: 'trace',
+      isRequired: false,
+      hasDefaultValue: true,
+      default: { name: 'uuid', args: [7] },
+      ...uuid,
+    }),
+    field({ name: 'token', hasDefaultValue: true, default: { name: 'uuid', args: [4] } }),
+    field({
+      name: 'owner',
+      type: 'Owner',
+      kind: 'object',
+      relationName: 'ItemToOwner',
+      relationFromFields: ['ownerId'],
+      relationToFields: ['id'],
+    }),
+  ])
+
+  it('declares a key with uuid() as Uuid and sets it to the Uuid itself', () => {
+    expect(generateEntityFile(owner, [owner, item], [], {}, 'postgresql'))
+      .toBe(`use sea_orm::entity::prelude::*;
+use sea_orm::Set;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "Owner")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: Uuid,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(has_many = "super::item::Entity")]
+    Items,
+}
+
+impl Related<super::item::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Items.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {
+    fn new() -> Self {
+        Self {
+            id: Set(uuid::Uuid::new_v4()),
+            ..ActiveModelTrait::default()
+        }
+    }
+}
+`)
+  })
+
+  it('declares a foreign key, an optional field and a list as Uuid, and leaves a text uuid() a String', () => {
+    expect(generateEntityFile(item, [owner, item], [], {}, 'postgresql'))
+      .toBe(`use sea_orm::entity::prelude::*;
+use sea_orm::Set;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "Item")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: Uuid,
+    #[sea_orm(column_name = "ownerId")]
+    pub owner_id: Uuid,
+    #[sea_orm(column_name = "reviewerId")]
+    pub reviewer_id: Option<Uuid>,
+    pub refs: Vec<Uuid>,
+    pub trace: Option<Uuid>,
+    pub token: String,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::owner::Entity",
+        from = "Column::OwnerId",
+        to = "super::owner::Column::Id"
+    )]
+    Owner,
+}
+
+impl Related<super::owner::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Owner.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {
+    fn new() -> Self {
+        Self {
+            trace: Set(Some(uuid::Uuid::now_v7())),
+            token: Set(uuid::Uuid::new_v4().to_string()),
+            ..ActiveModelTrait::default()
+        }
+    }
+}
+`)
+  })
+
+  it('generates nothing for ulid(), whose text is not a uuid', () => {
+    const ticket = model('Ticket', [
+      field({
+        name: 'id',
+        isId: true,
+        hasDefaultValue: true,
+        default: { name: 'ulid', args: [] },
+        ...uuid,
+      }),
+    ])
+    expect(generateEntityFile(ticket, [ticket], [])).toContain(
+      'impl ActiveModelBehavior for ActiveModel {}',
+    )
+  })
+
+  it('lays out a generated Uuid in new() as rustfmt does for the length of its name', () => {
+    const name = (first: string, n: number) => first + 'q'.repeat(n - 1)
+    const generated = (n: string, isRequired: boolean) =>
+      field({
+        name: n,
+        isRequired,
+        hasDefaultValue: true,
+        default: { name: 'uuid', args: [4] },
+        ...uuid,
+      })
+    const ident = model('Ident', [
+      field({ name: 'id', type: 'Int', isId: true }),
+      generated(name('a', 61), true),
+      generated(name('b', 62), true),
+      generated(name('c', 83), true),
+      generated(name('d', 75), false),
+      generated(name('e', 76), false),
+    ])
+    expect(generateEntityFile(ident, [ident], [])).toContain(`    fn new() -> Self {
+        Self {
+            a${'q'.repeat(60)}: Set(uuid::Uuid::new_v4()),
+            b${'q'.repeat(61)}: Set(
+                uuid::Uuid::new_v4(),
+            ),
+            c${'q'.repeat(82)}:
+                Set(uuid::Uuid::new_v4()),
+            d${'q'.repeat(74)}: Set(Some(
+                uuid::Uuid::new_v4(),
+            )),
+            e${'q'.repeat(75)}: Set(
+                Some(uuid::Uuid::new_v4()),
+            ),
+            ..ActiveModelTrait::default()
+        }
+    }
+`)
+  })
+
+  it('gives the join table of an implicit many-to-many the Uuid of each key', () => {
+    const tag = model('Tag', [field({ name: 'id', type: 'Int', isId: true })])
+    expect(generateM2MEntity('Owner', 'Tag', 'OwnerToTag', [owner, tag]))
+      .toContain(`pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]
+    pub owner_id: Uuid,
+    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]
+    pub tag_id: i32,
+}
+`)
   })
 })

@@ -103,3 +103,14 @@ export function relationMode(blocks: readonly PrismaBlock[]) {
     })
   return found[0] ?? 'foreignKeys'
 }
+
+/**
+ * The names of the `view` blocks. DMMF lists a view among the models, with nothing to tell it
+ * apart; Prisma Migrate creates no table for it.
+ *
+ * @param blocks - The blocks of the Prisma schema as written (all of its files, merged).
+ * @returns The name of each view.
+ */
+export function viewNames(blocks: readonly PrismaBlock[]) {
+  return new Set(blocks.filter((block) => block.keyword === 'view').map((block) => block.name))
+}

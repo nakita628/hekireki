@@ -704,6 +704,7 @@ function makeTableConstraints(
   imports: DrizzleImports,
   indexes: readonly DMMF.Index[],
   tableName: string,
+  views: ReadonlySet<string>,
 ) {
   const sqliteKey = model.fields.find((field) => isNullableSqliteKey(field, model, provider))
   const keyColumns = sqliteKey ? [sqliteKey.name] : model.primaryKey?.fields
@@ -760,7 +761,9 @@ function makeTableConstraints(
       return `${make}('${name}').on(${on.join(', ')})`
     })
 
-  const fkLines = model.fields.filter(isForeignKey).map((f) => {
+  // A view cannot be referenced: Prisma Migrate makes no foreign key for a relation to one.
+  const foreignKeys = model.fields.filter((f) => isForeignKey(f) && !views.has(f.type))
+  const fkLines = foreignKeys.map((f) => {
     imports.core.add('foreignKey')
     // A relation of a model to itself reads its own columns from the table it is given.
     const target = f.type === model.name ? 'table' : resolveVarNameByType(f.type, models)
@@ -823,6 +826,45 @@ const EXTRA_CONFIG_TYPE: { readonly [p in DbProvider]: string } = {
   sqlite: 'SQLiteTableExtraConfigValue',
 }
 
+const VIEW_FUNC: { readonly [p in DbProvider]: string } = {
+  postgresql: 'pgView',
+  mysql: 'mysqlView',
+  sqlite: 'sqliteView',
+}
+
+// A view's column is its type and whether it holds NULL, which is all a query reads of it: a view
+// has no key, default, index or foreign key of its own.
+function makeViewColumn(
+  field: DMMF.Field,
+  provider: DbProvider,
+  imports: DrizzleImports,
+  enums: readonly DMMF.DatamodelEnum[],
+) {
+  if (field.kind === 'object') return null
+  if (field.kind === 'unsupported') return `// unsupported type: ${field.name}`
+  const { default: _default, ...plain } = field
+  const colExpr = makeColumnExpr(plain, provider, imports, enums)
+  const notNull = field.isRequired && !field.isList ? '.notNull()' : ''
+  return `${field.name}: ${colExpr}${arrayChain(field, provider)}${notNull}`
+}
+
+type ColumnEntry = { readonly code: string; readonly doc: string | undefined }
+
+// A JSDoc block needs lines of its own, so a table with one lays its columns out one per line.
+function columnMap(entries: readonly ColumnEntry[]) {
+  return entries.some((entry) => entry.doc !== undefined)
+    ? `{\n${entries.map((entry) => [...docBlockLines(entry.doc, '  '), `  ${entry.code},`].join('\n')).join('\n')}\n}`
+    : `{ ${entries.map((entry) => entry.code).join(', ')} }`
+}
+
+/**
+ * A table, or, for a model named in `views`, the view Prisma reads: `pgView('Name', { ... })
+ * .existing()`. Prisma Migrate creates no view (its SQL is written by hand), and drizzle-kit
+ * leaves an existing one alone, where a table of that name would be created by drizzle-kit and
+ * dropped by Prisma's next diff.
+ *
+ * @param views - The names of the schema's `view` blocks, which DMMF lists among the models.
+ */
 export function makeTable(
   model: DMMF.Model,
   models: readonly DMMF.Model[],
@@ -830,22 +872,44 @@ export function makeTable(
   imports: DrizzleImports,
   enums: readonly DMMF.DatamodelEnum[],
   indexes: readonly DMMF.Index[],
+  views: ReadonlySet<string> = new Set(),
 ) {
+  const varName = resolveVarName(model)
+  const tableName = resolveTableName(model)
+  const modelDoc = docBlockLines(stripAnnotations(model.documentation), '')
+  if (views.has(model.name)) {
+    const viewFunc = VIEW_FUNC[provider]
+    imports.core.add(viewFunc)
+    const viewColumns = columnMap(
+      model.fields.flatMap((field) => {
+        const code = makeViewColumn(field, provider, imports, enums)
+        return code === null ? [] : [{ code, doc: stripAnnotations(field.documentation) }]
+      }),
+    )
+    return [
+      ...modelDoc,
+      `export const ${varName} = ${viewFunc}('${tableName}', ${viewColumns}).existing()`,
+    ].join('\n')
+  }
+
   const tableFunc = TABLE_FUNC[provider]
   imports.core.add(tableFunc)
 
-  const varName = resolveVarName(model)
-  const tableName = resolveTableName(model)
-  const entries = model.fields.flatMap((field) => {
-    const code = makeColumn(field, model, provider, imports, enums)
-    return code === null ? [] : [{ code, doc: stripAnnotations(field.documentation) }]
-  })
-  // A JSDoc block needs lines of its own, so a table with one lays its columns out one per line.
-  const columns = entries.some((entry) => entry.doc !== undefined)
-    ? `{\n${entries.map((entry) => [...docBlockLines(entry.doc, '  '), `  ${entry.code},`].join('\n')).join('\n')}\n}`
-    : `{ ${entries.map((entry) => entry.code).join(', ')} }`
-  const modelDoc = docBlockLines(stripAnnotations(model.documentation), '')
-  const constraints = makeTableConstraints(model, models, provider, imports, indexes, tableName)
+  const columns = columnMap(
+    model.fields.flatMap((field) => {
+      const code = makeColumn(field, model, provider, imports, enums)
+      return code === null ? [] : [{ code, doc: stripAnnotations(field.documentation) }]
+    }),
+  )
+  const constraints = makeTableConstraints(
+    model,
+    models,
+    provider,
+    imports,
+    indexes,
+    tableName,
+    views,
+  )
   if (constraints === null) {
     return [...modelDoc, `export const ${varName} = ${tableFunc}('${tableName}', ${columns})`].join(
       '\n',

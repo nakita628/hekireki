@@ -3,6 +3,7 @@ import { Effect } from 'effect'
 
 import { emit } from '../emit/index.js'
 import { drizzleSchema, parsePrismaProvider } from '../generator/drizzle.js'
+import { prismaBlocks, viewNames } from '../prisma/schema-text.js'
 import { GeneratorConfigError } from './errors.js'
 import { outputFile, requireOutput } from './output.js'
 
@@ -21,6 +22,7 @@ export function drizzle(options: GeneratorOptions) {
       options.dmmf.datamodel,
       providerResult.value,
       options.dmmf.datamodel.indexes,
+      viewNames(prismaBlocks(options.datamodel)),
     )
     return yield* emit(code, resolved.dir, resolved.file)
   })

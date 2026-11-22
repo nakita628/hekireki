@@ -16,11 +16,12 @@ export function generateGormModels(
   packageName = 'model',
   provider?: string,
   foreignKeyNames: ReadonlyMap<string, string> = new Map(),
+  views: ReadonlySet<string> = new Set(),
 ) {
   const idx = indexes ?? []
 
   const modelBodies = models.map((model) =>
-    generateModelStruct(model, models, enums, idx, provider, foreignKeyNames),
+    generateModelStruct(model, models, enums, idx, provider, foreignKeyNames, views),
   )
 
   return [

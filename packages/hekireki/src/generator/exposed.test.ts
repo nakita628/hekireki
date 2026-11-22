@@ -198,6 +198,7 @@ import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.statements.api.RowApi
+import org.postgresql.util.PGobject
 
 internal class PgEnumColumnType<E : Enum<E>>(
     val typeName: String,
@@ -216,11 +217,13 @@ internal class PgEnumColumnType<E : Enum<E>>(
         index: Int,
     ): Any? = rs.getString(index)
 
-    override fun notNullValueToDB(value: E): Any = dbName(value)
+    override fun notNullValueToDB(value: E): Any =
+        PGobject().also {
+            it.type = typeName
+            it.value = dbName(value)
+        }
 
     override fun nonNullValueToString(value: E): String = "'\${dbName(value).replace("'", "''")}'"
-
-    override fun parameterMarker(value: E?): String = "?::$typeName"
 }
 
 internal fun <E : Enum<E>> Table.pgEnum(

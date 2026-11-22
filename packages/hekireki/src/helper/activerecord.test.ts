@@ -3131,3 +3131,181 @@ class Post < ApplicationRecord
 end`)
   })
 })
+
+/** The models and enums of a schema text, on PostgreSQL unless it names a datasource. */
+function schemaOf(source: string) {
+  return datamodelOf(
+    getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          source.includes('datasource db')
+            ? source
+            : `datasource db {\n  provider = "postgresql"\n}\n${source}`,
+        ],
+      ],
+    }),
+  )
+}
+
+describe('a model keyed by a unique', () => {
+  // next-auth's VerificationToken: no @id and no @@id, so the table has no primary key for Rails
+  // to read, and `destroy` asks for `WHERE "verification_tokens"."" IS NULL`.
+  it('takes the first unique as its primary key', () => {
+    const { models } = schemaOf(`datasource db {
+  provider = "mysql"
+}
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map(name: "verification_tokens")
+}`)
+    expect(activeRecordModels(models, models, [], 'mysql'))
+      .toBe(`class VerificationToken < ApplicationRecord
+  self.primary_key = "token"
+
+  validates :identifier, presence: true, uniqueness: { scope: :token }
+  validates :token, presence: true, uniqueness: true
+  validates :expires, presence: true
+end`)
+  })
+
+  it('names the column of an @map-ped unique, id included, and passes over a nullable one', () => {
+    const { models } = schemaOf(`model Session {
+  note         String? @unique
+  sessionToken String  @unique @map("session_token")
+  userId       String
+}
+model Legacy {
+  id   Int    @unique
+  name String
+}`)
+    expect(activeRecordModels(models, models)).toBe(`class Session < ApplicationRecord
+  self.table_name = "Session"
+  self.primary_key = "session_token"
+
+  validates :note, uniqueness: { allow_nil: true }
+  validates :session_token, presence: true, uniqueness: true
+  validates :userId, presence: true
+end
+
+class Legacy < ApplicationRecord
+  self.table_name = "Legacy"
+  self.primary_key = "id"
+
+  validates :id, presence: true, uniqueness: true
+  validates :name, presence: true
+end`)
+  })
+
+  it('takes a compound unique as a composite primary key', () => {
+    const { models } = schemaOf(`model Membership {
+  teamId Int    @map("team_id")
+  userId Int
+  role   String
+
+  @@unique([teamId, userId])
+}`)
+    expect(activeRecordModels(models, models)).toBe(`class Membership < ApplicationRecord
+  self.table_name = "Membership"
+  self.primary_key = %w[team_id userId]
+
+  validates :team_id, presence: true, uniqueness: { scope: :userId }
+  validates :userId, presence: true
+  validates :role, presence: true
+end`)
+  })
+
+  // The key Rails has is the unique, so an association to it needs no primary_key: of its own.
+  it('leaves primary_key: off an association that references that unique', () => {
+    const { models } = schemaOf(`model Tenant {
+  slug  String @unique
+  sites Site[]
+}
+model Site {
+  id         Int    @id
+  tenantSlug String
+  tenant     Tenant @relation(fields: [tenantSlug], references: [slug])
+}`)
+    expect(activeRecordModels(models, models)).toBe(`class Tenant < ApplicationRecord
+  self.table_name = "Tenant"
+  self.primary_key = "slug"
+
+  validates :slug, presence: true, uniqueness: true
+
+  has_many :sites, foreign_key: "tenantSlug", inverse_of: :tenant, dependent: :restrict_with_error
+end
+
+class Site < ApplicationRecord
+  self.table_name = "Site"
+
+  belongs_to :tenant, foreign_key: "tenantSlug", inverse_of: :sites
+end`)
+  })
+})
+
+describe('a timestamp beside a column of the name Rails gives it', () => {
+  // documenso's Account: `created_at` is what the OAuth provider sent, an Int. An alias of that
+  // name would send it to `createdAt`; with neither, Rails would write the time into the Int.
+  it('writes no alias over a real created_at column, and lists the columns Rails fills', () => {
+    const { models } = schemaOf(`model Account {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  created_at Int?
+}`)
+    expect(activeRecordModels(models, models)).toBe(`class Account < ApplicationRecord
+  self.table_name = "Account"
+  self.implicit_order_column = "createdAt"
+
+  attribute :id, default: -> { Cuid.generate }
+  def self.timestamp_attributes_for_create
+    super - %w[created_at] + %w[createdAt]
+  end
+  private_class_method :timestamp_attributes_for_create
+end`)
+  })
+
+  it('does the same for updated_at, with the other @updatedAt columns', () => {
+    const { models } = schemaOf(`model Account {
+  id         Int      @id
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  syncedAt   DateTime @updatedAt
+  updated_at String?
+}`)
+    expect(activeRecordModels(models, models)).toBe(`class Account < ApplicationRecord
+  self.table_name = "Account"
+
+  alias_attribute :created_at, :createdAt
+  def self.timestamp_attributes_for_update
+    super - %w[updated_at] + %w[updatedAt syncedAt]
+  end
+  private_class_method :timestamp_attributes_for_update
+end`)
+  })
+
+  it('leaves a DateTime column of that name among the ones Rails fills', () => {
+    const { models } = schemaOf(`model Account {
+  id         Int       @id
+  createdAt  DateTime  @default(now())
+  created_at DateTime? @map("created_at")
+  stamp      DateTime  @updatedAt
+  updatedAt  DateTime? @map("updated_at")
+}`)
+    expect(activeRecordModels(models, models)).toBe(`class Account < ApplicationRecord
+  self.table_name = "Account"
+
+  def self.timestamp_attributes_for_create
+    super + %w[createdAt]
+  end
+  private_class_method :timestamp_attributes_for_create
+  def self.timestamp_attributes_for_update
+    super + %w[stamp]
+  end
+  private_class_method :timestamp_attributes_for_update
+end`)
+  })
+})

@@ -51,7 +51,9 @@ foreach (get_declared_classes() as $class) {
     $model->getKeyName();
     $model->getFillable();
     foreach ($model->getCasts() as $attribute => $cast) {
-        if (str_contains($cast, '\\') && !enum_exists($cast) && !class_exists($cast)) {
+        // A cast may carry arguments after a colon (AsPrismaList::class . ':' . Role::class).
+        $castClass = explode(':', $cast, 2)[0];
+        if (str_contains($castClass, '\\') && !enum_exists($castClass) && !class_exists($castClass)) {
             fwrite(STDERR, "cast for {$class}::{$attribute} points at missing {$cast}\n");
             exit(1);
         }

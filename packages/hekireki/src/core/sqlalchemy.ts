@@ -3,6 +3,7 @@ import { Effect } from 'effect'
 
 import { emitRaw } from '../emit/index.js'
 import { generateSingleFile } from '../generator/sqlalchemy.js'
+import { prismaBlocks, viewNames } from '../prisma/schema-text.js'
 import { outputFile, requireOutput } from './output.js'
 
 export function sqlalchemy(options: GeneratorOptions) {
@@ -16,6 +17,7 @@ export function sqlalchemy(options: GeneratorOptions) {
       enums,
       indexes,
       options.datasources[0]?.activeProvider,
+      viewNames(prismaBlocks(options.datamodel)),
     )
     return yield* emitRaw(code, resolved.dir, resolved.file)
   })

@@ -36,6 +36,7 @@ import {
   prismaString,
   relationMaps,
   relationMode,
+  viewNames,
 } from '../prisma/schema-text.js'
 import type { PrismaBlock } from '../prisma/schema-text.js'
 
@@ -130,6 +131,7 @@ const KT = {
   jsonb: `${EXPOSED}.json.jsonb`,
   UlidCreator: 'com.github.f4b6a3.ulid.UlidCreator',
   CUID: 'io.github.thibaultmeyer.cuid.CUID',
+  PGobject: 'org.postgresql.util.PGobject',
   buildList: 'kotlin.collections.buildList',
   emptyList: 'kotlin.collections.emptyList',
   error: 'kotlin.error',
@@ -275,17 +277,6 @@ export function enumSchemas(blocks: readonly PrismaBlock[]) {
       )
       .map(({ name, schema }) => [name, schema]),
   )
-}
-
-/**
- * The names of the `view` blocks. DMMF lists a view among the models, with nothing to tell it
- * apart; Prisma Migrate creates no table for it.
- *
- * @param blocks - The blocks of the Prisma schema as written (all of its files, merged).
- * @returns The name of each view.
- */
-function viewNames(blocks: readonly PrismaBlock[]) {
-  return new Set(blocks.filter((block) => block.keyword === 'view').map((block) => block.name))
 }
 
 const ATTRIBUTE_TOKEN = new RegExp(String.raw`${PRISMA_STRING}|[()[\]{}:,]|[^\s()[\]{}:,"]+`, 'gu')
@@ -3088,6 +3079,12 @@ const SUPPORT: readonly Declaration[] = [
   {
     name: 'PgEnumColumnType',
     needs: [],
+    // A value is bound as a PGobject of the enum's type, which the JDBC driver sends with the type's
+    // OID. A cast in the parameter marker would bind it only where this column type writes the
+    // marker itself: a column of a composite key is wrapped in EntityIDColumnType, which passes on
+    // notNullValueToDB but writes a bare `?`, and PostgreSQL refuses the varchar a string is sent as.
+    // The driver takes the type's name quoted as sqlType() writes it, and folds an unquoted one to
+    // lower case.
     lines: [
       `internal class PgEnumColumnType<E : ${t(KT.Enum)}<E>>(`,
       `    val typeName: ${t(KT.String)},`,
@@ -3103,11 +3100,13 @@ const SUPPORT: readonly Declaration[] = [
       '',
       ...readObjectLines('rs.getString(index)'),
       '',
-      `    override fun notNullValueToDB(value: E): ${t(KT.Any)} = dbName(value)`,
+      `    override fun notNullValueToDB(value: E): ${t(KT.Any)} =`,
+      `        ${x(KT.PGobject)}().also {`,
+      '            it.type = typeName',
+      '            it.value = dbName(value)',
+      '        }',
       '',
       `    override fun nonNullValueToString(value: E): ${t(KT.String)} = "'\${dbName(value).replace("'", "''")}'"`,
-      '',
-      `    override fun parameterMarker(value: E?): ${t(KT.String)} = "?::$typeName"`,
       '}',
     ],
   },

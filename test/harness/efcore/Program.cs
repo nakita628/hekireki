@@ -63,7 +63,7 @@ switch (args[0])
     case "smoke":
         var database = Recreate($"hekireki_efcore_{schema.Name}_smoke", File.ReadAllText(args[2]));
         return schema.Name == "main"
-            ? Smoke.Run(Options<Models.AppDbContext>(database, Models.AppDbContext.MapEnums))
+            ? Smoke.Run(Options<Models.AppDbContext>(database, Models.AppDbContext.MapEnums), OnDataSource(database))
             : EdgeSmoke.Run(() => new Hekireki.Edge.EdgeContext(Options<Hekireki.Edge.EdgeContext>(database, Hekireki.Edge.EdgeContext.MapEnums)));
     default:
         Console.Error.WriteLine($"unknown mode {args[0]}");
@@ -73,6 +73,14 @@ switch (args[0])
 // Configured as the README tells users to: the context's MapEnums handed to UseNpgsql.
 DbContextOptions<T> Options<T>(string connectionString, Action<NpgsqlDbContextOptionsBuilder> mapEnums) where T : DbContext =>
     new DbContextOptionsBuilder<T>().UseNpgsql(connectionString, mapEnums).Options;
+
+// A data source the caller builds: MapEnums on its builder, and on UseNpgsql beside it.
+DbContextOptions<Models.AppDbContext> OnDataSource(string connectionString)
+{
+    var builder = new NpgsqlDataSourceBuilder(connectionString);
+    Models.AppDbContext.MapEnums(builder);
+    return new DbContextOptionsBuilder<Models.AppDbContext>().UseNpgsql(builder.Build(), Models.AppDbContext.MapEnums).Options;
+}
 
 string Database(string name) => new NpgsqlConnectionStringBuilder(server) { Database = name }.ConnectionString;
 

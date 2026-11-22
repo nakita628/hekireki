@@ -104,7 +104,7 @@ export interface Category {
 
 /** BigInt autoincrement primary key (bigserial) and money as Decimal. */
 export interface Order {
-  id: Generated<bigint>
+  id: Generated<ColumnType<string, bigint | number | string, bigint | number | string>>
   user_id: string
   total: string
   placed_at: Generated<Timestamp>
@@ -112,8 +112,8 @@ export interface Order {
 
 /** Child of Order with a composite unique constraint. */
 export interface OrderItem {
-  id: Generated<bigint>
-  order_id: bigint
+  id: Generated<ColumnType<string, bigint | number | string, bigint | number | string>>
+  order_id: ColumnType<string, bigint | number | string, bigint | number | string>
   sku: string
   qty: Generated<number>
   price: string

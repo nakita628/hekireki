@@ -28,9 +28,12 @@ const PRISMA_TO_RUST: { [k: string]: string } = {
 // instant is text that is compared as text, and Prisma writes it with exactly three decimals
 // (`2030-01-02T03:04:05.000+00:00`); sqlx writes DateTimeUtc with none on a whole second and
 // DateTime as `2030-01-02 03:04:05.678`, so the column is a PrismaDateTime (prisma_date_time.rs)
-// that writes Prisma's text. sqlx reads a MySQL TIMESTAMP only as DateTime<Utc>.
-function rustTypeForNative(field: DMMF.Field, provider: string | undefined) {
+// that writes Prisma's text. sqlx reads a MySQL TIMESTAMP only as DateTime<Utc>. A `String
+// @db.Uuid` is a `uuid` column, which sqlx-postgres neither binds a String to (PostgreSQL does not
+// cast a `text` parameter to `uuid`) nor decodes into one: it is a Uuid.
+function rustTypeForNative(field: DMMF.Field, provider?: string) {
   const nativeName = field.nativeType?.[0]
+  if (nativeName === 'Uuid') return 'Uuid'
   if (nativeName === 'Timestamptz') return 'DateTimeWithTimeZone'
   if (nativeName === 'Timestamp' && provider === 'mysql') return 'DateTimeUtc'
   if (nativeName === 'Date') return 'Date'
@@ -226,7 +229,8 @@ function viaBody(path: string) {
 }
 
 // The sea-orm column type of a native type that takes no arguments of its own; one not here
-// (`Timestamp` among them) is left to the Rust type.
+// (`Timestamp` among them) is left to the Rust type. `Uuid` is: the Rust type is a Uuid, which
+// sea-orm reads as the column type `Uuid` and, in a Vec, as an array of it.
 const NATIVE_COLUMN_TYPES: { readonly [nativeType: string]: string } = {
   Text: 'Text',
   MediumText: 'Text',
@@ -238,7 +242,6 @@ const NATIVE_COLUMN_TYPES: { readonly [nativeType: string]: string } = {
   DoublePrecision: 'Double',
   Double: 'Double',
   Real: 'Double',
-  Uuid: 'Uuid',
   Timestamptz: 'TimestampWithTimeZone',
   Date: 'Date',
   Time: 'Time',
@@ -262,13 +265,15 @@ export function resolveSeaOrmColumnType(field: DMMF.Field) {
 
 function generatedIdExpr(field: DMMF.Field) {
   if (!isFunctionDefault(field.default)) return null
+  // A `@db.Uuid` field is a Uuid, so it takes the value itself; a ULID is not the text of one
+  // (Prisma Client's own insert of it fails on the column), so nothing is generated for it.
+  const isUuid = rustTypeForNative(field) === 'Uuid'
   if (field.default.name === 'uuid') {
-    return field.default.args[0] === 7
-      ? 'uuid::Uuid::now_v7().to_string()'
-      : 'uuid::Uuid::new_v4().to_string()'
+    const call = field.default.args[0] === 7 ? 'uuid::Uuid::now_v7()' : 'uuid::Uuid::new_v4()'
+    return isUuid ? call : `${call}.to_string()`
   }
   // Ulid::generate is the ulid crate 3.x API (1.x/2.x had Ulid::new).
-  if (field.default.name === 'ulid') return 'ulid::Ulid::generate().to_string()'
+  if (field.default.name === 'ulid') return isUuid ? null : 'ulid::Ulid::generate().to_string()'
   return null
 }
 
@@ -893,7 +898,10 @@ function newFnField(field: DMMF.Field, ident: string) {
       ? `            ${ident}: Set(\n${inner}${value},\n            ),`
       : `            ${ident}: Set(Some(\n${inner}${generate},\n            )),`
   }
-  if (n + g > 93) return `            ${ident}: Set(\n${inner}${value},\n            ),`
+  // A call that is no method chain (the Uuid of a `@db.Uuid` field) always takes the comma.
+  if (!generate.endsWith('.to_string()') || n + g > 93) {
+    return `            ${ident}: Set(\n${inner}${value},\n            ),`
+  }
   if (n + g < 93) return `            ${ident}: Set(\n${inner}${value}\n            ),`
   // At exactly 93 rustfmt breaks inside the generator's own call.
   const call = generate.slice(0, -'().to_string()'.length)
@@ -1041,9 +1049,11 @@ export function generateEntityFile(
   return lines.join('\n')
 }
 
+// The join table's column is of its model's key: a `uuid` for a `@db.Uuid` key.
 function pkRustType(modelName: string, models: readonly DMMF.Model[]) {
   const pkField = models.find((m) => m.name === modelName)?.fields.find((f) => f.isId)
-  return pkField ? prismaTypeToRustType(pkField.type, true) : 'String'
+  if (!pkField) return 'String'
+  return rustTypeForNative(pkField) === 'Uuid' ? 'Uuid' : prismaTypeToRustType(pkField.type, true)
 }
 
 export function generateM2MEntity(

@@ -266,6 +266,7 @@ usmall
 utiny
 uuidv
 varbits
+viewonly
 voidzero
 VISLIB
 Visus
