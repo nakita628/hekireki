@@ -3538,10 +3538,12 @@ from django.db.backends.base.base import BaseDatabaseWrapper
 
 
 class PlainJSONField(models.JSONField):
-    def db_type(self, connection: BaseDatabaseWrapper) -> str:
-        return "json"
+    def db_type(self, connection: BaseDatabaseWrapper) -> str | None:
+        return "json" if connection.vendor == "postgresql" else super().db_type(connection)
 
     def from_db_value(self, value: Any, expression: Any, connection: BaseDatabaseWrapper) -> Any:
+        if connection.vendor != "postgresql":
+            return super().from_db_value(value, expression, connection)
         return value
 
 

@@ -660,13 +660,16 @@ const ENUM_ARRAY_FIELD = `class EnumArrayField(ArrayField):  # type: ignore[type
 
 // A @db.Json column is PostgreSQL's json, which psycopg 2 and 3 load into Python values themselves
 // (Django registers a text loader for jsonb only): JSONField.from_db_value would hand the value to
-// json.loads, and decode a JSON string a second time. What the driver loaded is kept as it is, and
-// db_type is the column Prisma creates, so that migrate makes json rather than jsonb.
+// json.loads, and decode a JSON string a second time. On PostgreSQL what the driver loaded is kept as
+// it is, and db_type is the column Prisma creates, so that migrate makes json rather than jsonb;
+// another backend (a test settings file on SQLite) hands back the text, which JSONField decodes.
 const PLAIN_JSON_FIELD = `class PlainJSONField(models.JSONField):
-    def db_type(self, connection: BaseDatabaseWrapper) -> str:
-        return "json"
+    def db_type(self, connection: BaseDatabaseWrapper) -> str | None:
+        return "json" if connection.vendor == "postgresql" else super().db_type(connection)
 
     def from_db_value(self, value: Any, expression: Any, connection: BaseDatabaseWrapper) -> Any:
+        if connection.vendor != "postgresql":
+            return super().from_db_value(value, expression, connection)
         return value`
 
 /** A `@db.Json` column on PostgreSQL: the field PlainJSONField declares. */
