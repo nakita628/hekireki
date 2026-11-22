@@ -805,6 +805,33 @@ model Team {
     expect(gormProblems(listModels('Tag'), 'postgresql')).toStrictEqual([])
   })
 
+  it('types a native list as Prisma names it, and an Int list on CockroachDB as INT4', () => {
+    const native = gormFor(
+      `
+model Box {
+  id    Int      @id
+  ids   String[] @db.Uuid
+  ratio Float[]  @db.Real
+  tags  String[] @db.Char(2)
+  wide  Float[]  @db.DoublePrecision
+}
+`,
+      'postgresql',
+    )
+    expect(native).toContain('`gorm:"column:ids;type:uuid[]" json:"ids"`')
+    expect(native).toContain('`gorm:"column:ratio;type:real[]" json:"ratio"`')
+    expect(native).toContain('`gorm:"column:tags;type:char(2)[]" json:"tags"`')
+    expect(native).toContain('`gorm:"column:wide;type:double precision[]" json:"wide"`')
+    const cockroach = gormFor('model A {\n  id Int @id\n  n  Int[]\n}\n', 'cockroachdb')
+    expect(cockroach).toContain('`gorm:"column:n;type:int4[]" json:"n"`')
+  })
+
+  it('refuses a NULL element and a token that is not a boolean, as no Prisma list holds one', () => {
+    const code = gormFor(schema, 'postgresql')
+    expect(code).toContain('return fmt.Errorf("an array column held a NULL element: %q", text)')
+    expect(code).toContain('parseErr = fmt.Errorf("%q is not a boolean", item)')
+  })
+
   it('writes no ScalarList for a schema without lists', () => {
     expect(gormFor('model A {\n  id Int @id\n}\n', 'postgresql')).not.toContain('ScalarList')
   })

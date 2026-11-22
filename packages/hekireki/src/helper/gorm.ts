@@ -307,12 +307,27 @@ function isScalarList(field: DMMF.Field, provider: string | undefined) {
   )
 }
 
-// An enum list is read and written as text, as an enum is.
-function scalarListColumnType(field: DMMF.Field) {
-  const element =
-    resolveNativeType(field) ??
-    (field.kind === 'enum' ? 'text' : (SCALAR_LIST_ELEMENTS[field.type] ?? 'text'))
-  return `${element}[]`
+// A native type's name as PostgreSQL (and CockroachDB) write it, where it is not the lower-cased
+// Prisma name.
+const LIST_NATIVE_NAMES: { readonly [name: string]: string } = {
+  DoublePrecision: 'double precision',
+}
+
+/**
+ * The array column Prisma makes for a scalar list: of the native type the schema names, as Prisma
+ * writes it (`@db.Uuid` is `uuid[]`, `@db.Char(2)` `char(2)[]`), or else of the element's default
+ * type. CockroachDB reads `integer` as INT8, so an Int list there is `int4[]`, as Prisma makes it.
+ * An enum list is read and written as text, as an enum is.
+ */
+function scalarListColumnType(field: DMMF.Field, provider: string | undefined) {
+  if (field.nativeType) {
+    const [name, args] = field.nativeType
+    const params = (args ?? []).length > 0 ? `(${(args ?? []).join(',')})` : ''
+    return `${LIST_NATIVE_NAMES[name] ?? name.toLowerCase()}${params}[]`
+  }
+  if (field.kind === 'enum') return 'text[]'
+  if (provider === 'cockroachdb' && field.type === 'Int') return 'int4[]'
+  return `${SCALAR_LIST_ELEMENTS[field.type] ?? 'text'}[]`
 }
 
 function usesScalarList(models: readonly DMMF.Model[], provider: string | undefined) {
@@ -320,7 +335,7 @@ function usesScalarList(models: readonly DMMF.Model[], provider: string | undefi
 }
 
 function columnTypeTag(field: DMMF.Field, provider?: string) {
-  if (isScalarList(field, provider)) return `type:${scalarListColumnType(field)}`
+  if (isScalarList(field, provider)) return `type:${scalarListColumnType(field, provider)}`
   const nativeType = resolveNativeType(field)
   // A DateTime[] is a PostgreSQL array, `timestamp(3)[]` unless the native type says otherwise,
   // which the list type writes and reads as Prisma Client does.
@@ -1409,7 +1424,14 @@ export function generateScalarListType(models: readonly DMMF.Model[], provider?:
     '\t\tcase float64:',
     '\t\t\tvalue, parseErr = strconv.ParseFloat(item, 64)',
     '\t\tcase bool:',
-    '\t\t\tvalue = item == "t" || item == "true"',
+    '\t\t\tswitch item {',
+    '\t\t\tcase "t", "true":',
+    '\t\t\t\tvalue = true',
+    '\t\t\tcase "f", "false":',
+    '\t\t\t\tvalue = false',
+    '\t\t\tdefault:',
+    '\t\t\t\tparseErr = fmt.Errorf("%q is not a boolean", item)',
+    '\t\t\t}',
     '\t\t}',
     '\t\tif parseErr != nil {',
     '\t\t\treturn fmt.Errorf("an array column held %q: %w", text, parseErr)',
@@ -1421,7 +1443,8 @@ export function generateScalarListType(models: readonly DMMF.Model[], provider?:
     '}',
     '',
     '// ArrayItems splits the text form of a one-dimensional PostgreSQL array into its elements,',
-    '// unquoted.',
+    '// unquoted. A NULL element (an unquoted NULL) is an error: a Prisma list holds none, and the',
+    '// string "NULL" is written quoted.',
     'func ArrayItems(text string) ([]string, error) {',
     "\tif len(text) < 2 || text[0] != '{' || text[len(text)-1] != '}' {",
     '\t\treturn nil, fmt.Errorf("an array column held %q", text)',
@@ -1432,24 +1455,40 @@ export function generateScalarListType(models: readonly DMMF.Model[], provider?:
     '\t\treturn items, nil',
     '\t}',
     '\tvar item strings.Builder',
-    '\tquoted, escaped := false, false',
-    '\tfor _, r := range body {',
+    '\tquoted, escaped, wasQuoted := false, false, false',
+    '\tend := func() error {',
+    '\t\tif !wasQuoted && item.String() == "NULL" {',
+    '\t\t\treturn fmt.Errorf("an array column held a NULL element: %q", text)',
+    '\t\t}',
+    '\t\titems = append(items, item.String())',
+    '\t\titem.Reset()',
+    '\t\twasQuoted = false',
+    '\t\treturn nil',
+    '\t}',
+    '\t// Every delimiter is ASCII, so the text is walked byte by byte and any other byte kept as it is.',
+    '\tfor i := 0; i < len(body); i++ {',
+    '\t\tr := body[i]',
     '\t\tswitch {',
     '\t\tcase escaped:',
-    '\t\t\titem.WriteRune(r)',
+    '\t\t\titem.WriteByte(r)',
     '\t\t\tescaped = false',
     "\t\tcase r == '\\\\':",
     '\t\t\tescaped = true',
     "\t\tcase r == '\"':",
     '\t\t\tquoted = !quoted',
+    '\t\t\twasQuoted = true',
     "\t\tcase r == ',' && !quoted:",
-    '\t\t\titems = append(items, item.String())',
-    '\t\t\titem.Reset()',
+    '\t\t\tif err := end(); err != nil {',
+    '\t\t\t\treturn nil, err',
+    '\t\t\t}',
     '\t\tdefault:',
-    '\t\t\titem.WriteRune(r)',
+    '\t\t\titem.WriteByte(r)',
     '\t\t}',
     '\t}',
-    '\treturn append(items, item.String()), nil',
+    '\tif err := end(); err != nil {',
+    '\t\treturn nil, err',
+    '\t}',
+    '\treturn items, nil',
     '}',
   ]
 }

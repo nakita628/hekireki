@@ -366,7 +366,14 @@ func (list *ScalarList[T]) Scan(src any) error {
 		case float64:
 			value, parseErr = strconv.ParseFloat(item, 64)
 		case bool:
-			value = item == "t" || item == "true"
+			switch item {
+			case "t", "true":
+				value = true
+			case "f", "false":
+				value = false
+			default:
+				parseErr = fmt.Errorf("%q is not a boolean", item)
+			}
 		}
 		if parseErr != nil {
 			return fmt.Errorf("an array column held %q: %w", text, parseErr)
@@ -378,7 +385,8 @@ func (list *ScalarList[T]) Scan(src any) error {
 }
 
 // ArrayItems splits the text form of a one-dimensional PostgreSQL array into its elements,
-// unquoted.
+// unquoted. A NULL element (an unquoted NULL) is an error: a Prisma list holds none, and the
+// string "NULL" is written quoted.
 func ArrayItems(text string) ([]string, error) {
 	if len(text) < 2 || text[0] != '{' || text[len(text)-1] != '}' {
 		return nil, fmt.Errorf("an array column held %q", text)
@@ -389,22 +397,38 @@ func ArrayItems(text string) ([]string, error) {
 		return items, nil
 	}
 	var item strings.Builder
-	quoted, escaped := false, false
-	for _, r := range body {
+	quoted, escaped, wasQuoted := false, false, false
+	end := func() error {
+		if !wasQuoted && item.String() == "NULL" {
+			return fmt.Errorf("an array column held a NULL element: %q", text)
+		}
+		items = append(items, item.String())
+		item.Reset()
+		wasQuoted = false
+		return nil
+	}
+	// Every delimiter is ASCII, so the text is walked byte by byte and any other byte kept as it is.
+	for i := 0; i < len(body); i++ {
+		r := body[i]
 		switch {
 		case escaped:
-			item.WriteRune(r)
+			item.WriteByte(r)
 			escaped = false
 		case r == '\\':
 			escaped = true
 		case r == '"':
 			quoted = !quoted
+			wasQuoted = true
 		case r == ',' && !quoted:
-			items = append(items, item.String())
-			item.Reset()
+			if err := end(); err != nil {
+				return nil, err
+			}
 		default:
-			item.WriteRune(r)
+			item.WriteByte(r)
 		}
 	}
-	return append(items, item.String()), nil
+	if err := end(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
