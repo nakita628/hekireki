@@ -957,14 +957,15 @@ function idDefaultArg(field: DMMF.Field) {
     : `default=lambda: nanoid.generate(size=${nanoid.length})`
 }
 
+// A key with a literal default gets it like any column: Prisma creates the column with that
+// DEFAULT, and SQLAlchemy needs the value in the instance to hold its identity.
 function literalDefaultArgs(
   field: DMMF.Field,
-  isPk: boolean,
   enumMap: ReadonlyMap<string, DMMF.DatamodelEnum>,
   provider: string,
 ) {
   const defaultVal = formatDefault(field, enumMap.get(field.type))
-  if (defaultVal === null || isPk) return []
+  if (defaultVal === null) return []
   const sql = serverDefault(field, enumMap.get(field.type), provider)
   return [
     `default=${defaultVal}`,
@@ -978,7 +979,6 @@ function literalDefaultArgs(
 // precision.
 function defaultArgs(
   field: DMMF.Field,
-  isPk: boolean,
   enumMap: ReadonlyMap<string, DMMF.DatamodelEnum>,
   provider: string,
 ) {
@@ -999,8 +999,7 @@ function defaultArgs(
   if (isUlidDefault(field)) return ['default=lambda: str(ULID())']
   const idArg = idDefaultArg(field)
   if (idArg !== null) return [idArg]
-  if (!isPk || isAutoincrement(field)) return literalDefaultArgs(field, isPk, enumMap, provider)
-  return []
+  return literalDefaultArgs(field, enumMap, provider)
 }
 
 // Prisma's @updatedAt also sets the value on create; without an insert
@@ -1043,7 +1042,7 @@ function generateColumn(
     ...keyArgs(field, isPk, provider),
     // Prisma Migrate leaves a list's column nullable; the model reads it as a list all the same.
     ...(field.isList ? ['nullable=True'] : []),
-    ...defaultArgs(field, isPk, enumMap, provider),
+    ...defaultArgs(field, enumMap, provider),
     ...updatedAtArgs(field),
   ]
 
@@ -1387,15 +1386,13 @@ function someField(models: readonly DMMF.Model[], test: (field: DMMF.Field) => b
   return models.some((m) => m.fields.some(test))
 }
 
-// Whether a field's default is SQL text, a server_default: a now(), a literal default off the
-// key, a dbgenerated().
+// Whether a field's default is SQL text, a server_default: a now(), a literal default (a key's
+// included), a dbgenerated().
 function hasServerDefaultText(model: DMMF.Model) {
-  const keyFields = new Set(model.primaryKey?.fields)
   return model.fields.some(
     (f) =>
       f.default !== undefined &&
       f.default !== null &&
-      !(f.isId || keyFields.has(f.name)) &&
       (!isFunctionDefault(f.default) || ['now', 'dbgenerated'].includes(f.default.name)),
   )
 }

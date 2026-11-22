@@ -1221,8 +1221,12 @@ function propertyBlocks(
     ...attributeFields.map((f) => f.dbName ?? f.name),
   ]
   // A new model carries the schema's literal defaults before it is saved, as it will once
-  // the database has filled them.
-  const defaultEntries = attributeFields.flatMap((f) => {
+  // the database has filled them. A key's literal default (`@id @default(1)`) is among them:
+  // the key Eloquent holds after an insert that is not incrementing is the one the model had.
+  const defaultEntries = [
+    ...(key.idField === undefined ? [] : [key.idField]),
+    ...attributeFields,
+  ].flatMap((f) => {
     const value = phpDefault(f, ctx.enums, ctx.provider)
     return value === null ? [] : [`        ${phpString(f.dbName ?? f.name)} => ${value},`]
   })

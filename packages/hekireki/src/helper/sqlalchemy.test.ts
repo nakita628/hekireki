@@ -3163,3 +3163,41 @@ class Post(Base):
 `)
   })
 })
+
+// A key Prisma creates with a literal DEFAULT: SQLAlchemy holds the identity it inserted, so the
+// value has to be in the instance, and a composite key's column keeps its default too.
+describe('a primary key with a literal default', () => {
+  it('gets default= and server_default= as any column with that default', () => {
+    const { models, enums, indexes } = datamodelOf(
+      getDMMF({
+        datamodel: [
+          [
+            'schema.prisma',
+            `datasource db {
+  provider = "postgresql"
+}
+model SSOConfig {
+  id       String @id @default("sso_config")
+  settings Json
+}
+model DailyErrors {
+  date        String
+  team_id     String @default("")
+  status_code String
+
+  @@id([date, team_id, status_code])
+}`,
+          ],
+        ],
+      }),
+    )
+    const code = generateSingleFile(models, enums, indexes, 'postgresql')
+    expect(code).toContain(
+      `id: Mapped[str] = mapped_column(primary_key=True, default="sso_config", server_default=text("'sso_config'"))`,
+    )
+    expect(code).toContain(
+      `team_id: Mapped[str] = mapped_column(primary_key=True, default="", server_default=text("''"))`,
+    )
+    expect(code).toMatch(/^from sqlalchemy import .*\btext\b/mu)
+  })
+})
