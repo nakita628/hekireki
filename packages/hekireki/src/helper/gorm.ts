@@ -877,12 +877,22 @@ function generateRelationFields(
       ].filter((c) => c !== null),
     ]
     // A has-one is a pointer for the same reason, and Prisma requires the 1:1 back side to be
-    // optional anyway.
-    return withDoc(assoc.name, [
+    // optional anyway. A has-one onto its own model is a slice instead: GORM guesses a struct
+    // field that points at its own schema as belongs-to first, finds the key on that same
+    // schema and stops there, so `*User` would load the row this one points at (no tag forces
+    // has-one). A slice is guessed as has-many on the key, and the key's unique index keeps it
+    // to at most one row.
+    const isSelf = assoc.targetModel === model.name
+    const row = [
       own(assoc.name),
-      `*${goModelName(assoc.targetModel)}`,
+      `${isSelf ? '[]' : '*'}${goModelName(assoc.targetModel)}`,
       buildRelationTag(tagParts),
-    ])
+    ]
+    const lines = withDoc(assoc.name, row)
+    if (!isSelf) return lines
+    const self = goModelName(model.name)
+    const note = `// A 1:1 onto ${self} itself: GORM would read *${self} as belongs-to on the same key, so this is a slice of at most one.`
+    return [...lines.slice(0, -1), [note], row]
   })
 
   // Prisma's join table has two columns, A for the model whose name sorts
