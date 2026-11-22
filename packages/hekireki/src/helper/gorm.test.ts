@@ -3,6 +3,7 @@ import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { generateGormModels } from '../generator/gorm.js'
+import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import { buildGormTags, goFieldName, prismaTypeToGoType } from './gorm.js'
 
 /** The datamodel of a schema the test expects Prisma to parse. */
@@ -593,9 +594,8 @@ describe('buildGormTags native types', () => {
 })
 
 function gormFor(schema: string, provider = 'sqlite') {
-  const result = getDMMF({
-    datamodel: [['schema.prisma', `datasource db {\n  provider = "${provider}"\n}\n${schema}`]],
-  })
+  const source = `datasource db {\n  provider = "${provider}"\n}\n${schema}`
+  const result = getDMMF({ datamodel: [['schema.prisma', source]] })
   if ('type' in result) throw new Error(result.error.message)
   return generateGormModels(
     result.datamodel.models,
@@ -603,6 +603,7 @@ function gormFor(schema: string, provider = 'sqlite') {
     result.datamodel.indexes,
     'model',
     provider,
+    relationMaps(prismaBlocks(source)),
   )
 }
 
@@ -668,6 +669,50 @@ model Post {
     )
     expect(code).toContain(
       '`gorm:"foreignKey:AuthorID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`',
+    )
+  })
+
+  it("keeps the names @relation(map:) and @@unique(map:) give, and CockroachDB's Int as it was", () => {
+    const schema = `
+model User {
+  id    Int    @id
+  a     Int
+  b     Int
+  posts Post[]
+
+  @@unique([a, b], map: "user_pair")
+}
+
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], map: "post_author")
+}
+`
+    const code = gormFor(schema, 'cockroachdb')
+    expect(code).toContain('constraint:post_author,OnUpdate:CASCADE,OnDelete:RESTRICT')
+    expect(code).toContain('`gorm:"column:a;uniqueIndex:user_pair;not null" json:"a"`')
+    expect(code).not.toContain('size:32')
+  })
+
+  it('falls back to NO ACTION for a required relation on SQL Server, which has no RESTRICT', () => {
+    const code = gormFor(
+      `
+model User {
+  id    Int    @id
+  posts Post[]
+}
+
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+}
+`,
+      'sqlserver',
+    )
+    expect(code).toContain(
+      '`gorm:"foreignKey:AuthorID;constraint:Post_authorId_fkey,OnUpdate:CASCADE,OnDelete:NO ACTION"`',
     )
   })
 })

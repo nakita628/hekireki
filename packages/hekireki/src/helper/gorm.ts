@@ -73,10 +73,16 @@ function resolveNativeType(field: DMMF.Field) {
 
 /**
  * A relation through the foreign key `fkField` holds, which is on either end of it. A referential
- * action the schema leaves out is Prisma's: `Restrict` on delete for a required relation and
- * `SetNull` for an optional one, `Cascade` on update.
+ * action the schema leaves out is Prisma's: `Restrict` on delete for a required relation (`NoAction`
+ * on SQL Server, which has no RESTRICT) and `SetNull` for an optional one, `Cascade` on update.
  */
-function foreignKeyAssociation(name: string, targetModel: string, fkField: DMMF.Field) {
+function foreignKeyAssociation(
+  name: string,
+  targetModel: string,
+  fkField: DMMF.Field,
+  provider: string | undefined,
+) {
+  const requiredOnDelete = provider === 'sqlserver' ? 'NoAction' : 'Restrict'
   const foreignKeys = fkField.relationFromFields ?? []
   return {
     name,
@@ -85,14 +91,20 @@ function foreignKeyAssociation(name: string, targetModel: string, fkField: DMMF.
     references: fkField.relationToFields?.[0] ?? 'id',
     foreignKeys,
     referencesList: fkField.relationToFields ?? ['id'],
-    onDelete: fkField.relationOnDelete ?? (fkField.isRequired ? 'Restrict' : 'SetNull'),
+    // The relation field that holds the foreign key, whose @relation(map: ...) names it.
+    fkFieldName: fkField.name,
+    onDelete: fkField.relationOnDelete ?? (fkField.isRequired ? requiredOnDelete : 'SetNull'),
     onUpdate: fkField.relationOnUpdate ?? 'Cascade',
   }
 }
 
 type ForeignKeyAssociation = ReturnType<typeof foreignKeyAssociation>
 
-function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
+function getAssociations(
+  model: DMMF.Model,
+  allModels: readonly DMMF.Model[],
+  provider: string | undefined,
+) {
   const belongsTo: ForeignKeyAssociation[] = []
   const hasMany: (ForeignKeyAssociation & { isList: boolean })[] = []
   const hasOne: (ForeignKeyAssociation & { isList: boolean })[] = []
@@ -106,7 +118,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   for (const end of relationEnds(model, allModels)) {
     const { field } = end
     if (end.kind === 'belongsTo') {
-      belongsTo.push(foreignKeyAssociation(field.name, field.type, field))
+      belongsTo.push(foreignKeyAssociation(field.name, field.type, field, provider))
       continue
     }
     if (end.kind === 'manyToMany') {
@@ -119,7 +131,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       continue
     }
     const association = {
-      ...foreignKeyAssociation(field.name, field.type, end.inverse),
+      ...foreignKeyAssociation(field.name, field.type, end.inverse, provider),
       isList: end.kind === 'hasMany',
     }
     if (end.kind === 'hasMany') hasMany.push(association)
@@ -286,9 +298,14 @@ function columnTypeTag(field: DMMF.Field, provider?: string) {
 }
 
 // A Go int is 64 bits, which GORM makes a bigint (bigserial with autoIncrement); Prisma's Int is
-// 32 bits, `integer` (`serial`) on PostgreSQL and INT on MySQL.
-function sizeTag(field: DMMF.Field) {
-  return field.kind === 'scalar' && field.type === 'Int' && !field.isList && !field.nativeType
+// 32 bits, `integer` (`serial`) on PostgreSQL and INT on MySQL. CockroachDB reads `integer` as
+// INT8 whatever the size, so it is left as it was.
+function sizeTag(field: DMMF.Field, provider: string | undefined) {
+  return provider !== 'cockroachdb' &&
+    field.kind === 'scalar' &&
+    field.type === 'Int' &&
+    !field.isList &&
+    !field.nativeType
     ? 'size:32'
     : null
 }
@@ -326,7 +343,7 @@ export function buildGormTags(
       : null,
     ...compositeIndexTags,
     columnTypeTag(field, provider),
-    sizeTag(field),
+    sizeTag(field, provider),
     // Other scalar lists need a serializer so GORM can persist the slice; the built-in
     // json serializer works on every dialect without extra deps.
     field.isList && field.kind !== 'object' && !isDateTimeList(field) ? 'serializer:json' : null,
@@ -349,11 +366,13 @@ function collectCompositeIndexTags(
   const tableName = model.dbName ?? model.name
   const fieldByName = new Map(model.fields.map((mf) => [mf.name, mf]))
 
-  // A @unique(map: "...") keeps the name the schema gives it.
+  const columnsOf = (fields: readonly string[]) =>
+    fields.map((f) => fieldByName.get(f)?.dbName ?? f)
+  // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it.
   const mappedUniques = new Map(
     indexes
-      .filter((idx) => idx.model === model.name && idx.type === 'unique' && idx.fields.length === 1)
-      .map((idx) => [idx.fields[0]?.name, idx.dbName]),
+      .filter((idx) => idx.model === model.name && idx.type === 'unique')
+      .map((idx) => [idx.fields.map((f) => f.name).join(','), idx.dbName]),
   )
   const singleUniqueTags = model.fields
     .filter((f) => f.isUnique)
@@ -368,8 +387,9 @@ function collectCompositeIndexTags(
   const uniqueTags = model.uniqueFields
     .filter((fields) => fields.length > 1)
     .flatMap((fields) => {
-      const cols = fields.map((f) => fieldByName.get(f)?.dbName ?? f)
-      const idxName = `${tableName}_${cols.join('_')}_key`
+      const idxName =
+        mappedUniques.get(fields.join(',')) ??
+        constraintName(tableName, columnsOf(fields), 'key', provider ?? '')
       return fields.map((f): [string, string] => [f, `uniqueIndex:${idxName}`])
     })
 
@@ -379,7 +399,7 @@ function collectCompositeIndexTags(
       const idxName =
         idx.dbName ??
         idx.name ??
-        `${tableName}_${idx.fields.map((f) => fieldByName.get(f.name)?.dbName ?? f.name).join('_')}_idx`
+        constraintName(tableName, columnsOf(idx.fields.map((f) => f.name)), 'idx', provider ?? '')
       return idx.fields.map((f): [string, string] => [f.name, `index:${idxName}`])
     })
 
@@ -704,6 +724,7 @@ function generateRelationFields(
   allModels: readonly DMMF.Model[],
   associations: ReturnType<typeof getAssociations>,
   provider: string | undefined,
+  foreignKeyNames: ReadonlyMap<string, string>,
 ) {
   // A relation and the keys it names are written as the struct that holds each field names it.
   const of = (modelName: string) => (name: string) => goFieldNameIn(allModels, modelName, name)
@@ -754,7 +775,8 @@ function generateRelationFields(
         : []),
       ...[
         constraintTag(
-          foreignKeyName(allModels, assoc.targetModel, assoc.foreignKeys, provider),
+          foreignKeyNames.get(`${assoc.targetModel}.${assoc.fkFieldName}`) ??
+            foreignKeyName(allModels, assoc.targetModel, assoc.foreignKeys, provider),
           assoc.onDelete,
           assoc.onUpdate,
         ),
@@ -775,7 +797,8 @@ function generateRelationFields(
         : []),
       ...[
         constraintTag(
-          foreignKeyName(allModels, assoc.targetModel, assoc.foreignKeys, provider),
+          foreignKeyNames.get(`${assoc.targetModel}.${assoc.fkFieldName}`) ??
+            foreignKeyName(allModels, assoc.targetModel, assoc.foreignKeys, provider),
           assoc.onDelete,
           assoc.onUpdate,
         ),
@@ -851,6 +874,7 @@ export function generateModelStruct(
   enums: readonly DMMF.DatamodelEnum[] | undefined,
   indexes: readonly DMMF.Index[],
   provider?: string,
+  foreignKeyNames: ReadonlyMap<string, string> = new Map(),
 ) {
   // A model with no @id or @@id is keyed by its first unique fields, as a composite key is: GORM
   // needs a primary key to load an association, and the other models name this one.
@@ -858,7 +882,7 @@ export function generateModelStruct(
   const compositePkFieldNames = new Set(idField ? [] : primaryKeyFields(model))
   const isCompositePk = !idField && compositePkFieldNames.size > 0
 
-  const associations = getAssociations(model, allModels)
+  const associations = getAssociations(model, allModels, provider)
 
   const compositeTagMap = collectCompositeIndexTags(model, indexes, provider)
 
@@ -884,7 +908,13 @@ export function generateModelStruct(
     return rows
   })
 
-  const relationLines = generateRelationFields(model, allModels, associations, provider)
+  const relationLines = generateRelationFields(
+    model,
+    allModels,
+    associations,
+    provider,
+    foreignKeyNames,
+  )
 
   // GORM would pluralise the snake_cased struct name (Warehouse -> warehouses);
   // the table is Prisma's, so every model says which.
