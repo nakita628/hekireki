@@ -3,6 +3,7 @@ import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { generateGormModels } from '../generator/gorm.js'
+import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import { buildGormTags, goFieldName, prismaTypeToGoType } from './gorm.js'
 
 /** The datamodel of a schema the test expects Prisma to parse. */
@@ -152,7 +153,7 @@ describe('buildGormTags', () => {
       default: { name: 'autoincrement', args: [] },
     } as any
     expect(buildGormTags(field, true, false, [])).toBe(
-      '`gorm:"column:id;primaryKey;autoIncrement" json:"id"`',
+      '`gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`',
     )
   })
 
@@ -195,7 +196,7 @@ describe('buildGormTags', () => {
       '`gorm:"column:id;primaryKey;type:varchar(191)" json:"id"`',
     )
     expect(buildGormTags(uuidKey, true, false, [], [], 'postgresql')).toBe(
-      '`gorm:"column:id;primaryKey;type:char(36)" json:"id"`',
+      '`gorm:"column:id;primaryKey" json:"id"`',
     )
     // A ulid() key with a native type takes the native type, as Prisma Migrate does.
     const ulidKey = string({
@@ -593,9 +594,8 @@ describe('buildGormTags native types', () => {
 })
 
 function gormFor(schema: string, provider = 'sqlite') {
-  const result = getDMMF({
-    datamodel: [['schema.prisma', `datasource db {\n  provider = "${provider}"\n}\n${schema}`]],
-  })
+  const source = `datasource db {\n  provider = "${provider}"\n}\n${schema}`
+  const result = getDMMF({ datamodel: [['schema.prisma', source]] })
   if ('type' in result) throw new Error(result.error.message)
   return generateGormModels(
     result.datamodel.models,
@@ -603,8 +603,142 @@ function gormFor(schema: string, provider = 'sqlite') {
     result.datamodel.indexes,
     'model',
     provider,
+    relationMaps(prismaBlocks(source)),
   )
 }
+
+// GORM's postgres driver makes a Go int a bigint, a float64 a decimal and a time a timestamptz;
+// the tags give AutoMigrate the columns, defaults, keys and names Prisma Migrate makes.
+describe('generateGormModels columns as Prisma Migrate makes them on PostgreSQL', () => {
+  it("writes Prisma's types, the now() default, the unique and foreign key names and actions", () => {
+    const code = gormFor(
+      `
+model User {
+  id        String   @id @default(uuid())
+  email     String?  @unique
+  credits   Int      @default(3)
+  ratio     Float
+  amount    Decimal
+  createdAt DateTime @default(now())
+  tasks     Task[]
+}
+
+model Task {
+  id     Int    @id @default(autoincrement())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain(
+      [
+        '	ID        string   `gorm:"column:id;primaryKey" json:"id"`',
+        '	Email     *string  `gorm:"column:email;uniqueIndex:User_email_key" json:"email"`',
+        '	Credits   *int     `gorm:"column:credits;size:32;default:3;not null" json:"credits"`',
+        '	Ratio     float64  `gorm:"column:ratio;type:double precision;not null" json:"ratio"`',
+        '	Amount    float64  `gorm:"column:amount;type:decimal(65,30);not null" json:"amount"`',
+        '	CreatedAt DateTime `gorm:"column:createdAt;type:timestamp(3);default:CURRENT_TIMESTAMP;autoCreateTime:false;not null" json:"createdAt"`',
+        '	Tasks     []Task   `gorm:"foreignKey:UserID;constraint:Task_userId_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`',
+      ].join('\n'),
+    )
+    expect(code).toContain(
+      '\tID     int    `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`',
+    )
+  })
+
+  it('leaves a now() default to the hook elsewhere, and a name GORM cannot read to GORM', () => {
+    const code = gormFor(
+      `
+model User {
+  id        Int      @id
+  createdAt DateTime @default(now())
+  posts     Post[]
+}
+
+model Post {
+  id       Int  @id
+  authorId Int? @map("author id")
+  author   User? @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+`,
+      'sqlite',
+    )
+    expect(code).toContain(
+      '\tCreatedAt DateTime `gorm:"column:createdAt;autoCreateTime:false;not null" json:"createdAt"`',
+    )
+    expect(code).toContain(
+      '`gorm:"foreignKey:AuthorID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`',
+    )
+  })
+
+  it("keeps the names @relation(map:) and @@unique(map:) give, and CockroachDB's Int as it was", () => {
+    const schema = `
+model User {
+  id    Int    @id
+  a     Int
+  b     Int
+  posts Post[]
+
+  @@unique([a, b], map: "user_pair")
+}
+
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], map: "post_author")
+}
+`
+    const code = gormFor(schema, 'cockroachdb')
+    expect(code).toContain('constraint:post_author,OnUpdate:CASCADE,OnDelete:RESTRICT')
+    expect(code).toContain('`gorm:"column:a;uniqueIndex:user_pair;not null" json:"a"`')
+    expect(code).not.toContain('size:32')
+  })
+
+  it("cuts names at 128 on SQL Server and leaves a name the tag cannot hold to Prisma's default", () => {
+    const code = gormFor(
+      `
+model customer_order_line_items {
+  id                        Int    @id
+  warehouse_location_code   String
+  supplier_reference_number String
+  a                         Int
+  b                         Int
+
+  @@unique([warehouse_location_code, supplier_reference_number])
+  @@unique([a, b], map: "pair,v2")
+}
+`,
+      'sqlserver',
+    )
+    expect(code).toContain(
+      'uniqueIndex:customer_order_line_items_warehouse_location_code_supplier_reference_number_key',
+    )
+    expect(code).toContain('uniqueIndex:customer_order_line_items_a_b_key')
+    expect(code).not.toContain('pair,v2')
+  })
+
+  it('falls back to NO ACTION for a required relation on SQL Server, which has no RESTRICT', () => {
+    const code = gormFor(
+      `
+model User {
+  id    Int    @id
+  posts Post[]
+}
+
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+}
+`,
+      'sqlserver',
+    )
+    expect(code).toContain(
+      '`gorm:"foreignKey:AuthorID;constraint:Post_authorId_fkey,OnUpdate:CASCADE,OnDelete:NO ACTION"`',
+    )
+  })
+})
 
 // What these write was checked against GORM 1.31 on the tables `prisma db push` makes, in
 // examples/gorm; each was a runtime error or a wrong row before.
@@ -644,11 +778,11 @@ import (
 )
 
 type Post struct {
-	ID        int      \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
+	ID        int      \`gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"\`
 	UserID    *string  \`gorm:"column:userId" json:"userId"\`
 	CreatedAt DateTime \`gorm:"column:createdAt;autoCreateTime:false;not null" json:"createdAt"\`
 	User      *User
-	Comments  []Comment \`gorm:"foreignKey:PostID"\`
+	Comments  []Comment \`gorm:"foreignKey:PostID;constraint:Comment_postId_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"\`
 }
 
 func (Post) TableName() string {
@@ -665,7 +799,7 @@ func (m *Post) BeforeCreate(tx *gorm.DB) error {
 
 type User struct {
 	ID    string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
-	Posts []Post \`gorm:"foreignKey:UserID"\`
+	Posts []Post \`gorm:"foreignKey:UserID;constraint:Post_userId_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"\`
 }
 
 func (User) TableName() string {
@@ -680,8 +814,8 @@ func (m *User) BeforeCreate(_ *gorm.DB) error {
 }
 
 type Comment struct {
-	ID     int \`gorm:"column:id;primaryKey" json:"id"\`
-	PostID int \`gorm:"column:postId;not null" json:"postId"\`
+	ID     int \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	PostID int \`gorm:"column:postId;size:32;not null" json:"postId"\`
 	Post   *Post
 }
 
@@ -759,8 +893,8 @@ model Profile {
     ).toBe(`package model
 
 type User struct {
-	ID      int      \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
-	Profile *Profile \`gorm:"foreignKey:OwnerID"\`
+	ID      int      \`gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"\`
+	Profile *Profile \`gorm:"foreignKey:OwnerID;constraint:Profile_ownerId_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"\`
 }
 
 func (User) TableName() string {
@@ -768,8 +902,8 @@ func (User) TableName() string {
 }
 
 type Profile struct {
-	ID      int   \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
-	OwnerID int   \`gorm:"column:ownerId;uniqueIndex;not null" json:"ownerId"\`
+	ID      int   \`gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"\`
+	OwnerID int   \`gorm:"column:ownerId;uniqueIndex:Profile_ownerId_key;size:32;not null" json:"ownerId"\`
 	User    *User \`gorm:"foreignKey:OwnerID"\`
 }
 
@@ -801,7 +935,7 @@ import "gorm.io/gorm/schema"
 var NamingStrategy = schema.NamingStrategy{SingularTable: true, NoLowerCase: true}
 
 type Post struct {
-	ID   int   \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
+	ID   int   \`gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"\`
 	Tags []Tag \`gorm:"many2many:_PostToTag;joinForeignKey:A;joinReferences:B"\`
 }
 
@@ -847,13 +981,13 @@ model Setting {
 import "gorm.io/datatypes"
 
 type Setting struct {
-	ID     int            \`gorm:"column:id;primaryKey;autoIncrement" json:"id"\`
+	ID     int            \`gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"\`
 	Active *bool          \`gorm:"column:active;default:true;not null" json:"active"\`
 	Hidden bool           \`gorm:"column:hidden;default:false;not null" json:"hidden"\`
 	Slug   *string        \`gorm:"column:slug;default:'untitled';not null" json:"slug"\`
 	Note   string         \`gorm:"column:note;default:'';not null" json:"note"\`
-	Limit  *int           \`gorm:"column:limit;default:10;not null" json:"limit"\`
-	Offset int            \`gorm:"column:offset;default:0;not null" json:"offset"\`
+	Limit  *int           \`gorm:"column:limit;size:32;default:10;not null" json:"limit"\`
+	Offset int            \`gorm:"column:offset;size:32;default:0;not null" json:"offset"\`
 	Ratio  *float64       \`gorm:"column:ratio;default:0.5;not null" json:"ratio"\`
 	Price  *float64       \`gorm:"column:price;default:9.99;not null" json:"price"\`
 	Big    *int64         \`gorm:"column:big;default:9007199254740993;not null" json:"big"\`
@@ -891,7 +1025,7 @@ import (
 
 type Key struct {
 	ID    string  \`gorm:"column:id;primaryKey" json:"id"\`
-	V2    string  \`gorm:"column:v2;uniqueIndex;not null" json:"v2"\`
+	V2    string  \`gorm:"column:v2;uniqueIndex:Key_v2_key;not null" json:"v2"\`
 	Short *string \`gorm:"column:short" json:"short"\`
 	Long  string  \`gorm:"column:long;not null" json:"long"\`
 }
@@ -1009,7 +1143,7 @@ model Stamp {
         '\tAt        DateTime  `gorm:"column:at;type:timestamptz(3);default:\'2030-01-02 03:04:05.678\';not null" json:"at"`',
         '\tDay       *Date     `gorm:"column:day;type:date" json:"day"`',
         '\tClock     TimeOfDay `gorm:"column:clock;type:time(3);not null" json:"clock"`',
-        '\tUpdatedAt DateTime  `gorm:"column:updatedAt;autoUpdateTime:false;not null" json:"updatedAt"`',
+        '\tUpdatedAt DateTime  `gorm:"column:updatedAt;type:timestamp(3);autoUpdateTime:false;not null" json:"updatedAt"`',
       ].join('\n'),
     )
     expect(code).toContain(
@@ -1049,7 +1183,7 @@ model VerificationToken {
 
 type User struct {
 	ID       string    \`gorm:"column:id;primaryKey" json:"id"\`
-	Sessions []Session \`gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"\`
+	Sessions []Session \`gorm:"foreignKey:UserID;constraint:Session_userId_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"\`
 }
 
 func (User) TableName() string {
@@ -1057,7 +1191,7 @@ func (User) TableName() string {
 }
 
 type Session struct {
-	SessionToken string \`gorm:"column:sessionToken;primaryKey;uniqueIndex" json:"sessionToken"\`
+	SessionToken string \`gorm:"column:sessionToken;primaryKey;uniqueIndex:Session_sessionToken_key" json:"sessionToken"\`
 	UserID       string \`gorm:"column:userId;not null" json:"userId"\`
 	User         *User
 }
@@ -1101,7 +1235,7 @@ type User struct {
 	ID        string  \`gorm:"column:id;primaryKey" json:"id"\`
 	AccountID *string \`gorm:"column:accountId" json:"accountId"\`
 	Account   *Account
-	Current   *Account \`gorm:"foreignKey:CurrentUserID"\`
+	Current   *Account \`gorm:"foreignKey:CurrentUserID;constraint:Account_currentUserId_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"\`
 }
 
 func (User) TableName() string {
@@ -1110,9 +1244,9 @@ func (User) TableName() string {
 
 type Account struct {
 	ID            string  \`gorm:"column:id;primaryKey" json:"id"\`
-	CurrentUserID *string \`gorm:"column:currentUserId;uniqueIndex" json:"currentUserId"\`
+	CurrentUserID *string \`gorm:"column:currentUserId;uniqueIndex:Account_currentUserId_key" json:"currentUserId"\`
 	CurrentUser   *User   \`gorm:"foreignKey:CurrentUserID"\`
-	Users         []User  \`gorm:"foreignKey:AccountID"\`
+	Users         []User  \`gorm:"foreignKey:AccountID;constraint:User_accountId_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"\`
 }
 
 func (Account) TableName() string {
@@ -1138,7 +1272,7 @@ model Account {
         'type Account struct {',
         '\tID         string   `gorm:"column:id;primaryKey" json:"id"`',
         '\tCreatedAt  DateTime `gorm:"column:createdAt;autoCreateTime:false;not null" json:"createdAt"`',
-        '\tCreatedAt1 *int     `gorm:"column:created_at" json:"created_at"`',
+        '\tCreatedAt1 *int     `gorm:"column:created_at;size:32" json:"created_at"`',
         '}',
       ].join('\n'),
     )
@@ -1155,7 +1289,7 @@ model Account {
 `)
     expect(code).toContain(
       [
-        '\tCreatedAt  *int      `gorm:"column:created_at;autoCreateTime:false" json:"created_at"`',
+        '\tCreatedAt  *int      `gorm:"column:created_at;size:32;autoCreateTime:false" json:"created_at"`',
         '\tCreatedAt1 *DateTime `gorm:"column:createdAt" json:"createdAt"`',
       ].join('\n'),
     )
@@ -1177,7 +1311,9 @@ model Post {
   user    User   @relation(fields: [userId], references: [userId])
 }
 `)
-    expect(code).toContain('\tPosts   []Post `gorm:"foreignKey:UserID1;references:UserID"`')
+    expect(code).toContain(
+      '\tPosts   []Post `gorm:"foreignKey:UserID1;references:UserID;constraint:Post_userId_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`',
+    )
     expect(code).toContain('\tUser    *User  `gorm:"foreignKey:UserID1;references:UserID"`')
   })
 })
@@ -1238,14 +1374,14 @@ import (
 // Second paragraph */ with \\\\ backslash.
 type User struct {
 	// The key.
-	ID   int    \`gorm:"column:id;primaryKey" json:"id"\`
+	ID   int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	Name string \`gorm:"column:name;not null" json:"name"\`
 	// When they joined.
 	// Two lines.
 	CreatedAt DateTime \`gorm:"column:createdAt;autoCreateTime:false;not null" json:"createdAt"\`
 	Tone      string   \`gorm:"column:tone;not null" json:"tone"\`
 	// Their posts.
-	Posts []Post \`gorm:"foreignKey:AuthorID"\`
+	Posts []Post \`gorm:"foreignKey:AuthorID;constraint:Post_authorId_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"\`
 }
 
 func (User) TableName() string {
@@ -1261,9 +1397,9 @@ func (m *User) BeforeCreate(tx *gorm.DB) error {
 }
 
 type Post struct {
-	ID int \`gorm:"column:id;primaryKey" json:"id"\`
+	ID int \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	// Who wrote it.
-	AuthorID int \`gorm:"column:authorId;not null" json:"authorId"\`
+	AuthorID int \`gorm:"column:authorId;size:32;not null" json:"authorId"\`
 	// The author.
 	Author *User \`gorm:"foreignKey:AuthorID"\`
 }

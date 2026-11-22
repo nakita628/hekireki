@@ -5,6 +5,7 @@ import { emitRaw } from '../emit/index.js'
 import { generateGormModels } from '../generator/gorm.js'
 import { gormProblems } from '../helper/gorm.js'
 import { getString } from '../prisma/config.js'
+import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import { GeneratorConfigError } from './errors.js'
 import { outputFile, requireOutput } from './output.js'
 
@@ -27,6 +28,7 @@ export function gorm(options: GeneratorOptions) {
       indexes,
       packageName,
       options.datasources[0]?.activeProvider,
+      relationMaps(prismaBlocks(options.datamodel)),
     )
     return yield* emitRaw(code, resolved.dir, resolved.file)
   })

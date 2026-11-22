@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { stripAnnotations } from '../annotation/index.js'
+import { constraintName } from '../naming/case.js'
 import { allocate } from '../naming/index.js'
 import {
   implicitJoinTables,
@@ -70,8 +71,18 @@ function resolveNativeType(field: DMMF.Field) {
   return GORM_NATIVE_FIXED[nativeName] ?? null
 }
 
-/** A relation through the foreign key `fkField` holds, which is on either end of it. */
-function foreignKeyAssociation(name: string, targetModel: string, fkField: DMMF.Field) {
+/**
+ * A relation through the foreign key `fkField` holds, which is on either end of it. A referential
+ * action the schema leaves out is Prisma's: `Restrict` on delete for a required relation (`NoAction`
+ * on SQL Server, which has no RESTRICT) and `SetNull` for an optional one, `Cascade` on update.
+ */
+function foreignKeyAssociation(
+  name: string,
+  targetModel: string,
+  fkField: DMMF.Field,
+  provider: string | undefined,
+) {
+  const requiredOnDelete = provider === 'sqlserver' ? 'NoAction' : 'Restrict'
   const foreignKeys = fkField.relationFromFields ?? []
   return {
     name,
@@ -80,14 +91,20 @@ function foreignKeyAssociation(name: string, targetModel: string, fkField: DMMF.
     references: fkField.relationToFields?.[0] ?? 'id',
     foreignKeys,
     referencesList: fkField.relationToFields ?? ['id'],
-    onDelete: fkField.relationOnDelete,
-    onUpdate: fkField.relationOnUpdate,
+    // The relation field that holds the foreign key, whose @relation(map: ...) names it.
+    fkFieldName: fkField.name,
+    onDelete: fkField.relationOnDelete ?? (fkField.isRequired ? requiredOnDelete : 'SetNull'),
+    onUpdate: fkField.relationOnUpdate ?? 'Cascade',
   }
 }
 
 type ForeignKeyAssociation = ReturnType<typeof foreignKeyAssociation>
 
-function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
+function getAssociations(
+  model: DMMF.Model,
+  allModels: readonly DMMF.Model[],
+  provider: string | undefined,
+) {
   const belongsTo: ForeignKeyAssociation[] = []
   const hasMany: (ForeignKeyAssociation & { isList: boolean })[] = []
   const hasOne: (ForeignKeyAssociation & { isList: boolean })[] = []
@@ -101,7 +118,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
   for (const end of relationEnds(model, allModels)) {
     const { field } = end
     if (end.kind === 'belongsTo') {
-      belongsTo.push(foreignKeyAssociation(field.name, field.type, field))
+      belongsTo.push(foreignKeyAssociation(field.name, field.type, field, provider))
       continue
     }
     if (end.kind === 'manyToMany') {
@@ -114,7 +131,7 @@ function getAssociations(model: DMMF.Model, allModels: readonly DMMF.Model[]) {
       continue
     }
     const association = {
-      ...foreignKeyAssociation(field.name, field.type, end.inverse),
+      ...foreignKeyAssociation(field.name, field.type, end.inverse, provider),
       isList: end.kind === 'hasMany',
     }
     if (end.kind === 'hasMany') hasMany.push(association)
@@ -209,6 +226,11 @@ function dateTimeDefault(field: DMMF.Field, provider: string | undefined) {
     : `'${iso.slice(0, 10)} ${iso.slice(11, 23)}'`
 }
 
+// Prisma's PostgreSQL connector, which CockroachDB's shares, and GORM's postgres driver.
+function isPostgresFamily(provider: string | undefined) {
+  return provider === 'postgresql' || provider === 'cockroachdb'
+}
+
 function gormDefault(
   field: DMMF.Field,
   isPk: boolean,
@@ -218,9 +240,12 @@ function gormDefault(
 ) {
   const isNowDefault =
     field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
+  // Prisma Migrate writes now() as DEFAULT CURRENT_TIMESTAMP; the hook fills the value all the same.
+  const nowDefault = isNowDefault && isPostgresFamily(provider) ? 'CURRENT_TIMESTAMP' : null
   return (
     dbGeneratedDefault(field) ??
     dateTimeDefault(field, provider) ??
+    nowDefault ??
     ((!isPk || isCompositePk) && !isNowDefault && field.isUpdatedAt !== true
       ? (enumMappedDefault(field, enums) ?? formatGoDefault(field.default, field.type, field.kind))
       : null)
@@ -230,9 +255,10 @@ function gormDefault(
 function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
   if (!isPk) return []
   const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
-  // A native type wins (columnTypeTag), and on MySQL such a key is a String like any other,
-  // VARCHAR(191) (isMysqlDefaultString).
-  const fixedType = provider !== 'mysql' && resolveNativeType(field) === null
+  // A native type wins (columnTypeTag); on MySQL such a key is a String like any other,
+  // VARCHAR(191) (isMysqlDefaultString), and on PostgreSQL text, as Prisma Migrate makes it.
+  const fixedType =
+    provider !== 'mysql' && !isPostgresFamily(provider) && resolveNativeType(field) === null
   return [
     'primaryKey',
     ...(isAutoincrement(field) ? ['autoIncrement'] : []),
@@ -249,13 +275,39 @@ function isMysqlDefaultString(field: DMMF.Field, provider: string | undefined) {
   return !field.isList && !field.nativeType
 }
 
+// The column Prisma Migrate makes on PostgreSQL where GORM's postgres driver would make another:
+// GORM gives a float64 `decimal` and a time `timestamptz`.
+const POSTGRES_DEFAULT_TYPES: { readonly [type: string]: string } = {
+  Float: 'double precision',
+  Decimal: 'decimal(65,30)',
+  DateTime: 'timestamp(3)',
+}
+
 function columnTypeTag(field: DMMF.Field, provider?: string) {
   const nativeType = resolveNativeType(field)
   // A DateTime[] is a PostgreSQL array, `timestamp(3)[]` unless the native type says otherwise,
   // which the list type writes and reads as Prisma Client does.
   if (isDateTimeList(field)) return `type:${nativeType ?? 'timestamp(3)'}[]`
   if (isMysqlDefaultString(field, provider)) return 'type:varchar(191)'
-  return nativeType !== null ? `type:${nativeType}` : null
+  if (nativeType !== null) return `type:${nativeType}`
+  const postgresType =
+    isPostgresFamily(provider) && field.kind === 'scalar' && !field.isList
+      ? POSTGRES_DEFAULT_TYPES[field.type]
+      : undefined
+  return postgresType === undefined ? null : `type:${postgresType}`
+}
+
+// A Go int is 64 bits, which GORM makes a bigint (bigserial with autoIncrement); Prisma's Int is
+// 32 bits, `integer` (`serial`) on PostgreSQL and INT on MySQL. CockroachDB reads `integer` as
+// INT8 whatever the size, so it is left as it was.
+function sizeTag(field: DMMF.Field, provider: string | undefined) {
+  return provider !== 'cockroachdb' &&
+    field.kind === 'scalar' &&
+    field.type === 'Int' &&
+    !field.isList &&
+    !field.nativeType
+    ? 'size:32'
+    : null
 }
 
 // GORM fills a field named CreatedAt or UpdatedAt on its own, a time with the application's
@@ -285,9 +337,13 @@ export function buildGormTags(
   const parts = [
     `column:${columnName}`,
     ...primaryKeyTags(field, isPk, provider),
-    field.isUnique ? 'uniqueIndex' : null,
+    // A model's own unique fields come named in compositeIndexTags.
+    field.isUnique && !compositeIndexTags.some((tag) => tag.startsWith('uniqueIndex:'))
+      ? 'uniqueIndex'
+      : null,
     ...compositeIndexTags,
     columnTypeTag(field, provider),
+    sizeTag(field, provider),
     // Other scalar lists need a serializer so GORM can persist the slice; the built-in
     // json serializer works on every dialect without extra deps.
     field.isList && field.kind !== 'object' && !isDateTimeList(field) ? 'serializer:json' : null,
@@ -299,18 +355,49 @@ export function buildGormTags(
   return `\`gorm:"${parts.join(';')}" json:"${columnName}"\``
 }
 
-function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
+// A name the schema gives an index, unless the struct tag cannot hold it: GORM reads past a `,` as
+// settings and splits at a `;`, and a `"` or a backtick ends the tag. Such a name is left for
+// Prisma's default.
+function readableTagName(name: string | undefined) {
+  return name !== undefined && !/[,;"`]/u.test(name) ? name : undefined
+}
+
+function collectCompositeIndexTags(
+  model: DMMF.Model,
+  indexes: readonly DMMF.Index[],
+  provider: string | undefined,
+) {
   // An index Prisma left unnamed is named as Prisma Migrate names it
   // (`Post_authorId_idx`, `User_email_key`), so AutoMigrate and the migration
   // agree; index names are global per schema in PostgreSQL either way.
   const tableName = model.dbName ?? model.name
   const fieldByName = new Map(model.fields.map((mf) => [mf.name, mf]))
 
+  const columnsOf = (fields: readonly string[]) =>
+    fields.map((f) => fieldByName.get(f)?.dbName ?? f)
+  // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it, unless the
+  // struct tag cannot hold it (readableTagName).
+  const mappedUniques = new Map(
+    indexes
+      .filter((idx) => idx.model === model.name && idx.type === 'unique')
+      .map((idx) => [idx.fields.map((f) => f.name).join(','), readableTagName(idx.dbName)]),
+  )
+  const singleUniqueTags = model.fields
+    .filter((f) => f.isUnique)
+    .map((f): [string, string] => {
+      const named = mappedUniques.get(f.name)
+      return [
+        f.name,
+        `uniqueIndex:${named ?? constraintName(tableName, [f.dbName ?? f.name], 'key', provider ?? '')}`,
+      ]
+    })
+
   const uniqueTags = model.uniqueFields
     .filter((fields) => fields.length > 1)
     .flatMap((fields) => {
-      const cols = fields.map((f) => fieldByName.get(f)?.dbName ?? f)
-      const idxName = `${tableName}_${cols.join('_')}_key`
+      const idxName =
+        mappedUniques.get(fields.join(',')) ??
+        constraintName(tableName, columnsOf(fields), 'key', provider ?? '')
       return fields.map((f): [string, string] => [f, `uniqueIndex:${idxName}`])
     })
 
@@ -318,17 +405,20 @@ function collectCompositeIndexTags(model: DMMF.Model, indexes: readonly DMMF.Ind
     .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
     .flatMap((idx) => {
       const idxName =
-        idx.dbName ??
-        idx.name ??
-        `${tableName}_${idx.fields.map((f) => fieldByName.get(f.name)?.dbName ?? f.name).join('_')}_idx`
+        readableTagName(idx.dbName) ??
+        readableTagName(idx.name) ??
+        constraintName(tableName, columnsOf(idx.fields.map((f) => f.name)), 'idx', provider ?? '')
       return idx.fields.map((f): [string, string] => [f.name, `index:${idxName}`])
     })
 
-  return [...uniqueTags, ...indexTags].reduce<Map<string, string[]>>((map, [fieldName, tag]) => {
-    const existing = map.get(fieldName) ?? []
-    map.set(fieldName, [...existing, tag])
-    return map
-  }, new Map())
+  return [...singleUniqueTags, ...uniqueTags, ...indexTags].reduce<Map<string, string[]>>(
+    (map, [fieldName, tag]) => {
+      const existing = map.get(fieldName) ?? []
+      map.set(fieldName, [...existing, tag])
+      return map
+    },
+    new Map(),
+  )
 }
 
 // Go initialisms that should be ALL CAPS per https://go.dev/wiki/CodeReviewComments#initialisms
@@ -594,16 +684,31 @@ const SQL_ACTION: { [k: string]: string } = {
   SetDefault: 'SET DEFAULT',
 }
 
-function constraintTag(onDelete: string | undefined, onUpdate: string | undefined) {
-  const clauses = [
-    onUpdate !== undefined && SQL_ACTION[onUpdate] !== undefined
-      ? `OnUpdate:${SQL_ACTION[onUpdate]}`
-      : null,
-    onDelete !== undefined && SQL_ACTION[onDelete] !== undefined
-      ? `OnDelete:${SQL_ACTION[onDelete]}`
-      : null,
+// GORM takes the text before the first comma of `constraint:` as the constraint's name when it is
+// letters, digits, `_` and `-`; any other name is left to GORM (`fk_<table>_<field>`).
+function constraintTag(name: string, onDelete: string, onUpdate: string) {
+  const actions = [
+    SQL_ACTION[onUpdate] === undefined ? null : `OnUpdate:${SQL_ACTION[onUpdate]}`,
+    SQL_ACTION[onDelete] === undefined ? null : `OnDelete:${SQL_ACTION[onDelete]}`,
   ].filter((c) => c !== null)
-  return clauses.length > 0 ? `constraint:${clauses.join(',')}` : null
+  if (actions.length === 0) return null
+  return `constraint:${[...(/^[\w-]+$/u.test(name) ? [name] : []), ...actions].join(',')}`
+}
+
+/**
+ * The name Prisma Migrate gives the foreign key `holder` holds in the named fields:
+ * `<table>_<columns>_fkey`.
+ */
+function foreignKeyName(
+  allModels: readonly DMMF.Model[],
+  holder: string,
+  fieldNames: readonly string[],
+  provider: string | undefined,
+) {
+  const model = allModels.find((m) => m.name === holder)
+  const columnOf = new Map(model?.fields.map((f) => [f.name, f.dbName ?? f.name]))
+  const columns = fieldNames.map((name) => columnOf.get(name) ?? name)
+  return constraintName(model?.dbName ?? holder, columns, 'fkey', provider ?? '')
 }
 
 function buildRelationTag(parts: string[]) {
@@ -626,6 +731,8 @@ function generateRelationFields(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
   associations: ReturnType<typeof getAssociations>,
+  provider: string | undefined,
+  foreignKeyNames: ReadonlyMap<string, string>,
 ) {
   // A relation and the keys it names are written as the struct that holds each field names it.
   const of = (modelName: string) => (name: string) => goFieldNameIn(allModels, modelName, name)
@@ -674,7 +781,14 @@ function generateRelationFields(
       ...(assoc.foreignKeys.length > 1 || needsReferencesTag(assoc.references)
         ? [`references:${assoc.referencesList.map(own).join(',')}`]
         : []),
-      ...[constraintTag(assoc.onDelete, assoc.onUpdate)].filter((c) => c !== null),
+      ...[
+        constraintTag(
+          foreignKeyNames.get(`${assoc.targetModel}.${assoc.fkFieldName}`) ??
+            foreignKeyName(allModels, assoc.targetModel, assoc.foreignKeys, provider),
+          assoc.onDelete,
+          assoc.onUpdate,
+        ),
+      ].filter((c) => c !== null),
     ]
     return withDoc(assoc.name, [
       own(assoc.name),
@@ -689,7 +803,14 @@ function generateRelationFields(
       ...(assoc.foreignKeys.length > 1 || needsReferencesTag(assoc.references)
         ? [`references:${assoc.referencesList.map(own).join(',')}`]
         : []),
-      ...[constraintTag(assoc.onDelete, assoc.onUpdate)].filter((c) => c !== null),
+      ...[
+        constraintTag(
+          foreignKeyNames.get(`${assoc.targetModel}.${assoc.fkFieldName}`) ??
+            foreignKeyName(allModels, assoc.targetModel, assoc.foreignKeys, provider),
+          assoc.onDelete,
+          assoc.onUpdate,
+        ),
+      ].filter((c) => c !== null),
     ]
     // A has-one is a pointer for the same reason, and Prisma requires the 1:1 back side to be
     // optional anyway.
@@ -761,6 +882,7 @@ export function generateModelStruct(
   enums: readonly DMMF.DatamodelEnum[] | undefined,
   indexes: readonly DMMF.Index[],
   provider?: string,
+  foreignKeyNames: ReadonlyMap<string, string> = new Map(),
 ) {
   // A model with no @id or @@id is keyed by its first unique fields, as a composite key is: GORM
   // needs a primary key to load an association, and the other models name this one.
@@ -768,9 +890,9 @@ export function generateModelStruct(
   const compositePkFieldNames = new Set(idField ? [] : primaryKeyFields(model))
   const isCompositePk = !idField && compositePkFieldNames.size > 0
 
-  const associations = getAssociations(model, allModels)
+  const associations = getAssociations(model, allModels, provider)
 
-  const compositeTagMap = collectCompositeIndexTags(model, indexes)
+  const compositeTagMap = collectCompositeIndexTags(model, indexes, provider)
 
   const tableName = model.dbName ?? model.name
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
@@ -794,7 +916,13 @@ export function generateModelStruct(
     return rows
   })
 
-  const relationLines = generateRelationFields(model, allModels, associations)
+  const relationLines = generateRelationFields(
+    model,
+    allModels,
+    associations,
+    provider,
+    foreignKeyNames,
+  )
 
   // GORM would pluralise the snake_cased struct name (Warehouse -> warehouses);
   // the table is Prisma's, so every model says which.

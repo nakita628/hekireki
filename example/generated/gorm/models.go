@@ -20,21 +20,21 @@ var NamingStrategy = schema.NamingStrategy{SingularTable: true, NoLowerCase: tru
 // @updatedAt, and relations of every cardinality.
 type User struct {
 	// Primary key (UUIDv7)
-	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
+	ID string `gorm:"column:id;primaryKey" json:"id"`
 	// Unique login email
-	Email string `gorm:"column:email;uniqueIndex;not null" json:"email"`
+	Email string `gorm:"column:email;uniqueIndex:users_email_key;not null" json:"email"`
 	// Display name
 	Name      string    `gorm:"column:name;not null" json:"name"`
 	Role      string    `gorm:"column:role;default:'VIEWER';not null" json:"role"`
 	Interests []string  `gorm:"column:interests;serializer:json;not null" json:"interests"`
-	CreatedAt DateTime  `gorm:"column:created_at;autoCreateTime:false;not null" json:"created_at"`
-	UpdatedAt DateTime  `gorm:"column:updated_at;autoUpdateTime:false;not null" json:"updated_at"`
-	Posts     []Post    `gorm:"foreignKey:AuthorID;constraint:OnDelete:CASCADE"`
-	Comments  []Comment `gorm:"foreignKey:AuthorID;constraint:OnDelete:SET NULL"`
-	Orders    []Order   `gorm:"foreignKey:UserID"`
-	Followers []Follow  `gorm:"foreignKey:FollowingID;constraint:OnDelete:CASCADE"`
-	Following []Follow  `gorm:"foreignKey:FollowerID;constraint:OnDelete:CASCADE"`
-	Profile   *Profile  `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
+	CreatedAt DateTime  `gorm:"column:created_at;type:timestamp(3);default:CURRENT_TIMESTAMP;autoCreateTime:false;not null" json:"created_at"`
+	UpdatedAt DateTime  `gorm:"column:updated_at;type:timestamp(3);autoUpdateTime:false;not null" json:"updated_at"`
+	Posts     []Post    `gorm:"foreignKey:AuthorID;constraint:posts_author_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Comments  []Comment `gorm:"foreignKey:AuthorID;constraint:comments_author_id_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"`
+	Orders    []Order   `gorm:"foreignKey:UserID;constraint:orders_user_id_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Followers []Follow  `gorm:"foreignKey:FollowingID;constraint:follows_following_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Following []Follow  `gorm:"foreignKey:FollowerID;constraint:follows_follower_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Profile   *Profile  `gorm:"foreignKey:UserID;constraint:Profile_user_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 func (User) TableName() string {
@@ -68,7 +68,7 @@ func (*User) BeforeUpdate(tx *gorm.DB) error {
 // Pydantic model rejects unknown keys (extra='forbid').
 type Profile struct {
 	ID       string         `gorm:"column:id;primaryKey" json:"id"`
-	UserID   string         `gorm:"column:user_id;uniqueIndex;not null" json:"user_id"`
+	UserID   string         `gorm:"column:user_id;uniqueIndex:Profile_user_id_key;not null" json:"user_id"`
 	Bio      *string        `gorm:"column:bio;type:text" json:"bio"`
 	Nickname *string        `gorm:"column:nickname;type:varchar(64);default:'anonymous';not null" json:"nickname"`
 	Age      *int           `gorm:"column:age;type:smallint" json:"age"`
@@ -95,17 +95,17 @@ func (m *Profile) BeforeCreate(_ *gorm.DB) error {
 // mapped-enum default, and an implicit many-to-many to Tag.
 type Post struct {
 	// Primary key
-	ID string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
+	ID string `gorm:"column:id;primaryKey" json:"id"`
 	// Article title
 	Title      string    `gorm:"column:title;not null" json:"title"`
 	Content    *string   `gorm:"column:content" json:"content"`
 	Visibility string    `gorm:"column:visibility;default:'link_only';not null" json:"visibility"`
 	Published  bool      `gorm:"column:published;default:false;not null" json:"published"`
-	ViewCount  int       `gorm:"column:view_count;default:0;not null" json:"view_count"`
+	ViewCount  int       `gorm:"column:view_count;size:32;default:0;not null" json:"view_count"`
 	AuthorID   string    `gorm:"column:author_id;index:posts_author_id_idx;not null" json:"author_id"`
-	CreatedAt  DateTime  `gorm:"column:created_at;autoCreateTime:false;not null" json:"created_at"`
+	CreatedAt  DateTime  `gorm:"column:created_at;type:timestamp(3);default:CURRENT_TIMESTAMP;autoCreateTime:false;not null" json:"created_at"`
 	Author     *User     `gorm:"foreignKey:AuthorID"`
-	Comments   []Comment `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE"`
+	Comments   []Comment `gorm:"foreignKey:PostID;constraint:comments_post_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
 	Tags       []Tag     `gorm:"many2many:_PostToTag;joinForeignKey:A;joinReferences:B"`
 }
 
@@ -126,8 +126,8 @@ func (m *Post) BeforeCreate(tx *gorm.DB) error {
 
 // Implicit many-to-many partner of Post (join table `_PostToTag`).
 type Tag struct {
-	ID    int    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	Label string `gorm:"column:label;uniqueIndex;not null" json:"label"`
+	ID    int    `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
+	Label string `gorm:"column:label;uniqueIndex:Tag_label_key;not null" json:"label"`
 	Posts []Post `gorm:"many2many:_PostToTag;joinForeignKey:B;joinReferences:A"`
 }
 
@@ -138,11 +138,11 @@ func (Tag) TableName() string {
 // Two foreign keys with different referential actions
 // (Cascade vs SetNull) and a composite index.
 type Comment struct {
-	ID        int      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ID        int      `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
 	Body      string   `gorm:"column:body;not null" json:"body"`
 	PostID    string   `gorm:"column:post_id;index:comments_post_id_created_at_idx;not null" json:"post_id"`
 	AuthorID  *string  `gorm:"column:author_id" json:"author_id"`
-	CreatedAt DateTime `gorm:"column:created_at;index:comments_post_id_created_at_idx;autoCreateTime:false;not null" json:"created_at"`
+	CreatedAt DateTime `gorm:"column:created_at;index:comments_post_id_created_at_idx;type:timestamp(3);default:CURRENT_TIMESTAMP;autoCreateTime:false;not null" json:"created_at"`
 	Post      *Post
 	Author    *User `gorm:"foreignKey:AuthorID"`
 }
@@ -163,7 +163,7 @@ func (m *Comment) BeforeCreate(tx *gorm.DB) error {
 type Follow struct {
 	FollowerID  string   `gorm:"column:follower_id;primaryKey" json:"follower_id"`
 	FollowingID string   `gorm:"column:following_id;primaryKey" json:"following_id"`
-	Since       DateTime `gorm:"column:since;not null" json:"since"`
+	Since       DateTime `gorm:"column:since;type:timestamp(3);default:CURRENT_TIMESTAMP;not null" json:"since"`
 	Follower    *User    `gorm:"foreignKey:FollowerID"`
 	Following   *User    `gorm:"foreignKey:FollowingID"`
 }
@@ -182,11 +182,11 @@ func (m *Follow) BeforeCreate(tx *gorm.DB) error {
 
 // Self-relation (adjacency-list tree) with a composite unique.
 type Category struct {
-	ID       int        `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ID       int        `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
 	Name     string     `gorm:"column:name;uniqueIndex:Category_parent_id_name_key;not null" json:"name"`
-	ParentID *int       `gorm:"column:parent_id;uniqueIndex:Category_parent_id_name_key" json:"parent_id"`
+	ParentID *int       `gorm:"column:parent_id;uniqueIndex:Category_parent_id_name_key;size:32" json:"parent_id"`
 	Parent   *Category  `gorm:"foreignKey:ParentID"`
-	Children []Category `gorm:"foreignKey:ParentID"`
+	Children []Category `gorm:"foreignKey:ParentID;constraint:Category_parent_id_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"`
 }
 
 func (Category) TableName() string {
@@ -198,9 +198,9 @@ type Order struct {
 	ID       int64    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	UserID   string   `gorm:"column:user_id;not null" json:"user_id"`
 	Total    float64  `gorm:"column:total;type:decimal(12,2);not null" json:"total"`
-	PlacedAt DateTime `gorm:"column:placed_at;not null" json:"placed_at"`
+	PlacedAt DateTime `gorm:"column:placed_at;type:timestamp(3);default:CURRENT_TIMESTAMP;not null" json:"placed_at"`
 	User     *User
-	Items    []OrderItem `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE"`
+	Items    []OrderItem `gorm:"foreignKey:OrderID;constraint:order_items_order_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 func (Order) TableName() string {
@@ -220,7 +220,7 @@ type OrderItem struct {
 	ID      int64   `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	OrderID int64   `gorm:"column:order_id;uniqueIndex:order_items_order_id_sku_key;not null" json:"order_id"`
 	Sku     string  `gorm:"column:sku;uniqueIndex:order_items_order_id_sku_key;type:varchar(32);not null" json:"sku"`
-	Qty     *int    `gorm:"column:qty;default:1;not null" json:"qty"`
+	Qty     *int    `gorm:"column:qty;size:32;default:1;not null" json:"qty"`
 	Price   float64 `gorm:"column:price;type:decimal(12,2);not null" json:"price"`
 	Order   *Order
 }
@@ -235,7 +235,7 @@ type AuditLog struct {
 	Action    string         `gorm:"column:action;not null" json:"action"`
 	Payload   datatypes.JSON `gorm:"column:payload;default:'{}';not null" json:"payload"`
 	Signature []byte         `gorm:"column:signature" json:"signature"`
-	LoggedAt  DateTime       `gorm:"column:logged_at;default:now();not null" json:"logged_at"`
+	LoggedAt  DateTime       `gorm:"column:logged_at;type:timestamp(3);default:now();not null" json:"logged_at"`
 }
 
 func (AuditLog) TableName() string {
@@ -245,7 +245,7 @@ func (AuditLog) TableName() string {
 // Named implicit many-to-many: the join table is `_cast`,
 // not `_ActorToFilm`.
 type Actor struct {
-	ID    int    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ID    int    `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
 	Name  string `gorm:"column:name;not null" json:"name"`
 	Films []Film `gorm:"many2many:_cast;joinForeignKey:A;joinReferences:B"`
 }
@@ -255,7 +255,7 @@ func (Actor) TableName() string {
 }
 
 type Film struct {
-	ID     int     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ID     int     `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
 	Title  string  `gorm:"column:title;not null" json:"title"`
 	Actors []Actor `gorm:"many2many:_cast;joinForeignKey:B;joinReferences:A"`
 }

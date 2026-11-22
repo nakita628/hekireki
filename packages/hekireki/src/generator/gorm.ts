@@ -14,11 +14,12 @@ export function generateGormModels(
   indexes?: readonly DMMF.Index[],
   packageName = 'model',
   provider?: string,
+  foreignKeyNames: ReadonlyMap<string, string> = new Map(),
 ) {
   const idx = indexes ?? []
 
   const modelBodies = models.map((model) =>
-    generateModelStruct(model, models, enums, idx, provider),
+    generateModelStruct(model, models, enums, idx, provider, foreignKeyNames),
   )
 
   return [
