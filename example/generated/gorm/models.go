@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,17 +25,17 @@ type User struct {
 	// Unique login email
 	Email string `gorm:"column:email;uniqueIndex:users_email_key;not null" json:"email"`
 	// Display name
-	Name      string    `gorm:"column:name;not null" json:"name"`
-	Role      string    `gorm:"column:role;default:'VIEWER';not null" json:"role"`
-	Interests []string  `gorm:"column:interests;serializer:json;not null" json:"interests"`
-	CreatedAt DateTime  `gorm:"column:created_at;type:timestamp(3);default:CURRENT_TIMESTAMP;autoCreateTime:false;not null" json:"created_at"`
-	UpdatedAt DateTime  `gorm:"column:updated_at;type:timestamp(3);autoUpdateTime:false;not null" json:"updated_at"`
-	Posts     []Post    `gorm:"foreignKey:AuthorID;constraint:posts_author_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
-	Comments  []Comment `gorm:"foreignKey:AuthorID;constraint:comments_author_id_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"`
-	Orders    []Order   `gorm:"foreignKey:UserID;constraint:orders_user_id_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	Followers []Follow  `gorm:"foreignKey:FollowingID;constraint:follows_following_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
-	Following []Follow  `gorm:"foreignKey:FollowerID;constraint:follows_follower_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
-	Profile   *Profile  `gorm:"foreignKey:UserID;constraint:Profile_user_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Name      string             `gorm:"column:name;not null" json:"name"`
+	Role      string             `gorm:"column:role;default:'VIEWER';not null" json:"role"`
+	Interests ScalarList[string] `gorm:"column:interests;type:text[]" json:"interests"`
+	CreatedAt DateTime           `gorm:"column:created_at;type:timestamp(3);default:CURRENT_TIMESTAMP;autoCreateTime:false;not null" json:"created_at"`
+	UpdatedAt DateTime           `gorm:"column:updated_at;type:timestamp(3);autoUpdateTime:false;not null" json:"updated_at"`
+	Posts     []Post             `gorm:"foreignKey:AuthorID;constraint:posts_author_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Comments  []Comment          `gorm:"foreignKey:AuthorID;constraint:comments_author_id_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"`
+	Orders    []Order            `gorm:"foreignKey:UserID;constraint:orders_user_id_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Followers []Follow           `gorm:"foreignKey:FollowingID;constraint:follows_following_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Following []Follow           `gorm:"foreignKey:FollowerID;constraint:follows_follower_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Profile   *Profile           `gorm:"foreignKey:UserID;constraint:Profile_user_id_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 func (User) TableName() string {
@@ -311,4 +312,99 @@ func readPrismaTime(src any) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("a DateTime column held %q", value)
 	}
 	return time.Time{}, fmt.Errorf("a DateTime column held %T", src)
+}
+
+type ScalarList[T string | int | int64 | float64 | bool] []T
+
+func (list ScalarList[T]) Value() (driver.Value, error) {
+	items := make([]string, len(list))
+	for i, item := range list {
+		switch value := any(item).(type) {
+		case string:
+			items[i] = `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(value) + `"`
+		case int:
+			items[i] = strconv.FormatInt(int64(value), 10)
+		case int64:
+			items[i] = strconv.FormatInt(value, 10)
+		case float64:
+			items[i] = strings.NewReplacer("+Inf", "Infinity", "-Inf", "-Infinity").Replace(strconv.FormatFloat(value, 'g', -1, 64))
+		case bool:
+			items[i] = strconv.FormatBool(value)
+		}
+	}
+	return "{" + strings.Join(items, ",") + "}", nil
+}
+
+func (list *ScalarList[T]) Scan(src any) error {
+	var text string
+	switch value := src.(type) {
+	case nil:
+		*list = ScalarList[T]{}
+		return nil
+	case []byte:
+		text = string(value)
+	case string:
+		text = value
+	default:
+		return fmt.Errorf("an array column held %T", src)
+	}
+	items, err := ArrayItems(text)
+	if err != nil {
+		return err
+	}
+	read := make(ScalarList[T], len(items))
+	for i, item := range items {
+		var value any
+		var parseErr error
+		switch any(read[i]).(type) {
+		case string:
+			value = item
+		case int:
+			value, parseErr = strconv.Atoi(item)
+		case int64:
+			value, parseErr = strconv.ParseInt(item, 10, 64)
+		case float64:
+			value, parseErr = strconv.ParseFloat(item, 64)
+		case bool:
+			value = item == "t" || item == "true"
+		}
+		if parseErr != nil {
+			return fmt.Errorf("an array column held %q: %w", text, parseErr)
+		}
+		read[i] = value.(T)
+	}
+	*list = read
+	return nil
+}
+
+// ArrayItems splits the text form of a one-dimensional PostgreSQL array into its elements,
+// unquoted.
+func ArrayItems(text string) ([]string, error) {
+	if len(text) < 2 || text[0] != '{' || text[len(text)-1] != '}' {
+		return nil, fmt.Errorf("an array column held %q", text)
+	}
+	body := text[1 : len(text)-1]
+	items := []string{}
+	if body == "" {
+		return items, nil
+	}
+	var item strings.Builder
+	quoted, escaped := false, false
+	for _, r := range body {
+		switch {
+		case escaped:
+			item.WriteRune(r)
+			escaped = false
+		case r == '\\':
+			escaped = true
+		case r == '"':
+			quoted = !quoted
+		case r == ',' && !quoted:
+			items = append(items, item.String())
+			item.Reset()
+		default:
+			item.WriteRune(r)
+		}
+	}
+	return append(items, item.String()), nil
 }

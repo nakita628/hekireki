@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { generateGormModels } from '../generator/gorm.js'
 import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
-import { buildGormTags, goFieldName, prismaTypeToGoType } from './gorm.js'
+import { buildGormTags, goFieldName, gormProblems, prismaTypeToGoType } from './gorm.js'
 
 /** The datamodel of a schema the test expects Prisma to parse. */
 function datamodelOf(result: ReturnType<typeof getDMMF>) {
@@ -740,6 +740,76 @@ model Post {
   })
 })
 
+/** The models of a PostgreSQL schema holding one model of the given name, with a String[]. */
+function listModels(name: string) {
+  const result = getDMMF({
+    datamodel: [
+      [
+        'schema.prisma',
+        `datasource db {\n  provider = "postgresql"\n}\nmodel ${name} {\n  id Int @id\n  tags String[]\n}\n`,
+      ],
+    ],
+  })
+  if ('type' in result) throw new Error(result.error.message)
+  return result.datamodel.models
+}
+
+// Prisma makes every scalar list a PostgreSQL array column, which takes no JSON text: each list is
+// a ScalarList written and read in the array's text form.
+describe('generateGormModels scalar lists on PostgreSQL', () => {
+  const schema = `
+enum Role {
+  ADMIN
+  VIEWER
+}
+
+model Team {
+  id     String   @id
+  names  String[]
+  counts Int[]
+  bigs   BigInt[]
+  ratios Float[]
+  prices Decimal[]
+  flags  Boolean[]
+  roles  Role[]
+  codes  String[] @db.VarChar(10)
+  blobs  Json[]
+}
+`
+
+  it('holds each list in a ScalarList of its element, typed as the array column Prisma makes', () => {
+    const code = gormFor(schema, 'postgresql')
+    expect(code).toContain(
+      [
+        '\tNames  ScalarList[string]  `gorm:"column:names;type:text[]" json:"names"`',
+        '\tCounts ScalarList[int]     `gorm:"column:counts;type:integer[]" json:"counts"`',
+        '\tBigs   ScalarList[int64]   `gorm:"column:bigs;type:bigint[]" json:"bigs"`',
+        '\tRatios ScalarList[float64] `gorm:"column:ratios;type:double precision[]" json:"ratios"`',
+        '\tPrices ScalarList[float64] `gorm:"column:prices;type:decimal(65,30)[]" json:"prices"`',
+        '\tFlags  ScalarList[bool]    `gorm:"column:flags;type:boolean[]" json:"flags"`',
+        '\tRoles  ScalarList[string]  `gorm:"column:roles;type:text[]" json:"roles"`',
+        '\tCodes  ScalarList[string]  `gorm:"column:codes;type:varchar(10)[]" json:"codes"`',
+      ].join('\n'),
+    )
+    // A Json[] has no ScalarList element and keeps the json serializer.
+    expect(code).toContain('`gorm:"column:blobs;serializer:json" json:"blobs"`')
+    expect(code).toContain('type ScalarList[T string | int | int64 | float64 | bool] []T')
+    expect(code).toContain('func ArrayItems(text string) ([]string, error) {')
+    expect(code).toMatch(/^\t"strings"$/mu)
+  })
+
+  it('names a model whose Go name is the list type, where the schema has a list', () => {
+    expect(gormProblems(listModels('ScalarList'), 'postgresql')).toStrictEqual([
+      'model ScalarList: its Go name is ScalarList, what the models hold a scalar list in; rename the model and keep its table with @@map',
+    ])
+    expect(gormProblems(listModels('Tag'), 'postgresql')).toStrictEqual([])
+  })
+
+  it('writes no ScalarList for a schema without lists', () => {
+    expect(gormFor('model A {\n  id Int @id\n}\n', 'postgresql')).not.toContain('ScalarList')
+  })
+})
+
 // What these write was checked against GORM 1.31 on the tables `prisma db push` makes, in
 // examples/gorm; each was a runtime error or a wrong row before.
 describe('generateGormModels against the tables Prisma makes', () => {
@@ -1071,9 +1141,9 @@ model Stamp {
     )
     expect(code).toContain(
       [
-        '\tList   DateTimeList  `gorm:"column:list;type:timestamp(3)[];not null" json:"list"`',
-        '\tDays   DateList      `gorm:"column:days;type:date[];not null" json:"days"`',
-        '\tClocks TimeOfDayList `gorm:"column:clocks;type:timetz[];not null" json:"clocks"`',
+        '\tList   DateTimeList  `gorm:"column:list;type:timestamp(3)[]" json:"list"`',
+        '\tDays   DateList      `gorm:"column:days;type:date[]" json:"days"`',
+        '\tClocks TimeOfDayList `gorm:"column:clocks;type:timetz[]" json:"clocks"`',
       ].join('\n'),
     )
     expect(code).not.toContain('serializer:json')
