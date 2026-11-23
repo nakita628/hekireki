@@ -7,7 +7,11 @@ import { makePascalCase, makeSnakeCase } from '../naming/case.js'
 import { allocate } from '../naming/index.js'
 import type { RelationEnd } from '../prisma/model.js'
 import { fieldColumn, primaryKeyFields, referentialActions, relationEnds } from '../prisma/model.js'
-import { ACTIVE_RECORD_INSTANCE_METHODS, RUBY_TOP_LEVEL_CONSTANTS } from './activerecord-names.js'
+import {
+  ACTIVE_RECORD_DANGEROUS_COLUMNS,
+  ACTIVE_RECORD_INSTANCE_METHODS,
+  RUBY_TOP_LEVEL_CONSTANTS,
+} from './activerecord-names.js'
 
 // cspell:disable
 // Names an enum key on an Active Record model may not take, nor the plural of
@@ -1011,6 +1015,8 @@ export function activeRecordClassNames(models: readonly DMMF.Model[]) {
 // an association: then the name Rails would give an association of its class
 // (`has_many :contact_attributes`), or where that is no better or is taken by another association
 // or a column of the model, the model's own name before it (`organization_errors`).
+// A column Active Record refuses an attribute of (`invalid`, `hash`) is reached through an alias
+// instead, named as Rails names its own for `id`: the column's name with `_value` after it.
 function railsNames(models: readonly DMMF.Model[]) {
   const classNames = activeRecordClassNames(models)
   const classOf = (modelName: string) => classNames.get(modelName) ?? makePascalCase(modelName)
@@ -1047,10 +1053,32 @@ function railsNames(models: readonly DMMF.Model[]) {
       ]
     }),
   )
+  const associationOf = (modelName: string, fieldName: string) =>
+    associations.get(modelName)?.get(fieldName) ?? makeSnakeCase(fieldName)
+  const attributes = new Map(
+    models.map((model): [string, Map<string, string>] => {
+      const columns = model.fields.filter((f) => f.kind !== 'object').map((f) => f.dbName ?? f.name)
+      const renamed = allocate(
+        model.fields
+          .filter(
+            (f) => f.kind === 'scalar' && ACTIVE_RECORD_DANGEROUS_COLUMNS.has(f.dbName ?? f.name),
+          )
+          .map((f) => ({ key: f.dbName ?? f.name, candidate: `${f.dbName ?? f.name}_value` })),
+        [
+          ...ACTIVE_RECORD_DANGEROUS_COLUMNS,
+          ...columns,
+          ...relationEnds(model, models).map(({ field }) => associationOf(model.name, field.name)),
+        ],
+        makeSnakeCase,
+      )
+      return [model.name, renamed]
+    }),
+  )
   return {
     classOf,
-    associationOf: (modelName: string, fieldName: string) =>
-      associations.get(modelName)?.get(fieldName) ?? makeSnakeCase(fieldName),
+    associationOf,
+    // The attributes a model reaches its refused columns by, by column.
+    aliasesOf: (modelName: string) => attributes.get(modelName) ?? new Map<string, string>(),
   }
 }
 
@@ -1664,6 +1692,21 @@ function inheritanceColumnLines(model: DMMF.Model) {
     : []
 }
 
+// Active Record defines a column's attribute methods unless the model has one of the name already,
+// and raises for one it defines itself (`invalid?`, `hash`). Told that those are there already,
+// it leaves them as they are and defines the column's others (`invalid`, `invalid=`); the alias
+// reaches the column in full.
+function refusedColumnLines(aliases: ReadonlyMap<string, string>) {
+  return aliases.size === 0
+    ? []
+    : [
+        'def self.instance_method_already_implemented?(method_name)',
+        '  dangerous_attribute_method?(method_name) || super',
+        'end',
+        'private_class_method :instance_method_already_implemented?',
+      ]
+}
+
 // Active Record writes timestamps only into created_at/updated_at (or
 // *_on), while Prisma's convention is createdAt/updatedAt, and @updatedAt
 // is set by the Prisma client, not the database. alias_attribute is how
@@ -2043,6 +2086,7 @@ type ValidationContext = {
   readonly updatedField: DMMF.Field | undefined
   readonly uniqueSets: ReadonlyMap<string, readonly (readonly string[])[]>
   readonly nullableFields: ReadonlySet<string>
+  readonly aliases: ReadonlyMap<string, string>
 }
 
 // `presence(false)` says the column is filled some other way, whatever
@@ -2115,9 +2159,11 @@ function fieldValidationLines(f: DMMF.Field, ctx: ValidationContext) {
     ),
     ...own.flatMap(({ option }) => (option === null ? [] : [option])),
   ]
+  // A refused column is validated through its alias: `validates :hash` would read Object#hash.
+  const attribute = `:${ctx.aliases.get(f.dbName ?? f.name) ?? f.dbName ?? f.name}`
   return [
-    ...(rules.length === 0 ? [] : [rubyCall('validates', [`:${f.dbName ?? f.name}`], rules)]),
-    ...uniqueness.slice(1).map((rule) => rubyCall('validates', [`:${f.dbName ?? f.name}`], [rule])),
+    ...(rules.length === 0 ? [] : [rubyCall('validates', [attribute], rules)]),
+    ...uniqueness.slice(1).map((rule) => rubyCall('validates', [attribute], [rule])),
   ]
 }
 
@@ -2149,6 +2195,7 @@ function validationLines(
   modelLines: readonly string[],
   createdField: DMMF.Field | undefined,
   updatedField: DMMF.Field | undefined,
+  aliases: ReadonlyMap<string, string>,
 ) {
   const foreignKeyFields = new Set(
     model.fields.flatMap((f) => (f.kind === 'object' ? (f.relationFromFields ?? []) : [])),
@@ -2162,6 +2209,7 @@ function validationLines(
     updatedField,
     uniqueSets: uniqueSetsByColumn(uniqueSetsOf(model, foreignKeyFields)),
     nullableFields: new Set(model.fields.filter((g) => !g.isRequired).map((g) => g.name)),
+    aliases,
   }
   return model.fields.flatMap((f) => fieldValidationLines(f, ctx))
 }
@@ -2292,6 +2340,7 @@ function activeRecordModel(model: DMMF.Model, ctx: ModelContext) {
   // table is this pluralized.
   const modelSnake = underscore(className)
   const idField = model.fields.find((f) => f.isId)
+  const aliases = names.aliasesOf(model.name)
   const createdField = createdAtField(model)
   const updatedField = updatedAtField(model)
   const orderColumnLines =
@@ -2324,9 +2373,14 @@ function activeRecordModel(model: DMMF.Model, ctx: ModelContext) {
       ...inheritanceColumnLines(model),
       ...orderColumnLines,
     ],
-    [...attributes, ...timestampLines(model, createdField, updatedField)],
+    refusedColumnLines(aliases),
+    [
+      ...attributes,
+      ...[...aliases].map(([column, name]) => `alias_attribute :${name}, :${column}`),
+      ...timestampLines(model, createdField, updatedField),
+    ],
     enumLines(model, ctx.enumMap),
-    validationLines(model, modelLines, createdField, updatedField),
+    validationLines(model, modelLines, createdField, updatedField, aliases),
     associationLines,
     modelLines,
   ]
