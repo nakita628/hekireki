@@ -114,7 +114,9 @@ A Prisma `view` is the database's own, which Prisma Migrate never creates. `heki
 marks its model `managed = False` and a `ForeignKey` to it `db_constraint=False`, so `migrate`
 leaves it alone. GORM and SeaORM have no way for a model to say it is a view: the struct or entity
 `hekireki-gorm` and `hekireki-sea-orm` write says so in its comment, and is not to be passed to
-`AutoMigrate` or `Schema::create_table_from_entity`.
+`AutoMigrate` or `Schema::create_table_from_entity`. SeaORM 1.1 also writes a foreign key for every
+`belongs_to`, so the entity of a model that points at a view says that its table is not to be
+created with `Schema::create_table_from_entity` either.
 
 ### Database and documents
 

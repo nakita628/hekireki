@@ -940,6 +940,37 @@ function behaviorImpl(
   ].join('\n')
 }
 
+/**
+ * What an entity says of a view: Prisma Migrate never creates one (its SQL is written by hand),
+ * and SeaORM has no notion of one, so `Schema::create_table_from_entity` would create a table of
+ * the view's name, and write a foreign key for every `belongs_to` (SeaORM 1.1 has no way for a
+ * relation to opt out), which the database refuses for one that references a view.
+ */
+function viewDocLines(
+  model: DMMF.Model,
+  belongsTo: readonly { readonly targetModel: string }[],
+  views: ReadonlySet<string>,
+  hasDoc: boolean,
+) {
+  const separator = hasDoc ? ['///'] : []
+  if (views.has(model.name)) {
+    return [
+      ...separator,
+      '/// A database view: read it, do not write to it, and do not pass it to',
+      '/// `Schema::create_table_from_entity`, which would create a table of that name.',
+    ]
+  }
+  const targets = [...new Set(belongsTo.map((assoc) => assoc.targetModel))].filter((target) =>
+    views.has(target),
+  )
+  if (targets.length === 0) return []
+  return [
+    ...separator,
+    `/// It points at the database ${targets.length > 1 ? 'views' : 'view'} ${targets.map((target) => `\`${target}\``).join(', ')}, which no foreign key can reference.`,
+    '/// Do not create its table with `Schema::create_table_from_entity`, which would write one.',
+  ]
+}
+
 export function generateEntityFile(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
@@ -1030,15 +1061,7 @@ export function generateEntityFile(
   const serdeAttrs = buildSerdeAttributes(serde)
 
   const doc = rustDocLines(stripAnnotations(model.documentation), '')
-  // Prisma Migrate never creates a view (its SQL is written by hand), and SeaORM has no notion of
-  // one: `Schema::create_table_from_entity` given this entity creates a table of that name.
-  const viewDoc = views.has(model.name)
-    ? [
-        ...(doc.length > 0 ? ['///'] : []),
-        '/// A database view: read it, do not write to it, and do not pass it to',
-        '/// `Schema::create_table_from_entity`, which would create a table of that name.',
-      ]
-    : []
+  const viewDoc = viewDocLines(model, associations.belongsTo, views, doc.length > 0)
 
   const lines = [
     ...useLines,
