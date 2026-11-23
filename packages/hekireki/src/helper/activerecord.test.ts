@@ -2783,7 +2783,8 @@ end`)
 
   // `invalid?` and `hash` are Active Record's, so the columns raise DangerousAttributeError as the
   // model first defines its attribute methods. Those methods are left to Active Record, and an
-  // alias reaches each column; the alias of a column that has one of its name already is numbered.
+  // alias reaches each column; the alias of a column that has one of its name already is numbered,
+  // and an enum key of an alias's name goes behind its prefix.
   it('reaches a column named after a method Active Record defines through an alias', () => {
     const credential = makeModel({
       name: 'Credential',
@@ -2806,8 +2807,18 @@ end`)
           default: 'PERSONAL',
         }),
         makeField({ name: 'logger', type: 'String', isRequired: false }),
+        makeField({ name: 'errors', type: 'bytea', kind: 'unsupported', isRequired: false }),
+        makeField({ name: 'status', type: 'Status', kind: 'enum' }),
       ],
     })
+    const status: DMMF.DatamodelEnum = {
+      name: 'Status',
+      values: [
+        { name: 'INVALID_VALUE', dbName: null },
+        { name: 'OK', dbName: null },
+      ],
+      dbName: null,
+    }
     const kind: DMMF.DatamodelEnum = {
       name: 'Kind',
       values: [
@@ -2816,7 +2827,7 @@ end`)
       ],
       dbName: null,
     }
-    expect(activeRecordModels([credential], [credential], [kind]))
+    expect(activeRecordModels([credential], [credential], [kind, status]))
       .toBe(`class Credential < ApplicationRecord
   self.table_name = "Credential"
 
@@ -2826,7 +2837,11 @@ end`)
   private_class_method :instance_method_already_implemented?
 
   def read_attribute_for_serialization(name)
-    self.class.dangerous_attribute_method?(name) ? _read_attribute(name) : super
+    if has_attribute?(name) && self.class.dangerous_attribute_method?(name)
+      _read_attribute(name.to_s)
+    else
+      super
+    end
   end
 
   attribute :invalid, default: false
@@ -2834,9 +2849,11 @@ end`)
   alias_attribute :hash_value1, :hash
   alias_attribute :class_value, :class
   alias_attribute :logger_value, :logger
+  alias_attribute :errors_value, :errors
 
   attribute :class, default: "PERSONAL"
   validates :class_value, inclusion: { in: %w[PERSONAL TEAM] }
+  enum :status, { invalid_value: "INVALID_VALUE", ok: "OK" }, prefix: true, validate: true
 
   validates :hash_value1, presence: true, uniqueness: true
 end`)

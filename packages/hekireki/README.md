@@ -262,7 +262,8 @@ on a record (`attributes`, `errors`) becomes the association Rails would name af
 for `invalid?`, `hash`, `class`) leaves those methods to Active Record and is reached through an
 alias with `_value` after its name (`alias_attribute :invalid_value, :invalid`), which its
 validations and translations name too; such an enum column is held to its values by an `inclusion`
-validation instead of `enum`.
+validation instead of `enum`. Its messages name the alias ("Hash value can't be blank") unless an
+`@ar.name` names the column.
 
 A `/// @ar.` line on a field is a validator (`presence`, `length(maximum: 255)`) added to that
 field's `validates`; on a model it is a Ruby line written into the class as it is

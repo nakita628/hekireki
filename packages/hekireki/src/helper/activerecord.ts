@@ -1061,9 +1061,7 @@ function railsNames(models: readonly DMMF.Model[]) {
       const renamed = allocate(
         model.fields
           .filter(
-            (f) =>
-              (f.kind === 'scalar' || f.kind === 'enum') &&
-              ACTIVE_RECORD_DANGEROUS_COLUMNS.has(f.dbName ?? f.name),
+            (f) => f.kind !== 'object' && ACTIVE_RECORD_DANGEROUS_COLUMNS.has(f.dbName ?? f.name),
           )
           .map((f) => ({ key: f.dbName ?? f.name, candidate: `${f.dbName ?? f.name}_value` })),
         [
@@ -1701,7 +1699,7 @@ function inheritanceColumnLines(model: DMMF.Model) {
 // and raises for one it defines itself (`invalid?`, `hash`). Told that those are there already,
 // it leaves them as they are and defines the column's others (`invalid`, `invalid=`); the alias
 // reaches the column in full. `as_json` reads each column by sending its name, which for these
-// would answer Active Record's method (`hash`, `class`), so it reads the column instead.
+// would answer Active Record's method (`hash`, `class`), so it reads those columns instead.
 function refusedColumnLines(aliases: ReadonlyMap<string, string>) {
   return aliases.size === 0
     ? []
@@ -1712,7 +1710,11 @@ function refusedColumnLines(aliases: ReadonlyMap<string, string>) {
         'private_class_method :instance_method_already_implemented?',
         '',
         'def read_attribute_for_serialization(name)',
-        '  self.class.dangerous_attribute_method?(name) ? _read_attribute(name) : super',
+        '  if has_attribute?(name) && self.class.dangerous_attribute_method?(name)',
+        '    _read_attribute(name.to_s)',
+        '  else',
+        '    super',
+        '  end',
         'end',
       ]
 }
@@ -2049,7 +2051,8 @@ function enumLines(
   enumMap: ReadonlyMap<string, DMMF.DatamodelEnum['values']>,
   aliases: ReadonlyMap<string, string>,
 ) {
-  const taken = new Set<string>()
+  // An enum key named as an alias would put its predicate over the alias's (`invalid_value?`).
+  const taken = new Set<string>(aliases.values())
   return model.fields
     .filter((f) => f.kind === 'enum' && !f.isList)
     .flatMap((f) => enumFieldLines(f, enumMap, taken, aliases))
