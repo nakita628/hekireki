@@ -7,12 +7,12 @@ defmodule Example.User do
 
   use Ecto.Schema
 
-  @primary_key {:id, Ecto.UUID, autogenerate: [version: 7]}
-  @foreign_key_type :binary_id
+  @primary_key {:id, :string, autogenerate: {Ecto.UUID, :generate, [[version: 7]]}}
+  @foreign_key_type :string
   @timestamps_opts [type: Example.PrismaDateTime, autogenerate: {Example.PrismaDateTime, :autogenerate, []}]
 
   @type t :: %__MODULE__{
-          id: Ecto.UUID.t(),
+          id: String.t(),
           email: String.t(),
           name: String.t(),
           role: atom(),

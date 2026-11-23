@@ -18,7 +18,7 @@ defmodule Example.Order do
   schema "orders" do
     field(:total, :decimal)
     field(:placed_at, Example.PrismaDateTime, autogenerate: true)
-    belongs_to(:user, Example.User, foreign_key: :user_id, type: :binary_id)
+    belongs_to(:user, Example.User, foreign_key: :user_id, type: :string)
     has_many(:items, Example.OrderItem, foreign_key: :order_id)
   end
 end

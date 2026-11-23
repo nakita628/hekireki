@@ -19,8 +19,8 @@ defmodule Example.Comment do
 
   schema "comments" do
     field(:body, :string)
-    belongs_to(:post, Example.Post, foreign_key: :post_id, type: :binary_id)
-    belongs_to(:author, Example.User, foreign_key: :author_id, type: :binary_id)
+    belongs_to(:post, Example.Post, foreign_key: :post_id, type: :string)
+    belongs_to(:author, Example.User, foreign_key: :author_id, type: :string)
     timestamps(inserted_at_source: :created_at, updated_at: false)
   end
 end

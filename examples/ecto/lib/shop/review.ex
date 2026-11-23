@@ -22,7 +22,7 @@ defmodule Shop.Review do
   schema "reviews" do
     field(:rating, :integer)
     field(:body, :string)
-    belongs_to(:product, Shop.Product, foreign_key: :product_id, type: :binary_id)
+    belongs_to(:product, Shop.Product, foreign_key: :product_id, type: :string)
     belongs_to(:account, Shop.Account, foreign_key: :account_id)
     belongs_to(:parent, Shop.Review, foreign_key: :parent_id)
     has_many(:replies, Shop.Review, foreign_key: :parent_id)
