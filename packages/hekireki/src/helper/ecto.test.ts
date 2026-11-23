@@ -2466,6 +2466,8 @@ describe('Json defaults', () => {
     ['[1,2]', '    field(:meta, App.PrismaJson, default: [1, 2])'],
     ['42', '    field(:meta, App.PrismaJson, default: 42)'],
     ['"quoted"', '    field(:meta, App.PrismaJson, default: "quoted")'],
+    ['1e21', '    field(:meta, App.PrismaJson, default: 1.0e21)'],
+    ['[0.0000001,2.5e-8]', '    field(:meta, App.PrismaJson, default: [1.0e-7, 2.5e-8])'],
     ['null', '    field(:meta, App.PrismaJson)'],
   ])('renders the default %s', (json, expected) => {
     const models = [
@@ -2519,13 +2521,10 @@ describe('ectoJsonType', () => {
 end`)
   })
 
-  it.each([
-    ['postgresql', '{:ok, value}'],
-    ['cockroachdb', '{:ok, value}'],
-    ['sqlite', '{:ok, Application.get_env(:ecto_sqlite3, :json_library, Jason).encode!(value)}'],
-    ['mysql', '{:ok, Application.get_env(:myxql, :json_library, Jason).encode!(value)}'],
-  ])('loads any JSON value, and on %s dumps it as %s', (provider, dumped) => {
-    expect(ectoJsonType('App', provider)).toBe(`defmodule App.PrismaJson do
+  it.each(['postgresql', 'cockroachdb'])(
+    'on %s loads and sends any JSON value as it is',
+    (provider) => {
+      expect(ectoJsonType('App', provider)).toBe(`defmodule App.PrismaJson do
   use Ecto.Type
 
   defguardp is_json(value)
@@ -2544,7 +2543,89 @@ end`)
   def load(_), do: :error
 
   @impl true
-  def dump(value) when is_json(value), do: ${dumped}
+  def dump(value) when is_json(value), do: {:ok, value}
+  def dump(_), do: :error
+end`)
+    },
+  )
+
+  // Prisma's JSONB column has NUMERIC affinity on SQLite, which keeps the text 42 as an INTEGER,
+  // and ecto_sqlite3's :map loader refused it: the column is read as it is and decoded here.
+  it('on SQLite reads the column as it is and decodes the JSON text itself', () => {
+    expect(ectoJsonType('App', 'sqlite')).toBe(`defmodule App.PrismaJson do
+  use Ecto.Type
+
+  defguardp is_json(value)
+            when is_map(value) or is_list(value) or is_binary(value) or is_number(value) or
+                   is_boolean(value)
+
+  @impl true
+  def type, do: :string
+
+  @impl true
+  def cast(value) when is_json(value), do: {:ok, value}
+  def cast(_), do: :error
+
+  @impl true
+  def load(value) when is_number(value), do: {:ok, value}
+
+  def load(value) when is_binary(value) do
+    case Application.get_env(:ecto_sqlite3, :json_library, Jason).decode(value) do
+      {:ok, json} -> {:ok, json}
+      _ -> :error
+    end
+  end
+
+  def load(_), do: :error
+
+  @impl true
+  def dump(value) when is_json(value) do
+    case Application.get_env(:ecto_sqlite3, :json_library, Jason).encode(value) do
+      {:ok, text} -> {:ok, text}
+      _ -> :error
+    end
+  end
+
+  def dump(_), do: :error
+end`)
+  })
+
+  // MyXQL decodes a JSON column itself and the :map loader decoded a string again, which raised on
+  // "text"; MariaDB's JSON is text, which is decoded here.
+  it('on MySQL takes what MyXQL decoded and decodes the text MariaDB gives', () => {
+    expect(ectoJsonType('App', 'mysql')).toBe(`defmodule App.PrismaJson do
+  use Ecto.Type
+
+  defguardp is_json(value)
+            when is_map(value) or is_list(value) or is_binary(value) or is_number(value) or
+                   is_boolean(value)
+
+  @impl true
+  def type, do: :string
+
+  @impl true
+  def cast(value) when is_json(value), do: {:ok, value}
+  def cast(_), do: :error
+
+  @impl true
+  def load(value) when is_binary(value) do
+    case Application.get_env(:myxql, :json_library, Jason).decode(value) do
+      {:ok, json} -> {:ok, json}
+      _ -> {:ok, value}
+    end
+  end
+
+  def load(value) when is_json(value), do: {:ok, value}
+  def load(_), do: :error
+
+  @impl true
+  def dump(value) when is_json(value) do
+    case Application.get_env(:myxql, :json_library, Jason).encode(value) do
+      {:ok, text} -> {:ok, text}
+      _ -> :error
+    end
+  end
+
   def dump(_), do: :error
 end`)
   })

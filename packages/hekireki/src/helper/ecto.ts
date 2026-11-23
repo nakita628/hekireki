@@ -486,11 +486,19 @@ function toElixirString(value: string) {
   return `"${escaped}"`
 }
 
+// A JSON number as an Elixir literal: JavaScript writes a large or a small one with an exponent
+// (`1e+21`, `1e-7`), which Elixir reads only as a float with a fraction (`1.0e21`, `1.0e-7`).
+function elixirNumber(value: number) {
+  const [mantissa = '', exponent] = String(value).split('e')
+  if (exponent === undefined) return mantissa
+  return `${mantissa.includes('.') ? mantissa : `${mantissa}.0`}e${exponent.replace('+', '')}`
+}
+
 function jsonToElixirLiteral(value: unknown): string {
   if (value === null) return 'nil'
   if (value === true) return 'true'
   if (value === false) return 'false'
-  if (typeof value === 'number') return String(value)
+  if (typeof value === 'number') return elixirNumber(value)
   if (typeof value === 'string') return toElixirString(value)
   if (Array.isArray(value)) return `[${value.map(jsonToElixirLiteral).join(', ')}]`
   if (typeof value === 'object') {
@@ -1489,11 +1497,16 @@ const JSON_LIBRARY_APPS: ReadonlyMap<string, string> = new Map([
 /**
  * The type a schema keeps a Json in, written beside the schemas. A Json column holds any JSON
  * value, and Ecto's `:map` loads an object only: a row holding an array, a string, a number or a
- * boolean, as Prisma Client writes them, could not be read. Its `type/0` is `:map`, so the adapter
- * decodes the column as it decodes a `:map`, and it takes whatever JSON value that gives. PostgreSQL
- * and CockroachDB are sent the value, which Postgrex encodes; SQLite and MySQL the JSON text,
- * encoded with the adapter's own JSON library, since `ecto_sqlite3` writes a string as it is and
- * MyXQL encodes only a map or a list.
+ * boolean, as Prisma Client writes them, could not be read. A string is cast as a JSON string, as
+ * Prisma Client takes it.
+ *
+ * On PostgreSQL and CockroachDB its `type/0` is `:map`: Postgrex decodes the column into any JSON
+ * value and encodes the value sent. On SQLite and MySQL it is `:string`, kept out of the adapters'
+ * `:map` loader, and the type reads and writes the JSON text with the adapter's own JSON library:
+ * Prisma's `JSONB` column on SQLite has NUMERIC affinity, so SQLite keeps the text of a number as
+ * an INTEGER or a REAL (a `1.0` comes back as `1`), which `ecto_sqlite3`'s `:map` loader refuses;
+ * MySQL's JSON column is decoded by MyXQL already, and the `:map` loader decoded a string a second
+ * time, while MariaDB's is text. A string MyXQL gives that is not JSON text is a JSON string.
  *
  * @param app - The module the schemas are under.
  * @param provider - The datasource's provider: SQLite and MySQL are sent JSON text, every other one
@@ -1515,6 +1528,63 @@ const JSON_LIBRARY_APPS: ReadonlyMap<string, string> = new Map([
  */
 export function ectoJsonType(app: string, provider: string | undefined) {
   const library = JSON_LIBRARY_APPS.get(provider ?? '')
+  if (library === undefined) {
+    return [
+      ...jsonTypeHead(app, ':map'),
+      '  @impl true',
+      '  def load(value) when is_json(value), do: {:ok, value}',
+      '  def load(_), do: :error',
+      '',
+      '  @impl true',
+      '  def dump(value) when is_json(value), do: {:ok, value}',
+      '  def dump(_), do: :error',
+      'end',
+    ].join('\n')
+  }
+  const json = `Application.get_env(${library}, :json_library, Jason)`
+  return [
+    ...jsonTypeHead(app, ':string'),
+    '  @impl true',
+    ...(provider === 'sqlite'
+      ? [
+          '  def load(value) when is_number(value), do: {:ok, value}',
+          '',
+          '  def load(value) when is_binary(value) do',
+          `    case ${json}.decode(value) do`,
+          '      {:ok, json} -> {:ok, json}',
+          '      _ -> :error',
+          '    end',
+          '  end',
+          '',
+          '  def load(_), do: :error',
+        ]
+      : [
+          '  def load(value) when is_binary(value) do',
+          `    case ${json}.decode(value) do`,
+          '      {:ok, json} -> {:ok, json}',
+          '      _ -> {:ok, value}',
+          '    end',
+          '  end',
+          '',
+          '  def load(value) when is_json(value), do: {:ok, value}',
+          '  def load(_), do: :error',
+        ]),
+    '',
+    '  @impl true',
+    '  def dump(value) when is_json(value) do',
+    `    case ${json}.encode(value) do`,
+    '      {:ok, text} -> {:ok, text}',
+    '      _ -> :error',
+    '    end',
+    '  end',
+    '',
+    '  def dump(_), do: :error',
+    'end',
+  ].join('\n')
+}
+
+// What every PrismaJson starts with: the module, its primitive type and a cast of any JSON value.
+function jsonTypeHead(app: string, type: string) {
   return [
     `defmodule ${app}.PrismaJson do`,
     '  use Ecto.Type',
@@ -1524,21 +1594,11 @@ export function ectoJsonType(app: string, provider: string | undefined) {
     '                   is_boolean(value)',
     '',
     '  @impl true',
-    '  def type, do: :map',
+    `  def type, do: ${type}`,
     '',
     '  @impl true',
     '  def cast(value) when is_json(value), do: {:ok, value}',
     '  def cast(_), do: :error',
     '',
-    '  @impl true',
-    '  def load(value) when is_json(value), do: {:ok, value}',
-    '  def load(_), do: :error',
-    '',
-    '  @impl true',
-    library === undefined
-      ? '  def dump(value) when is_json(value), do: {:ok, value}'
-      : `  def dump(value) when is_json(value), do: {:ok, Application.get_env(${library}, :json_library, Jason).encode!(value)}`,
-    '  def dump(_), do: :error',
-    'end',
-  ].join('\n')
+  ]
 }

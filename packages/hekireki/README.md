@@ -424,7 +424,8 @@ the module's documentation names the session time zone a `@db.Timestamptz`, `@db
 
 A `Json` is kept in `PrismaJson`, written alongside them too: Ecto's `:map` loads a JSON object
 only, and a `Json` column holds any JSON value, so an array, a string, a number or a boolean that
-Prisma Client wrote reads back as it is, and an `@default("[]")` is a default of the field.
+Prisma Client wrote reads back as it is (on SQLite as the column keeps it: a `1.0` is `1`), and an
+`@default("[]")` is a default of the field.
 
 `examples/ecto` in the repository runs a schema against Ecto on SQLite.
 
