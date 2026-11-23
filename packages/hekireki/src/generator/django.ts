@@ -13,7 +13,7 @@ import {
 } from '../helper/django.js'
 import { enumSchemas } from '../helper/exposed.js'
 import { primaryKeyFields } from '../prisma/model.js'
-import { prismaBlocks } from '../prisma/schema-text.js'
+import { prismaBlocks, viewNames } from '../prisma/schema-text.js'
 
 export function djangoCode(
   models: readonly DMMF.Model[],
@@ -23,8 +23,9 @@ export function djangoCode(
   source = '',
 ) {
   const idx = indexes ?? []
-  // What DMMF drops is read off the schema's text: the @@schema of an enum.
+  // What DMMF drops is read off the schema's text: the @@schema of an enum, and which models are views.
   const blocks = prismaBlocks(source)
+  const views = viewNames(blocks)
   const enumTypes = enumSqlTypes(enums ?? [], enumSchemas(blocks))
   // Imports and default helpers are collected from the models that are actually
   // emitted; a model with nothing to key it by (neither an id nor a required
@@ -43,7 +44,9 @@ export function djangoCode(
     ...collectDefaultHelpers(emitted, names, enums),
     ...(enums ?? []).map((e) => generateEnumClass(e)),
     ...emitted
-      .map((model) => generateModelBody(model, models, idx, m2mTables, names, provider, enumTypes))
+      .map((model) =>
+        generateModelBody(model, models, idx, m2mTables, names, provider, enumTypes, views),
+      )
       .filter((body) => body !== null),
     ...m2mTables.map((t) => generateThroughModel(t)),
   ]

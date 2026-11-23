@@ -960,6 +960,7 @@ function generateForeignKeyField(
   allModels: readonly DMMF.Model[],
   names: Names,
   isPk: boolean,
+  views: ReadonlySet<string>,
 ) {
   const attrName = attrNameOf(names, model, relationField)
   const columnName = fieldColumnName(scalarField)
@@ -975,7 +976,9 @@ function generateForeignKeyField(
 
   const args = [
     target,
-    `on_delete=${onDeleteFor(relationField, scalarField)}`,
+    // A view's relation is no foreign key the database holds: Django must neither refuse a delete
+    // over it nor cascade one into the view.
+    `on_delete=${views.has(model.name) ? 'models.DO_NOTHING' : onDeleteFor(relationField, scalarField)}`,
     `related_name=${relatedName}`,
     toFieldArg(relationField, allModels, names),
     isPk ? 'primary_key=True' : null,
@@ -989,6 +992,8 @@ function generateForeignKeyField(
     // schema actually declares arrives through Meta.indexes instead, so leaving
     // this on would add one or two indexes the database does not have.
     ctor === 'ForeignKey' ? 'db_index=False' : null,
+    // Prisma Migrate makes no foreign key to or from a view, and the database could not hold one.
+    views.has(relationField.type) || views.has(model.name) ? 'db_constraint=False' : null,
     ...formatDefaultArgs(model, scalarField, names),
   ].filter((a) => a !== null)
 
@@ -1173,7 +1178,12 @@ function declaredUniqueNames(uniqueIndexes: readonly DMMF.Index[]) {
   return names
 }
 
-function generateMetaLines(model: DMMF.Model, indexes: readonly DMMF.Index[], names: Names) {
+function generateMetaLines(
+  model: DMMF.Model,
+  indexes: readonly DMMF.Index[],
+  names: Names,
+  views: ReadonlySet<string>,
+) {
   const tableName = model.dbName ?? model.name
 
   // Meta constraints/indexes name Django *fields*: a column held by a
@@ -1246,6 +1256,8 @@ function generateMetaLines(model: DMMF.Model, indexes: readonly DMMF.Index[], na
     '',
     '    class Meta:',
     `        db_table = ${toPythonString(tableName)}`,
+    // A Prisma `view` is a database view whose SQL is written by hand: `migrate` leaves it alone.
+    ...(views.has(model.name) ? ['        managed = False'] : []),
     ...(constraints.length > 0
       ? ['        constraints = [', ...constraints.map((c) => `            ${c},`), '        ]']
       : []),
@@ -1328,6 +1340,7 @@ export function generateModelBody(
   names: Names,
   provider: string,
   enumTypes: ReadonlyMap<string, string> = new Map(),
+  views: ReadonlySet<string> = new Set(),
 ) {
   const pkFields = primaryKeyFields(model)
   if (pkFields.length === 0) return null
@@ -1354,7 +1367,7 @@ export function generateModelBody(
     const owner = fkByScalarName.get(field.name)
     if (owner) {
       return [
-        generateForeignKeyField(model, owner, field, allModels, names, isPk),
+        generateForeignKeyField(model, owner, field, allModels, names, isPk, views),
         ...pythonDocstringLines(
           stripAnnotations(field.documentation) ?? stripAnnotations(owner.documentation),
           '    ',
@@ -1375,7 +1388,7 @@ export function generateModelBody(
     ...(model.fields.some((f) => f.isUpdatedAt === true)
       ? ['    objects = AutoNowQuerySet.as_manager()']
       : []),
-    ...generateMetaLines(model, indexes, names),
+    ...generateMetaLines(model, indexes, names, views),
   ].join('\n')
 }
 

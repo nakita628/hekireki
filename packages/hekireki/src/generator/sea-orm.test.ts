@@ -3,6 +3,7 @@ import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { PRISMA_DATE_TIME_RS } from '../helper/sea-orm.js'
+import { prismaBlocks, viewNames } from '../prisma/schema-text.js'
 import { seaOrmFiles } from './sea-orm.js'
 
 /** The datamodel `getDMMF` parsed, or its parse error thrown. */
@@ -376,6 +377,153 @@ impl ActiveModelBehavior for ActiveModel {
         Ok(self)
     }
 }
+`)
+  })
+})
+
+describe('views', () => {
+  // Prisma Migrate never creates a view, and SeaORM has no way for an
+  // entity to say it is one, so the entity says it itself.
+  it('says on the entity of a view that it is not to be created as a table', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["views"]
+}
+
+model User {
+  id   Int       @id
+  stat UserStat?
+}
+
+/// What each user has written.
+view UserStat {
+  userId Int  @unique
+  posts  Int
+  user   User @relation(fields: [userId], references: [id])
+}
+`
+    const { models: viewModels, enums: viewEnums } = datamodelOf(
+      getDMMF({ datamodel: [['schema.prisma', schema]] }),
+    )
+    const files = seaOrmFiles(
+      viewModels,
+      viewEnums,
+      {},
+      'postgresql',
+      viewNames(prismaBlocks(schema)),
+    )
+
+    expect(files.find((file) => file.fileName === 'user_stat.rs')?.code)
+      .toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+/// What each user has written.
+///
+/// A database view: read it, do not write to it, and do not pass it to
+/// \`Schema::create_table_from_entity\`, which would create a table of that name.
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "UserStat")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(unique)]
+    #[sea_orm(column_name = "userId")]
+    pub user_id: i32,
+    pub posts: i32,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::user::Entity",
+        from = "Column::UserId",
+        to = "super::user::Column::Id"
+    )]
+    User,
+}
+
+impl Related<super::user::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::User.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {}
+`)
+  })
+})
+
+describe('a relation to a view', () => {
+  // SeaORM 1.1 writes a foreign key for every belongs_to, which the database refuses to make to
+  // a view, and a relation has no way to opt out of it.
+  it('says on the entity of a model that points at a view that its table is not to be created from it', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["views"]
+}
+
+view UserStat {
+  userId Int     @unique
+  posts  Int
+  badges Badge[]
+}
+
+model Badge {
+  id     Int      @id
+  statId Int
+  stat   UserStat @relation(fields: [statId], references: [userId])
+}
+`
+    const { models: viewModels, enums: viewEnums } = datamodelOf(
+      getDMMF({ datamodel: [['schema.prisma', schema]] }),
+    )
+    const files = seaOrmFiles(
+      viewModels,
+      viewEnums,
+      {},
+      'postgresql',
+      viewNames(prismaBlocks(schema)),
+    )
+
+    expect(files.find((file) => file.fileName === 'badge.rs')?.code)
+      .toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+/// It points at the Prisma view \`UserStat\`, which no foreign key can reference.
+/// Do not create its table with \`Schema::create_table_from_entity\`, which would write one.
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "Badge")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: i32,
+    #[sea_orm(column_name = "statId")]
+    pub stat_id: i32,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::user_stat::Entity",
+        from = "Column::StatId",
+        to = "super::user_stat::Column::UserId"
+    )]
+    Stat,
+}
+
+impl Related<super::user_stat::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Stat.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {}
 `)
   })
 })
