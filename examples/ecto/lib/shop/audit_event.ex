@@ -12,14 +12,14 @@ defmodule Shop.AuditEvent do
   @type t :: %__MODULE__{
           id: integer(),
           action: String.t(),
-          payload: map() | nil,
+          payload: map() | list() | String.t() | number() | boolean() | nil,
           at: DateTime.t(),
           account: Shop.Account.t() | nil
         }
 
   schema "audit_events" do
     field(:action, :string)
-    field(:payload, :map)
+    field(:payload, Shop.PrismaJson)
     field(:at, Shop.PrismaDateTime, autogenerate: true)
     belongs_to(:account, Shop.Account, foreign_key: :account_id)
   end

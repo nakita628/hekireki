@@ -1,6 +1,13 @@
 import type { DMMF } from '@prisma/generator-helper'
 
-import { dateTimeFields, dateTimeModule, ectoDateTypes, ectoSchemas } from '../helper/ecto.js'
+import {
+  dateTimeFields,
+  dateTimeModule,
+  ectoDateTypes,
+  ectoJsonType,
+  ectoSchemas,
+  hasJsonField,
+} from '../helper/ecto.js'
 import { makeSnakeCase } from '../naming/case.js'
 
 export function ectoSchemaFiles(
@@ -27,6 +34,13 @@ export function ectoSchemaFiles(
         options.provider,
         new Set(models.flatMap((model) => dateTimeFields(model).map(dateTimeModule))),
       ),
+    },
+    // The type a Json is kept in, likewise.
+    {
+      fileName: 'prisma_json.ex',
+      code: models.some(hasJsonField)
+        ? ectoJsonType(Array.isArray(app) ? app.join('.') : app, options.provider)
+        : '',
     },
   ].filter((entry) => entry.code.trim().length > 0)
 }

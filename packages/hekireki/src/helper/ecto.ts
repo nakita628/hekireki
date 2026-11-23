@@ -13,8 +13,9 @@ import {
 import { prismaConstraintName } from '../prisma/postgres.js'
 
 /**
- * The Ecto type of a scalar Prisma type. A DateTime is not one of Ecto's own: it is kept in one of
- * the types `ectoDateTypes` writes beside the schemas, which `dateTimeModule` names.
+ * The Ecto type of a scalar Prisma type. A DateTime and a Json are not of Ecto's own: a DateTime is
+ * kept in one of the types `ectoDateTypes` writes beside the schemas, which `dateTimeModule` names,
+ * and a Json in the `PrismaJson` that `ectoJsonType` writes.
  */
 export function prismaTypeToEctoType(
   type: string,
@@ -30,11 +31,12 @@ export function prismaTypeToEctoType(
   return 'string'
 }
 
-// What each of the DateTime types holds, as a typespec.
-const DATE_TIME_TYPESPECS: ReadonlyMap<string, string> = new Map([
+// What each of the types written beside the schemas holds, as a typespec.
+const WRITTEN_TYPESPECS: ReadonlyMap<string, string> = new Map([
   ['PrismaDateTime', 'DateTime.t()'],
   ['PrismaDate', 'Date.t()'],
   ['PrismaTime', 'Time.t()'],
+  ['PrismaJson', 'map() | list() | String.t() | number() | boolean()'],
 ])
 
 /**
@@ -48,15 +50,20 @@ export function dateTimeModule(field: DMMF.Field) {
   return 'PrismaDateTime'
 }
 
+/** Whether a model has a Json column, which is kept in the type `ectoJsonType` writes. */
+export function hasJsonField(model: DMMF.Model) {
+  return model.fields.some((f) => f.kind === 'scalar' && f.type === 'Json')
+}
+
 /** The DateTime columns of a model, which are kept in the types `ectoDateTypes` writes. */
 export function dateTimeFields(model: DMMF.Model) {
   return model.fields.filter((f) => f.kind === 'scalar' && f.type === 'DateTime')
 }
 
 export function ectoTypeToTypespec(type: string) {
-  // A DateTime type is named with the app's module in front of it.
-  const dateTime = DATE_TIME_TYPESPECS.get(type.split('.').at(-1) ?? '')
-  if (dateTime !== undefined) return dateTime
+  // A type written beside the schemas is named with the app's module in front of it.
+  const written = WRITTEN_TYPESPECS.get(type.split('.').at(-1) ?? '')
+  if (written !== undefined) return written
   switch (type) {
     case 'string':
       return 'String.t()'
@@ -420,9 +427,8 @@ function functionDefaultOption(def: DMMF.FieldDefault) {
 }
 
 // DMMF carries BigInt defaults as digit strings, DateTime literals
-// as ISO strings, and Json defaults as JSON text. Ecto validates
-// :default against the field type at compile time: :map takes an
-// Elixir map literal. A DateTime is the instant in UTC with
+// as ISO strings, and Json defaults as JSON text, which becomes the
+// Elixir term PrismaJson holds. A DateTime is the instant in UTC with
 // milliseconds, as Prisma's client holds it, whatever offset the
 // literal was written with; a date or a time of day is its UTC part.
 function stringDefaultOption(f: DMMF.Field, def: string) {
@@ -435,13 +441,8 @@ function stringDefaultOption(f: DMMF.Field, def: string) {
     return `default: ~U[${iso.slice(0, 10)} ${iso.slice(11, 23)}Z]`
   }
   if (f.type === 'Json') {
-    // Ecto's :map only accepts a map default; an array or scalar
-    // Json default would fail schema compilation, so it stays a
-    // database-level concern and is not emitted here.
     const parsed: unknown = JSON.parse(def)
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? `default: ${jsonToElixirLiteral(parsed)}`
-      : null
+    return parsed === null ? null : `default: ${jsonToElixirLiteral(parsed)}`
   }
   if (isUuidColumn(f)) {
     // Ecto dumps a :default when the schema compiles, and Ecto.UUID takes the 36 characters only.
@@ -593,8 +594,8 @@ function foreignKeyOf(model: DMMF.Model, field: DMMF.Field, allModels: readonly 
  * not cast, a function that does not take the field first, a `unique_constraint` on a field that
  * is not `@unique`, a `foreign_key_constraint` on a field that is not a foreign key, and on a
  * relation field anything but the `assoc_constraint` of the side with the key or the
- * `no_assoc_constraint` of the other, and a model named after a type a DateTime is kept in
- * (`PrismaDateTime`, `PrismaDate`, `PrismaTime`) where the schema has one. Each names the model or
+ * `no_assoc_constraint` of the other, and a model named after a type a DateTime or a Json is kept
+ * in (`PrismaDateTime`, `PrismaDate`, `PrismaTime`, `PrismaJson`) where the schema has one. Each names the model or
  * field it is on.
  */
 // What is wrong with an @ecto. call on a relation field, given the side of the key it is on.
@@ -654,10 +655,16 @@ export function ectoProblems(models: readonly DMMF.Model[]) {
   const dateTypes = new Set<string>(
     models.flatMap((model) => dateTimeFields(model).map(dateTimeModule)),
   )
+  const jsonType = models.some(hasJsonField)
   return models.flatMap((model) => {
     if (dateTypes.has(makePascalCase(model.name))) {
       return [
         `model ${model.name}: its module is the one the generator writes to keep a DateTime in; rename the model, or @@map it to its table under another name`,
+      ]
+    }
+    if (jsonType && makePascalCase(model.name) === 'PrismaJson') {
+      return [
+        `model ${model.name}: its module is the one the generator writes to keep a Json in; rename the model, or @@map it to its table under another name`,
       ]
     }
     const cast = new Set(castFields(model).map((f) => f.name))
@@ -990,6 +997,7 @@ const NO_PRIMARY_KEY: EctoPrimaryKey = {
 // The Ecto type of a scalar field, by its Prisma type and the column Prisma makes of it.
 function scalarEctoType(f: DMMF.Field, modulePrefix: string) {
   if (f.type === 'DateTime') return `${modulePrefix}${dateTimeModule(f)}`
+  if (f.type === 'Json') return `${modulePrefix}PrismaJson`
   return isUuidColumn(f) ? 'Ecto.UUID' : prismaTypeToEctoType(f.type)
 }
 
@@ -1469,4 +1477,68 @@ export function ectoDateTypes(
     ...(modules.has('PrismaDate') ? [date.join('\n')] : []),
     ...(modules.has('PrismaTime') ? [time.join('\n')] : []),
   ].join('\n\n')
+}
+
+// The application whose `:json_library` a provider's adapter encodes JSON with, where the type has
+// to send JSON text.
+const JSON_LIBRARY_APPS: ReadonlyMap<string, string> = new Map([
+  ['sqlite', ':ecto_sqlite3'],
+  ['mysql', ':myxql'],
+])
+
+/**
+ * The type a schema keeps a Json in, written beside the schemas. A Json column holds any JSON
+ * value, and Ecto's `:map` loads an object only: a row holding an array, a string, a number or a
+ * boolean, as Prisma Client writes them, could not be read. Its `type/0` is `:map`, so the adapter
+ * decodes the column as it decodes a `:map`, and it takes whatever JSON value that gives. PostgreSQL
+ * and CockroachDB are sent the value, which Postgrex encodes; SQLite and MySQL the JSON text,
+ * encoded with the adapter's own JSON library, since `ecto_sqlite3` writes a string as it is and
+ * MyXQL encodes only a map or a list.
+ *
+ * @param app - The module the schemas are under.
+ * @param provider - The datasource's provider: SQLite and MySQL are sent JSON text, every other one
+ * the value.
+ * @returns The Elixir source of the type.
+ * @example
+ * ```elixir
+ * defmodule App.PrismaJson do
+ *   use Ecto.Type
+ *
+ *   defguardp is_json(value)
+ *             when is_map(value) or is_list(value) or is_binary(value) or is_number(value) or
+ *                    is_boolean(value)
+ *
+ *   @impl true
+ *   def type, do: :map
+ * end
+ * ```
+ */
+export function ectoJsonType(app: string, provider: string | undefined) {
+  const library = JSON_LIBRARY_APPS.get(provider ?? '')
+  return [
+    `defmodule ${app}.PrismaJson do`,
+    '  use Ecto.Type',
+    '',
+    '  defguardp is_json(value)',
+    '            when is_map(value) or is_list(value) or is_binary(value) or is_number(value) or',
+    '                   is_boolean(value)',
+    '',
+    '  @impl true',
+    '  def type, do: :map',
+    '',
+    '  @impl true',
+    '  def cast(value) when is_json(value), do: {:ok, value}',
+    '  def cast(_), do: :error',
+    '',
+    '  @impl true',
+    '  def load(value) when is_json(value), do: {:ok, value}',
+    '  def load(_), do: :error',
+    '',
+    '  @impl true',
+    library === undefined
+      ? '  def dump(value) when is_json(value), do: {:ok, value}'
+      : `  def dump(value) when is_json(value), do: {:ok, Application.get_env(${library}, :json_library, Jason).encode!(value)}`,
+    '  def dump(_), do: :error',
+    'end',
+  ].join('\n')
 }

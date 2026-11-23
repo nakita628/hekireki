@@ -422,6 +422,10 @@ given by `Ecto.Changeset.force_change/3`, as a struct's `nil` is no change. On P
 the module's documentation names the session time zone a `@db.Timestamptz`, `@db.Timetz` or
 `TIMESTAMP` column needs.
 
+A `Json` is kept in `PrismaJson`, written alongside them too: Ecto's `:map` loads a JSON object
+only, and a `Json` column holds any JSON value, so an array, a string, a number or a boolean that
+Prisma Client wrote reads back as it is, and an `@default("[]")` is a default of the field.
+
 `examples/ecto` in the repository runs a schema against Ecto on SQLite.
 
 ## Studio

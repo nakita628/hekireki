@@ -16,7 +16,7 @@ defmodule Example.Profile do
           age: integer() | nil,
           balance: Decimal.t(),
           verified: boolean(),
-          meta: map() | nil,
+          meta: map() | list() | String.t() | number() | boolean() | nil,
           avatar: binary() | nil,
           last_seen: DateTime.t() | nil,
           user: Example.User.t() | nil
@@ -29,7 +29,7 @@ defmodule Example.Profile do
     field(:age, :integer)
     field(:balance, :decimal, default: Decimal.new("0"))
     field(:verified, :boolean, default: false)
-    field(:meta, :map)
+    field(:meta, Example.PrismaJson)
     field(:avatar, :binary)
     field(:last_seen, Example.PrismaDateTime)
     belongs_to(:user, Example.User, foreign_key: :user_id, type: :string)

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import {
   ectoDateTypes,
+  ectoJsonType,
   ectoProblems,
   ectoSchemas,
   ectoTypeToTypespec,
@@ -956,7 +957,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.TypeTest do\n  use Ecto.Schema\n\n  @primary_key {:id, :string, autogenerate: {Ecto.UUID, :generate, []}}\n  @foreign_key_type :string\n\n  @type t :: %__MODULE__{\n          id: String.t(),\n          score: float(),\n          big_num: integer(),\n          price: Decimal.t(),\n          metadata: map(),\n          data: binary()\n        }\n\n  schema "TypeTest" do\n    field(:score, :float)\n    field(:big_num, :integer, source: :bigNum)\n    field(:price, :decimal)\n    field(:metadata, :map)\n    field(:data, :binary)\n  end\nend',
+        'defmodule App.TypeTest do\n  use Ecto.Schema\n\n  @primary_key {:id, :string, autogenerate: {Ecto.UUID, :generate, []}}\n  @foreign_key_type :string\n\n  @type t :: %__MODULE__{\n          id: String.t(),\n          score: float(),\n          big_num: integer(),\n          price: Decimal.t(),\n          metadata: map() | list() | String.t() | number() | boolean(),\n          data: binary()\n        }\n\n  schema "TypeTest" do\n    field(:score, :float)\n    field(:big_num, :integer, source: :bigNum)\n    field(:price, :decimal)\n    field(:metadata, App.PrismaJson)\n    field(:data, :binary)\n  end\nend',
       )
     })
 
@@ -982,7 +983,7 @@ end`)
       const result = ectoSchemas([model], 'App')
 
       expect(result).toBe(
-        'defmodule App.TypeTest do\n  use Ecto.Schema\n\n  @primary_key {:id, :string, autogenerate: {Ecto.UUID, :generate, []}}\n  @foreign_key_type :string\n\n  @type t :: %__MODULE__{\n          id: String.t(),\n          score: float(),\n          big_num: integer(),\n          price: Decimal.t(),\n          metadata: map(),\n          data: binary()\n        }\n\n  schema "TypeTest" do\n    field(:score, :float)\n    field(:big_num, :integer, source: :bigNum)\n    field(:price, :decimal)\n    field(:metadata, :map)\n    field(:data, :binary)\n  end\nend',
+        'defmodule App.TypeTest do\n  use Ecto.Schema\n\n  @primary_key {:id, :string, autogenerate: {Ecto.UUID, :generate, []}}\n  @foreign_key_type :string\n\n  @type t :: %__MODULE__{\n          id: String.t(),\n          score: float(),\n          big_num: integer(),\n          price: Decimal.t(),\n          metadata: map() | list() | String.t() | number() | boolean(),\n          data: binary()\n        }\n\n  schema "TypeTest" do\n    field(:score, :float)\n    field(:big_num, :integer, source: :bigNum)\n    field(:price, :decimal)\n    field(:metadata, App.PrismaJson)\n    field(:data, :binary)\n  end\nend',
       )
     })
   })
@@ -2439,6 +2440,7 @@ describe('ectoTypeToTypespec', () => {
     ['decimal', 'Decimal.t()'],
     ['map', 'map()'],
     ['binary', 'binary()'],
+    ['App.PrismaJson', 'map() | list() | String.t() | number() | boolean()'],
     ['whatever', 'term()'],
   ] as const)('spells %s as %s', (ecto, typespec) => {
     expect(ectoTypeToTypespec(ecto)).toBe(typespec)
@@ -2446,18 +2448,25 @@ describe('ectoTypeToTypespec', () => {
 })
 
 // A Json `@default` arrives as JSON text and has to come out as an Elixir literal, escapes and
-// all - `#{}` most of all, which Elixir would otherwise interpolate at compile time. Ecto's
-// `:map` only accepts a map, so an array or scalar default stays a database-level concern.
+// all - `#{}` most of all, which Elixir would otherwise interpolate at compile time. PrismaJson
+// takes any JSON value, so an array or a scalar is a default as an object is; JSON null is no
+// default at all.
 describe('Json defaults', () => {
   it.each([
-    ['{"a":1}', '    field(:meta, :map, default: %{"a" => 1})'],
+    ['{"a":1}', '    field(:meta, App.PrismaJson, default: %{"a" => 1})'],
     [
       '{"nested":{"k":[1,"two",null,true,false]}}',
-      '    field(:meta, :map, default: %{"nested" => %{"k" => [1, "two", nil, true, false]}})',
+      '    field(:meta, App.PrismaJson, default: %{"nested" => %{"k" => [1, "two", nil, true, false]}})',
     ],
-    ['{"k":"a\\"b\\n#{x}\\r"}', '    field(:meta, :map, default: %{"k" => "a\\"b\\n\\#{x}\\r"})'],
-    ['[1,2]', '    field(:meta, :map)'],
-    ['42', '    field(:meta, :map)'],
+    [
+      '{"k":"a\\"b\\n#{x}\\r"}',
+      '    field(:meta, App.PrismaJson, default: %{"k" => "a\\"b\\n\\#{x}\\r"})',
+    ],
+    ['[]', '    field(:meta, App.PrismaJson, default: [])'],
+    ['[1,2]', '    field(:meta, App.PrismaJson, default: [1, 2])'],
+    ['42', '    field(:meta, App.PrismaJson, default: 42)'],
+    ['"quoted"', '    field(:meta, App.PrismaJson, default: "quoted")'],
+    ['null', '    field(:meta, App.PrismaJson)'],
   ])('renders the default %s', (json, expected) => {
     const models = [
       makeModel({
@@ -2470,6 +2479,95 @@ describe('Json defaults', () => {
     ]
     const lines = ectoSchemas(models, 'App', models).split('\n')
     expect(lines.find((line) => line.includes(':meta'))).toBe(expected)
+  })
+})
+
+// A Json column holds any JSON value, and Ecto's :map loads an object only: a row Prisma Client
+// wrote with an array in it raised `cannot load [] as type :map`.
+describe('ectoJsonType', () => {
+  it('declares a Json field with PrismaJson and types it as any JSON value', () => {
+    const model = makeModel({
+      name: 'SsoConnection',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({
+          name: 'domainClaims',
+          type: 'Json',
+          hasDefaultValue: true,
+          default: '[]',
+        }),
+        makeField({ name: 'extra', type: 'Json', isRequired: false }),
+      ],
+    })
+
+    expect(ectoSchemas([model], 'App', [model])).toBe(`defmodule App.SsoConnection do
+  use Ecto.Schema
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          domain_claims: map() | list() | String.t() | number() | boolean(),
+          extra: map() | list() | String.t() | number() | boolean() | nil
+        }
+
+  schema "SsoConnection" do
+    field(:id, :integer, primary_key: true)
+    field(:domain_claims, App.PrismaJson, default: [], source: :domainClaims)
+    field(:extra, App.PrismaJson)
+  end
+end`)
+  })
+
+  it.each([
+    ['postgresql', '{:ok, value}'],
+    ['cockroachdb', '{:ok, value}'],
+    ['sqlite', '{:ok, Application.get_env(:ecto_sqlite3, :json_library, Jason).encode!(value)}'],
+    ['mysql', '{:ok, Application.get_env(:myxql, :json_library, Jason).encode!(value)}'],
+  ])('loads any JSON value, and on %s dumps it as %s', (provider, dumped) => {
+    expect(ectoJsonType('App', provider)).toBe(`defmodule App.PrismaJson do
+  use Ecto.Type
+
+  defguardp is_json(value)
+            when is_map(value) or is_list(value) or is_binary(value) or is_number(value) or
+                   is_boolean(value)
+
+  @impl true
+  def type, do: :map
+
+  @impl true
+  def cast(value) when is_json(value), do: {:ok, value}
+  def cast(_), do: :error
+
+  @impl true
+  def load(value) when is_json(value), do: {:ok, value}
+  def load(_), do: :error
+
+  @impl true
+  def dump(value) when is_json(value), do: ${dumped}
+  def dump(_), do: :error
+end`)
+  })
+
+  it('names a model whose module is PrismaJson where the schema has a Json field', () => {
+    const json = makeModel({
+      name: 'PrismaJson',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'data', type: 'Json' }),
+      ],
+    })
+    const plain = makeModel({
+      name: 'PrismaJson',
+      fields: [makeField({ name: 'id', type: 'Int', isId: true })],
+    })
+
+    expect([ectoProblems([json]), ectoProblems([plain])]).toStrictEqual([
+      [
+        'model PrismaJson: its module is the one the generator writes to keep a Json in; rename the model, or @@map it to its table under another name',
+      ],
+      [],
+    ])
   })
 })
 
