@@ -8,8 +8,8 @@ defmodule Example.Follow do
   @primary_key false
 
   @type t :: %__MODULE__{
-          follower_id: Ecto.UUID.t(),
-          following_id: Ecto.UUID.t(),
+          follower_id: String.t(),
+          following_id: String.t(),
           since: DateTime.t(),
           follower: Example.User.t() | nil,
           following: Example.User.t() | nil
@@ -17,9 +17,9 @@ defmodule Example.Follow do
 
   schema "follows" do
     field(:since, Example.PrismaDateTime, autogenerate: true)
-    field(:follower_id, :binary_id, primary_key: true)
-    field(:following_id, :binary_id, primary_key: true)
-    belongs_to(:follower, Example.User, foreign_key: :follower_id, define_field: false, type: :binary_id)
-    belongs_to(:following, Example.User, foreign_key: :following_id, define_field: false, type: :binary_id)
+    field(:follower_id, :string, primary_key: true)
+    field(:following_id, :string, primary_key: true)
+    belongs_to(:follower, Example.User, foreign_key: :follower_id, define_field: false, type: :string)
+    belongs_to(:following, Example.User, foreign_key: :following_id, define_field: false, type: :string)
   end
 end

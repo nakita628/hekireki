@@ -6,11 +6,11 @@ defmodule Shop.Wishlist do
 
   use Ecto.Schema
 
-  @primary_key {:id, :binary_id, autogenerate: true}
-  @foreign_key_type :binary_id
+  @primary_key {:id, :string, autogenerate: {Ecto.UUID, :generate, []}}
+  @foreign_key_type :string
 
   @type t :: %__MODULE__{
-          id: Ecto.UUID.t(),
+          id: String.t(),
           share_token: String.t(),
           account: Shop.Account.t() | nil,
           products: [Shop.Product.t()]

@@ -21,7 +21,7 @@ defmodule Conformance.MixProject do
   # Exact-version pins keep resolution deterministic; the committed mix.lock
   # records the hex tarball hashes. Bumps go through Renovate.
   # Ecto 3.14+ is required for UUIDv7 autogeneration
-  # (@primary_key {:id, Ecto.UUID, autogenerate: [version: 7]}).
+  # (Ecto.UUID.generate(version: 7), and autogenerate: [version: 7] on a @db.Uuid key).
   defp deps do
     [
       {:ecto, "== 3.14.1"},

@@ -2,17 +2,17 @@ defmodule Shop.Product do
   @moduledoc """
   A random primary key made by the client, not the database: Ecto has to generate it. Its
   author is an account with an integer key, the case where a module-wide
-  `@foreign_key_type :binary_id` must not reach the `belongs_to`.
+  `@foreign_key_type :string` must not reach the `belongs_to`.
   """
 
   use Ecto.Schema
 
-  @primary_key {:id, :binary_id, autogenerate: true}
-  @foreign_key_type :binary_id
+  @primary_key {:id, :string, autogenerate: {Ecto.UUID, :generate, []}}
+  @foreign_key_type :string
   @timestamps_opts [type: Shop.PrismaDateTime, autogenerate: {Shop.PrismaDateTime, :autogenerate, []}]
 
   @type t :: %__MODULE__{
-          id: Ecto.UUID.t(),
+          id: String.t(),
           sku: String.t(),
           name: String.t(),
           price: Decimal.t(),

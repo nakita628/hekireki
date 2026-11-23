@@ -84,7 +84,7 @@ model Profile {
 
 /// A random primary key made by the client, not the database: Ecto has to generate it. Its
 /// author is an account with an integer key, the case where a module-wide
-/// `@foreign_key_type :binary_id` must not reach the `belongs_to`.
+/// `@foreign_key_type :string` must not reach the `belongs_to`.
 model Product {
   id         String     @id @default(uuid())
   sku        String     @unique
