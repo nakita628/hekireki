@@ -6,7 +6,7 @@ defmodule Shop.PrismaJson do
                    is_boolean(value)
 
   @impl true
-  def type, do: :string
+  def type, do: :any
 
   @impl true
   def cast(value) when is_json(value), do: {:ok, value}

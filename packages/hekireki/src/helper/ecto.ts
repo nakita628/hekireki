@@ -603,8 +603,8 @@ function foreignKeyOf(model: DMMF.Model, field: DMMF.Field, allModels: readonly 
  * is not `@unique`, a `foreign_key_constraint` on a field that is not a foreign key, and on a
  * relation field anything but the `assoc_constraint` of the side with the key or the
  * `no_assoc_constraint` of the other, and a model named after a type a DateTime or a Json is kept
- * in (`PrismaDateTime`, `PrismaDate`, `PrismaTime`, `PrismaJson`) where the schema has one. Each names the model or
- * field it is on.
+ * in (`PrismaDateTime`, `PrismaDate`, `PrismaTime`, `PrismaJson`, or its file `prisma_json.ex`)
+ * where the schema has one. Each names the model or field it is on.
  */
 // What is wrong with an @ecto. call on a relation field, given the side of the key it is on.
 function relationCallProblems(name: string, side: 'owner' | 'inverse' | undefined) {
@@ -670,7 +670,10 @@ export function ectoProblems(models: readonly DMMF.Model[]) {
         `model ${model.name}: its module is the one the generator writes to keep a DateTime in; rename the model, or @@map it to its table under another name`,
       ]
     }
-    if (jsonType && makePascalCase(model.name) === 'PrismaJson') {
+    if (
+      jsonType &&
+      (makePascalCase(model.name) === 'PrismaJson' || makeSnakeCase(model.name) === 'prisma_json')
+    ) {
       return [
         `model ${model.name}: its module is the one the generator writes to keep a Json in; rename the model, or @@map it to its table under another name`,
       ]
@@ -1501,12 +1504,14 @@ const JSON_LIBRARY_APPS: ReadonlyMap<string, string> = new Map([
  * Prisma Client takes it.
  *
  * On PostgreSQL and CockroachDB its `type/0` is `:map`: Postgrex decodes the column into any JSON
- * value and encodes the value sent. On SQLite and MySQL it is `:string`, kept out of the adapters'
- * `:map` loader, and the type reads and writes the JSON text with the adapter's own JSON library:
+ * value and encodes the value sent. On SQLite and MySQL it is `:any`, which keeps the adapters'
+ * `:map` loader out and a JSON path (`p.attributes["color"]`) in a query, and the type reads and
+ * writes the JSON text with the adapter's own JSON library:
  * Prisma's `JSONB` column on SQLite has NUMERIC affinity, so SQLite keeps the text of a number as
  * an INTEGER or a REAL (a `1.0` comes back as `1`), which `ecto_sqlite3`'s `:map` loader refuses;
  * MySQL's JSON column is decoded by MyXQL already, and the `:map` loader decoded a string a second
- * time, while MariaDB's is text. A string MyXQL gives that is not JSON text is a JSON string.
+ * time, while MariaDB's is text. A binary that is JSON text is decoded, so on MySQL a JSON string
+ * whose contents are JSON text (`"42"`) loads as what it holds.
  *
  * @param app - The module the schemas are under.
  * @param provider - The datasource's provider: SQLite and MySQL are sent JSON text, every other one
@@ -1543,7 +1548,7 @@ export function ectoJsonType(app: string, provider: string | undefined) {
   }
   const json = `Application.get_env(${library}, :json_library, Jason)`
   return [
-    ...jsonTypeHead(app, ':string'),
+    ...jsonTypeHead(app, ':any'),
     '  @impl true',
     ...(provider === 'sqlite'
       ? [

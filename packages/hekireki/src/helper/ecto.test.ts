@@ -2560,7 +2560,7 @@ end`)
                    is_boolean(value)
 
   @impl true
-  def type, do: :string
+  def type, do: :any
 
   @impl true
   def cast(value) when is_json(value), do: {:ok, value}
@@ -2601,7 +2601,7 @@ end`)
                    is_boolean(value)
 
   @impl true
-  def type, do: :string
+  def type, do: :any
 
   @impl true
   def cast(value) when is_json(value), do: {:ok, value}
@@ -2643,11 +2643,16 @@ end`)
       fields: [makeField({ name: 'id', type: 'Int', isId: true })],
     })
 
-    expect([ectoProblems([json]), ectoProblems([plain])]).toStrictEqual([
+    const upper = makeModel({ ...json, name: 'PrismaJSON' })
+
+    expect([ectoProblems([json]), ectoProblems([plain]), ectoProblems([upper])]).toStrictEqual([
       [
         'model PrismaJson: its module is the one the generator writes to keep a Json in; rename the model, or @@map it to its table under another name',
       ],
       [],
+      [
+        'model PrismaJSON: its module is the one the generator writes to keep a Json in; rename the model, or @@map it to its table under another name',
+      ],
     ])
   })
 })

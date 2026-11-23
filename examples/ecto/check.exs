@@ -100,7 +100,16 @@ check("a Json array, string, number or boolean is written and read back as it wa
   prisma = product!.("JSON-TEXT", [])
   Repo.query!(~s(UPDATE "Product" SET attributes = ? WHERE id = ?), [~s(["a",1]), prisma.id])
 
-  reasons(written ++ [expect(Repo.get!(Product, prisma.id).attributes, ["a", 1], "the JSON text Prisma writes")])
+  path = product!.("JSON-PATH", attributes: %{"color" => "blue"})
+  by_path = Repo.all(from(p in Product, where: p.attributes["color"] == "blue", select: p.id))
+
+  reasons(
+    written ++
+      [
+        expect(Repo.get!(Product, prisma.id).attributes, ["a", 1], "the JSON text Prisma writes"),
+        expect(by_path, [path.id], "a JSON path in a query")
+      ]
+  )
 end)
 
 # Prisma's Decimal is a DECIMAL column on SQLite, which has NUMERIC affinity: the database keeps a
