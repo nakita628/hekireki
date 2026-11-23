@@ -8,7 +8,7 @@ defmodule Example.AuditLog do
   @primary_key false
 
   @type t :: %__MODULE__{
-          id: String.t(),
+          id: Ecto.UUID.t(),
           action: String.t(),
           payload: map(),
           signature: binary() | nil,
@@ -16,7 +16,7 @@ defmodule Example.AuditLog do
         }
 
   schema "audit_logs" do
-    field(:id, :string, primary_key: true, read_after_writes: true)
+    field(:id, Ecto.UUID, primary_key: true, read_after_writes: true)
     field(:action, :string)
     field(:payload, :map, default: %{})
     field(:signature, :binary)
