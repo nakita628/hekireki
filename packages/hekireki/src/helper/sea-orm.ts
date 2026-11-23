@@ -30,10 +30,14 @@ const PRISMA_TO_RUST: { [k: string]: string } = {
 // DateTime as `2030-01-02 03:04:05.678`, so the column is a PrismaDateTime (prisma_date_time.rs)
 // that writes Prisma's text. sqlx reads a MySQL TIMESTAMP only as DateTime<Utc>. A `String
 // @db.Uuid` is a `uuid` column, which sqlx-postgres neither binds a String to (PostgreSQL does not
-// cast a `text` parameter to `uuid`) nor decodes into one: it is a Uuid.
+// cast a `text` parameter to `uuid`) nor decodes into one: it is a Uuid. sqlx decodes a `smallint`
+// only into an i16 and a MySQL `TINYINT` only into an i8, which sea-orm reads as SmallInteger and
+// TinyInteger.
 function rustTypeForNative(field: DMMF.Field, provider?: string) {
   const nativeName = field.nativeType?.[0]
   if (nativeName === 'Uuid') return 'Uuid'
+  if (nativeName === 'SmallInt') return 'i16'
+  if (nativeName === 'TinyInt') return 'i8'
   if (nativeName === 'Timestamptz') return 'DateTimeWithTimeZone'
   if (nativeName === 'Timestamp' && provider === 'mysql') return 'DateTimeUtc'
   if (nativeName === 'Date') return 'Date'
@@ -229,15 +233,14 @@ function viaBody(path: string) {
 }
 
 // The sea-orm column type of a native type that takes no arguments of its own; one not here
-// (`Timestamp` among them) is left to the Rust type. `Uuid` is: the Rust type is a Uuid, which
-// sea-orm reads as the column type `Uuid` and, in a Vec, as an array of it.
+// (`Timestamp` among them) is left to the Rust type. `Uuid`, `SmallInt` and `TinyInt` are: the Rust
+// type is a Uuid, an i16 or an i8, which sea-orm reads as the column type `Uuid`, `SmallInteger` or
+// `TinyInteger` and, in a Vec, as an array of it.
 const NATIVE_COLUMN_TYPES: { readonly [nativeType: string]: string } = {
   Text: 'Text',
   MediumText: 'Text',
   LongText: 'Text',
   TinyText: 'Text',
-  SmallInt: 'SmallInteger',
-  TinyInt: 'SmallInteger',
   MediumInt: 'Integer',
   DoublePrecision: 'Double',
   Double: 'Double',
