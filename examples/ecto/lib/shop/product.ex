@@ -19,8 +19,8 @@ defmodule Shop.Product do
           weight: float(),
           barcode: integer() | nil,
           stock: integer(),
-          attributes: map(),
-          dimensions: map() | nil,
+          attributes: map() | list() | String.t() | number() | boolean(),
+          dimensions: map() | list() | String.t() | number() | boolean() | nil,
           label: String.t(),
           released_at: DateTime.t(),
           inserted_at: DateTime.t(),
@@ -44,8 +44,8 @@ defmodule Shop.Product do
     field(:stock, :integer, default: -1)
     # Json, a JSONB column in SQLite. No default: `prisma db push` writes a Json default on SQLite
     # unquoted, and SQLite refuses the table.
-    field(:attributes, :map)
-    field(:dimensions, :map)
+    field(:attributes, Shop.PrismaJson)
+    field(:dimensions, Shop.PrismaJson)
     # A string default Elixir would interpolate if it were not escaped.
     field(:label, :string, default: "\#{name} \"quoted\" \\ back")
     # A DateTime literal written with an offset: the instant is 2020-01-01T00:00:00Z.

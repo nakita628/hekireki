@@ -210,6 +210,19 @@ end`,
     ])
   })
 
+  it('writes the type a Json is kept in beside a schema that has one', () => {
+    const document = makeModel({
+      name: 'Document',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'body', type: 'Json' }),
+      ],
+    })
+    expect(
+      ectoSchemaFiles([document], 'App', [], { provider: 'sqlite' }).map((file) => file.fileName),
+    ).toStrictEqual(['document.ex', 'prisma_json.ex'])
+  })
+
   it('emits nothing for a schema without models', () => {
     expect(ectoSchemaFiles([], 'App', enums)).toStrictEqual([])
   })

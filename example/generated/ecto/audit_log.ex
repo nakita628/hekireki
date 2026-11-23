@@ -10,7 +10,7 @@ defmodule Example.AuditLog do
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),
           action: String.t(),
-          payload: map(),
+          payload: map() | list() | String.t() | number() | boolean(),
           signature: binary() | nil,
           logged_at: DateTime.t()
         }
@@ -18,7 +18,7 @@ defmodule Example.AuditLog do
   schema "audit_logs" do
     field(:id, Ecto.UUID, primary_key: true, read_after_writes: true)
     field(:action, :string)
-    field(:payload, :map, default: %{})
+    field(:payload, Example.PrismaJson, default: %{})
     field(:signature, :binary)
     field(:logged_at, Example.PrismaDateTime, read_after_writes: true)
   end

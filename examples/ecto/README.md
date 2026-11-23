@@ -41,6 +41,7 @@ It opens with what running these schemas found in the generator, so none comes b
 | `@default(now())` on a column that is not a timestamp stayed `nil` on the struct Ecto returned            | `at` and `placed_at` are on the struct `Repo.insert!` returns                    |
 | `@default(uuid())` on a column that is not the key was left to a database that has no such default        | a wishlist's `share_token` is a UUID Ecto made                                   |
 | A `BigInt` `autoincrement()` key was a plain field that Ecto never read back (in `example/schema.prisma`) | the unit tests; SQLite counts no `BigInt` key up (below)                         |
+| A `Json` was `:map`, which loads an object only: a row holding an array could not be read                 | a product's `attributes` reads back an array, a string, a number and a boolean   |
 
 Then each thing the schema promises, as Ecto keeps it:
 

@@ -86,6 +86,32 @@ check("every scalar type SQLite has is written and read back as it was", fn ->
   ])
 end)
 
+# A Json column holds any JSON value. Ecto's :map loads an object only, and a row holding anything
+# else could not be read at all.
+check("a Json array, string, number or boolean is written and read back as it was", fn ->
+  values = [[], [1, "two", nil, true], "text", 42, 2.5, false]
+
+  written =
+    for {value, index} <- Enum.with_index(values) do
+      product = product!.("JSON#{index}", attributes: value)
+      expect(Repo.get!(Product, product.id).attributes, value, "Json #{inspect(value)}")
+    end
+
+  prisma = product!.("JSON-TEXT", [])
+  Repo.query!(~s(UPDATE "Product" SET attributes = ? WHERE id = ?), [~s(["a",1]), prisma.id])
+
+  path = product!.("JSON-PATH", attributes: %{"color" => "blue"})
+  by_path = Repo.all(from(p in Product, where: p.attributes["color"] == "blue", select: p.id))
+
+  reasons(
+    written ++
+      [
+        expect(Repo.get!(Product, prisma.id).attributes, ["a", 1], "the JSON text Prisma writes"),
+        expect(by_path, [path.id], "a JSON path in a query")
+      ]
+  )
+end)
+
 # Prisma's Decimal is a DECIMAL column on SQLite, which has NUMERIC affinity: the database keeps a
 # REAL, whatever Ecto sends. What a server keeps exactly, SQLite keeps to a double's precision.
 check("SQLite keeps a Decimal as a REAL: 15 significant digits come back, 20 do not", fn ->
