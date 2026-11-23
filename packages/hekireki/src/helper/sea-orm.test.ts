@@ -1538,4 +1538,30 @@ pub enum Relation {}
 impl ActiveModelBehavior for ActiveModel {}
 `)
   })
+
+  it('leaves a Boolean @db.TinyInt(1) a bool', () => {
+    const flag = {
+      ...model,
+      fields: [
+        model.fields[0],
+        field({ name: 'active', type: 'Boolean', nativeType: ['TinyInt', ['1']] }),
+      ],
+    }
+    expect(generateEntityFile(flag, [flag], [], {}, 'mysql')).toContain('    pub active: bool,\n')
+  })
+
+  it('gives the join table of an implicit many-to-many the i16 of a @db.SmallInt key', () => {
+    const tag: any = {
+      ...model,
+      name: 'Tag',
+      fields: [field({ name: 'id', isId: true, nativeType: ['SmallInt', []] })],
+    }
+    expect(generateM2MEntity('Log', 'Tag', 'LogToTag', [model, tag])).toContain(`pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]
+    pub log_id: i32,
+    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]
+    pub tag_id: i16,
+}
+`)
+  })
 })

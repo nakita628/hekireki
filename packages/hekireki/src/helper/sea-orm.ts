@@ -36,8 +36,8 @@ const PRISMA_TO_RUST: { [k: string]: string } = {
 function rustTypeForNative(field: DMMF.Field, provider?: string) {
   const nativeName = field.nativeType?.[0]
   if (nativeName === 'Uuid') return 'Uuid'
-  if (nativeName === 'SmallInt') return 'i16'
-  if (nativeName === 'TinyInt') return 'i8'
+  if (field.type === 'Int' && nativeName === 'SmallInt') return 'i16'
+  if (field.type === 'Int' && nativeName === 'TinyInt') return 'i8'
   if (nativeName === 'Timestamptz') return 'DateTimeWithTimeZone'
   if (nativeName === 'Timestamp' && provider === 'mysql') return 'DateTimeUtc'
   if (nativeName === 'Date') return 'Date'
@@ -1088,11 +1088,15 @@ export function generateEntityFile(
   return lines.join('\n')
 }
 
-// The join table's column is of its model's key: a `uuid` for a `@db.Uuid` key.
+// The join table's column is of its model's key: a `uuid` for a `@db.Uuid` key, a `smallint` for
+// a `@db.SmallInt` one.
 function pkRustType(modelName: string, models: readonly DMMF.Model[]) {
   const pkField = models.find((m) => m.name === modelName)?.fields.find((f) => f.isId)
   if (!pkField) return 'String'
-  return rustTypeForNative(pkField) === 'Uuid' ? 'Uuid' : prismaTypeToRustType(pkField.type, true)
+  const native = rustTypeForNative(pkField)
+  return native === 'Uuid' || native === 'i16' || native === 'i8'
+    ? native
+    : prismaTypeToRustType(pkField.type, true)
 }
 
 export function generateM2MEntity(
