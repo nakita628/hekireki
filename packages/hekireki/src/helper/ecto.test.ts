@@ -1922,6 +1922,117 @@ defmodule App.Post do
   end
 end`)
   })
+
+  it('types each foreign key by the key it references, text or @db.Uuid', () => {
+    const { models } = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id    String @id @default(uuid()) @db.Uuid @map("account_id")
+  notes Note[]
+}
+
+model Note {
+  id        String  @id @default(uuid())
+  accountId String  @db.Uuid
+  account   Account @relation(fields: [accountId], references: [id])
+  marks     Mark[]
+}
+
+model Mark {
+  id     String @id @default(uuid()) @db.Uuid
+  noteId String
+  note   Note   @relation(fields: [noteId], references: [id])
+}`,
+      }),
+    )
+
+    expect(ectoSchemas(models, 'App')).toBe(`defmodule App.Account do
+  use Ecto.Schema
+
+  @primary_key {:id, :binary_id, autogenerate: true, source: :account_id}
+  @foreign_key_type :binary_id
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          notes: [App.Note.t()]
+        }
+
+  schema "Account" do
+    has_many(:notes, App.Note, foreign_key: :account_id)
+  end
+end
+
+defmodule App.Note do
+  use Ecto.Schema
+
+  @primary_key {:id, :string, autogenerate: {Ecto.UUID, :generate, []}}
+  @foreign_key_type :string
+
+  @type t :: %__MODULE__{
+          id: String.t(),
+          account: App.Account.t() | nil,
+          marks: [App.Mark.t()]
+        }
+
+  schema "Note" do
+    field(:account_id, :binary_id, source: :accountId)
+    belongs_to(:account, App.Account, foreign_key: :account_id, define_field: false, type: :binary_id)
+    has_many(:marks, App.Mark, foreign_key: :note_id)
+  end
+end
+
+defmodule App.Mark do
+  use Ecto.Schema
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          note: App.Note.t() | nil
+        }
+
+  schema "Mark" do
+    field(:note_id, :string, source: :noteId)
+    belongs_to(:note, App.Note, foreign_key: :note_id, define_field: false, type: :string)
+  end
+end`)
+  })
+
+  it('keeps a uuid() key of a SQL Server @db.UniqueIdentifier column as :binary_id', () => {
+    const { models } = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "sqlserver"
+}
+
+model User {
+  id   String @id @default(uuid()) @db.UniqueIdentifier
+  name String
+}`,
+      }),
+    )
+
+    expect(ectoSchemas(models, 'App')).toBe(`defmodule App.User do
+  use Ecto.Schema
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          name: String.t()
+        }
+
+  schema "User" do
+    field(:name, :string)
+  end
+end`)
+  })
 })
 
 describe('ulid primary key', () => {

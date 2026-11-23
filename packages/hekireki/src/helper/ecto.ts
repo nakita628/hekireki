@@ -114,9 +114,11 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
 
   if (key === 'uuid' || key === 'uuid7') {
     const isV7 = key === 'uuid7'
-    // Only @db.Uuid is a uuid column, which Ecto's adapters write as 16 bytes. Every other uuid()
-    // key is a text column holding the 36 characters Prisma Client writes, so the key is a string.
-    if (field.nativeType?.[0] !== 'Uuid') {
+    // @db.Uuid and SQL Server's @db.UniqueIdentifier are uuid columns, which Ecto's adapters write
+    // as 16 bytes. Every other uuid() key is a text column holding the 36 characters Prisma Client
+    // writes, so the key is a string.
+    const native = field.nativeType?.[0]
+    if (native !== 'Uuid' && native !== 'UniqueIdentifier') {
       return {
         line: `@primary_key {:id, :string, autogenerate: {Ecto.UUID, :generate, [${isV7 ? '[version: 7]' : ''}]}${sourceOpt}}`,
         typeSpec: 'String.t()',
