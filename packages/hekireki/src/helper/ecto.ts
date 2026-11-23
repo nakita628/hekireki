@@ -67,6 +67,7 @@ export function ectoTypeToTypespec(type: string) {
     case 'boolean':
       return 'boolean()'
     case 'binary_id':
+    case 'Ecto.UUID':
       return 'Ecto.UUID.t()'
     case 'Ecto.ULID':
       return 'Ecto.ULID.t()'
@@ -83,6 +84,12 @@ export function ectoTypeToTypespec(type: string) {
     default:
       return 'term()'
   }
+}
+
+// A String that PostgreSQL holds in a uuid column, which Postgrex takes as 16 bytes and not as
+// the 36 characters: Ecto.UUID casts the text and dumps the bytes.
+function isUuidColumn(field: DMMF.Field) {
+  return field.type === 'String' && field.nativeType?.[0] === 'Uuid'
 }
 
 // Ecto type references are atoms (:binary_id) or modules (Ecto.ULID).
@@ -291,7 +298,7 @@ function getBelongsToFkType(
   // Autoincrement integer PK → no explicit FK type needed (Ecto default :id)
   if (pkConfig?.line.includes(':id, autogenerate') === true) return null
 
-  if (referenced.type === 'String') return 'string'
+  if (referenced.type === 'String') return isUuidColumn(referenced) ? 'Ecto.UUID' : 'string'
   if (referenced.type === 'DateTime') return `${appName}.${dateTimeModule(referenced)}`
 
   const ectoType = prismaTypeToEctoType(referenced.type)
@@ -401,7 +408,7 @@ function functionDefaultOption(def: DMMF.FieldDefault) {
   // so the database fills it, and reads it back to have it on the struct.
   if (def.name === 'dbgenerated') return 'read_after_writes: true'
   // uuid() outside a primary key is made by Prisma's client, not the database: Ecto makes it
-  // on insert. A string, as the column is, on every adapter.
+  // on insert, as the 36 characters a text column holds and a @db.Uuid field's Ecto.UUID dumps.
   if (def.name === 'uuid') {
     return def.args[0] === 7
       ? 'autogenerate: {Ecto.UUID, :generate, [[version: 7]]}'
@@ -970,14 +977,18 @@ const NO_PRIMARY_KEY: EctoPrimaryKey = {
   foreignKeyType: null,
 }
 
+// The Ecto type of a scalar field, by its Prisma type and the column Prisma makes of it.
+function scalarEctoType(f: DMMF.Field, modulePrefix: string) {
+  if (f.type === 'DateTime') return `${modulePrefix}${dateTimeModule(f)}`
+  return isUuidColumn(f) ? 'Ecto.UUID' : prismaTypeToEctoType(f.type)
+}
+
 function typeSpecField(f: DMMF.Field) {
   const nullSuffix = f.isRequired ? '' : ' | nil'
   if (f.kind === 'enum') {
     return `${makeSnakeCase(f.name)}: atom()${nullSuffix}`
   }
-  const baseTypeSpec = ectoTypeToTypespec(
-    f.type === 'DateTime' ? dateTimeModule(f) : prismaTypeToEctoType(f.type),
-  )
+  const baseTypeSpec = ectoTypeToTypespec(scalarEctoType(f, ''))
   const typeSpec = f.isList ? `[${baseTypeSpec}]` : baseTypeSpec
   return `${makeSnakeCase(f.name)}: ${typeSpec}${nullSuffix}`
 }
@@ -1058,8 +1069,7 @@ function schemaFieldLines(
     return enumSchemaFieldLines(f, snakeName, sourceOpt, enumMap.get(f.type) ?? [])
   }
   const primary = keyFieldNames.has(f.name) ? ', primary_key: true' : ''
-  const type =
-    f.type === 'DateTime' ? `${appName}.${dateTimeModule(f)}` : `:${prismaTypeToEctoType(f.type)}`
+  const type = formatEctoType(scalarEctoType(f, `${appName}.`))
   const ectoType = f.isList ? `{:array, ${type}}` : type
   const defaultOpt = ectoDefaultOption(f)
   const defaultClause = defaultOpt === null ? '' : `, ${defaultOpt}`

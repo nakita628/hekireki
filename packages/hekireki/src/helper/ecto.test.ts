@@ -2003,6 +2003,102 @@ defmodule App.Mark do
 end`)
   })
 
+  it('types a String @db.Uuid field that Ecto does not generate as Ecto.UUID', () => {
+    const { models } = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Watchlist {
+  id     String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  token  String  @unique @db.Uuid
+  audits Audit[]
+  shares Share[]
+}
+
+model Audit {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  watchlistId String    @db.Uuid
+  actorId     String?   @db.Uuid
+  traceIds    String[]  @db.Uuid
+  tenantId    String    @default("8f1d3b4a-2c6e-4f7a-9b0c-1d2e3f4a5b6c") @db.Uuid
+  requestId   String    @default(uuid()) @db.Uuid
+  label       String
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id])
+}
+
+model Share {
+  id        Int       @id @default(autoincrement())
+  token     String    @db.Uuid
+  watchlist Watchlist @relation(fields: [token], references: [token])
+}`,
+      }),
+    )
+
+    expect(ectoSchemas(models, 'App')).toBe(`defmodule App.Watchlist do
+  use Ecto.Schema
+
+  @primary_key false
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          token: Ecto.UUID.t(),
+          audits: [App.Audit.t()],
+          shares: [App.Share.t()]
+        }
+
+  schema "Watchlist" do
+    field(:id, Ecto.UUID, primary_key: true, read_after_writes: true)
+    field(:token, Ecto.UUID)
+    has_many(:audits, App.Audit, foreign_key: :watchlist_id, references: :id)
+    has_many(:shares, App.Share, foreign_key: :token, references: :token)
+  end
+end
+
+defmodule App.Audit do
+  use Ecto.Schema
+
+  @primary_key {:id, Ecto.UUID, autogenerate: [version: 7]}
+  @foreign_key_type :binary_id
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          actor_id: Ecto.UUID.t() | nil,
+          trace_ids: [Ecto.UUID.t()],
+          tenant_id: Ecto.UUID.t(),
+          request_id: Ecto.UUID.t(),
+          label: String.t(),
+          watchlist: App.Watchlist.t() | nil
+        }
+
+  schema "Audit" do
+    field(:actor_id, Ecto.UUID, source: :actorId)
+    field(:trace_ids, {:array, Ecto.UUID}, source: :traceIds)
+    field(:tenant_id, Ecto.UUID, default: "8f1d3b4a-2c6e-4f7a-9b0c-1d2e3f4a5b6c", source: :tenantId)
+    field(:request_id, Ecto.UUID, autogenerate: {Ecto.UUID, :generate, []}, source: :requestId)
+    field(:label, :string)
+    field(:watchlist_id, Ecto.UUID, source: :watchlistId)
+    belongs_to(:watchlist, App.Watchlist, foreign_key: :watchlist_id, define_field: false, type: Ecto.UUID)
+  end
+end
+
+defmodule App.Share do
+  use Ecto.Schema
+
+  @primary_key {:id, :id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          watchlist: App.Watchlist.t() | nil
+        }
+
+  schema "Share" do
+    belongs_to(:watchlist, App.Watchlist, foreign_key: :token, type: Ecto.UUID, references: :token)
+  end
+end`)
+  })
+
   it('keeps a uuid() key of a SQL Server @db.UniqueIdentifier column as :binary_id', () => {
     const { models } = datamodelOf(
       getDMMF({
@@ -2300,6 +2396,7 @@ describe('ectoTypeToTypespec', () => {
     ['float', 'float()'],
     ['boolean', 'boolean()'],
     ['binary_id', 'Ecto.UUID.t()'],
+    ['Ecto.UUID', 'Ecto.UUID.t()'],
     ['Ecto.ULID', 'Ecto.ULID.t()'],
     ['naive_datetime', 'NaiveDateTime.t()'],
     ['utc_datetime', 'DateTime.t()'],
