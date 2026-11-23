@@ -16,8 +16,7 @@ pub struct Model {
     pub bio: Option<String>,
     #[sea_orm(column_type = "String(StringLen::N(64))", default_value = "anonymous")]
     pub nickname: String,
-    #[sea_orm(column_type = "SmallInteger")]
-    pub age: Option<i32>,
+    pub age: Option<i16>,
     #[sea_orm(column_type = "Decimal(Some((10, 2)))", default_value = 0)]
     pub balance: Decimal,
     #[sea_orm(default_value = false)]

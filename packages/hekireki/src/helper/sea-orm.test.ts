@@ -1025,8 +1025,8 @@ const NATIVE_TYPES: readonly (readonly [
   ['String', '@db.MediumText', ['MediumText', []], 'Text'],
   ['String', '@db.LongText', ['LongText', []], 'Text'],
   ['String', '@db.TinyText', ['TinyText', []], 'Text'],
-  ['Int', '@db.SmallInt', ['SmallInt', []], 'SmallInteger'],
-  ['Int', '@db.TinyInt', ['TinyInt', []], 'SmallInteger'],
+  ['Int', '@db.SmallInt', ['SmallInt', []], null],
+  ['Int', '@db.TinyInt', ['TinyInt', []], null],
   ['Int', '@db.MediumInt', ['MediumInt', []], 'Integer'],
   ['Float', '@db.DoublePrecision', ['DoublePrecision', []], 'Double'],
   ['Float', '@db.Double', ['Double', []], 'Double'],
@@ -1476,6 +1476,91 @@ impl ActiveModelBehavior for ActiveModel {
     pub owner_id: Uuid,
     #[sea_orm(primary_key, auto_increment = false, column_name = "B")]
     pub tag_id: i32,
+}
+`)
+  })
+})
+
+// sqlx-postgres decodes a `smallint` only into an i16, and sqlx-mysql a `TINYINT` only into an i8.
+describe('@db.SmallInt and @db.TinyInt', () => {
+  const field = (o: Record<string, unknown>): any => ({
+    kind: 'scalar',
+    type: 'Int',
+    isList: false,
+    isRequired: true,
+    isUnique: false,
+    isId: false,
+    isReadOnly: false,
+    isGenerated: false,
+    isUpdatedAt: false,
+    hasDefaultValue: false,
+    ...o,
+  })
+  const model: any = {
+    name: 'Log',
+    dbName: null,
+    primaryKey: null,
+    uniqueFields: [],
+    uniqueIndexes: [],
+    fields: [
+      field({
+        name: 'id',
+        isId: true,
+        hasDefaultValue: true,
+        default: { name: 'autoincrement', args: [] },
+      }),
+      field({ name: 'action_flag', nativeType: ['SmallInt', []] }),
+      field({ name: 'max_width', isRequired: false, nativeType: ['SmallInt', []] }),
+      field({ name: 'level', nativeType: ['TinyInt', []] }),
+      field({ name: 'rank', isRequired: false, nativeType: ['TinyInt', []] }),
+    ],
+  }
+
+  it('declares a smallint column i16 and a TINYINT column i8', () => {
+    expect(generateEntityFile(model, [model], [], {}, 'mysql'))
+      .toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "Log")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i32,
+    pub action_flag: i16,
+    pub max_width: Option<i16>,
+    pub level: i8,
+    pub rank: Option<i8>,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {}
+`)
+  })
+
+  it('leaves a Boolean @db.TinyInt(1) a bool', () => {
+    const flag = {
+      ...model,
+      fields: [
+        model.fields[0],
+        field({ name: 'active', type: 'Boolean', nativeType: ['TinyInt', ['1']] }),
+      ],
+    }
+    expect(generateEntityFile(flag, [flag], [], {}, 'mysql')).toContain('    pub active: bool,\n')
+  })
+
+  it('gives the join table of an implicit many-to-many the i16 of a @db.SmallInt key', () => {
+    const tag: any = {
+      ...model,
+      name: 'Tag',
+      fields: [field({ name: 'id', isId: true, nativeType: ['SmallInt', []] })],
+    }
+    expect(generateM2MEntity('Log', 'Tag', 'LogToTag', [model, tag])).toContain(`pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]
+    pub log_id: i32,
+    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]
+    pub tag_id: i16,
 }
 `)
   })
