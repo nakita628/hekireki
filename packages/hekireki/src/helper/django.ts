@@ -976,7 +976,9 @@ function generateForeignKeyField(
 
   const args = [
     target,
-    `on_delete=${onDeleteFor(relationField, scalarField)}`,
+    // A view's relation is no foreign key the database holds: Django must neither refuse a delete
+    // over it nor cascade one into the view.
+    `on_delete=${views.has(model.name) ? 'models.DO_NOTHING' : onDeleteFor(relationField, scalarField)}`,
     `related_name=${relatedName}`,
     toFieldArg(relationField, allModels, names),
     isPk ? 'primary_key=True' : null,
@@ -990,8 +992,8 @@ function generateForeignKeyField(
     // schema actually declares arrives through Meta.indexes instead, so leaving
     // this on would add one or two indexes the database does not have.
     ctor === 'ForeignKey' ? 'db_index=False' : null,
-    // Prisma Migrate makes no foreign key to a view, and the database could not hold one.
-    views.has(relationField.type) ? 'db_constraint=False' : null,
+    // Prisma Migrate makes no foreign key to or from a view, and the database could not hold one.
+    views.has(relationField.type) || views.has(model.name) ? 'db_constraint=False' : null,
     ...formatDefaultArgs(model, scalarField, names),
   ].filter((a) => a !== null)
 

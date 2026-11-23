@@ -3677,8 +3677,8 @@ class User(models.Model):
 
 describe('views', () => {
   // A `view` is the database's own, and Prisma Migrate creates neither
-  // it nor a foreign key to it, so `migrate` must not create a table or a constraint for it.
-  it('marks a view unmanaged and makes no constraint for a foreign key to it', () => {
+  // it nor a foreign key to or from it, so neither `migrate` nor Django's delete collector may act on it.
+  it('marks a view unmanaged and neither enforces nor constrains a relation to or from it', () => {
     const schema = `datasource db {
   provider = "postgresql"
 }
@@ -3729,7 +3729,7 @@ class Badge(models.Model):
 
 
 class UserStat(models.Model):
-    user = models.OneToOneField("User", on_delete=models.RESTRICT, related_name="stat", primary_key=True, db_column="userId")
+    user = models.OneToOneField("User", on_delete=models.DO_NOTHING, related_name="stat", primary_key=True, db_column="userId", db_constraint=False)
     posts = models.IntegerField()
 
     class Meta:

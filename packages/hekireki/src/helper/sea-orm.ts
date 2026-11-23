@@ -966,7 +966,7 @@ function viewDocLines(
   if (targets.length === 0) return []
   return [
     ...separator,
-    `/// It points at the database ${targets.length > 1 ? 'views' : 'view'} ${targets.map((target) => `\`${target}\``).join(', ')}, which no foreign key can reference.`,
+    `/// It points at the Prisma ${targets.length > 1 ? 'views' : 'view'} ${targets.map((target) => `\`${target}\``).join(', ')}, which no foreign key can reference.`,
     '/// Do not create its table with `Schema::create_table_from_entity`, which would write one.',
   ]
 }

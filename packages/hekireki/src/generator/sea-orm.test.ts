@@ -496,7 +496,7 @@ model Badge {
       .toBe(`use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-/// It points at the database view \`UserStat\`, which no foreign key can reference.
+/// It points at the Prisma view \`UserStat\`, which no foreign key can reference.
 /// Do not create its table with \`Schema::create_table_from_entity\`, which would write one.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "Badge")]
