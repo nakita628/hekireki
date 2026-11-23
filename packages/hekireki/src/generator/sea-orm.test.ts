@@ -3,6 +3,7 @@ import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { PRISMA_DATE_TIME_RS } from '../helper/sea-orm.js'
+import { prismaBlocks, viewNames } from '../prisma/schema-text.js'
 import { seaOrmFiles } from './sea-orm.js'
 
 /** The datamodel `getDMMF` parsed, or its parse error thrown. */
@@ -376,6 +377,81 @@ impl ActiveModelBehavior for ActiveModel {
         Ok(self)
     }
 }
+`)
+  })
+})
+
+describe('views', () => {
+  // Prisma Migrate never creates a view, and SeaORM has no way for an
+  // entity to say it is one, so the entity says it itself.
+  it('says on the entity of a view that it is not to be created as a table', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["views"]
+}
+
+model User {
+  id   Int       @id
+  stat UserStat?
+}
+
+/// What each user has written.
+view UserStat {
+  userId Int  @unique
+  posts  Int
+  user   User @relation(fields: [userId], references: [id])
+}
+`
+    const { models: viewModels, enums: viewEnums } = datamodelOf(
+      getDMMF({ datamodel: [['schema.prisma', schema]] }),
+    )
+    const files = seaOrmFiles(
+      viewModels,
+      viewEnums,
+      {},
+      'postgresql',
+      viewNames(prismaBlocks(schema)),
+    )
+
+    expect(files.find((file) => file.fileName === 'user_stat.rs')?.code)
+      .toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+/// What each user has written.
+///
+/// A database view: read it, do not write to it, and do not pass it to
+/// \`Schema::create_table_from_entity\`, which would create a table of that name.
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "UserStat")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(unique)]
+    #[sea_orm(column_name = "userId")]
+    pub user_id: i32,
+    pub posts: i32,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::user::Entity",
+        from = "Column::UserId",
+        to = "super::user::Column::Id"
+    )]
+    User,
+}
+
+impl Related<super::user::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::User.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {}
 `)
   })
 })

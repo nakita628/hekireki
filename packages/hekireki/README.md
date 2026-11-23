@@ -110,6 +110,12 @@ API of Npgsql's own plugins, which Npgsql marks experimental (`NPG9001`; checked
 applied. `@db.Decimal(p, s)` with `s` up to 28 needs none of this. A Prisma `view` is mapped with
 `ToView`, so `EnsureCreated()` and migrations leave it alone.
 
+A Prisma `view` is the database's own, which Prisma Migrate never creates. `hekireki-django`
+marks its model `managed = False` and a `ForeignKey` to it `db_constraint=False`, so `migrate`
+leaves it alone. GORM and SeaORM have no way for a model to say it is a view: the struct or entity
+`hekireki-gorm` and `hekireki-sea-orm` write says so in its comment, and is not to be passed to
+`AutoMigrate` or `Schema::create_table_from_entity`.
+
 ### Database and documents
 
 | Provider           | Writes                              | Options                                                                                         |

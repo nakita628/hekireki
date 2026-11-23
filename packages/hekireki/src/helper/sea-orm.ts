@@ -946,6 +946,7 @@ export function generateEntityFile(
   enums: readonly DMMF.DatamodelEnum[],
   serde: { readonly renameAll?: string } = {},
   provider?: string,
+  views: ReadonlySet<string> = new Set(),
 ) {
   const primaryKey = new Set(primaryKeyFields(model))
   const isCompositePk = primaryKey.size > 1
@@ -1028,10 +1029,22 @@ export function generateEntityFile(
 
   const serdeAttrs = buildSerdeAttributes(serde)
 
+  const doc = rustDocLines(stripAnnotations(model.documentation), '')
+  // Prisma Migrate never creates a view (its SQL is written by hand), and SeaORM has no notion of
+  // one: `Schema::create_table_from_entity` given this entity creates a table of that name.
+  const viewDoc = views.has(model.name)
+    ? [
+        ...(doc.length > 0 ? ['///'] : []),
+        '/// A database view: read it, do not write to it, and do not pass it to',
+        '/// `Schema::create_table_from_entity`, which would create a table of that name.',
+      ]
+    : []
+
   const lines = [
     ...useLines,
     '',
-    ...rustDocLines(stripAnnotations(model.documentation), ''),
+    ...doc,
+    ...viewDoc,
     deriveModel,
     ...serdeAttrs,
     seaOrmAttribute('', [`table_name = "${tableName}"`]),

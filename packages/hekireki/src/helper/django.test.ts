@@ -3674,3 +3674,68 @@ class User(models.Model):
 `)
   })
 })
+
+describe('views', () => {
+  // A `view` is the database's own, and Prisma Migrate creates neither
+  // it nor a foreign key to it, so `migrate` must not create a table or a constraint for it.
+  it('marks a view unmanaged and makes no constraint for a foreign key to it', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["views"]
+}
+
+model User {
+  id   Int       @id
+  stat UserStat?
+}
+
+view UserStat {
+  userId Int     @unique
+  posts  Int
+  user   User    @relation(fields: [userId], references: [id])
+  badges Badge[]
+}
+
+model Badge {
+  id     Int      @id
+  statId Int
+  stat   UserStat @relation(fields: [statId], references: [userId])
+}
+`
+    const result = getDMMF({ datamodel: [['schema.prisma', schema]] })
+    const { models, enums, indexes } = datamodelOf(result)
+
+    expect(djangoCode(models, enums, indexes, 'postgresql', schema)).toBe(
+      `from django.db import models
+
+
+class User(models.Model):
+    id = models.IntegerField(primary_key=True)
+
+    class Meta:
+        db_table = "User"
+
+
+class Badge(models.Model):
+    id = models.IntegerField(primary_key=True)
+    stat = models.ForeignKey("UserStat", on_delete=models.RESTRICT, related_name="badges", db_column="statId", db_index=False, db_constraint=False)
+
+    class Meta:
+        db_table = "Badge"
+
+
+class UserStat(models.Model):
+    user = models.OneToOneField("User", on_delete=models.RESTRICT, related_name="stat", primary_key=True, db_column="userId")
+    posts = models.IntegerField()
+
+    class Meta:
+        db_table = "UserStat"
+        managed = False
+`,
+    )
+  })
+})
