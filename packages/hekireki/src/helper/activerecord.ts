@@ -7,7 +7,11 @@ import { makePascalCase, makeSnakeCase } from '../naming/case.js'
 import { allocate } from '../naming/index.js'
 import type { RelationEnd } from '../prisma/model.js'
 import { fieldColumn, primaryKeyFields, referentialActions, relationEnds } from '../prisma/model.js'
-import { ACTIVE_RECORD_INSTANCE_METHODS, RUBY_TOP_LEVEL_CONSTANTS } from './activerecord-names.js'
+import {
+  ACTIVE_RECORD_DANGEROUS_COLUMNS,
+  ACTIVE_RECORD_INSTANCE_METHODS,
+  RUBY_TOP_LEVEL_CONSTANTS,
+} from './activerecord-names.js'
 
 // cspell:disable
 // Names an enum key on an Active Record model may not take, nor the plural of
@@ -1011,6 +1015,8 @@ export function activeRecordClassNames(models: readonly DMMF.Model[]) {
 // an association: then the name Rails would give an association of its class
 // (`has_many :contact_attributes`), or where that is no better or is taken by another association
 // or a column of the model, the model's own name before it (`organization_errors`).
+// A column Active Record refuses an attribute of (`invalid`, `hash`) is reached through an alias
+// instead, named as Rails names its own for `id`: the column's name with `_value` after it.
 function railsNames(models: readonly DMMF.Model[]) {
   const classNames = activeRecordClassNames(models)
   const classOf = (modelName: string) => classNames.get(modelName) ?? makePascalCase(modelName)
@@ -1047,10 +1053,32 @@ function railsNames(models: readonly DMMF.Model[]) {
       ]
     }),
   )
+  const associationOf = (modelName: string, fieldName: string) =>
+    associations.get(modelName)?.get(fieldName) ?? makeSnakeCase(fieldName)
+  const attributes = new Map(
+    models.map((model): [string, Map<string, string>] => {
+      const columns = model.fields.filter((f) => f.kind !== 'object').map((f) => f.dbName ?? f.name)
+      const renamed = allocate(
+        model.fields
+          .filter(
+            (f) => f.kind !== 'object' && ACTIVE_RECORD_DANGEROUS_COLUMNS.has(f.dbName ?? f.name),
+          )
+          .map((f) => ({ key: f.dbName ?? f.name, candidate: `${f.dbName ?? f.name}_value` })),
+        [
+          ...ACTIVE_RECORD_DANGEROUS_COLUMNS,
+          ...columns,
+          ...relationEnds(model, models).map(({ field }) => associationOf(model.name, field.name)),
+        ],
+        makeSnakeCase,
+      )
+      return [model.name, renamed]
+    }),
+  )
   return {
     classOf,
-    associationOf: (modelName: string, fieldName: string) =>
-      associations.get(modelName)?.get(fieldName) ?? makeSnakeCase(fieldName),
+    associationOf,
+    // The attributes a model reaches its refused columns by, by column.
+    aliasesOf: (modelName: string) => attributes.get(modelName) ?? new Map<string, string>(),
   }
 }
 
@@ -1429,10 +1457,11 @@ function yamlLines(tree: LocaleTree, depth: number): string[] {
  * (`activerecord.errors.models.todo.attributes.title.blank`).
  */
 export function activeRecordLocaleFiles(models: readonly DMMF.Model[]) {
-  const { classOf, associationOf } = railsNames(models)
+  const { classOf, associationOf, aliasesOf } = railsNames(models)
   return models.flatMap((model) => {
     // The model's `i18n_key`, its class name underscored.
     const modelKey = underscore(classOf(model.name))
+    const aliases = aliasesOf(model.name)
     const trees = new Map<string, LocaleTree>()
     const tree = (locale: string) => {
       const found = trees.get(locale) ?? {}
@@ -1448,12 +1477,14 @@ export function activeRecordLocaleFiles(models: readonly DMMF.Model[]) {
     }
     // A relation field is the association, which Rails names in snake_case
     // (`belongs_to :user`) and reports a missing `belongs_to` on: its name
-    // goes under `user`, the foreign key's under the column, `user_id`.
+    // goes under `user`, the foreign key's under the column, `user_id`, and a column reached
+    // through an alias (`hash_value`) under the alias its validations name.
     for (const field of model.fields) {
+      const column = field.dbName ?? field.name
       const attribute =
         field.kind === 'object'
           ? associationOf(model.name, field.name)
-          : (field.dbName ?? field.name)
+          : (aliases.get(column) ?? column)
       for (const call of arCalls(field.documentation, 'field').calls) {
         const { validator, messages } = validatorCall(call)
         if (field.kind === 'object' && validator !== 'name') continue
@@ -1662,6 +1693,30 @@ function inheritanceColumnLines(model: DMMF.Model) {
   )
     ? ['self.inheritance_column = nil']
     : []
+}
+
+// Active Record defines a column's attribute methods unless the model has one of the name already,
+// and raises for one it defines itself (`invalid?`, `hash`). Told that those are there already,
+// it leaves them as they are and defines the column's others (`invalid`, `invalid=`); the alias
+// reaches the column in full. `as_json` reads each column by sending its name, which for these
+// would answer Active Record's method (`hash`, `class`), so it reads those columns instead.
+function refusedColumnLines(aliases: ReadonlyMap<string, string>) {
+  return aliases.size === 0
+    ? []
+    : [
+        'def self.instance_method_already_implemented?(method_name)',
+        '  dangerous_attribute_method?(method_name) || super',
+        'end',
+        'private_class_method :instance_method_already_implemented?',
+        '',
+        'def read_attribute_for_serialization(name)',
+        '  if has_attribute?(name) && self.class.dangerous_attribute_method?(name)',
+        '    _read_attribute(name.to_s)',
+        '  else',
+        '    super',
+        '  end',
+        'end',
+      ]
 }
 
 // Active Record writes timestamps only into created_at/updated_at (or
@@ -1900,6 +1955,7 @@ type EnumValue = { readonly key: string; readonly name: string; readonly stored:
 function inclusionEnumLines(
   f: DMMF.Field,
   column: string,
+  attribute: string,
   values: readonly EnumValue[],
   defaultValue: EnumValue | undefined,
 ) {
@@ -1909,7 +1965,7 @@ function inclusionEnumLines(
       : []),
     rubyCall(
       'validates',
-      [`:${column}`],
+      [`:${attribute}`],
       [
         `inclusion: { in: ${rubyArray(values.map((v) => `"${v.stored}"`))}${f.isRequired ? '' : ', allow_nil: true'} }`,
       ],
@@ -1940,6 +1996,7 @@ function enumFieldLines(
   f: DMMF.Field,
   enumMap: ReadonlyMap<string, DMMF.DatamodelEnum['values']>,
   taken: Set<string>,
+  aliases: ReadonlyMap<string, string>,
 ) {
   const column = f.dbName ?? f.name
   const values = (enumMap.get(f.type) ?? []).map((v) => ({
@@ -1948,8 +2005,10 @@ function enumFieldLines(
     stored: v.dbName ?? v.name,
   }))
   const defaultValue = values.find((v) => v.name === f.default)
-  if (RAILS_RESERVED_NAMES.has(pluralize(column))) {
-    return inclusionEnumLines(f, column, values, defaultValue)
+  // The `enum` DSL refuses a column Active Record refuses, and cannot be given its alias.
+  const alias = aliases.get(column)
+  if (alias !== undefined || RAILS_RESERVED_NAMES.has(pluralize(column))) {
+    return inclusionEnumLines(f, column, alias ?? column, values, defaultValue)
   }
   const pairs = values.map((v) => `${symbolKey(v.key)}: "${v.stored}"`).join(', ')
   const affix = enumAffix(column, values, taken)
@@ -1987,11 +2046,16 @@ function enumFieldLines(
 // validate: true makes a value outside the enum, or nil where the
 // column is NOT NULL, a validation error like the other constraints,
 // instead of an ArgumentError on assignment.
-function enumLines(model: DMMF.Model, enumMap: ReadonlyMap<string, DMMF.DatamodelEnum['values']>) {
-  const taken = new Set<string>()
+function enumLines(
+  model: DMMF.Model,
+  enumMap: ReadonlyMap<string, DMMF.DatamodelEnum['values']>,
+  aliases: ReadonlyMap<string, string>,
+) {
+  // An enum key named as an alias would put its predicate over the alias's (`invalid_value?`).
+  const taken = new Set<string>(aliases.values())
   return model.fields
     .filter((f) => f.kind === 'enum' && !f.isList)
-    .flatMap((f) => enumFieldLines(f, enumMap, taken))
+    .flatMap((f) => enumFieldLines(f, enumMap, taken, aliases))
 }
 
 // A @@unique pair is validated on the column a person fills in and
@@ -2043,6 +2107,7 @@ type ValidationContext = {
   readonly updatedField: DMMF.Field | undefined
   readonly uniqueSets: ReadonlyMap<string, readonly (readonly string[])[]>
   readonly nullableFields: ReadonlySet<string>
+  readonly aliases: ReadonlyMap<string, string>
 }
 
 // `presence(false)` says the column is filled some other way, whatever
@@ -2115,9 +2180,11 @@ function fieldValidationLines(f: DMMF.Field, ctx: ValidationContext) {
     ),
     ...own.flatMap(({ option }) => (option === null ? [] : [option])),
   ]
+  // A refused column is validated through its alias: `validates :hash` would read Object#hash.
+  const attribute = `:${ctx.aliases.get(f.dbName ?? f.name) ?? f.dbName ?? f.name}`
   return [
-    ...(rules.length === 0 ? [] : [rubyCall('validates', [`:${f.dbName ?? f.name}`], rules)]),
-    ...uniqueness.slice(1).map((rule) => rubyCall('validates', [`:${f.dbName ?? f.name}`], [rule])),
+    ...(rules.length === 0 ? [] : [rubyCall('validates', [attribute], rules)]),
+    ...uniqueness.slice(1).map((rule) => rubyCall('validates', [attribute], [rule])),
   ]
 }
 
@@ -2149,6 +2216,7 @@ function validationLines(
   modelLines: readonly string[],
   createdField: DMMF.Field | undefined,
   updatedField: DMMF.Field | undefined,
+  aliases: ReadonlyMap<string, string>,
 ) {
   const foreignKeyFields = new Set(
     model.fields.flatMap((f) => (f.kind === 'object' ? (f.relationFromFields ?? []) : [])),
@@ -2162,6 +2230,7 @@ function validationLines(
     updatedField,
     uniqueSets: uniqueSetsByColumn(uniqueSetsOf(model, foreignKeyFields)),
     nullableFields: new Set(model.fields.filter((g) => !g.isRequired).map((g) => g.name)),
+    aliases,
   }
   return model.fields.flatMap((f) => fieldValidationLines(f, ctx))
 }
@@ -2292,6 +2361,7 @@ function activeRecordModel(model: DMMF.Model, ctx: ModelContext) {
   // table is this pluralized.
   const modelSnake = underscore(className)
   const idField = model.fields.find((f) => f.isId)
+  const aliases = names.aliasesOf(model.name)
   const createdField = createdAtField(model)
   const updatedField = updatedAtField(model)
   const orderColumnLines =
@@ -2324,9 +2394,14 @@ function activeRecordModel(model: DMMF.Model, ctx: ModelContext) {
       ...inheritanceColumnLines(model),
       ...orderColumnLines,
     ],
-    [...attributes, ...timestampLines(model, createdField, updatedField)],
-    enumLines(model, ctx.enumMap),
-    validationLines(model, modelLines, createdField, updatedField),
+    refusedColumnLines(aliases),
+    [
+      ...attributes,
+      ...[...aliases].map(([column, name]) => `alias_attribute :${name}, :${column}`),
+      ...timestampLines(model, createdField, updatedField),
+    ],
+    enumLines(model, ctx.enumMap, aliases),
+    validationLines(model, modelLines, createdField, updatedField, aliases),
     associationLines,
     modelLines,
   ]

@@ -258,7 +258,12 @@ named after a constant Ruby or Rails has already loaded (`Monitor`, `Set`, `Data
 `MonitorRecord`, with its table named, and a relation named after a method Active Record defines
 on a record (`attributes`, `errors`) becomes the association Rails would name after its class
 (`contact_attributes`), or where that is the same name, one with the model's name before it
-(`organization_errors`).
+(`organization_errors`). A column whose attribute methods Active Record defines itself (`invalid`
+for `invalid?`, `hash`, `class`) leaves those methods to Active Record and is reached through an
+alias with `_value` after its name (`alias_attribute :invalid_value, :invalid`), which its
+validations and translations name too; such an enum column is held to its values by an `inclusion`
+validation instead of `enum`. Its messages name the alias ("Hash value can't be blank") unless an
+`@ar.name` names the column.
 
 A `/// @ar.` line on a field is a validator (`presence`, `length(maximum: 255)`) added to that
 field's `validates`; on a model it is a Ruby line written into the class as it is
