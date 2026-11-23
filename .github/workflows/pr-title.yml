@@ -1,0 +1,40 @@
+name: PR title
+
+# Pull requests are squash-merged with their title as the commit message, and release-please
+# reads those titles to work out the next version: `feat` raises the minor, `fix` and `perf` the
+# patch, and `!` before the colon marks a breaking change. A title that is not
+# `type(scope): summary` releases nothing and lands on main as-is, so it is checked here, and the
+# Issue loop does not merge a pull request with a red check. The types are the ones
+# .github/pull_request_template.md lists, plus `revert`; the bump pull request release-please.yml
+# opens is `chore: bump version to x.y.z`, and Renovate's are `chore(deps): …` or `fix(deps): …`.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+# Nothing is granted: the check reads the title from the event payload and nothing else.
+permissions: {}
+
+# Only the latest title is worth checking, so an edit that supersedes an earlier one cancels its
+# run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title:
+    name: Check the pull request title
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the title is type(scope) followed by a summary
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          PATTERN='^(feat|fix|perf|refactor|docs|test|build|ci|chore|revert)(\([a-z0-9._/,-]+\))?!?: [^ ].*[^.]$'
+          if printf '%s' "$TITLE" | grep -Eq "$PATTERN"; then
+            echo "ok: $TITLE"
+            exit 0
+          fi
+          echo "::error::The pull request title must be 'type(scope): summary' with no trailing period, e.g. 'fix(gorm): mark every belongs-to so GORM does not take it for has-one'. Got: $TITLE"
+          exit 1
