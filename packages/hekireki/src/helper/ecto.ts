@@ -443,6 +443,16 @@ function stringDefaultOption(f: DMMF.Field, def: string) {
       ? `default: ${jsonToElixirLiteral(parsed)}`
       : null
   }
+  if (isUuidColumn(f)) {
+    // Ecto dumps a :default when the schema compiles, and Ecto.UUID takes the 36 characters only.
+    // PostgreSQL also reads a uuid without its hyphens or in braces, and returns it in lower case:
+    // the default is written as the database returns it, and left to the database when it is not
+    // a uuid at all.
+    const hex = def.replaceAll(/[{}-]/gu, '').toLowerCase()
+    return /^[0-9a-f]{32}$/u.test(hex)
+      ? `default: "${[hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-')}"`
+      : null
+  }
   return `default: ${toElixirString(def)}`
 }
 

@@ -2099,6 +2099,42 @@ defmodule App.Share do
 end`)
   })
 
+  it('writes the default of a @db.Uuid field as the 36 characters Ecto.UUID dumps, or leaves it to the database', () => {
+    const { models } = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id      Int    @id @default(autoincrement())
+  compact String @default("8F1D3B4A2C6E4F7A9B0C1D2E3F4A5B6C") @db.Uuid
+  braced  String @default("{8f1d3b4a-2c6e-4f7a-9b0c-1d2e3f4a5b6c}") @db.Uuid
+  other   String @default("not-a-uuid") @db.Uuid
+}`,
+      }),
+    )
+
+    expect(ectoSchemas(models, 'App')).toBe(`defmodule App.Tenant do
+  use Ecto.Schema
+
+  @primary_key {:id, :id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          compact: Ecto.UUID.t(),
+          braced: Ecto.UUID.t(),
+          other: Ecto.UUID.t()
+        }
+
+  schema "Tenant" do
+    field(:compact, Ecto.UUID, default: "8f1d3b4a-2c6e-4f7a-9b0c-1d2e3f4a5b6c")
+    field(:braced, Ecto.UUID, default: "8f1d3b4a-2c6e-4f7a-9b0c-1d2e3f4a5b6c")
+    field(:other, Ecto.UUID)
+  end
+end`)
+  })
+
   it('keeps a uuid() key of a SQL Server @db.UniqueIdentifier column as :binary_id', () => {
     const { models } = datamodelOf(
       getDMMF({
