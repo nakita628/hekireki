@@ -2168,6 +2168,39 @@ end`)
     ])
   })
 
+  // `hash` is validated through its alias, and Rails looks the alias up.
+  it('keys a column reached through an alias by the alias', () => {
+    const file = makeModel({
+      name: 'Upload',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({
+          name: 'hash',
+          type: 'String',
+          documentation:
+            '@ar.name(ja: "ハッシュ")\n@ar.presence(message: { ja: "を入力してください" })',
+        }),
+      ],
+    })
+    expect(activeRecordLocaleFiles([file])).toStrictEqual([
+      {
+        fileName: 'models/upload/ja.yml',
+        code: `ja:
+  activerecord:
+    attributes:
+      upload:
+        hash_value: "ハッシュ"
+    errors:
+      models:
+        upload:
+          attributes:
+            hash_value:
+              blank: "を入力してください"
+`,
+      },
+    ])
+  })
+
   it('writes nothing when no call carries a translation', () => {
     const bare = makeModel({
       name: 'Bare',
@@ -2765,11 +2798,25 @@ end`)
         }),
         makeField({ name: 'hash', type: 'String', isUnique: true }),
         makeField({ name: 'hash_value', type: 'String', isRequired: false }),
-        makeField({ name: 'class', type: 'String', isRequired: false }),
+        makeField({
+          name: 'class',
+          type: 'Kind',
+          kind: 'enum',
+          hasDefaultValue: true,
+          default: 'PERSONAL',
+        }),
         makeField({ name: 'logger', type: 'String', isRequired: false }),
       ],
     })
-    expect(activeRecordModels([credential], [credential]))
+    const kind: DMMF.DatamodelEnum = {
+      name: 'Kind',
+      values: [
+        { name: 'PERSONAL', dbName: null },
+        { name: 'TEAM', dbName: null },
+      ],
+      dbName: null,
+    }
+    expect(activeRecordModels([credential], [credential], [kind]))
       .toBe(`class Credential < ApplicationRecord
   self.table_name = "Credential"
 
@@ -2778,11 +2825,18 @@ end`)
   end
   private_class_method :instance_method_already_implemented?
 
+  def read_attribute_for_serialization(name)
+    self.class.dangerous_attribute_method?(name) ? _read_attribute(name) : super
+  end
+
   attribute :invalid, default: false
   alias_attribute :invalid_value, :invalid
   alias_attribute :hash_value1, :hash
   alias_attribute :class_value, :class
   alias_attribute :logger_value, :logger
+
+  attribute :class, default: "PERSONAL"
+  validates :class_value, inclusion: { in: %w[PERSONAL TEAM] }
 
   validates :hash_value1, presence: true, uniqueness: true
 end`)
