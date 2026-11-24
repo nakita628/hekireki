@@ -22,6 +22,7 @@ model Event {
   updatedAt DateTime  @updatedAt @map("updated_at")
   syncedAt  DateTime  @updatedAt @map("synced_at")
   since     DateTime  @default("2020-01-01T00:00:00Z")
+  payload   Bytes?
 
   @@map("events")
 }

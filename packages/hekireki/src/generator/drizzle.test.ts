@@ -1567,7 +1567,7 @@ describe('dates', () => {
   it.each([
     ['postgresql', "bytea('value').notNull().default(sql`decode('0001ff', 'hex')`)"],
     ['mysql', "bytes('value', { type: 'longblob' }).notNull().default(sql`0x0001ff`)"],
-    ['sqlite', "blob('value', { mode: 'buffer' }).notNull().default(sql`X'0001ff'`)"],
+    ['sqlite', "blobBytes('value').notNull().default(sql`X'0001ff'`)"],
   ] as const)('writes a Bytes and its default on %s as the bytes they are', (provider, column) => {
     const datamodel = makeDatamodel([
       makeModel({

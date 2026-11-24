@@ -108,5 +108,27 @@ check(
     : wrong.map((row) => `${row.title} is ${row.at.toISOString()}`).join(', '),
 )
 
+// The bytes as they are, one that is not UTF-8 among them, both ways round.
+const bytes = new Uint8Array([0, 1, 255, 16])
+await db.update(events).set({ payload: bytes }).where(eq(events.id, written.id))
+const prismaBytes = await prisma.event.findUniqueOrThrow({ where: { id: written.id } })
+check(
+  'Prisma reads the bytes drizzle wrote',
+  prismaBytes.payload !== null && Buffer.compare(prismaBytes.payload, bytes) === 0
+    ? undefined
+    : `payload is ${String(prismaBytes.payload)}`,
+)
+await prisma.event.update({ where: { id: created.id }, data: { payload: bytes } })
+const [drizzleBytes] = await db
+  .select({ payload: events.payload })
+  .from(events)
+  .where(eq(events.id, created.id))
+check(
+  'drizzle reads the bytes Prisma wrote',
+  drizzleBytes?.payload instanceof Uint8Array && Buffer.compare(drizzleBytes.payload, bytes) === 0
+    ? undefined
+    : `payload is ${String(drizzleBytes?.payload)}`,
+)
+
 await prisma.$disconnect()
 connection.close()
