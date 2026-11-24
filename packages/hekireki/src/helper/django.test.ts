@@ -3673,6 +3673,121 @@ class User(models.Model):
         db_table = "User"
 `)
   })
+
+  // django-taggit's taggit_tag as `prisma db pull` writes it up: Django creates a
+  // varchar_pattern_ops index of that name for each unique CharField by itself.
+  it('leaves out the _like index Django creates for a unique string column', () => {
+    const code = djangoFor(`
+model taggit_tag {
+  id   Int    @id @default(autoincrement())
+  name String @unique @db.VarChar(100)
+  slug String @unique @db.VarChar(100)
+
+  @@index([name], map: "taggit_tag_name_58eb2ed9_like")
+  @@index([slug], map: "taggit_tag_slug_6be58b2c_like")
+}
+`)
+
+    expect(code).toBe(`from django.db import models
+
+
+class TaggitTag(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        db_table = "taggit_tag"
+`)
+  })
+
+  it('leaves out the _like index of a string primary key and of a one-to-one key', () => {
+    const code = djangoFor(`
+model Account {
+  id      String   @id @map("code")
+  profile Profile?
+
+  @@index([id], map: "acct_code_32022487_like", type: BTree)
+  @@map("acct")
+}
+
+model Profile {
+  id        Int     @id @default(autoincrement())
+  userCode  String  @unique @map("user_code")
+  account   Account @relation(fields: [userCode], references: [id])
+
+  @@index([userCode], map: "profile_user_code_7d8486b6_like")
+  @@map("profile")
+}
+`)
+
+    expect(code).toBe(`from django.db import models
+
+
+class Account(models.Model):
+    id = models.TextField(primary_key=True, db_column="code", default=None)
+
+    class Meta:
+        db_table = "acct"
+
+
+class Profile(models.Model):
+    id = models.AutoField(primary_key=True)
+    account = models.OneToOneField("Account", on_delete=models.RESTRICT, related_name="profile", db_column="user_code")
+
+    class Meta:
+        db_table = "profile"
+`)
+  })
+
+  it('keeps an index that only resembles the _like index of Django', () => {
+    const code = djangoFor(`
+model tag {
+  id    Int    @id @default(autoincrement())
+  code  String @unique
+  label String
+  count Int    @unique
+
+  @@index([code], map: "tag_code_00000000_like")
+  @@index([label], map: "tag_label_ecc010d4_like")
+  @@index([label, code], map: "tag_code_c617073f_like")
+  @@index([count], map: "tag_count_4035f2b1_like")
+}
+`)
+
+    expect(code).toContain(
+      [
+        '        indexes = [',
+        '            models.Index(fields=["code"], name="tag_code_00000000_like"),',
+        '            models.Index(fields=["label"], name="tag_label_ecc010d4_like"),',
+        '            models.Index(fields=["label", "code"]),',
+        '            models.Index(fields=["count"], name="tag_count_4035f2b1_like"),',
+        '        ]',
+      ].join('\n'),
+    )
+  })
+
+  it('keeps the index of that name on MySQL, where Django creates none', () => {
+    const code = djangoFor(
+      `
+model taggit_tag {
+  id   Int    @id @default(autoincrement())
+  name String @unique @db.VarChar(100)
+
+  @@index([name], map: "taggit_tag_name_58eb2ed9_like")
+}
+`,
+      'mysql',
+    )
+
+    expect(code).toContain(
+      [
+        '        indexes = [',
+        '            models.Index(fields=["name"], name="taggit_tag_name_58eb2ed9_like"),',
+        '        ]',
+      ].join('\n'),
+    )
+  })
 })
 
 describe('views', () => {

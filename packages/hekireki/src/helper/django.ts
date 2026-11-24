@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import type { DMMF } from '@prisma/generator-helper'
 
 import { stripAnnotations } from '../annotation/index.js'
@@ -1178,11 +1180,70 @@ function declaredUniqueNames(uniqueIndexes: readonly DMMF.Index[]) {
   return names
 }
 
+// On PostgreSQL Django gives every unique varchar or text column a second index
+// of its own, for LIKE, named `<table>_<column>_<digest>_like`. A schema pulled
+// from tables Django created lists it as an @@index under that name, which
+// `migrate` would then create twice.
+function likeIndexNames(model: DMMF.Model, allModels: readonly DMMF.Model[], provider: string) {
+  if (provider !== 'postgresql') return new Map<string, string>()
+  const tableName = model.dbName ?? model.name
+  const pkFields = primaryKeyFields(model)
+  const singlePk = pkFields.length === 1 ? pkFields[0] : undefined
+  const ownerByScalarName = new Map(
+    singleColumnBelongsTo(model).map((f) => [f.relationFromFields?.[0], f]),
+  )
+  const modelsByName = new Map(allModels.map((m) => [m.name, m]))
+  const isText = (column: DMMF.Field | undefined) =>
+    column !== undefined &&
+    !column.isList &&
+    ['CharField', 'TextField'].includes(columnDjangoField(column, provider).ctor)
+  return new Map(
+    model.fields
+      .filter((field) => {
+        if (field.kind === 'object') return false
+        const isPk = field.name === singlePk
+        const owner = ownerByScalarName.get(field.name)
+        if (owner === undefined) return (isPk || field.isUnique) && isText(field)
+        // A relation's column is of the type of the key it references.
+        const back = backRelation(owner, model, allModels)
+        const target = modelsByName.get(owner.type)
+        const referenced = target?.fields.find((f) => f.name === owner.relationToFields?.[0])
+        return (isPk || (back !== undefined && !back.isList)) && isText(referenced)
+      })
+      .map((field) => {
+        const column = fieldColumnName(field)
+        const digest = createHash('md5').update(`${tableName}${column}`).digest('hex').slice(0, 8)
+        return [`${tableName}_${column}_${digest}_like`, field.name]
+      }),
+  )
+}
+
+// The @@index entries Meta.indexes declares. One that lists an @ignore field is
+// left out, and so is the index Django creates by itself.
+function writtenIndexes(
+  model: DMMF.Model,
+  indexes: readonly DMMF.Index[],
+  likeNames: ReadonlyMap<string, string>,
+) {
+  return indexes.filter(
+    (idx) =>
+      idx.model === model.name &&
+      (idx.type === 'normal' || idx.type === 'fulltext') &&
+      coversWrittenFields(
+        model,
+        idx.fields.map((f) => f.name),
+      ) &&
+      !(idx.fields.length === 1 && idx.fields[0]?.name === likeNames.get(idx.dbName ?? '')),
+  )
+}
+
 function generateMetaLines(
   model: DMMF.Model,
+  allModels: readonly DMMF.Model[],
   indexes: readonly DMMF.Index[],
   names: Names,
   views: ReadonlySet<string>,
+  provider: string,
 ) {
   const tableName = model.dbName ?? model.name
 
@@ -1212,45 +1273,38 @@ function generateMetaLines(
       return `models.UniqueConstraint(fields=[${fieldNames}], name=${toPythonString(name)})`
     })
 
-  const indexEntries = indexes
-    .filter(
-      (idx) =>
-        idx.model === model.name &&
-        (idx.type === 'normal' || idx.type === 'fulltext') &&
-        coversWrittenFields(
-          model,
-          idx.fields.map((f) => f.name),
-        ),
-    )
-    .map((idx) => {
-      // Prisma records a descending index column as a sort order; Django spells
-      // the same thing as a "-" prefix on the field name.
-      const fieldNames = idx.fields
-        .map((f) => {
-          const ref = fieldRef(f.name)
-          return toPythonString(f.sortOrder === 'desc' ? `-${ref}` : ref)
-        })
-        .join(', ')
-      // An explicit @@index(map:) name is carried over only when Django accepts
-      // it verbatim: over 30 characters trips models.E034, and a leading
-      // underscore or digit trips models.E033. Truncating instead would name
-      // neither the database's index nor Django's, and two long names sharing a
-      // prefix would collide into models.E029 — an unnamed index lets Django
-      // derive a valid, unique one.
-      const carriesName =
-        idx.dbName !== undefined &&
-        idx.dbName !== null &&
-        idx.dbName.length <= 30 &&
-        /^[a-zA-Z]/u.test(idx.dbName)
-      const name = carriesName ? `, name=${toPythonString(idx.dbName)}` : ''
-      // An explicit index method has its own class in django.contrib.postgres;
-      // an unrecognised one falls back to the plain btree Index rather than
-      // naming a class that does not exist.
-      const ctor = postgresIndexClass(idx.algorithm)
-      return ctor === null
-        ? `models.Index(fields=[${fieldNames}]${name})`
-        : `${ctor}(fields=[${fieldNames}]${name})`
-    })
+  const likeNames = likeIndexNames(model, allModels, provider)
+  const indexEntries = writtenIndexes(model, indexes, likeNames).map((idx) => {
+    // Prisma records a descending index column as a sort order; Django spells
+    // the same thing as a "-" prefix on the field name.
+    const fieldNames = idx.fields
+      .map((f) => {
+        const ref = fieldRef(f.name)
+        return toPythonString(f.sortOrder === 'desc' ? `-${ref}` : ref)
+      })
+      .join(', ')
+    // An explicit @@index(map:) name is carried over only when Django accepts
+    // it verbatim: over 30 characters trips models.E034, and a leading
+    // underscore or digit trips models.E033. Truncating instead would name
+    // neither the database's index nor Django's, and two long names sharing a
+    // prefix would collide into models.E029 — an unnamed index lets Django
+    // derive a valid, unique one.
+    const carriesName =
+      idx.dbName !== undefined &&
+      idx.dbName !== null &&
+      idx.dbName.length <= 30 &&
+      /^[a-zA-Z]/u.test(idx.dbName) &&
+      // An index over other columns that took the name of Django's own.
+      !likeNames.has(idx.dbName)
+    const name = carriesName ? `, name=${toPythonString(idx.dbName)}` : ''
+    // An explicit index method has its own class in django.contrib.postgres;
+    // an unrecognised one falls back to the plain btree Index rather than
+    // naming a class that does not exist.
+    const ctor = postgresIndexClass(idx.algorithm)
+    return ctor === null
+      ? `models.Index(fields=[${fieldNames}]${name})`
+      : `${ctor}(fields=[${fieldNames}]${name})`
+  })
 
   return [
     '',
@@ -1388,7 +1442,7 @@ export function generateModelBody(
     ...(model.fields.some((f) => f.isUpdatedAt === true)
       ? ['    objects = AutoNowQuerySet.as_manager()']
       : []),
-    ...generateMetaLines(model, indexes, names, views),
+    ...generateMetaLines(model, allModels, indexes, names, views, provider),
   ].join('\n')
 }
 
@@ -1405,20 +1459,13 @@ export function generateEnumClass(enumDef: DMMF.DatamodelEnum) {
 }
 
 // The django.contrib.postgres index classes the written indexes are declared with.
-function indexClassesOf(models: readonly DMMF.Model[], indexes: readonly DMMF.Index[]) {
-  const modelsByName = new Map(models.map((m) => [m.name, m]))
-  return indexes
-    .filter((idx) => {
-      const model = modelsByName.get(idx.model)
-      return (
-        model !== undefined &&
-        (idx.type === 'normal' || idx.type === 'fulltext') &&
-        coversWrittenFields(
-          model,
-          idx.fields.map((f) => f.name),
-        )
-      )
-    })
+function indexClassesOf(
+  models: readonly DMMF.Model[],
+  indexes: readonly DMMF.Index[],
+  provider: string,
+) {
+  return models
+    .flatMap((model) => writtenIndexes(model, indexes, likeIndexNames(model, models, provider)))
     .map((idx) => postgresIndexClass(idx.algorithm))
     .filter((ctor) => ctor !== null)
 }
@@ -1557,7 +1604,7 @@ export function collectGlobalImports(
     fromDatetime: ['date', 'datetime', 'time'].filter((kind) => kinds.has(kind)),
     nowHelpers: nowHelperKinds.length > 0,
     nowDatetime: nowKinds.includes('datetime'),
-    indexClasses: [...new Set(indexClassesOf(models, indexes))].toSorted(),
+    indexClasses: [...new Set(indexClassesOf(models, indexes, provider))].toSorted(),
   }
   const stdlib = stdlibImports(needs)
   const thirdParty = thirdPartyImports(needs)
