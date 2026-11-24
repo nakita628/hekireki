@@ -54,7 +54,7 @@ const SQLITE_SCALAR_MAP: { [k: string]: string } = {
   Boolean: "integer({ mode: 'boolean' })",
   DateTime: 'utcDateTime()',
   Json: "text({ mode: 'json' })",
-  Bytes: 'blob()',
+  Bytes: 'blobBytes()',
 }
 
 // A native type argument Prisma gives, which an empty one is not.
@@ -167,7 +167,8 @@ function mysqlNativeType(name: string, args: readonly string[]) {
 // writes and reads it, a Bytes as the Uint8Array Prisma Client gives, and a BigInt on SQLite as
 // the integer Prisma keeps it as. drizzle's own `blob({ mode: 'bigint' })` reads the column as
 // bytes and writes the digits as a BLOB, which neither reads what Prisma wrote nor writes what
-// Prisma reads.
+// Prisma reads. Its `blob()` with no mode is JSON in drizzle-orm 1.0, and the buffer mode types
+// the bytes as a Buffer, which the Uint8Array Prisma Client gives is not.
 const COLUMN_HELPERS: { readonly [name: string]: string } = {
   bigInteger: `const bigInteger = customType<{ data: bigint; driverData: number | bigint }>({
   dataType: () => 'bigint',
@@ -176,6 +177,10 @@ const COLUMN_HELPERS: { readonly [name: string]: string } = {
 })`,
   bytea: `const bytea = customType<{ data: Uint8Array }>({
   dataType: () => 'bytea',
+})`,
+  blobBytes: `const blobBytes = customType<{ data: Uint8Array }>({
+  dataType: () => 'blob',
+  codec: 'blob',
 })`,
   bytes: `const bytes = customType<{ data: Uint8Array; config: { type: string } }>({
   dataType: (config) => config?.type ?? 'longblob',

@@ -1,6 +1,11 @@
 import { customType, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
 
+const blobBytes = customType<{ data: Uint8Array }>({
+  dataType: () => 'blob',
+  codec: 'blob',
+})
+
 const utcDateTime = customType<{ data: Date; driverData: string | number }>({
   dataType: () => 'datetime',
   toDriver: (value) => value.toISOString().replace('Z', '+00:00'),
@@ -37,6 +42,7 @@ export const events = sqliteTable(
     since: utcDateTime('since')
       .notNull()
       .default(sql`'2020-01-01T00:00:00.000+00:00'`),
+    payload: blobBytes('payload'),
   },
   (table) => [uniqueIndex('events_title_key').on(table.title)],
 )

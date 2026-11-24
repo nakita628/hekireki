@@ -80,6 +80,9 @@ A `Bytes` is a `Uint8Array` in drizzle as it is in Prisma Client, in the column 
   `@db.Blob` and `@db.MediumBlob` name. drizzle's `binary()` and `varbinary()` read the bytes as
   text, which loses every byte that is not UTF-8, and it has no blob: the generated `bytes` takes
   the column's type and leaves the bytes alone.
+- **SQLite** has it in `blob`. drizzle's `blob()` with no mode is JSON in drizzle-orm 1.0, and its
+  buffer mode types the bytes as a `Buffer`: the generated `blobBytes` is a `Uint8Array` and leaves
+  the bytes alone.
 - **A `@default` on one** is the bytes in the table, written as the database reads them:
   `decode('0001ff', 'hex')` on PostgreSQL, `0x0001ff` on MySQL, `X'0001ff'` on SQLite.
 

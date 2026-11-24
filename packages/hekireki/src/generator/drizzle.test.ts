@@ -155,6 +155,31 @@ describe('drizzleSchema', () => {
         "export const sequence = sqliteTable('Sequence', { id: bigInteger('id').notNull(), big: bigInteger('big').notNull() }, (table) => [primaryKey({ columns: [table.id] })])",
       )
     })
+
+    // drizzle-orm 1.0's blob() with no mode is JSON, and its buffer mode types the bytes as a
+    // Buffer. The column is a blob holding the Uint8Array Prisma Client gives, with drizzle's blob
+    // codec, which reads it from every driver and through a relational query as bytes.
+    it('keeps a Bytes in a blob column, as the Uint8Array Prisma Client gives', () => {
+      const datamodel = makeDatamodel([
+        makeModel({
+          name: 'Attachment',
+          fields: [
+            makeField({ name: 'id', type: 'Int', isId: true }),
+            makeField({ name: 'block', type: 'Bytes', isRequired: false }),
+          ],
+        }),
+      ])
+
+      const code = drizzleSchema(datamodel, 'sqlite', [])
+
+      expect(code).toContain(`const blobBytes = customType<{ data: Uint8Array }>({
+  dataType: () => 'blob',
+  codec: 'blob',
+})`)
+      expect(code.split('\n').at(-1)).toBe(
+        "export const attachment = sqliteTable('Attachment', { id: integer('id').primaryKey(), block: blobBytes('block') })",
+      )
+    })
   })
 
   describe('a primary key that is not the rowid', () => {
@@ -1567,7 +1592,7 @@ describe('dates', () => {
   it.each([
     ['postgresql', "bytea('value').notNull().default(sql`decode('0001ff', 'hex')`)"],
     ['mysql', "bytes('value', { type: 'longblob' }).notNull().default(sql`0x0001ff`)"],
-    ['sqlite', "blob('value').notNull().default(sql`X'0001ff'`)"],
+    ['sqlite', "blobBytes('value').notNull().default(sql`X'0001ff'`)"],
   ] as const)('writes a Bytes and its default on %s as the bytes they are', (provider, column) => {
     const datamodel = makeDatamodel([
       makeModel({
