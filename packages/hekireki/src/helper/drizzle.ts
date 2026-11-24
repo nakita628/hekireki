@@ -54,7 +54,8 @@ const SQLITE_SCALAR_MAP: { [k: string]: string } = {
   Boolean: "integer({ mode: 'boolean' })",
   DateTime: 'utcDateTime()',
   Json: "text({ mode: 'json' })",
-  Bytes: 'blob()',
+  // drizzle-orm 1.0's blob() with no mode is JSON; the buffer mode keeps the bytes as they are.
+  Bytes: "blob({ mode: 'buffer' })",
 }
 
 // A native type argument Prisma gives, which an empty one is not.
