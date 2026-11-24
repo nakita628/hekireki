@@ -1188,6 +1188,44 @@ class Blob extends Model
 }`)
   })
 
+  it('keeps incrementing false for a text key the database makes, which may read as a number', () => {
+    const ticket = makeModel({
+      name: 'Ticket',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'dbgenerated', args: ["lpad(nextval('ticket_seq')::text, 8, '0')"] },
+        }),
+      ],
+    })
+
+    expect(
+      eloquentModels([ticket], 'App\\Models', undefined, undefined, { provider: 'postgresql' }),
+    ).toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+
+class Ticket extends Model
+{
+    protected $table = 'Ticket';
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'id',
+    ];
+}`)
+  })
+
   it('keeps incrementing false for a non-autoincrement Int primary key', () => {
     const counter = makeModel({
       name: 'Counter',

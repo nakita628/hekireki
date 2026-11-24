@@ -1226,13 +1226,17 @@ function isAutoincrementKey(idField: DMMF.Field | undefined) {
 
 // A key the database makes from a dbgenerated() default (`gen_random_uuid()`) is known only
 // once the row is in. Eloquent reads a key back only where the model is incrementing, and with
-// the pgsql driver that insert is `insert ... returning "id"`, whatever the key's type; the
-// other drivers ask for the last insert id, which is not this key.
+// the pgsql driver that insert is `insert ... returning "id"`; the other drivers ask for the
+// last insert id, which is not this key. What comes back is made an integer where it reads as
+// a number, so this is for a key that is one (Int, BigInt) or never reads as one (a uuid).
 function isReturnedKey(idField: DMMF.Field | undefined, provider: string | undefined) {
   return (
     idField !== undefined &&
     (provider === 'postgresql' || provider === 'cockroachdb') &&
-    functionDefault(idField)?.name === 'dbgenerated'
+    functionDefault(idField)?.name === 'dbgenerated' &&
+    (idField.type === 'Int' ||
+      idField.type === 'BigInt' ||
+      (idField.type === 'String' && idField.nativeType?.[0] === 'Uuid'))
   )
 }
 
