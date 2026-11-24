@@ -225,6 +225,7 @@ subplan
 subsecs
 supabase
 Tabler
+taggit
 takibi
 textbg
 textlint

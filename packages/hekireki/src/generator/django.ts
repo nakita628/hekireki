@@ -39,7 +39,7 @@ export function djangoCode(
   const names = resolveNames(emitted, m2mTables)
 
   const sections = [
-    collectGlobalImports(emitted, idx, provider).join('\n'),
+    collectGlobalImports(emitted, idx, provider, models).join('\n'),
     ...collectFieldClasses(emitted, provider),
     ...collectDefaultHelpers(emitted, names, enums),
     ...(enums ?? []).map((e) => generateEnumClass(e)),
