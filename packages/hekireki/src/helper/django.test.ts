@@ -3683,8 +3683,8 @@ model taggit_tag {
   name String @unique @db.VarChar(100)
   slug String @unique @db.VarChar(100)
 
-  @@index([name], map: "taggit_tag_name_58eb2ed9_like")
-  @@index([slug], map: "taggit_tag_slug_6be58b2c_like")
+  @@index([name(ops: raw("varchar_pattern_ops"))], map: "taggit_tag_name_58eb2ed9_like")
+  @@index([slug(ops: raw("varchar_pattern_ops"))], map: "taggit_tag_slug_6be58b2c_like")
 }
 `)
 
@@ -3698,6 +3698,32 @@ class TaggitTag(models.Model):
 
     class Meta:
         db_table = "taggit_tag"
+`)
+  })
+
+  // Past PostgreSQL's 63 characters Django cuts the table and the column to 24 each.
+  it('leaves out a _like index whose name Django had to shorten', () => {
+    const code = djangoFor(`
+model organization_membership_invitation {
+  id               Int    @id @default(autoincrement())
+  invitation_token String @unique @db.VarChar(64)
+  url_path         String @unique
+
+  @@index([invitation_token], map: "organization_membership__invitation_token_7b4c1edf_like")
+  @@index([url_path], map: "organization_membership_invitation_url_path_2b9c6064_like")
+}
+`)
+
+    expect(code).toBe(`from django.db import models
+
+
+class OrganizationMembershipInvitation(models.Model):
+    id = models.AutoField(primary_key=True)
+    invitation_token = models.CharField(max_length=64, unique=True)
+    url_path = models.TextField(unique=True)
+
+    class Meta:
+        db_table = "organization_membership_invitation"
 `)
   })
 

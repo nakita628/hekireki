@@ -1180,12 +1180,41 @@ function declaredUniqueNames(uniqueIndexes: readonly DMMF.Index[]) {
   return names
 }
 
+// The name Django's schema editor gives the `_like` index of a column
+// (`_create_index_name`): past PostgreSQL's 63 characters, the table and the
+// column are cut to 24 each. A Node.js in FIPS mode has no MD5 to name it with.
+function likeIndexName(tableName: string, column: string) {
+  const suffix = (() => {
+    try {
+      const digest = createHash('md5').update(`${tableName}${column}`).digest('hex')
+      return `${digest.slice(0, 8)}_like`
+    } catch {
+      return null
+    }
+  })()
+  if (suffix === null) return null
+  const full = `${tableName}_${column}_${suffix}`
+  // Python counts and cuts by code point.
+  if ([...full.matchAll(/./gsu)].length <= 63) return full
+  const [table, col] = [tableName, column].map((text) => text.match(/^.{0,24}/su)?.[0] ?? '')
+  const short = `${table}_${col}_${suffix}`
+  return /^[_\d]/u.test(short) ? `D${short.slice(0, -1)}` : short
+}
+
 // On PostgreSQL Django gives every unique varchar or text column a second index
 // of its own, for LIKE, named `<table>_<column>_<digest>_like`. A schema pulled
 // from tables Django created lists it as an @@index under that name, which
-// `migrate` would then create twice.
-function likeIndexNames(model: DMMF.Model, allModels: readonly DMMF.Model[], provider: string) {
-  if (provider !== 'postgresql') return new Map<string, string>()
+// `migrate` would then create a second time.
+function likeIndexNames(
+  model: DMMF.Model,
+  allModels: readonly DMMF.Model[],
+  indexes: readonly DMMF.Index[],
+  provider: string,
+) {
+  const named = indexes.some(
+    (idx) => idx.model === model.name && idx.dbName?.endsWith('_like') === true,
+  )
+  if (provider !== 'postgresql' || !named) return new Map<string, string>()
   const tableName = model.dbName ?? model.name
   const pkFields = primaryKeyFields(model)
   const singlePk = pkFields.length === 1 ? pkFields[0] : undefined
@@ -1210,10 +1239,9 @@ function likeIndexNames(model: DMMF.Model, allModels: readonly DMMF.Model[], pro
         const referenced = target?.fields.find((f) => f.name === owner.relationToFields?.[0])
         return (isPk || (back !== undefined && !back.isList)) && isText(referenced)
       })
-      .map((field) => {
-        const column = fieldColumnName(field)
-        const digest = createHash('md5').update(`${tableName}${column}`).digest('hex').slice(0, 8)
-        return [`${tableName}_${column}_${digest}_like`, field.name]
+      .flatMap((field): [string, string][] => {
+        const name = likeIndexName(tableName, fieldColumnName(field))
+        return name === null ? [] : [[name, field.name]]
       }),
   )
 }
@@ -1273,7 +1301,7 @@ function generateMetaLines(
       return `models.UniqueConstraint(fields=[${fieldNames}], name=${toPythonString(name)})`
     })
 
-  const likeNames = likeIndexNames(model, allModels, provider)
+  const likeNames = likeIndexNames(model, allModels, indexes, provider)
   const indexEntries = writtenIndexes(model, indexes, likeNames).map((idx) => {
     // Prisma records a descending index column as a sort order; Django spells
     // the same thing as a "-" prefix on the field name.
@@ -1461,11 +1489,14 @@ export function generateEnumClass(enumDef: DMMF.DatamodelEnum) {
 // The django.contrib.postgres index classes the written indexes are declared with.
 function indexClassesOf(
   models: readonly DMMF.Model[],
+  allModels: readonly DMMF.Model[],
   indexes: readonly DMMF.Index[],
   provider: string,
 ) {
   return models
-    .flatMap((model) => writtenIndexes(model, indexes, likeIndexNames(model, models, provider)))
+    .flatMap((model) =>
+      writtenIndexes(model, indexes, likeIndexNames(model, allModels, indexes, provider)),
+    )
     .map((idx) => postgresIndexClass(idx.algorithm))
     .filter((ctor) => ctor !== null)
 }
@@ -1559,6 +1590,7 @@ export function collectGlobalImports(
   models: readonly DMMF.Model[],
   indexes: readonly DMMF.Index[],
   provider: string,
+  allModels: readonly DMMF.Model[] = models,
 ) {
   const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
   const needsUtcField = scalarFields.some((f) => holdsUtc(f, provider))
@@ -1604,7 +1636,7 @@ export function collectGlobalImports(
     fromDatetime: ['date', 'datetime', 'time'].filter((kind) => kinds.has(kind)),
     nowHelpers: nowHelperKinds.length > 0,
     nowDatetime: nowKinds.includes('datetime'),
-    indexClasses: [...new Set(indexClassesOf(models, indexes, provider))].toSorted(),
+    indexClasses: [...new Set(indexClassesOf(models, allModels, indexes, provider))].toSorted(),
   }
   const stdlib = stdlibImports(needs)
   const thirdParty = thirdPartyImports(needs)
