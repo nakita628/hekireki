@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm'
 
 const blobBytes = customType<{ data: Uint8Array }>({
   dataType: () => 'blob',
+  codec: 'blob',
 })
 
 const utcDateTime = customType<{ data: Date; driverData: string | number }>({

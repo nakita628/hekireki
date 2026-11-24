@@ -180,6 +180,7 @@ const COLUMN_HELPERS: { readonly [name: string]: string } = {
 })`,
   blobBytes: `const blobBytes = customType<{ data: Uint8Array }>({
   dataType: () => 'blob',
+  codec: 'blob',
 })`,
   bytes: `const bytes = customType<{ data: Uint8Array; config: { type: string } }>({
   dataType: (config) => config?.type ?? 'longblob',
