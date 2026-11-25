@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { stripAnnotations } from '../annotation/index.js'
-import { constraintName } from '../naming/case.js'
+import { constraintName, indexPrefix } from '../naming/case.js'
 import { allocate } from '../naming/index.js'
 import {
   implicitJoinTables,
@@ -549,6 +549,21 @@ function sortSetting(idx: Pick<DMMF.Index, 'fields'> | undefined, field: string)
   return idx?.fields.find((f) => f.name === field)?.sortOrder === 'desc' ? ',sort:desc' : ''
 }
 
+// GORM's `length:` index setting for a field MySQL indexes by a prefix (`note(length: 100)`), which
+// the migrator writes after the column as Prisma Migrate does, `note`(100); a TEXT or BLOB column
+// cannot be indexed without one. The other databases take no prefix.
+function lengthSetting(
+  model: DMMF.Model,
+  idx: Pick<DMMF.Index, 'fields'> | undefined,
+  field: string,
+  provider: string | undefined,
+) {
+  const indexField = idx?.fields.find((f) => f.name === field)
+  const prefix =
+    provider === 'mysql' && indexField !== undefined ? indexPrefix(model, indexField) : undefined
+  return prefix === undefined ? '' : `,length:${prefix}`
+}
+
 // GORM's `priority:` index setting for a field of a composite index: GORM orders an index's columns
 // by priority (10 where none is given) and otherwise by struct field order, so each field carries
 // its 1-based position in the schema's field list, `@@index([c, b])` giving `(c, b)` as Prisma
@@ -636,7 +651,7 @@ function collectCompositeIndexTags(
       const named = mappedUniques.get(f.name)
       return [
         f.name,
-        `uniqueIndex:${escapeTagValue(named ?? constraintName(tableName, [f.dbName ?? f.name], 'key', provider ?? ''))}${sortSetting(plainUniqueOf.get(f.name), f.name)}`,
+        `uniqueIndex:${escapeTagValue(named ?? constraintName(tableName, [f.dbName ?? f.name], 'key', provider ?? ''))}${lengthSetting(model, plainUniqueOf.get(f.name), f.name, provider)}${sortSetting(plainUniqueOf.get(f.name), f.name)}`,
       ]
     })
 
@@ -649,7 +664,7 @@ function collectCompositeIndexTags(
       const idx = plainUniqueOf.get(fields.join(','))
       return fields.map((f): [string, string] => [
         f,
-        `uniqueIndex:${escapeTagValue(idxName)}${prioritySetting(fields, f)}${sortSetting(idx, f)}`,
+        `uniqueIndex:${escapeTagValue(idxName)}${prioritySetting(fields, f)}${lengthSetting(model, idx, f, provider)}${sortSetting(idx, f)}`,
       ])
     })
 
@@ -687,7 +702,7 @@ function collectCompositeIndexTags(
     const fieldNames = idx.fields.map((f) => f.name)
     return fieldNames.map((f, i): [string, string] => [
       f,
-      `${setting}:${escapeTagValue(name)}${typeSetting}${expressions[i] ?? ''}${prioritySetting(fieldNames, f)}${sortSetting(idx, f)}${whereSetting}`,
+      `${setting}:${escapeTagValue(name)}${typeSetting}${expressions[i] ?? ''}${prioritySetting(fieldNames, f)}${lengthSetting(model, idx, f, provider)}${sortSetting(idx, f)}${whereSetting}`,
     ])
   }
 
