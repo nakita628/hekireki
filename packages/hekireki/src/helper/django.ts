@@ -9,7 +9,7 @@ import {
   pythonDocstringLines,
   toPythonString,
 } from '../literal/python.js'
-import { makePascalCase, makeSnakeCase } from '../naming/case.js'
+import { constraintName, makePascalCase, makeSnakeCase } from '../naming/case.js'
 import {
   backRelation,
   cuidDefaultVersion,
@@ -1276,10 +1276,11 @@ function partialIndexComment(
   where: string,
   tableName: string,
   columnRef: (prismaFieldName: string) => string,
+  provider: string,
 ) {
   const columns = index.fields.map((f) => columnRef(f.name))
   const suffix = index.type === 'unique' ? 'key' : 'idx'
-  const name = index.dbName ?? `${tableName}_${columns.join('_')}_${suffix}`
+  const name = index.dbName ?? constraintName(tableName, columns, suffix, provider)
   const kind = index.type === 'unique' ? 'unique index' : 'index'
   const on = columns.map((c) => quotedIdentifier(c)).join(', ')
   // A comment is one line: a raw condition that spans lines is read as one.
@@ -1366,7 +1367,7 @@ function generateMetaLines(
   const partialComments = (unique: boolean) =>
     partials
       .filter((p) => p.index.model === model.name && (p.index.type === 'unique') === unique)
-      .flatMap((p) => partialIndexComment(p.index, p.where, tableName, columnRef))
+      .flatMap((p) => partialIndexComment(p.index, p.where, tableName, columnRef, provider))
 
   return [
     '',

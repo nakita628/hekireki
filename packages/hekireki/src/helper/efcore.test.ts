@@ -3490,6 +3490,29 @@ model Tag {
 }
 `
 
+  it('does not take the key for a partial index on the same fields', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["partialIndexes"]
+}
+
+model A {
+  id    Int    @id
+  email String @unique
+
+  @@index([id], where: raw("id > 0"))
+}
+`
+    const { plan } = fixture(schema, { ...DEFAULT_OPTIONS, source: schema })
+    const code = contextFile(plan).code
+    expect(code).toContain('entity.HasKey(e => e.Id).HasName("A_pkey");')
+    expect(code).toContain('.HasFilter("(id > 0)")')
+  })
+
   it('keeps its condition with HasFilter, and keys nothing', () => {
     const { plan } = fixture(PARTIAL, { ...DEFAULT_OPTIONS, source: PARTIAL })
     expect(contextFile(plan).code).toContain(`        modelBuilder.Entity<User>(entity =>

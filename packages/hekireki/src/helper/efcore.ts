@@ -1317,7 +1317,7 @@ export function planEfCore(
 ): EfCorePlan {
   // The `where` of a partial index is not in DMMF; it is read off the schema's text.
   const blocks = prismaBlocks(options.source ?? '')
-  const whereOf = partialIndexWhere(blocks)
+  const whereOf = partialIndexWhere(blocks, options.provider)
   // DMMF leaves an `@ignore` field out of the model, but not out of an index that lists it: the
   // entity has no property for such an index to name, so it is left out with the field.
   const planIndexes = (model: DMMF.Model): readonly EfIndex[] => {

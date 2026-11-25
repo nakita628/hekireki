@@ -75,14 +75,6 @@ function indexCondition(tokens: readonly string[]): IndexCondition | null {
   return { kind: 'fields', terms }
 }
 
-/**
- * The `where` of each partial index (the `partialIndexes` preview feature), with what tells the
- * index apart: its model, whether it is unique, its fields and its `map`. DMMF drops it, so it is
- * read off the schema's text.
- *
- * @param blocks - The blocks of the Prisma schema as written (all of its files, merged).
- * @returns Each index that has a `where`.
- */
 // The fields an @@index or @@unique lists, named or as its first argument.
 function blockIndexFields(args: ReturnType<typeof attributeArguments>) {
   const list = args.get('fields') ?? args.get('') ?? []
@@ -102,6 +94,14 @@ function conditionKey(
   return JSON.stringify([model, unique, dbName ?? null, fields])
 }
 
+/**
+ * The `where` of each partial index (the `partialIndexes` preview feature), with what tells the
+ * index apart: its model, whether it is unique, its fields and its `map`. DMMF drops it, so it is
+ * read off the schema's text.
+ *
+ * @param blocks - The blocks of the Prisma schema as written (all of its files, merged).
+ * @returns Each index that has a `where`.
+ */
 export function indexConditions(blocks: readonly PrismaBlock[]) {
   return blocks
     .filter((block) => block.keyword === 'model')
@@ -134,32 +134,40 @@ export function indexConditions(blocks: readonly PrismaBlock[]) {
 }
 
 // A partial index's condition as Prisma Migrate writes it. Prisma takes true, false, null, a
-// string or a number for a field, or `{ not: ... }` of one.
-function conditionSql(model: DMMF.Model, condition: IndexCondition) {
+// string or a number for a field, or `{ not: ... }` of one. SQL Server has no boolean literal, so
+// there a Boolean is compared with 1 or 0 and a name is quoted in brackets.
+function conditionSql(model: DMMF.Model, condition: IndexCondition, provider: string | undefined) {
   if (condition.kind === 'raw') return `(${condition.sql})`
+  const sqlServer = provider === 'sqlserver'
   const byName = new Map(model.fields.map((f) => [f.name, f]))
   const terms = condition.terms.map((term) => {
     const field = byName.get(term.field)
-    const column = sqlQuoted(field ? (field.dbName ?? field.name) : term.field)
+    const column = sqlQuoted(field ? (field.dbName ?? field.name) : term.field, sqlServer)
     if (term.value === 'null') return `${column} IS ${term.not ? 'NOT ' : ''}NULL`
-    const value = term.value.startsWith('"') ? sqlString(prismaString(term.value)) : term.value
-    return `${column} ${term.not ? '!=' : '='} ${value}`
+    return `${column} ${term.not ? '!=' : '='} ${conditionValue(term.value, sqlServer)}`
   })
   return `(${terms.join(' AND ')})`
 }
 
-function sqlQuoted(name: string) {
-  return `"${name.replaceAll('"', '""')}"`
+function conditionValue(value: string, sqlServer: boolean) {
+  if (value.startsWith('"')) return sqlString(prismaString(value))
+  if (sqlServer && (value === 'true' || value === 'false')) return value === 'true' ? '1' : '0'
+  return value
+}
+
+function sqlQuoted(name: string, sqlServer: boolean) {
+  return sqlServer ? `[${name.replaceAll(']', ']]')}]` : `"${name.replaceAll('"', '""')}"`
 }
 
 /**
  * The condition of each partial index of a schema, as SQL, looked up by the index DMMF gives.
  *
  * @param blocks - The blocks of the Prisma schema as written (all of its files, merged).
+ * @param provider - The datasource's provider, which the SQL is written for.
  * @returns For a model and one of its indexes (`unique` or `normal`), the `WHERE` condition of a
  *   partial one in parentheses, or undefined for an index that holds every row.
  */
-export function partialIndexWhere(blocks: readonly PrismaBlock[]) {
+export function partialIndexWhere(blocks: readonly PrismaBlock[], provider?: string) {
   const conditions = new Map<string, ReturnType<typeof indexConditions>[number]>()
   for (const c of indexConditions(blocks)) {
     const key = conditionKey(c.model, c.unique, c.dbName, c.fields)
@@ -173,6 +181,8 @@ export function partialIndexWhere(blocks: readonly PrismaBlock[]) {
       readonly fields: readonly { readonly name: string }[]
     },
   ) => {
+    // Only an @@index or a unique can be partial; a key (`id`) on the same fields is not one.
+    if (index.type !== 'unique' && index.type !== 'normal') return undefined
     const condition = conditions.get(
       conditionKey(
         model.name,
@@ -181,6 +191,6 @@ export function partialIndexWhere(blocks: readonly PrismaBlock[]) {
         index.fields.map((f) => f.name),
       ),
     )
-    return condition === undefined ? undefined : conditionSql(model, condition.condition)
+    return condition === undefined ? undefined : conditionSql(model, condition.condition, provider)
   }
 }

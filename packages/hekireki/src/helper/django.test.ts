@@ -3897,6 +3897,32 @@ ${models}`
     return djangoCode(dmmfModels, enums, indexes, 'postgresql', source)
   }
 
+  it('keeps a plain @unique beside a partial unique on the same field, and no key as a partial index', () => {
+    const code = partialDjango(`
+model A {
+  id    Int    @id
+  email String @unique
+
+  @@unique([email], where: raw("alive"), map: "a_email_alive")
+  @@index([id], where: raw("id > 0"))
+}
+`)
+    expect(code).toContain('email = models.TextField(unique=True)')
+    expect(code.split('The partial index "A_id_idx"')).toHaveLength(2)
+  })
+
+  it('names a partial index as Prisma Migrate does, cut to the identifier limit', () => {
+    const code = partialDjango(`
+model AVeryLongModelNameThatGoesOnAndOnAndOnForever {
+  id                              Int @id
+  keyOfTheModelThatGoesOn Int
+
+  @@index([keyOfTheModelThatGoesOn], where: raw("id > 0"))
+}
+`)
+    expect(code).toContain('"AVeryLongModelNameThatGoesOnAndOnAndOnForever_keyOfTheModel_idx"')
+  })
+
   // Django's condition= takes a Q, not SQL: written as a plain index or constraint a partial one
   // would hold every row, so it is left out and named in a comment for a migration to create.
   it('leaves a partial index out with a comment, and keeps one that holds every row', () => {

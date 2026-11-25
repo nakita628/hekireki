@@ -3246,11 +3246,27 @@ ${models}`
       result.indexes,
       provider,
       new Set(),
-      partialIndexWhere(prismaBlocks(schema)),
+      partialIndexWhere(prismaBlocks(schema), provider),
     )
   }
 
-  it('writes postgresql_where=text(...) on PostgreSQL', () => {
+  it('writes a Boolean as 1 or 0 and a name in brackets on SQL Server, which has no boolean literal', () => {
+    expect(
+      partialCode(
+        'sqlserver',
+        `model Account {
+  id    Int     @id
+  alive Boolean
+  n     Int
+
+  @@index([n], where: { alive: true })
+}
+`,
+      ),
+    ).toContain('Index("Account_n_idx", "n", mssql_where=literal_column("([alive] = 1)")),')
+  })
+
+  it('writes postgresql_where=literal_column(...) on PostgreSQL', () => {
     expect(
       partialCode(
         'postgresql',
@@ -3262,13 +3278,13 @@ ${models}`
   note   String?
   tag    String
 
-  @@unique([n], where: raw("note <> 'a\\"b' AND tag::text <> ':x'"), map: "account_n_key")
+  @@unique([n], where: raw("note <> 'a\\"b' AND tag::text <> ':x' AND tag <> ':ab:'"), map: "account_n_key")
   @@index([alive], where: { alive: true })
   @@index([tag], where: { note: "it's", n: { not: 5 } })
   @@index([n])
 }`,
       ),
-    ).toBe(`from sqlalchemy import Index, MetaData, Text, text
+    ).toBe(`from sqlalchemy import Index, MetaData, Text, literal_column
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
 
@@ -3289,16 +3305,16 @@ class Account(Base):
     tag: Mapped[str]
 
     __table_args__ = (
-        Index("Account_email_key", "email", unique=True, postgresql_where=text("(note IS NULL)")),
-        Index("Account_alive_idx", "alive", postgresql_where=text("(\\"alive\\" = true)")),
-        Index("Account_tag_idx", "tag", postgresql_where=text("(\\"note\\" = 'it''s' AND \\"n\\" != 5)")),
+        Index("Account_email_key", "email", unique=True, postgresql_where=literal_column("(note IS NULL)")),
+        Index("Account_alive_idx", "alive", postgresql_where=literal_column("(\\"alive\\" = true)")),
+        Index("Account_tag_idx", "tag", postgresql_where=literal_column("(\\"note\\" = 'it''s' AND \\"n\\" != 5)")),
         Index("Account_n_idx", "n"),
-        Index("account_n_key", "n", unique=True, postgresql_where=text("(note <> 'a\\"b' AND tag::text <> '\\\\:x')")),
+        Index("account_n_key", "n", unique=True, postgresql_where=literal_column("(note <> 'a\\"b' AND tag::text <> ':x' AND tag <> ':ab:')")),
     )
 `)
   })
 
-  it('writes sqlite_where=text(...) on SQLite', () => {
+  it('writes sqlite_where=literal_column(...) on SQLite', () => {
     expect(
       partialCode(
         'sqlite',
@@ -3310,7 +3326,7 @@ class Account(Base):
   @@unique([email], where: { alive: true })
 }`,
       ),
-    ).toBe(`from sqlalchemy import Index, Text, text
+    ).toBe(`from sqlalchemy import Index, Text, literal_column
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -3326,7 +3342,7 @@ class Account(Base):
     alive: Mapped[bool]
 
     __table_args__ = (
-        Index("Account_email_key", "email", unique=True, sqlite_where=text("(\\"alive\\" = true)")),
+        Index("Account_email_key", "email", unique=True, sqlite_where=literal_column("(\\"alive\\" = true)")),
         {"sqlite_autoincrement": True},
     )
 `)

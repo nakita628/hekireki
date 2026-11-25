@@ -78,6 +78,7 @@ const MODULE_NAMES = new Set([
   'func',
   'int',
   'list',
+  'literal_column',
   'mapped_column',
   'relationship',
   'str',
@@ -183,16 +184,12 @@ function whereKeyword(provider: string) {
   return provider === 'mysql' ? null : 'postgresql_where'
 }
 
-// A partial index's condition as the argument of Index(): text() reads `:name` as a bind
-// parameter, which DDL cannot render, so each colon it would take is escaped with a backslash.
+// A partial index's condition as the argument of Index(). literal_column() renders the SQL as it
+// is, where text() would take a `:name` in it for a bind parameter, which DDL cannot render.
 function whereArg(index: SqlIndex, provider: string) {
   const keyword = whereKeyword(provider)
   if (index.where === undefined || keyword === null) return null
-  const sql = index.where.replaceAll(
-    /(?<![:\p{L}\p{N}_\\]):(?=[\p{L}\p{N}_]+(?![:\p{L}\p{N}_]))/gu,
-    '\\:',
-  )
-  return `${keyword}=text(${toPythonString(sql)})`
+  return `${keyword}=literal_column(${toPythonString(index.where)})`
 }
 
 // The indexes and uniques of a model whose fields are all on it: one that lists an `@ignore`d
@@ -554,6 +551,7 @@ const MODULE_LEVEL_NAMES = new Set([
   'date',
   'timezone',
   'text',
+  'literal_column',
   'func',
 ])
 
@@ -1611,7 +1609,7 @@ function modelSaImports(
     ...(foreignKeys.some((assoc) => assoc.foreignKeys.length > 1) ? ['ForeignKeyConstraint'] : []),
     ...(modelIndexes(model, indexes).length > 0 ? ['Index'] : []),
     ...(modelIndexes(model, indexes).some((idx) => whereArg(idx, provider) !== null)
-      ? ['text']
+      ? ['literal_column']
       : []),
   ]
 }

@@ -20,7 +20,7 @@ export function sqlalchemy(options: GeneratorOptions) {
       indexes,
       options.datasources[0]?.activeProvider,
       viewNames(blocks),
-      partialIndexWhere(blocks),
+      partialIndexWhere(blocks, options.datasources[0]?.activeProvider),
     )
     return yield* emitRaw(code, resolved.dir, resolved.file)
   })
