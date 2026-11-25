@@ -3293,6 +3293,43 @@ model Item {
       'ForeignKeyConstraint(["ref"], ["Account.id"], ondelete="RESTRICT", onupdate="CASCADE", name="item_holder_fk")',
     )
   })
+
+  it('gives the column the foreign key of the relation to a table, not one to a view', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["views"]
+}
+view Summary {
+  id    Int    @unique
+  items Item[]
+}
+model Account {
+  id    Int    @id
+  items Item[]
+}
+model Item {
+  id      Int     @id
+  ref     Int
+  summary Summary @relation(fields: [ref], references: [id])
+  account Account @relation(fields: [ref], references: [id], map: "item_account_fk")
+}
+`
+    const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
+    const code = generateSingleFile(
+      result.models,
+      result.enums,
+      result.indexes,
+      'postgresql',
+      new Set(['Summary']),
+      () => undefined,
+      relationMaps(prismaBlocks(schema)),
+    )
+    expect(code).not.toContain('ForeignKey("Summary.id"')
+    expect(code).toContain('name="item_account_fk"')
+  })
 })
 
 // A partial index (the `partialIndexes` preview feature) keeps its condition, which DMMF drops, as

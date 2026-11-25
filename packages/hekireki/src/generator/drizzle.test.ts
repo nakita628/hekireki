@@ -1902,7 +1902,10 @@ describe('keys, indexes and foreign keys as Prisma Migrate makes them', () => {
       'postgresql',
       [],
     )
-    expect(schema).toContain(`foreignKey({ name: '_${'P'.repeat(57)}_fkey', columns: [table.A]`)
+    // Prisma Migrate cuts the table's name and keeps `_A_fkey` and `_B_fkey` whole, so the two
+    // names stay apart.
+    expect(schema).toContain(`foreignKey({ name: '_${'P'.repeat(55)}_A_fkey', columns: [table.A]`)
+    expect(schema).toContain(`foreignKey({ name: '_${'P'.repeat(55)}_B_fkey', columns: [table.B]`)
   })
 
   // DMMF drops `@relation(map:)`: the name is read off the schema's text, as Prisma Migrate takes

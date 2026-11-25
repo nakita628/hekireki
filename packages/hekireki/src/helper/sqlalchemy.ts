@@ -1206,7 +1206,7 @@ function generateTableArgs(
   const modelByName = new Map(allModels.map((m) => [m.name, m]))
   // A column takes one inline ForeignKey (foreignKeyArgs), the first relation's over it; another
   // relation over the same single column, with a constraint of its own, is written here.
-  const { belongsTo } = getAssociations(model, allModels)
+  const belongsTo = realForeignKeys(model, getAssociations(model, allModels), views)
   const isInline = (f: DMMF.Field) =>
     f.relationFromFields?.length === 1 &&
     belongsTo.find((a) => a.foreignKey === f.relationFromFields?.[0])?.name === f.name
@@ -1545,7 +1545,8 @@ export function generateModelBody(
         field,
         isPk,
         isFk,
-        associations,
+        // The column's ForeignKey is that of a relation the database holds: none to a view.
+        { ...associations, belongsTo: realForeignKeys(model, associations, views) },
         allModels,
         enumMap,
         provider,
