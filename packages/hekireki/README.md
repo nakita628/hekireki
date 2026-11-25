@@ -97,7 +97,8 @@ add the foreign keys back, or migrate with Prisma Migrate.
 On PostgreSQL, `hekireki-gorm` holds a `Decimal @db.Money` in `Money` and a `Json @db.Json` in
 `PlainJSON`, types written beside the models. PostgreSQL prints money in its locale's form
 (`$1,234.50`), which a `float64` cannot scan: `Money` reads the C and en_US form or a plain number,
-refuses any other text (a locale whose decimal mark is `,`), and writes the amount through
+refuses any other text (a locale whose decimal mark is `,`) and an amount past $90 trillion,
+which a `float64` does not hold to the cent, and writes the amount through
 `numeric`, which no locale reads.
 `PlainJSON` keeps the JSON text as written and tells `AutoMigrate` the column is `json`, where
 `datatypes.JSON` makes it `jsonb`. Both answer `money` and `json` to `AutoMigrate`, so the next

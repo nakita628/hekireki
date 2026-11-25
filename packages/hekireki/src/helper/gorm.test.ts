@@ -2944,6 +2944,7 @@ model Wallet {
     expect(code).toContain(
       '\t\treturn fmt.Errorf("a money column held %q, which is not in the C or en_US form", text)\n',
     )
+    expect(code).toContain('\tif amount > maxExactMoney || amount < -maxExactMoney {\n')
   })
 
   it('leaves CockroachDB, which has no money and whose json is jsonb, as it was', () => {
