@@ -141,9 +141,9 @@ func (Tag) TableName() string {
 type Comment struct {
 	ID        int      `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
 	Body      string   `gorm:"column:body;not null" json:"body"`
-	PostID    string   `gorm:"column:post_id;index:comments_post_id_created_at_idx;not null" json:"post_id"`
+	PostID    string   `gorm:"column:post_id;index:comments_post_id_created_at_idx,priority:1;not null" json:"post_id"`
 	AuthorID  *string  `gorm:"column:author_id" json:"author_id"`
-	CreatedAt DateTime `gorm:"column:created_at;index:comments_post_id_created_at_idx;type:timestamp(3);default:CURRENT_TIMESTAMP;autoCreateTime:false;not null" json:"created_at"`
+	CreatedAt DateTime `gorm:"column:created_at;index:comments_post_id_created_at_idx,priority:2;type:timestamp(3);default:CURRENT_TIMESTAMP;autoCreateTime:false;not null" json:"created_at"`
 	Post      *Post    `gorm:"belongsTo"`
 	Author    *User    `gorm:"foreignKey:AuthorID;belongsTo"`
 }
@@ -184,8 +184,8 @@ func (m *Follow) BeforeCreate(tx *gorm.DB) error {
 // Self-relation (adjacency-list tree) with a composite unique.
 type Category struct {
 	ID       int        `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`
-	Name     string     `gorm:"column:name;uniqueIndex:Category_parent_id_name_key;not null" json:"name"`
-	ParentID *int       `gorm:"column:parent_id;uniqueIndex:Category_parent_id_name_key;size:32" json:"parent_id"`
+	Name     string     `gorm:"column:name;uniqueIndex:Category_parent_id_name_key,priority:2;not null" json:"name"`
+	ParentID *int       `gorm:"column:parent_id;uniqueIndex:Category_parent_id_name_key,priority:1;size:32" json:"parent_id"`
 	Parent   *Category  `gorm:"foreignKey:ParentID;belongsTo"`
 	Children []Category `gorm:"foreignKey:ParentID;constraint:Category_parent_id_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"`
 }
@@ -219,8 +219,8 @@ func (m *Order) BeforeCreate(tx *gorm.DB) error {
 // Child of Order with a composite unique constraint.
 type OrderItem struct {
 	ID      int64   `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	OrderID int64   `gorm:"column:order_id;uniqueIndex:order_items_order_id_sku_key;not null" json:"order_id"`
-	Sku     string  `gorm:"column:sku;uniqueIndex:order_items_order_id_sku_key;type:varchar(32);not null" json:"sku"`
+	OrderID int64   `gorm:"column:order_id;uniqueIndex:order_items_order_id_sku_key,priority:1;not null" json:"order_id"`
+	Sku     string  `gorm:"column:sku;uniqueIndex:order_items_order_id_sku_key,priority:2;type:varchar(32);not null" json:"sku"`
 	Qty     *int    `gorm:"column:qty;size:32;default:1;not null" json:"qty"`
 	Price   float64 `gorm:"column:price;type:decimal(12,2);not null" json:"price"`
 	Order   *Order  `gorm:"belongsTo"`

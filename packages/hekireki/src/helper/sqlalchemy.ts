@@ -1112,6 +1112,18 @@ function tableOptions(model: DMMF.Model, provider: string) {
     : null
 }
 
+// A composite @@id whose columns are not in field order: `primary_key=True` on each column makes
+// SQLAlchemy's key the table's column order, so the key is spelled out in Prisma's order. Its
+// name is still the base's `<table>_pkey`.
+function keyOrderConstraint(model: DMMF.Model) {
+  const keyFields = model.primaryKey?.fields ?? []
+  const keySet = new Set(keyFields)
+  const fieldOrder = model.fields.filter((f) => keySet.has(f.name)).map((f) => f.name)
+  if (keyFields.every((name, i) => fieldOrder[i] === name)) return null
+  const columns = keyFields.map((name) => toPythonString(fieldColumn(model, name)))
+  return `PrimaryKeyConstraint(${columns.join(', ')})`
+}
+
 function generateTableArgs(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
@@ -1167,7 +1179,9 @@ function generateTableArgs(
   // SQLite's AUTOINCREMENT on a lone Int key, whether or not it defaults to autoincrement() (a
   // BigInt's is no INTEGER key, and goes without).
   const options = tableOptions(model, provider)
+  const keyOrder = keyOrderConstraint(model)
   const allConstraints = [
+    ...(keyOrder === null ? [] : [keyOrder]),
     ...indexConstraints,
     ...fkConstraints,
     ...(options === null ? [] : [options]),
@@ -1631,6 +1645,7 @@ function modelSaImports(
     ...columns,
     ...(foreignKeys.length > 0 ? ['ForeignKey'] : []),
     ...(foreignKeys.some((assoc) => assoc.foreignKeys.length > 1) ? ['ForeignKeyConstraint'] : []),
+    ...(keyOrderConstraint(model) === null ? [] : ['PrimaryKeyConstraint']),
     ...(modelIndexes(model, indexes).length > 0 ? ['Index'] : []),
     ...(readsLiteralColumn(model, indexes, provider) ? ['literal_column'] : []),
   ]

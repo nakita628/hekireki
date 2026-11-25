@@ -527,3 +527,135 @@ impl ActiveModelBehavior for ActiveModel {}
 `)
   })
 })
+
+describe('a composite key out of field order', () => {
+  // DeriveEntityModel makes the PrimaryKey enum, the tuple find_by_id takes and the key
+  // Schema::create_table_from_entity writes of the fields in their order.
+  it('declares the key fields in the @@id order at the place of the first of them', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+
+model pairs {
+  a     Int
+  b     Int
+  c     Int
+  d     Int
+  notes notes[]
+
+  @@id([b, a])
+}
+
+model notes {
+  id   Int   @id
+  pb   Int
+  pa   Int
+  pair pairs @relation(fields: [pb, pa], references: [b, a])
+}
+`
+    const { models: keyModels, enums: keyEnums } = datamodelOf(
+      getDMMF({ datamodel: [['schema.prisma', schema]] }),
+    )
+    const files = seaOrmFiles(keyModels, keyEnums, {}, 'postgresql')
+
+    expect(files.find((file) => file.fileName === 'pairs.rs')?.code)
+      .toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "pairs")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub b: i32,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub a: i32,
+    pub c: i32,
+    pub d: i32,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(has_many = "super::notes::Entity")]
+    Notes,
+}
+
+impl Related<super::notes::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Notes.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {}
+`)
+    expect(files.find((file) => file.fileName === 'notes.rs')?.code)
+      .toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "notes")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: i32,
+    pub pb: i32,
+    pub pa: i32,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::pairs::Entity",
+        from = "(Column::Pb, Column::Pa)",
+        to = "(super::pairs::Column::B, super::pairs::Column::A)"
+    )]
+    Pair,
+}
+
+impl Related<super::pairs::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Pair.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {}
+`)
+  })
+
+  it('leaves the fields where they are when the @@id order is theirs', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+
+model pairs {
+  a Int
+  b Int
+  c Int
+
+  @@id([a, c])
+}
+`
+    const { models: keyModels, enums: keyEnums } = datamodelOf(
+      getDMMF({ datamodel: [['schema.prisma', schema]] }),
+    )
+    const files = seaOrmFiles(keyModels, keyEnums, {}, 'postgresql')
+
+    expect(files.find((file) => file.fileName === 'pairs.rs')?.code)
+      .toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "pairs")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub a: i32,
+    pub b: i32,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub c: i32,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {}
+`)
+  })
+})

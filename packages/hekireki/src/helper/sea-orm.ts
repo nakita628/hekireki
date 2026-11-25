@@ -974,6 +974,27 @@ function viewDocLines(
   ]
 }
 
+/**
+ * The columns with the key's in the order of its `@@id`, at the place of the first of them, when
+ * that order is not the fields' own; every other column stays where it is. DeriveEntityModel
+ * makes the `PrimaryKey` enum, the tuple of its `ValueType` (what `find_by_id` takes) and the key
+ * `Schema::create_table_from_entity` writes of the fields in their order, so `@@id([b, a])` over
+ * `a` and `b` would otherwise be `PRIMARY KEY (a, b)`.
+ */
+function inKeyOrder<T extends { readonly field: DMMF.Field }>(
+  columns: readonly T[],
+  keyFields: readonly string[],
+) {
+  const byName = new Map(columns.map((c) => [c.field.name, c]))
+  const keyColumns = keyFields.flatMap((name) => byName.get(name) ?? [])
+  const isKey = new Set(keyColumns)
+  const inFieldOrder = columns.filter((c) => isKey.has(c))
+  if (keyColumns.every((c, i) => c === inFieldOrder[i])) return columns
+  const first = columns.findIndex((c) => isKey.has(c))
+  const rest = columns.filter((c) => !isKey.has(c))
+  return [...rest.slice(0, first), ...keyColumns, ...rest.slice(first)]
+}
+
 export function generateEntityFile(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
@@ -982,7 +1003,8 @@ export function generateEntityFile(
   provider?: string,
   views: ReadonlySet<string> = new Set(),
 ) {
-  const primaryKey = new Set(primaryKeyFields(model))
+  const keyFields = primaryKeyFields(model)
+  const primaryKey = new Set(keyFields)
   const isCompositePk = primaryKey.size > 1
 
   if (primaryKey.size === 0) return ''
@@ -1011,7 +1033,7 @@ export function generateEntityFile(
       stamp: stampValue(field, elemType),
     }
   })
-  const fieldLines = columns.flatMap((c) => c.lines)
+  const fieldLines = inKeyOrder(columns, keyFields).flatMap((c) => c.lines)
   // What before_save sets, as Prisma Client does: an @updatedAt on every save the caller left it
   // out of, a now() or literal default on insert.
   const stamped = columns.flatMap(({ field, ident, stamp }) =>

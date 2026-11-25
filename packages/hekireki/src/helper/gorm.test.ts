@@ -735,7 +735,7 @@ model Post {
 `
     const code = gormFor(schema, 'cockroachdb')
     expect(code).toContain('constraint:post_author,OnUpdate:CASCADE,OnDelete:RESTRICT')
-    expect(code).toContain('`gorm:"column:a;uniqueIndex:user_pair;not null" json:"a"`')
+    expect(code).toContain('`gorm:"column:a;uniqueIndex:user_pair,priority:1;not null" json:"a"`')
     expect(code).not.toContain('size:32')
   })
 
@@ -1393,8 +1393,8 @@ func (Session) TableName() string {
 }
 
 type VerificationToken struct {
-	Identifier string \`gorm:"column:identifier;primaryKey;uniqueIndex:VerificationToken_identifier_token_key" json:"identifier"\`
-	Token      string \`gorm:"column:token;primaryKey;uniqueIndex:VerificationToken_identifier_token_key" json:"token"\`
+	Identifier string \`gorm:"column:identifier;primaryKey;uniqueIndex:VerificationToken_identifier_token_key,priority:1" json:"identifier"\`
+	Token      string \`gorm:"column:token;primaryKey;uniqueIndex:VerificationToken_identifier_token_key,priority:2" json:"token"\`
 }
 
 func (VerificationToken) TableName() string {
@@ -1537,9 +1537,9 @@ model Account {
 type Account struct {
 	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	Email string \`gorm:"column:email;uniqueIndex:Account_email_key;uniqueIndex:account_email_alive,where:(alive);not null" json:"email"\`
-	Alive bool   \`gorm:"column:alive;uniqueIndex:Account_alive_n_key,where:(\\"alive\\" = true);index:Account_alive_idx,where:(\\"alive\\" = true);not null" json:"alive"\`
+	Alive bool   \`gorm:"column:alive;uniqueIndex:Account_alive_n_key,priority:1,where:(\\"alive\\" = true);index:Account_alive_idx,where:(\\"alive\\" = true);not null" json:"alive"\`
 	// The partial index Account_n_note_idx is left out: its condition holds a ";", at which GORM splits the tag.
-	N    int     \`gorm:"column:n;uniqueIndex:Account_alive_n_key,where:(\\"alive\\" = true);size:32;not null" json:"n"\`
+	N    int     \`gorm:"column:n;uniqueIndex:Account_alive_n_key,priority:2,where:(\\"alive\\" = true);size:32;not null" json:"n"\`
 	Code string  \`gorm:"column:code;uniqueIndex:Account_code_key,where:(n > 0);not null" json:"code"\`
 	Note *string \`gorm:"column:note;index:Account_note_idx,where:(note IN ('a\\\\,b'\\\\, 'c\\\\\\\\\\"d'\\\\, 'e\\\\\\\\,f'))" json:"note"\`
 }
@@ -1581,8 +1581,8 @@ model Token {
 
 type Pair struct {
 	ID int \`gorm:"column:id;primaryKey;size:32" json:"id"\`
-	A  int \`gorm:"column:a;uniqueIndex:Pair_a_b_key;uniqueIndex:pair_pos,where:(a > 0);size:32;not null" json:"a"\`
-	B  int \`gorm:"column:b;uniqueIndex:Pair_a_b_key;uniqueIndex:pair_pos,where:(a > 0);size:32;not null" json:"b"\`
+	A  int \`gorm:"column:a;uniqueIndex:Pair_a_b_key,priority:1;uniqueIndex:pair_pos,priority:1,where:(a > 0);size:32;not null" json:"a"\`
+	B  int \`gorm:"column:b;uniqueIndex:Pair_a_b_key,priority:2;uniqueIndex:pair_pos,priority:2,where:(a > 0);size:32;not null" json:"b"\`
 }
 
 func (Pair) TableName() string {
@@ -1629,12 +1629,12 @@ model LogEntry {
 
 type LogEntry struct {
 	ID        int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
-	UUID      string \`gorm:"column:uuid;index:log_entry_uuid_idx;type:varchar(191);not null" json:"uuid"\`
-	Action    string \`gorm:"column:action;index:log_entry_uuid_idx;index:LogEntry_action_idx;type:varchar(191);not null" json:"action"\`
-	Timestamp int    \`gorm:"column:timestamp;index:log_entry_uuid_idx,sort:desc;size:32;not null" json:"timestamp"\`
+	UUID      string \`gorm:"column:uuid;index:log_entry_uuid_idx,priority:1;type:varchar(191);not null" json:"uuid"\`
+	Action    string \`gorm:"column:action;index:log_entry_uuid_idx,priority:2;index:LogEntry_action_idx;type:varchar(191);not null" json:"action"\`
+	Timestamp int    \`gorm:"column:timestamp;index:log_entry_uuid_idx,priority:3,sort:desc;size:32;not null" json:"timestamp"\`
 	Code      string \`gorm:"column:code;uniqueIndex:LogEntry_code_key,sort:desc;type:varchar(191);not null" json:"code"\`
-	A         int    \`gorm:"column:a;uniqueIndex:LogEntry_a_b_key,sort:desc;size:32;not null" json:"a"\`
-	B         int    \`gorm:"column:b;uniqueIndex:LogEntry_a_b_key;size:32;not null" json:"b"\`
+	A         int    \`gorm:"column:a;uniqueIndex:LogEntry_a_b_key,priority:1,sort:desc;size:32;not null" json:"a"\`
+	B         int    \`gorm:"column:b;uniqueIndex:LogEntry_a_b_key,priority:2;size:32;not null" json:"b"\`
 }
 
 func (LogEntry) TableName() string {
@@ -1668,8 +1668,8 @@ model Account {
 
 type Account struct {
 	ID    int  \`gorm:"column:id;primaryKey;size:32" json:"id"\`
-	Alive bool \`gorm:"column:alive;index:Account_alive_n_idx,where:(alive);not null" json:"alive"\`
-	N     int  \`gorm:"column:n;uniqueIndex:Account_n_key,sort:desc,where:(n > 0);index:Account_alive_n_idx,sort:desc,where:(alive);size:32;not null" json:"n"\`
+	Alive bool \`gorm:"column:alive;index:Account_alive_n_idx,priority:1,where:(alive);not null" json:"alive"\`
+	N     int  \`gorm:"column:n;uniqueIndex:Account_n_key,sort:desc,where:(n > 0);index:Account_alive_n_idx,priority:2,sort:desc,where:(alive);size:32;not null" json:"n"\`
 }
 
 func (Account) TableName() string {
@@ -1880,6 +1880,162 @@ func readPrismaTime(src any) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("a DateTime column held %q", value)
 	}
 	return time.Time{}, fmt.Errorf("a DateTime column held %T", src)
+}
+`)
+  })
+})
+
+// GORM orders a composite index's columns by each field's `priority:` (10 where none is given) and
+// then by struct field order, and a composite primary key's by struct field order alone
+// (schema.Parse, gorm v1.31.2), so each field of a composite index carries its position in the
+// schema's list and the key's fields are declared in @@id order: the columns come out in the order
+// Prisma Migrate gives them.
+describe('generateGormModels composite column order', () => {
+  it('leaves the fields where they are when the @@id order is theirs, apart or not', () => {
+    const code = gormFor(
+      `
+model trio {
+  a Int
+  b Int
+  c Int
+
+  @@id([a, c])
+}
+`,
+      'postgresql',
+    )
+    const a = code.indexOf('\tA int')
+    const b = code.indexOf('\tB int')
+    const c = code.indexOf('\tC int')
+    expect(a).toBeGreaterThan(-1)
+    expect(b).toBeGreaterThan(a)
+    expect(c).toBeGreaterThan(b)
+  })
+
+  it('declares @@id fields in key order and writes priority: on composite index fields', () => {
+    expect(
+      gormFor(
+        `
+model pairs {
+  a Int
+  b Int
+  c Int
+  d Int
+
+  @@id([b, a])
+  @@unique([d, c])
+  @@index([c, b])
+}
+`,
+        'postgresql',
+      ),
+    ).toBe(`package model
+
+type Pairs struct {
+	B int \`gorm:"column:b;primaryKey;index:pairs_c_b_idx,priority:2;size:32" json:"b"\`
+	A int \`gorm:"column:a;primaryKey;size:32" json:"a"\`
+	C int \`gorm:"column:c;uniqueIndex:pairs_d_c_key,priority:2;index:pairs_c_b_idx,priority:1;size:32;not null" json:"c"\`
+	D int \`gorm:"column:d;uniqueIndex:pairs_d_c_key,priority:1;size:32;not null" json:"d"\`
+}
+
+func (Pairs) TableName() string {
+	return "pairs"
+}
+`)
+  })
+
+  it('moves the key fields, with their comments, to the first of them and keeps the rest in place', () => {
+    expect(
+      gormFor(
+        `
+model Line {
+  /// The order's number.
+  order  Int
+  /// A note.
+  note   String
+  item   String @default(uuid())
+  /// The line's number.
+  number Int
+  parts  Part[]
+
+  @@id([number, order])
+}
+
+model Part {
+  id         Int  @id
+  lineOrder  Int
+  lineNumber Int
+  line       Line @relation(fields: [lineNumber, lineOrder], references: [number, order])
+}
+`,
+        'postgresql',
+      ),
+    ).toBe(`package model
+
+import (
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+type Line struct {
+	// The line's number.
+	Number int \`gorm:"column:number;primaryKey;size:32" json:"number"\`
+	// The order's number.
+	Order int \`gorm:"column:order;primaryKey;size:32" json:"order"\`
+	// A note.
+	Note  string \`gorm:"column:note;not null" json:"note"\`
+	Item  string \`gorm:"column:item;not null" json:"item"\`
+	Parts []Part \`gorm:"foreignKey:LineNumber,LineOrder;references:Number,Order;constraint:Part_lineNumber_lineOrder_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"\`
+}
+
+func (Line) TableName() string {
+	return "Line"
+}
+
+func (m *Line) BeforeCreate(_ *gorm.DB) error {
+	if m.Item == "" {
+		m.Item = uuid.NewString()
+	}
+	return nil
+}
+
+type Part struct {
+	ID         int   \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	LineOrder  int   \`gorm:"column:lineOrder;size:32;not null" json:"lineOrder"\`
+	LineNumber int   \`gorm:"column:lineNumber;size:32;not null" json:"lineNumber"\`
+	Line       *Line \`gorm:"foreignKey:LineNumber,LineOrder;references:Number,Order;belongsTo"\`
+}
+
+func (Part) TableName() string {
+	return "Part"
+}
+`)
+  })
+
+  it('declares the fields of the @@unique that keys a model with no @id in its order', () => {
+    expect(
+      gormFor(
+        `
+model Token {
+  identifier String
+  value      String
+  token      String
+
+  @@unique([token, identifier])
+}
+`,
+        'postgresql',
+      ),
+    ).toBe(`package model
+
+type Token struct {
+	Token      string \`gorm:"column:token;primaryKey;uniqueIndex:Token_token_identifier_key,priority:1" json:"token"\`
+	Identifier string \`gorm:"column:identifier;primaryKey;uniqueIndex:Token_token_identifier_key,priority:2" json:"identifier"\`
+	Value      string \`gorm:"column:value;not null" json:"value"\`
+}
+
+func (Token) TableName() string {
+	return "Token"
 }
 `)
   })

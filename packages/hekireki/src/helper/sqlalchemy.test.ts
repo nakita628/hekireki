@@ -3456,3 +3456,118 @@ class LogEntry(Base):
 `)
   })
 })
+
+describe('composite key column order', () => {
+  function keyCode(provider: string, models: string) {
+    const schema = `datasource db {
+  provider = "${provider}"
+}
+${models}`
+    const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
+    return generateSingleFile(result.models, result.enums, result.indexes, provider)
+  }
+
+  it('spells out a key whose @@id order is not the field order', () => {
+    expect(
+      keyCode(
+        'postgresql',
+        `model pairs {
+  a Int
+  b Int
+  c Int
+  d Int
+  @@id([b, a])
+}`,
+      ),
+    ).toBe(`from sqlalchemy import MetaData, PrimaryKeyConstraint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+
+
+class Pairs(Base):
+    __tablename__ = "pairs"
+
+    a: Mapped[int] = mapped_column(primary_key=True)
+    b: Mapped[int] = mapped_column(primary_key=True)
+    c: Mapped[int]
+    d: Mapped[int]
+
+    __table_args__ = (
+        PrimaryKeyConstraint("b", "a"),
+    )
+`)
+  })
+
+  it('leaves a key whose @@id order is the field order to its columns', () => {
+    const code = keyCode(
+      'postgresql',
+      `model pairs {
+  a Int
+  b Int
+  c Int
+  @@id([a, b])
+}`,
+    )
+    expect(code).not.toContain('PrimaryKeyConstraint')
+    expect(code).not.toContain('__table_args__')
+  })
+
+  it('names the database columns, ahead of the indexes and the table options, on MySQL', () => {
+    expect(
+      keyCode(
+        'mysql',
+        `model Membership {
+  orgId  Int @map("org_id")
+  userId Int @map("user_id")
+  role   String
+  @@id([userId, orgId])
+  @@index([role, orgId])
+}`,
+      ),
+    ).toContain(`class Membership(Base):
+    __tablename__ = "Membership"
+
+    org_id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(primary_key=True)
+    role: Mapped[str]
+
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "org_id"),
+        Index("Membership_role_org_id_idx", "role", "org_id"),
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
+    )
+`)
+  })
+
+  it('keeps the order of a key a composite foreign key references', () => {
+    expect(
+      keyCode(
+        'sqlite',
+        `model Version {
+  docId  Int
+  number Int
+  notes  Note[]
+  @@id([number, docId])
+}
+model Note {
+  id      Int     @id
+  number  Int
+  docId   Int
+  version Version @relation(fields: [number, docId], references: [number, docId])
+}`,
+      ),
+    ).toContain(`class Version(Base):
+    __tablename__ = "Version"
+
+    doc_id: Mapped[int] = mapped_column("docId", primary_key=True)
+    number: Mapped[int] = mapped_column(primary_key=True)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("number", "docId"),
+    )
+`)
+  })
+})
