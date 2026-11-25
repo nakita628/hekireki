@@ -1313,6 +1313,32 @@ class Counter extends Model
 }`)
   })
 
+  // Eloquent eager loads with whereIntegerInRaw, casting each key with (int), unless the key type
+  // is 'string': `(int) 'ADMIN'` is 0, so no users of a role keyed by an enum would load. (#279)
+  it.each([
+    ['an enum', { type: 'RoleCode', kind: 'enum' as const }],
+    ['a DateTime', { type: 'DateTime' }],
+    ['a Decimal', { type: 'Decimal' }],
+    ['a Bytes', { type: 'Bytes' }],
+    ['a Float', { type: 'Float' }],
+  ])('declares the key type string for %s key', (_, key) => {
+    const role = makeModel({
+      name: 'Role',
+      fields: [makeField({ name: 'code', isId: true, ...key })],
+    })
+    const enums = [{ name: 'RoleCode', values: [{ name: 'ADMIN', dbName: null }], dbName: null }]
+    expect(eloquentModels([role], 'App\\Models', [role], enums)).toContain(
+      "    protected $keyType = 'string';",
+    )
+  })
+
+  it('keeps the integer key type for an Int or BigInt key', () => {
+    const models = ['Int', 'BigInt'].map((type) =>
+      makeModel({ name: `K${type}`, fields: [makeField({ name: 'id', type, isId: true })] }),
+    )
+    expect(eloquentModels(models, 'App\\Models')).not.toContain('$keyType')
+  })
+
   it('generates hasOne for a one-to-one relation', () => {
     const user = makeModel({
       name: 'User',
