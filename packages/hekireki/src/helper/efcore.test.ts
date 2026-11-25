@@ -3720,7 +3720,9 @@ model T {
             entity.Property(e => e.Mt)
                 .HasColumnType("mediumtext")
                 .HasColumnName("mt");
-            entity.Property(e => e.Lt).HasColumnName("lt");
+            entity.Property(e => e.Lt)
+                .HasColumnType("longtext")
+                .HasColumnName("lt");
             entity.Property(e => e.Price)
                 .HasPrecision(10, 2)
                 .HasColumnName("price");
@@ -3740,6 +3742,34 @@ model T {
             entity.Property(e => e.Mb)
                 .HasColumnType("mediumblob")
                 .HasColumnName("mb");
+            entity.Property(e => e.Raw)
+                .HasColumnType("longblob")
+                .HasColumnName("raw");`)
+  })
+
+  // MySQL indexes a TEXT or BLOB column only by a prefix, which the context does not give.
+  it('leaves an indexed MySQL TEXT or BLOB column to Pomelo', () => {
+    const { plan } = fixture(
+      `
+datasource db {
+  provider = "mysql"
+}
+
+model T {
+  id   Int    @id
+  body String @db.Text
+  lt   String @db.LongText
+  raw  Bytes
+
+  @@index([body(length: 100)])
+  @@index([lt(length: 50), raw(length: 8)])
+}
+`,
+      { ...DEFAULT_OPTIONS, provider: 'mysql' },
+    )
+    expect(contextFile(plan).code)
+      .toContain(`            entity.Property(e => e.Body).HasColumnName("body");
+            entity.Property(e => e.Lt).HasColumnName("lt");
             entity.Property(e => e.Raw).HasColumnName("raw");`)
   })
 
