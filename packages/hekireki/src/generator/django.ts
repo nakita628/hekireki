@@ -13,7 +13,7 @@ import {
 } from '../helper/django.js'
 import { enumSchemas } from '../helper/exposed.js'
 import { primaryKeyFields } from '../prisma/model.js'
-import { partialIndexWhere } from '../prisma/partial-index.js'
+import { partialIndexWhere, withPlainUniques } from '../prisma/partial-index.js'
 import { prismaBlocks, viewNames } from '../prisma/schema-text.js'
 
 export function djangoCode(
@@ -39,7 +39,7 @@ export function djangoCode(
     return where === undefined ? [] : [{ index, where }]
   })
   const idx = (indexes ?? []).filter((index) => conditionOf(index) === undefined)
-  const models = withPlainUniques(schemaModels, idx)
+  const models = withPlainUniques(schemaModels, indexes ?? [], whereOf)
   const views = viewNames(blocks)
   const enumTypes = enumSqlTypes(enums ?? [], enumSchemas(blocks))
   // Imports and default helpers are collected from the models that are actually
@@ -77,24 +77,4 @@ export function djangoCode(
   ]
 
   return `${sections.join('\n\n\n')}\n`
-}
-
-// DMMF leaves isUnique off a field whose @unique has a partial unique index beside it on the same
-// field; the @unique holds every row all the same, so the field is unique by that index.
-function withPlainUniques(models: readonly DMMF.Model[], indexes: readonly DMMF.Index[]) {
-  const unique = new Set(
-    indexes
-      .filter((i) => i.type === 'unique' && i.isDefinedOnField && i.fields.length === 1)
-      .map((i) => `${i.model}.${i.fields[0]?.name ?? ''}`),
-  )
-  return models.map((model) =>
-    model.fields.some((f) => !f.isUnique && unique.has(`${model.name}.${f.name}`))
-      ? {
-          ...model,
-          fields: model.fields.map((f) =>
-            !f.isUnique && unique.has(`${model.name}.${f.name}`) ? { ...f, isUnique: true } : f,
-          ),
-        }
-      : model,
-  )
 }
