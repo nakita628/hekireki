@@ -12,6 +12,7 @@ import {
   isJoinSideA,
   referentialActions,
 } from '../prisma/model.js'
+import { INDEX_METHODS, operatorClassName } from '../prisma/postgres.js'
 
 type DbProvider = 'postgresql' | 'mysql' | 'sqlite'
 
@@ -795,13 +796,20 @@ function makeTableConstraints(
       // A column a unique constraint names has no order, and a constraint is what a relation needs
       // ahead of its foreign key: there `sort: Desc` is dropped, as nothing in drizzle can say it.
       const descending = (f: DMMF.IndexField) => make !== 'unique' && f.sortOrder === 'desc'
+      // On PostgreSQL an index keeps the method `type:` names and each column's operator class
+      // `ops:` names, as `.using(method, ...)` and the column's `.op(...)`; without them drizzle-kit
+      // makes a btree on the column's default class. BTree is what `.on` makes, and a constraint
+      // has neither.
+      const postgresIndex = provider === 'postgresql' && make !== 'unique'
+      const method = postgresIndex ? indexMethod(idx) : undefined
       // MySQL takes part of a TEXT in an index; drizzle has the part as SQL. A descending column is
       // `.desc()` on PostgreSQL, with Prisma's `NULLS FIRST` (which drizzle-kit writes as plain
       // `DESC`, as Prisma does); SQLite's and MySQL's columns have no `.desc()`, so it is SQL there.
       const on = idx.fields.map((f) => {
         const prefix = provider === 'mysql' ? indexPrefix(model, f) : undefined
-        if (provider === 'postgresql' && descending(f)) return `table.${f.name}.desc().nullsFirst()`
-        if (prefix === undefined && !descending(f)) return `table.${f.name}`
+        const column = `table.${f.name}${postgresIndex ? operatorClassCall(model, f) : ''}`
+        if (provider === 'postgresql' && descending(f)) return `${column}.desc().nullsFirst()`
+        if (prefix === undefined && !descending(f)) return column
         imports.orm.add('sql')
         const part = prefix === undefined ? '' : `(${prefix})`
         const order = descending(f) ? ' DESC' : ''
@@ -809,7 +817,9 @@ function makeTableConstraints(
       })
       if (where !== undefined) imports.orm.add('sql')
       const condition = where === undefined ? '' : `.where(sql\`${templateText(where)}\`)`
-      return `${make}('${name}').on(${on.join(', ')})${condition}`
+      const builder =
+        method === undefined ? `on(${on.join(', ')})` : `using('${method}', ${on.join(', ')})`
+      return `${make}('${name}').${builder}${condition}`
     })
 
   // A view cannot be referenced: Prisma Migrate makes no foreign key for a relation to one.
@@ -833,6 +843,19 @@ function makeTableConstraints(
 
   const all = [pkLine, ...indexLines, ...fkLines].filter((l) => l !== null)
   return all.length > 0 ? all.join(', ') : null
+}
+
+// The method of a PostgreSQL index other than BTree, the one drizzle's `.on` makes.
+function indexMethod(index: DMMF.Index) {
+  return index.algorithm === undefined ? undefined : INDEX_METHODS[index.algorithm]
+}
+
+// A column's operator class in a PostgreSQL index as drizzle's `.op(...)`, or nothing for the
+// default class of the column's type.
+function operatorClassCall(model: DMMF.Model, field: DMMF.IndexField) {
+  if (field.operatorClass === undefined) return ''
+  const nativeType = model.fields.find((f) => f.name === field.name)?.nativeType?.[0]
+  return `.op(${tsString(operatorClassName(field.operatorClass, nativeType))})`
 }
 
 function indexMaker(type: DMMF.Index['type'], referenced: boolean) {

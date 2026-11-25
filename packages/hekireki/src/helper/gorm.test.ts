@@ -1743,6 +1743,132 @@ func (Token) TableName() string {
   })
 })
 
+// On PostgreSQL an index's method (`type: Gin`) takes GORM's `type:`, which the migrator writes as
+// USING, and an operator class (`ops:`) takes `expression:`, which the migrator writes in place of
+// the quoted column, so AutoMigrate makes the index Prisma Migrate makes (schema.Parse, gorm
+// v1.31.2, reads back each Type and Expression as written here).
+describe('generateGormModels index methods and operator classes', () => {
+  it('writes the method of a GIN index in type:', () => {
+    expect(
+      gormFor(
+        `
+model Doc {
+  id   Int      @id
+  tags String[]
+
+  @@index([tags], map: "doc_tags_gin", type: Gin)
+}
+`,
+        'postgresql',
+      ),
+    ).toContain('index:doc_tags_gin,type:gin;type:text[]"')
+  })
+
+  it('writes an operator class in expression:, after the quoted column', () => {
+    expect(
+      gormFor(
+        `
+model Doc {
+  id   Int   @id
+  data Json  @map("payload")
+
+  @@index([data(ops: JsonbPathOps)], map: "doc_data_gin", type: Gin)
+}
+`,
+        'postgresql',
+      ),
+    ).toContain('index:doc_data_gin,type:gin,expression:\\"payload\\" jsonb_path_ops;not null"')
+  })
+
+  it('writes a raw operator class as it is, beside priority:, sort:desc and where:', () => {
+    expect(
+      gormFor(
+        `
+generator client {
+  provider        = "prisma-client"
+  output          = "./generated"
+  previewFeatures = ["partialIndexes"]
+}
+
+model Doc {
+  id    Int     @id
+  title String
+  n     Int
+  alive Boolean
+
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "doc_title_trgm", type: Gist)
+  @@index([title(ops: raw("text_pattern_ops")), n(sort: Desc)], where: { alive: true })
+}
+`,
+        'postgresql',
+      ),
+    ).toBe(`package model
+
+type Doc struct {
+	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	Title string \`gorm:"column:title;index:doc_title_trgm,type:gist,expression:\\"title\\" gin_trgm_ops;index:Doc_title_n_idx,expression:\\"title\\" text_pattern_ops,priority:1,where:(\\"alive\\" = true);not null" json:"title"\`
+	N     int    \`gorm:"column:n;index:Doc_title_n_idx,priority:2,sort:desc,where:(\\"alive\\" = true);size:32;not null" json:"n"\`
+	Alive bool   \`gorm:"column:alive;not null" json:"alive"\`
+}
+
+func (Doc) TableName() string {
+	return "Doc"
+}
+`)
+  })
+
+  it('leaves out an index whose operator class holds a ";", with a comment naming it', () => {
+    expect(
+      gormFor(
+        `
+model Doc {
+  id    Int    @id
+  title String
+
+  @@index([title(ops: raw("a;b"))], map: "doc_title_ops")
+}
+`,
+        'postgresql',
+      ),
+    ).toContain(
+      '// The index doc_title_ops is left out: the expression of its column "title" with the operator class "a;b" holds a ";", at which GORM splits the tag.\n\tTitle string `gorm:"column:title;not null"',
+    )
+  })
+
+  // A line break in the operator class stays inside the comment, so the model still compiles.
+  it('keeps a line break in the left-out operator class inside the comment', () => {
+    expect(
+      gormFor(
+        `
+model Doc {
+  id    Int    @id
+  title String
+
+  @@index([title(ops: raw("a;\\nb"))], map: "doc_title_ops")
+}
+`,
+        'postgresql',
+      ),
+    ).toContain('with the operator class "a;\\nb" holds a ";"')
+  })
+
+  it('writes the method on CockroachDB, whose connector is PostgreSQL', () => {
+    expect(
+      gormFor(
+        `
+model Doc {
+  id   Int  @id
+  data Json
+
+  @@index([data], map: "doc_data_gin", type: Gin)
+}
+`,
+        'cockroachdb',
+      ),
+    ).toContain('index:doc_data_gin,type:gin;')
+  })
+})
+
 // An index column with `sort: Desc` takes GORM's `sort:desc` in that field's index setting, so
 // AutoMigrate writes it DESC in CREATE INDEX as Prisma Migrate does (schema.Parse, gorm v1.31.2,
 // reads Sort "desc" from each tag written here); `sort: Asc` is the default and stays plain.

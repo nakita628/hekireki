@@ -3602,6 +3602,96 @@ model Note {
   })
 })
 
+// An index's method (`type:`) and its columns' operator classes (`ops:`) on PostgreSQL are given to
+// Index() as postgresql_using and postgresql_ops, which metadata.create_all() writes after USING and
+// after each column; without them it would make a B-tree with the default operator classes.
+describe('index methods and operator classes', () => {
+  function methodCode(provider: string, models: string) {
+    const schema = `datasource db {
+  provider = "${provider}"
+}
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["partialIndexes"]
+}
+${models}`
+    const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
+    return generateSingleFile(
+      result.models,
+      result.enums,
+      result.indexes,
+      provider,
+      new Set(),
+      partialIndexWhere(prismaBlocks(schema), provider),
+    )
+  }
+
+  const DOC = `model Doc {
+  id    Int      @id
+  tags  String[]
+  data  Json
+  title String   @map("doc_title")
+  body  String
+
+  @@index([tags], map: "doc_tags_gin", type: Gin)
+  @@index([data(ops: JsonbPathOps)], map: "doc_data_gin", type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "doc_title_trgm", type: Gin)
+  @@index([body], type: Hash)
+  @@index([id], type: BTree)
+}`
+
+  it('writes the method and the operator classes on PostgreSQL', () => {
+    expect(methodCode('postgresql', DOC)).toContain(`
+    __table_args__ = (
+        Index("doc_tags_gin", "tags", postgresql_using="gin"),
+        Index("doc_data_gin", "data", postgresql_using="gin", postgresql_ops={"data": "jsonb_path_ops"}),
+        Index("doc_title_trgm", "doc_title", postgresql_using="gin", postgresql_ops={"doc_title": "gin_trgm_ops"}),
+        Index("Doc_body_idx", "body", postgresql_using="hash"),
+        Index("Doc_id_idx", "id"),
+    )
+`)
+  })
+
+  it('writes them on CockroachDB, whose dialect in SQLAlchemy is PostgreSQL', () => {
+    expect(
+      methodCode(
+        'cockroachdb',
+        `model Doc {
+  id   Int  @id
+  data Json
+
+  @@index([data], map: "doc_data_gin", type: Gin)
+}`,
+      ),
+    ).toContain('Index("doc_data_gin", "data", postgresql_using="gin"),')
+  })
+
+  it('writes them with a partial condition, a descending column and a unique', () => {
+    expect(
+      methodCode(
+        'postgresql',
+        `model Account {
+  id    Int      @id
+  email String
+  name  String
+  tags  String[]
+  alive Boolean
+
+  @@index([tags(ops: ArrayOps)], where: { alive: true }, map: "account_tags_gin", type: Gin)
+  @@index([email, name(ops: raw("text_pattern_ops"), sort: Desc)], map: "account_name_idx")
+  @@unique([email], where: { alive: true }, map: "account_email_key")
+}`,
+      ),
+    ).toContain(`
+    __table_args__ = (
+        Index("account_tags_gin", "tags", postgresql_using="gin", postgresql_ops={"tags": "array_ops"}, postgresql_where=literal_column("(\\"alive\\" = true)")),
+        Index("account_name_idx", "email", literal_column("\\"name\\" text_pattern_ops").desc()),
+        Index("account_email_key", "email", unique=True, postgresql_where=literal_column("(\\"alive\\" = true)")),
+    )
+`)
+  })
+})
+
 describe('foreign key names', () => {
   function fkCode(models: string) {
     const schema = `datasource db {
