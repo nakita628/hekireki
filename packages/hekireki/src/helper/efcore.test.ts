@@ -3449,6 +3449,140 @@ public partial class AppDbContext : DbContext
   })
 })
 
+// The `where` of a partial index (the `partialIndexes` preview feature) is not in DMMF; without it
+// the tables EnsureCreated makes hold every row unique, or index every row. (#256)
+describe('a partial index', () => {
+  const PARTIAL = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["partialIndexes"]
+}
+
+model User {
+  id     Int     @id
+  email  String
+  handle String  @unique
+  slug   String  @unique(where: raw("slug <> ''"))
+  alive  Boolean
+  note   String?
+  posts  Post[]
+
+  @@unique([email], where: raw("note IS NULL AND email NOT LIKE 'a\\\\_%'"))
+  @@index([alive], where: { alive: true }, map: "user_alive")
+  @@index([note], where: { note: "it's \\"x\\"" })
+}
+
+model Post {
+  id         Int    @id
+  authorSlug String
+  author     User   @relation(fields: [authorSlug], references: [handle])
+}
+
+model Tag {
+  code  String
+  label String
+
+  @@unique([code], where: raw("label <> ''"))
+  @@unique([label])
+}
+`
+
+  it('does not take the key for a partial index on the same fields', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["partialIndexes"]
+}
+
+model A {
+  id    Int    @id
+  email String @unique
+
+  @@index([id], where: raw("id > 0"))
+}
+`
+    const { plan } = fixture(schema, { ...DEFAULT_OPTIONS, source: schema })
+    const code = contextFile(plan).code
+    expect(code).toContain('entity.HasKey(e => e.Id).HasName("A_pkey");')
+    expect(code).toContain('.HasFilter("(id > 0)")')
+  })
+
+  it('keeps its condition with HasFilter, and keys nothing', () => {
+    const { plan } = fixture(PARTIAL, { ...DEFAULT_OPTIONS, source: PARTIAL })
+    expect(contextFile(plan).code).toContain(`        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("User_pkey");
+
+            entity.ToTable("User");
+
+            entity.HasAlternateKey(e => e.Handle).HasName("User_handle_key");
+
+            entity.HasIndex(e => e.Slug, "User_slug_key")
+                .IsUnique()
+                .HasFilter("(slug <> '')");
+
+            entity.HasIndex(e => e.Alive, "user_alive").HasFilter("(\\"alive\\" = true)");
+
+            entity.HasIndex(e => e.Note, "User_note_idx").HasFilter("(\\"note\\" = 'it''s \\"x\\"')");
+
+            entity.HasIndex(e => e.Email, "User_email_key")
+                .IsUnique()
+                .HasFilter("(note IS NULL AND email NOT LIKE 'a\\\\_%')");
+
+            entity.Property(e => e.Id)
+                .ValueGeneratedNever()
+                .HasColumnName("id");
+            entity.Property(e => e.Email).HasColumnName("email");
+            entity.Property(e => e.Handle).HasColumnName("handle");
+            entity.Property(e => e.Slug).HasColumnName("slug");
+            entity.Property(e => e.Alive).HasColumnName("alive");
+            entity.Property(e => e.Note).HasColumnName("note");
+        });
+`)
+    expect(contextFile(plan).code).toContain(`        modelBuilder.Entity<Tag>(entity =>
+        {
+            entity.HasKey(e => e.Label).HasName("Tag_label_key");
+
+            entity.ToTable("Tag");
+
+            entity.HasIndex(e => e.Code, "Tag_code_key")
+                .IsUnique()
+                .HasFilter("(label <> '')");
+
+            entity.Property(e => e.Code).HasColumnName("code");
+            entity.Property(e => e.Label).HasColumnName("label");
+        });
+`)
+  })
+
+  it('stays a filtered index when a relation references its fields', () => {
+    const schema = PARTIAL.replace('references: [handle]', 'references: [slug]')
+    const { plan } = fixture(schema, { ...DEFAULT_OPTIONS, source: schema })
+    const context = contextFile(plan).code
+    expect(context).toContain(`            entity.HasIndex(e => e.Slug, "User_slug_key")
+                .IsUnique()
+                .HasFilter("(slug <> '')");
+`)
+    expect(context).not.toContain('HasAlternateKey(e => e.Slug)')
+  })
+
+  it('keeps its condition on SQLite', () => {
+    const schema = PARTIAL.replace('"postgresql"', '"sqlite"')
+    const { plan } = fixture(schema, { ...DEFAULT_OPTIONS, provider: 'sqlite', source: schema })
+    expect(contextFile(plan).code)
+      .toContain(`            entity.HasIndex(e => e.Email, "User_email_key")
+                .IsUnique()
+                .HasFilter("(note IS NULL AND email NOT LIKE 'a\\\\_%')");
+`)
+  })
+})
+
 describe('MySQL and SQLite', () => {
   const enumAndDates = `
 enum Role {

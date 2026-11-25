@@ -3880,3 +3880,146 @@ class UserStat(models.Model):
     )
   })
 })
+
+describe('partial indexes', () => {
+  function partialDjango(models: string) {
+    const source = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["partialIndexes"]
+}
+${models}`
+    const result = getDMMF({ datamodel: [['schema.prisma', source]] })
+    const { models: dmmfModels, enums, indexes } = datamodelOf(result)
+    return djangoCode(dmmfModels, enums, indexes, 'postgresql', source)
+  }
+
+  it('keeps a plain @unique beside a partial unique on the same field, and no key as a partial index', () => {
+    const code = partialDjango(`
+model A {
+  id    Int    @id
+  email String @unique
+
+  @@unique([email], where: raw("alive"), map: "a_email_alive")
+  @@index([id], where: raw("id > 0"))
+}
+`)
+    expect(code).toContain('email = models.TextField(unique=True)')
+    expect(code.split('The partial index "A_id_idx"')).toHaveLength(2)
+  })
+
+  it('names a partial index as Prisma Migrate does, cut to the identifier limit', () => {
+    const code = partialDjango(`
+model AVeryLongModelNameThatGoesOnAndOnAndOnForever {
+  id                              Int @id
+  keyOfTheModelThatGoesOn Int
+
+  @@index([keyOfTheModelThatGoesOn], where: raw("id > 0"))
+}
+`)
+    expect(code).toContain('"AVeryLongModelNameThatGoesOnAndOnAndOnForever_keyOfTheModel_idx"')
+  })
+
+  // Django's condition= takes a Q, not SQL: written as a plain index or constraint a partial one
+  // would hold every row, so it is left out and named in a comment for a migration to create.
+  it('leaves a partial index out with a comment, and keeps one that holds every row', () => {
+    const code = partialDjango(`
+model Account {
+  id        Int       @id
+  email     String    @unique(where: raw("deleted_at IS NULL"))
+  handle    String    @map("user_handle")
+  alive     Boolean
+  n         Int
+  tags      String[]
+  deletedAt Int?      @map("deleted_at")
+
+  @@unique([handle], where: raw("alive"))
+  @@unique([n, handle], where: { alive: true }, map: "account_n_alive")
+  @@index([alive], where: { alive: true })
+  @@index([tags], type: Gin, where: raw("deleted_at IS NULL"))
+  @@index([n])
+}
+`)
+
+    expect(code).toBe(`from django.contrib.postgres.fields import ArrayField
+from django.db import models
+
+
+class Account(models.Model):
+    id = models.IntegerField(primary_key=True)
+    email = models.TextField()
+    handle = models.TextField(db_column="user_handle")
+    alive = models.BooleanField()
+    n = models.IntegerField()
+    tags = ArrayField(models.TextField())
+    deleted_at = models.IntegerField(null=True)
+
+    class Meta:
+        db_table = "Account"
+        # The partial unique index "Account_email_key" on ("email") WHERE (deleted_at IS NULL) is left out:
+        # Django's condition= takes a Q, not SQL, so it is left to a migration (e.g. RunSQL).
+        # The partial unique index "Account_user_handle_key" on ("user_handle") WHERE (alive) is left out:
+        # Django's condition= takes a Q, not SQL, so it is left to a migration (e.g. RunSQL).
+        # The partial unique index "account_n_alive" on ("n", "user_handle") WHERE ("alive" = true) is left out:
+        # Django's condition= takes a Q, not SQL, so it is left to a migration (e.g. RunSQL).
+        indexes = [
+            models.Index(fields=["n"]),
+        ]
+        # The partial index "Account_alive_idx" on ("alive") WHERE ("alive" = true) is left out:
+        # Django's condition= takes a Q, not SQL, so it is left to a migration (e.g. RunSQL).
+        # The partial index "Account_tags_idx" on ("tags") WHERE (deleted_at IS NULL) is left out:
+        # Django's condition= takes a Q, not SQL, so it is left to a migration (e.g. RunSQL).
+`)
+  })
+
+  it('keeps the name of a unique constraint beside a partial one over the same fields', () => {
+    const code = partialDjango(`
+model Account {
+  id    Int     @id
+  email String
+  alive Boolean
+
+  @@unique([email], where: raw("alive"), map: "account_email_alive")
+  @@unique([email], map: "account_email")
+}
+`)
+
+    expect(code).toBe(`from django.db import models
+
+
+class Account(models.Model):
+    id = models.IntegerField(primary_key=True)
+    email = models.TextField()
+    alive = models.BooleanField()
+
+    class Meta:
+        db_table = "Account"
+        constraints = [
+            models.UniqueConstraint(fields=["email"], name="account_email"),
+        ]
+        # The partial unique index "account_email_alive" on ("email") WHERE (alive) is left out:
+        # Django's condition= takes a Q, not SQL, so it is left to a migration (e.g. RunSQL).
+`)
+  })
+
+  it('reads a raw condition that spans lines as one line of the comment', () => {
+    const code = partialDjango(`
+model Account {
+  id    Int     @id
+  n     Int
+  alive Boolean
+
+  @@index([n], where: raw("alive\\n  AND n > 0"))
+}
+`)
+
+    expect(code.slice(code.indexOf('    class Meta:'))).toBe(`    class Meta:
+        db_table = "Account"
+        # The partial index "Account_n_idx" on ("n") WHERE (alive AND n > 0) is left out:
+        # Django's condition= takes a Q, not SQL, so it is left to a migration (e.g. RunSQL).
+`)
+  })
+})

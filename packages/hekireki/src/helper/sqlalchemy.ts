@@ -78,6 +78,7 @@ const MODULE_NAMES = new Set([
   'func',
   'int',
   'list',
+  'literal_column',
   'mapped_column',
   'relationship',
   'str',
@@ -169,9 +170,31 @@ function className(modelName: string) {
   return MODULE_CLASSES.has(name) ? `${name}_` : name
 }
 
+/**
+ * An index of DMMF, with the condition of a partial one (the `partialIndexes` preview feature) as
+ * the SQL Prisma Migrate writes after its WHERE: DMMF drops it.
+ */
+export type SqlIndex = DMMF.Index & { readonly where?: string }
+
+// The keyword a partial index's condition is given to Index() by, per dialect; MySQL has no
+// partial index.
+function whereKeyword(provider: string) {
+  if (provider === 'sqlite') return 'sqlite_where'
+  if (provider === 'sqlserver') return 'mssql_where'
+  return provider === 'mysql' ? null : 'postgresql_where'
+}
+
+// A partial index's condition as the argument of Index(). literal_column() renders the SQL as it
+// is, where text() would take a `:name` in it for a bind parameter, which DDL cannot render.
+function whereArg(index: SqlIndex, provider: string) {
+  const keyword = whereKeyword(provider)
+  if (index.where === undefined || keyword === null) return null
+  return `${keyword}=literal_column(${toPythonString(index.where)})`
+}
+
 // The indexes and uniques of a model whose fields are all on it: one that lists an `@ignore`d
 // field, which has no column, is left out.
-function modelIndexes(model: DMMF.Model, indexes: readonly DMMF.Index[]) {
+function modelIndexes(model: DMMF.Model, indexes: readonly SqlIndex[]) {
   const fieldNames = new Set(model.fields.map((mf) => mf.name))
   return indexes.filter(
     (idx) =>
@@ -528,6 +551,7 @@ const MODULE_LEVEL_NAMES = new Set([
   'date',
   'timezone',
   'text',
+  'literal_column',
   'func',
 ])
 
@@ -1067,7 +1091,7 @@ function tableOptions(model: DMMF.Model, provider: string) {
 function generateTableArgs(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
-  indexes: readonly DMMF.Index[],
+  indexes: readonly SqlIndex[],
   provider: string,
   views: ReadonlySet<string>,
 ) {
@@ -1076,13 +1100,19 @@ function generateTableArgs(
   const tableName = model.dbName ?? model.name
 
   // Prisma Migrate makes every unique a unique index, named `<table>_<columns>_key`, and every
-  // index `<table>_<columns>_idx`.
+  // index `<table>_<columns>_idx`; a partial one keeps its condition.
   const indexConstraints = modelIndexes(model, indexes).map((idx) => {
     const columns = idx.fields.map((f) => fieldColumn(model, f.name))
     const unique = idx.type === 'unique'
     const name = idx.dbName ?? constraintName(tableName, columns, unique ? 'key' : 'idx', provider)
-    const cols = columns.map((c) => `"${c}"`).join(', ')
-    return unique ? `Index("${name}", ${cols}, unique=True)` : `Index("${name}", ${cols})`
+    const where = whereArg(idx, provider)
+    const args = [
+      `"${name}"`,
+      ...columns.map((c) => `"${c}"`),
+      ...(unique ? ['unique=True'] : []),
+      ...(where === null ? [] : [where]),
+    ]
+    return `Index(${args.join(', ')})`
   })
 
   const modelByName = new Map(allModels.map((m) => [m.name, m]))
@@ -1369,7 +1399,7 @@ export function generateModelBody(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
   enums: readonly DMMF.DatamodelEnum[] | undefined,
-  indexes: readonly DMMF.Index[],
+  indexes: readonly SqlIndex[],
   m2mTables: readonly {
     relationName: string
     tableName: string
@@ -1563,7 +1593,7 @@ function fieldSaImports(field: DMMF.Field, provider: string) {
 function modelSaImports(
   model: DMMF.Model,
   models: readonly DMMF.Model[],
-  indexes: readonly DMMF.Index[],
+  indexes: readonly SqlIndex[],
   provider: string,
   views: ReadonlySet<string>,
 ) {
@@ -1578,6 +1608,9 @@ function modelSaImports(
     ...(foreignKeys.length > 0 ? ['ForeignKey'] : []),
     ...(foreignKeys.some((assoc) => assoc.foreignKeys.length > 1) ? ['ForeignKeyConstraint'] : []),
     ...(modelIndexes(model, indexes).length > 0 ? ['Index'] : []),
+    ...(modelIndexes(model, indexes).some((idx) => whereArg(idx, provider) !== null)
+      ? ['literal_column']
+      : []),
   ]
 }
 
@@ -1675,7 +1708,7 @@ function pythonImportLines(needs: ImportNeeds) {
 export function collectGlobalImports(
   models: readonly DMMF.Model[],
   _enums: readonly DMMF.DatamodelEnum[] | undefined,
-  indexes: readonly DMMF.Index[],
+  indexes: readonly SqlIndex[],
   m2mTables: readonly {
     tableName: string
     varName: string

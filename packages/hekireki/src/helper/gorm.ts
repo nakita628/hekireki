@@ -439,10 +439,28 @@ function readableTagName(name: string | undefined) {
   return name !== undefined && !/[,;"`]/u.test(name) ? name : undefined
 }
 
+// A partial index's condition (the SQL Prisma Migrate writes after WHERE) as the value of GORM's
+// `where:` index setting, escaped for the struct tag, or null where GORM cannot read it back: GORM
+// splits the gorm tag at every `;` before it reads an index, with no escape. It splits the index's
+// settings at a `,` unless a `\` comes before it (and drops that `\`), and turns a `\"` into `"`;
+// both are escaped here. The condition always ends in `)`, so no `\` comes before the `;` that
+// follows it in the tag.
+function indexWhereSetting(sql: string) {
+  if (sql.includes(';')) return null
+  return escapeTagValue(sql.replaceAll('\\"', '\\\\"').replaceAll(',', '\\,'))
+}
+
+/** The condition of a partial index, as `partialIndexWhere` gives it. */
+type IndexWhere = (
+  model: DMMF.Model,
+  index: Pick<DMMF.Index, 'type' | 'dbName' | 'fields'>,
+) => string | undefined
+
 function collectCompositeIndexTags(
   model: DMMF.Model,
   indexes: readonly DMMF.Index[],
   provider: string | undefined,
+  indexWhere: IndexWhere,
 ) {
   // An index Prisma left unnamed is named as Prisma Migrate names it
   // (`Post_authorId_idx`, `User_email_key`), so AutoMigrate and the migration
@@ -452,15 +470,27 @@ function collectCompositeIndexTags(
 
   const columnsOf = (fields: readonly string[]) =>
     fields.map((f) => fieldByName.get(f)?.dbName ?? f)
+  const ownIndexes = indexes.filter((idx) => idx.model === model.name)
+  // A partial unique index (one with a `where`) holds only some rows unique: DMMF leaves it out of
+  // isUnique and uniqueFields, so it keys nothing, and it is written below with its condition.
+  const uniques = ownIndexes.filter((idx) => idx.type === 'unique')
+  const partialUniques = uniques.filter((idx) => indexWhere(model, idx) !== undefined)
+  const plainUniques = uniques.filter((idx) => indexWhere(model, idx) === undefined)
   // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it, unless the
   // struct tag cannot hold it (readableTagName).
   const mappedUniques = new Map(
-    indexes
-      .filter((idx) => idx.model === model.name && idx.type === 'unique')
-      .map((idx) => [idx.fields.map((f) => f.name).join(','), readableTagName(idx.dbName)]),
+    plainUniques.map((idx) => [
+      idx.fields.map((f) => f.name).join(','),
+      readableTagName(idx.dbName),
+    ]),
+  )
+  // DMMF leaves isUnique off a field whose @unique has a partial unique index beside it on the same
+  // field, so a field is also unique by an index that holds every row.
+  const uniqueByIndex = new Set(
+    plainUniques.filter((idx) => idx.fields.length === 1).map((idx) => idx.fields[0]?.name),
   )
   const singleUniqueTags = model.fields
-    .filter((f) => f.isUnique)
+    .filter((f) => f.isUnique || uniqueByIndex.has(f.name))
     .map((f): [string, string] => {
       const named = mappedUniques.get(f.name)
       return [
@@ -478,24 +508,61 @@ function collectCompositeIndexTags(
       return fields.map((f): [string, string] => [f, `uniqueIndex:${idxName}`])
     })
 
-  const indexTags = indexes
-    .filter((idx) => idx.model === model.name && (idx.type === 'normal' || idx.type === 'fulltext'))
-    .flatMap((idx) => {
-      const idxName =
-        readableTagName(idx.dbName) ??
-        readableTagName(idx.name) ??
-        constraintName(tableName, columnsOf(idx.fields.map((f) => f.name)), 'idx', provider ?? '')
-      return idx.fields.map((f): [string, string] => [f.name, `index:${idxName}`])
-    })
+  // A partial index's tag carries its condition in `where:`; one GORM cannot read back
+  // (indexWhereSetting) is left out, so AutoMigrate makes no index that holds every row, and a
+  // comment on its first field says so.
+  const notes: [string, string][] = []
+  const tagsOf = (idx: DMMF.Index, setting: 'index' | 'uniqueIndex', name: string) => {
+    const where = indexWhere(model, idx)
+    const condition = where === undefined ? '' : indexWhereSetting(where)
+    if (condition === null) {
+      notes.push([
+        idx.fields[0]?.name ?? '',
+        `The partial ${setting === 'uniqueIndex' ? 'unique ' : ''}index ${name} is left out: its condition holds a ";", at which GORM splits the tag.`,
+      ])
+      return []
+    }
+    const tag = `${setting}:${name}${condition === '' ? '' : `,where:${condition}`}`
+    return idx.fields.map((f): [string, string] => [f.name, tag])
+  }
 
-  return [...singleUniqueTags, ...uniqueTags, ...indexTags].reduce<Map<string, string[]>>(
-    (map, [fieldName, tag]) => {
-      const existing = map.get(fieldName) ?? []
-      map.set(fieldName, [...existing, tag])
-      return map
-    },
-    new Map(),
+  const partialUniqueTags = partialUniques.flatMap((idx) =>
+    tagsOf(
+      idx,
+      'uniqueIndex',
+      readableTagName(idx.dbName) ??
+        constraintName(tableName, columnsOf(idx.fields.map((f) => f.name)), 'key', provider ?? ''),
+    ),
   )
+
+  const indexTags = ownIndexes
+    .filter((idx) => idx.type === 'normal' || idx.type === 'fulltext')
+    .flatMap((idx) =>
+      tagsOf(
+        idx,
+        'index',
+        readableTagName(idx.dbName) ??
+          readableTagName(idx.name) ??
+          constraintName(
+            tableName,
+            columnsOf(idx.fields.map((f) => f.name)),
+            'idx',
+            provider ?? '',
+          ),
+      ),
+    )
+
+  return {
+    tags: groupByField([...singleUniqueTags, ...uniqueTags, ...partialUniqueTags, ...indexTags]),
+    notes: groupByField(notes),
+  }
+}
+
+function groupByField(entries: readonly (readonly [string, string])[]) {
+  return entries.reduce<Map<string, string[]>>((map, [fieldName, value]) => {
+    map.set(fieldName, [...(map.get(fieldName) ?? []), value])
+    return map
+  }, new Map())
 }
 
 // Go initialisms that should be ALL CAPS per https://go.dev/wiki/CodeReviewComments#initialisms
@@ -999,6 +1066,7 @@ export function generateModelStruct(
   provider?: string,
   foreignKeyNames: ReadonlyMap<string, string> = new Map(),
   views: ReadonlySet<string> = new Set(),
+  indexWhere: IndexWhere = () => undefined,
 ) {
   // A model with no @id or @@id is keyed by its first unique fields, as a composite key is: GORM
   // needs a primary key to load an association, and the other models name this one.
@@ -1008,7 +1076,7 @@ export function generateModelStruct(
 
   const associations = getAssociations(model, allModels, provider)
 
-  const compositeTagMap = collectCompositeIndexTags(model, indexes, provider)
+  const indexTags = collectCompositeIndexTags(model, indexes, provider, indexWhere)
 
   const tableName = model.dbName ?? model.name
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
@@ -1016,8 +1084,11 @@ export function generateModelStruct(
   const names = goFieldNames(model)
   const fieldLines = scalarFields.flatMap((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
-    const fieldIndexTags = compositeTagMap.get(field.name) ?? []
-    const rows = goCommentLines(stripAnnotations(field.documentation)).map((line) => [line])
+    const fieldIndexTags = indexTags.tags.get(field.name) ?? []
+    const rows = [
+      ...goCommentLines(stripAnnotations(field.documentation)),
+      ...(indexTags.notes.get(field.name) ?? []).map((note) => `// ${note}`),
+    ].map((line) => [line])
     rows.push(
       generateStructField(
         field,

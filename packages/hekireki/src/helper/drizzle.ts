@@ -438,6 +438,15 @@ function makeColumnExpr(
 
 const SQL_IMPORT = { pkg: 'drizzle-orm', kind: 'named', name: 'sql' } as const
 
+// SQL as the text of a template literal: a backslash, a backtick and a `${` are escaped, so the
+// tag reads the SQL as written.
+function templateText(sql: string) {
+  return sql.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('${', '\\${')
+}
+
+/** The `where` of a partial index as SQL, or undefined for an index that holds every row. */
+type IndexWhere = (model: DMMF.Model, index: DMMF.Index) => string | undefined
+
 type DefaultChain = {
   readonly chain: string
   readonly imports: readonly ImportReq[]
@@ -710,6 +719,7 @@ function makeTableConstraints(
   indexes: readonly DMMF.Index[],
   tableName: string,
   views: ReadonlySet<string>,
+  whereOf: IndexWhere,
 ) {
   const sqliteKey = model.fields.find((field) => isNullableSqliteKey(field, model, provider))
   const keyColumns = sqliteKey ? [sqliteKey.name] : model.primaryKey?.fields
@@ -749,11 +759,17 @@ function makeTableConstraints(
           idx.type === 'unique' ? 'key' : 'idx',
           provider,
         )
+      // A partial index (the `partialIndexes` preview feature) holds only the rows its condition
+      // takes, which a constraint cannot say: it is an index with drizzle's `.where`. MySQL has
+      // none, and Prisma takes none there.
+      const where = provider === 'mysql' ? undefined : whereOf(model, idx)
       // drizzle-kit adds a table's foreign keys before its indexes, and a foreign key is refused
       // where what it points at is not unique yet: a unique a relation points at is a constraint,
       // made with the table. SQLite makes its foreign keys with the table and asks for neither.
       const referenced =
-        provider !== 'sqlite' && referencedKeys.has(idx.fields.map((field) => field.name).join(','))
+        provider !== 'sqlite' &&
+        where === undefined &&
+        referencedKeys.has(idx.fields.map((field) => field.name).join(','))
       const make = indexMaker(idx.type, referenced)
       imports.core.add(make)
       // MySQL takes part of a TEXT in an index; drizzle has the part as SQL.
@@ -763,7 +779,9 @@ function makeTableConstraints(
         imports.orm.add('sql')
         return `sql\`\${table.${f.name}}(${prefix})\``
       })
-      return `${make}('${name}').on(${on.join(', ')})`
+      if (where !== undefined) imports.orm.add('sql')
+      const condition = where === undefined ? '' : `.where(sql\`${templateText(where)}\`)`
+      return `${make}('${name}').on(${on.join(', ')})${condition}`
     })
 
   // A view cannot be referenced: Prisma Migrate makes no foreign key for a relation to one.
@@ -869,6 +887,7 @@ function columnMap(entries: readonly ColumnEntry[]) {
  * dropped by Prisma's next diff.
  *
  * @param views - The names of the schema's `view` blocks, which DMMF lists among the models.
+ * @param whereOf - The condition of each partial index, which DMMF drops.
  */
 export function makeTable(
   model: DMMF.Model,
@@ -878,6 +897,7 @@ export function makeTable(
   enums: readonly DMMF.DatamodelEnum[],
   indexes: readonly DMMF.Index[],
   views: ReadonlySet<string> = new Set(),
+  whereOf: IndexWhere = () => undefined,
 ) {
   const varName = resolveVarName(model)
   const tableName = resolveTableName(model)
@@ -914,6 +934,7 @@ export function makeTable(
     indexes,
     tableName,
     views,
+    whereOf,
   )
   if (constraints === null) {
     return [...modelDoc, `export const ${varName} = ${tableFunc}('${tableName}', ${columns})`].join(

@@ -15,6 +15,7 @@ import {
   tableName,
 } from '../prisma/model.js'
 import type { ManyToMany } from '../prisma/model.js'
+import { partialIndexWhere } from '../prisma/partial-index.js'
 import {
   entityKey,
   fieldNames,
@@ -235,6 +236,25 @@ function csharpString(value: string) {
   return `"${escaped}"`
 }
 
+/** An index, with the condition of a partial one (`where`, as SQL in parentheses). */
+type EfIndex = IndexInfo & { readonly where?: string }
+
+// A partial unique index holds only some rows unique, so it keys nothing: not the entity, and not
+// the principal end of a relation.
+function keyIndexes(indexes: readonly EfIndex[]) {
+  return indexes.filter((index) => index.where === undefined)
+}
+
+function partialIndex(index: IndexInfo, where: string): EfIndex {
+  return {
+    type: index.type,
+    fields: index.fields,
+    ...(index.dbName === undefined ? {} : { dbName: index.dbName }),
+    ...(index.algorithm === undefined ? {} : { algorithm: index.algorithm }),
+    where,
+  }
+}
+
 type ForeignKey = {
   readonly dependent: DMMF.Model
   readonly navigation: DMMF.Field
@@ -248,7 +268,7 @@ type ForeignKey = {
 
 function foreignKeys(
   models: readonly DMMF.Model[],
-  indexesOf: (model: DMMF.Model) => readonly IndexInfo[],
+  indexesOf: (model: DMMF.Model) => readonly EfIndex[],
 ) {
   const modelByName = new Map(models.map((m) => [m.name, m]))
   return models.flatMap((dependent) =>
@@ -260,7 +280,7 @@ function foreignKeys(
         const from = navigation.relationFromFields ?? []
         const to = navigation.relationToFields ?? []
         const sourceOf = new Map(to.map((target, index) => [target, from[index]]))
-        const principalIndexes = indexesOf(principal)
+        const principalIndexes = keyIndexes(indexesOf(principal))
         const referenced = principalIndexes.find(
           (index) =>
             (index.type === 'id' || index.type === 'unique') &&
@@ -1051,7 +1071,7 @@ type EfCorePlan = {
   readonly enums: readonly DMMF.DatamodelEnum[]
   /** The names of the models that are a `view` in the schema. */
   readonly views: ReadonlySet<string>
-  readonly indexesOf: (model: DMMF.Model) => readonly IndexInfo[]
+  readonly indexesOf: (model: DMMF.Model) => readonly EfIndex[]
   readonly foreignKeys: readonly ForeignKey[]
   readonly manyToMany: readonly ManyToMany[]
 }
@@ -1295,19 +1315,28 @@ export function planEfCore(
     readonly source?: string
   },
 ): EfCorePlan {
+  // The `where` of a partial index is not in DMMF; it is read off the schema's text.
+  const blocks = prismaBlocks(options.source ?? '')
+  const whereOf = partialIndexWhere(blocks, options.provider)
   // DMMF leaves an `@ignore` field out of the model, but not out of an index that lists it: the
   // entity has no property for such an index to name, so it is left out with the field.
-  const indexesOf = (model: DMMF.Model) => {
+  const planIndexes = (model: DMMF.Model): readonly EfIndex[] => {
     const fieldNamesOf = new Set(model.fields.map((field) => field.name))
-    return modelIndexes(model, datamodel.indexes ?? []).filter((index) =>
-      index.fields.every((f) => fieldNamesOf.has(f.name)),
-    )
+    return modelIndexes(model, datamodel.indexes ?? [])
+      .filter((index) => index.fields.every((f) => fieldNamesOf.has(f.name)))
+      .map((index) => {
+        const where = whereOf(model, index)
+        return where === undefined ? index : partialIndex(index, where)
+      })
   }
+  // Computed once per model: the indexes are told apart by identity.
+  const indexes = new Map(datamodel.models.map((m) => [m.name, planIndexes(m)]))
+  const indexesOf = (model: DMMF.Model) => indexes.get(model.name) ?? planIndexes(model)
   const schema = {
     provider: options.provider,
     models: datamodel.models,
     enums: datamodel.enums,
-    views: viewNames(prismaBlocks(options.source ?? '')),
+    views: viewNames(blocks),
     indexesOf,
     foreignKeys: foreignKeys(datamodel.models, indexesOf),
     manyToMany: manyToManyRelations(datamodel.models),
@@ -1658,12 +1687,7 @@ function manyToManyConfig(plan: EfCorePlan, m2m: ManyToMany) {
   ]
 }
 
-function indexConfig(
-  plan: EfCorePlan,
-  model: DMMF.Model,
-  index: IndexInfo,
-  isAlternateKey: boolean,
-) {
+function indexConfig(plan: EfCorePlan, model: DMMF.Model, index: EfIndex, isAlternateKey: boolean) {
   const properties = fieldNames(index).map((f) => propertyName(plan.names, model, f))
   const name = csharpString(indexName(model, index))
   if (isAlternateKey) {
@@ -1692,6 +1716,8 @@ function indexConfig(
     ...(operators.some((operator) => operator !== '')
       ? [`.HasOperators(${operators.map(csharpString).join(', ')})`]
       : []),
+    // A partial index: EF Core writes the filter after WHERE as given.
+    ...(index.where === undefined ? [] : [`.HasFilter(${csharpString(index.where)})`]),
   ]
   return chain(`entity.HasIndex(${keyLambda('e', properties)}, ${name})`, calls, '            ')
 }
@@ -1704,7 +1730,7 @@ function fieldSetKey(fields: readonly string[]) {
 function entityConfig(plan: EfCorePlan, model: DMMF.Model) {
   const names = plan.names
   const indexes = plan.indexesOf(model)
-  const key = entityKey(model, indexes)
+  const key = entityKey(model, keyIndexes(indexes))
   const keyFields = key ? fieldNames(key) : []
   const keyLine = key
     ? chain(
@@ -1737,7 +1763,9 @@ function entityConfig(plan: EfCorePlan, model: DMMF.Model) {
         plan,
         model,
         index,
-        index.type === 'unique' && referencedKeys.has(fieldSetKey(fieldNames(index))),
+        index.type === 'unique' &&
+          index.where === undefined &&
+          referencedKeys.has(fieldSetKey(fieldNames(index))),
       ),
     )
   return [
