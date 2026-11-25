@@ -240,15 +240,16 @@ describe('buildGormTags', () => {
         isUpdatedAt: false,
         hasDefaultValue: false,
       }) as any
-    // reflect.StructTag unquotes a `\"`, a `\\` and a `\n`, and the tag stays on one line.
+    // reflect.StructTag unquotes a `\"`, a `\\` and a `\n`, and the tag stays on one line. None of
+    // them is a json key encoding/json takes, so the json name is the field's, as it would be.
     expect(buildGormTags(field('a\nb'), false, false, [], [], 'postgresql')).toBe(
-      String.raw`${'`'}gorm:"column:a\nb;not null" json:"a\nb"${'`'}`,
+      String.raw`${'`'}gorm:"column:a\nb;not null" json:"Label"${'`'}`,
     )
     expect(buildGormTags(field('a"b'), false, false, [], [], 'postgresql')).toBe(
-      String.raw`${'`'}gorm:"column:a\"b;not null" json:"a\"b"${'`'}`,
+      String.raw`${'`'}gorm:"column:a\"b;not null" json:"Label"${'`'}`,
     )
     expect(buildGormTags(field('a\\b'), false, false, [], [], 'postgresql')).toBe(
-      String.raw`${'`'}gorm:"column:a\\b;not null" json:"a\\b"${'`'}`,
+      String.raw`${'`'}gorm:"column:a\\b;not null" json:"Label"${'`'}`,
     )
   })
 
@@ -1115,7 +1116,7 @@ model Tag {
     ])
   })
 
-  it('passes over an index left out with a note, and says when the map: name is refused too', () => {
+  it('passes over an index left out with a note, and names a map: name the tag cannot hold', () => {
     const source = `datasource db {
   provider = "postgresql"
 }
@@ -1145,7 +1146,78 @@ model Item {
         partialIndexWhere(prismaBlocks(source), 'postgresql'),
       ),
     ).toStrictEqual([
-      'model Item: the index on code is named "item,s_c,d_idx", whose "," GORM\'s tag cannot hold; its map: name "item,code" cannot be held either (a , ; " or backtick, or a \\ at its end); change it',
+      'model Item: the index on code is named "item,code", which GORM\'s tag cannot hold (a , ; " or backtick, or a \\ at its end); change it',
+    ])
+  })
+
+  it('names a map: name the tag cannot hold even where the name Prisma would give fits, and two fields written under one json name', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Item {
+  id    Int    @id
+  code  String @unique(map: "a,b")
+  slug  String
+  label String @map("x,y")
+  other String @map("Label")
+
+  @@index([slug], map: "slug;idx")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on code is named "a,b", which GORM\'s tag cannot hold (a , ; " or backtick, or a \\ at its end); change it',
+      'model Item: the index on slug is named "slug;idx", which GORM\'s tag cannot hold (a , ; " or backtick, or a \\ at its end); change it',
+      'model Item: label and other are both written json:"Label", and encoding/json drops both; change the @map of one',
+    ])
+  })
+
+  it('names a map: name with a quote or a backtick, which the dialector takes as a quote of its own', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Item {
+  id   Int    @id
+  code String @unique(map: "\\"code_key")
+  slug String
+
+  @@index([slug], map: "item\`slug")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on code is named "\\"code_key", which GORM\'s tag cannot hold (a , ; " or backtick, or a \\ at its end); change it',
+      'model Item: the index on slug is named "item`slug", which GORM\'s tag cannot hold (a , ; " or backtick, or a \\ at its end); change it',
+    ])
+  })
+
+  it('compares json names as encoding/json takes them: the field name for a column it cannot take, the Go name the struct gives', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Item {
+  id    Int    @id
+  label String @map("it's")
+  other String @map("Label")
+  a_b   String @map("x,1")
+  aB    String @map("x,2")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Item: label and other are both written json:"Label", and encoding/json drops both; change the @map of one',
     ])
   })
 
@@ -1162,10 +1234,10 @@ model Item {
       'postgresql',
     )
     expect(code).toContain(
-      String.raw`${'`'}gorm:"column:a\"b;uniqueIndex:Note_a\"b_key;not null" json:"a\"b"${'`'}`,
+      String.raw`${'`'}gorm:"column:a\"b;uniqueIndex:Note_a\"b_key;not null" json:"Quote"${'`'}`,
     )
     expect(code).toContain(
-      String.raw`${'`'}gorm:"column:a\\c;index:Note_a\\c_idx;not null" json:"a\\c"${'`'}`,
+      String.raw`${'`'}gorm:"column:a\\c;index:Note_a\\c_idx;not null" json:"Path"${'`'}`,
     )
   })
 
