@@ -203,19 +203,23 @@ end)
 # uuid() key is a :string, as in Prisma Client, so the rows bring their own id, as they do the
 # uuid() column.
 check("Repo.insert_all fills no uuid() key: its rows bring their own", fn ->
-  account = account!.("insert-all")
+  # One account each: a wishlist's account is unique, and a first row saved by mistake must not
+  # make the second fail for that.
+  keyless = account!.("insert-all-keyless")
+  keyed = account!.("insert-all-keyed")
 
   refused =
     try do
-      Repo.insert_all(Wishlist, [%{account_id: account.id, share_token: Ecto.UUID.generate()}])
+      Repo.insert_all(Wishlist, [%{account_id: keyless.id, share_token: Ecto.UUID.generate()}])
       "insert_all saved a Wishlist without an id"
     rescue
-      error in Exqlite.Error -> if error.message =~ "NOT NULL", do: nil, else: error.message
+      error in Exqlite.Error ->
+        if error.message =~ "NOT NULL constraint failed: Wishlist.id", do: nil, else: error.message
     end
 
   id = Ecto.UUID.generate()
   token = Ecto.UUID.generate()
-  {count, _} = Repo.insert_all(Wishlist, [%{id: id, share_token: token, account_id: account.id}])
+  {count, _} = Repo.insert_all(Wishlist, [%{id: id, share_token: token, account_id: keyed.id}])
 
   reasons([
     refused,

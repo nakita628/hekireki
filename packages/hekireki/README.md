@@ -442,11 +442,12 @@ Prisma Client wrote reads back as it is (on SQLite as the column keeps it: a `1.
 `@default("[]")` is a default of the field.
 
 A `uuid()` or `uuid(7)` key without `@db.Uuid` or `@db.UniqueIdentifier` is a text column, so it
-is a `:string` key that `Repo.insert/2` fills with `Ecto.UUID.generate/1`. As in Prisma Client, an
-id you give is neither checked nor lower-cased. `Repo.insert_all/3` fills only `:id` and
-`:binary_id` keys, so its rows need an `id` of their own (`Ecto.UUID.generate()`, or
-`Ecto.UUID.generate(version: 7)`), as they need a value for a `uuid()` or `ulid()` field that is
-not the key.
+is a `:string` key that `Repo.insert/2` fills with `Ecto.UUID.generate()` (`generate(version: 7)`
+for `uuid(7)`, Ecto 3.14 or later). As in Prisma Client, an id you give is neither checked nor
+lower-cased. `Repo.insert_all/3` fills only an `autoincrement()` key and a `uuid()` key of a
+`@db.Uuid` column (`:id` and `:binary_id`), so its rows need an `id` of their own for any other
+generated key (a text `uuid()`, a `uuid(7)`, a `ulid()`), as they need a value for a `uuid()` or
+`ulid()` field that is not the key.
 
 `examples/ecto` in the repository runs a schema against Ecto on SQLite.
 
