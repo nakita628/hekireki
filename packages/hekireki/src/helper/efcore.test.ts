@@ -4145,3 +4145,173 @@ model Field {
     }
   })
 })
+
+// Pomelo maps each MySQL integer and float column to a CLR type of its own: in any other, EF Core
+// casts unchecked and writes an out-of-range value as another number.
+describe('EF Core on MySQL integer and float columns', () => {
+  const schema = `
+datasource db {
+  provider = "mysql"
+}
+
+model N {
+  id    Int     @id @db.UnsignedInt
+  ti    Int     @default(-5) @db.TinyInt
+  si    Int     @default(7) @db.SmallInt
+  mi    Int     @db.MediumInt
+  uti   Int     @default(200) @db.UnsignedTinyInt
+  usi   Int     @db.UnsignedSmallInt
+  umi   Int     @db.UnsignedMediumInt
+  yr    Int     @default(2024) @db.Year
+  ubi   BigInt  @default(9007199254740993) @db.UnsignedBigInt
+  fl    Float   @default(1.5) @db.Float
+  flag  Boolean @db.TinyInt
+  opt   Int?    @db.SmallInt
+  kids  Kid[]
+  tags  Tag[]
+}
+
+model Kid {
+  id  BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  nId Int    @db.UnsignedInt
+  n   N      @relation(fields: [nId], references: [id])
+}
+
+model Tag {
+  id Int @id @default(autoincrement()) @db.UnsignedSmallInt
+  ns N[]
+}
+
+model B {
+  id Int @id @default(autoincrement()) @db.UnsignedTinyInt
+}
+`
+
+  it('types each column as Pomelo maps it, with its typed default, and a Boolean @db.TinyInt a bool', () => {
+    const { datamodel, plan } = fixture(schema, { ...DEFAULT_OPTIONS, provider: 'mysql' })
+    expect(entityFile(plan, model(datamodel, 'N')).code).toContain(`public partial class N
+{
+    public uint Id { get; set; }
+
+    public sbyte Ti { get; set; } = (sbyte)-5;
+
+    public short Si { get; set; } = (short)7;
+
+    public int Mi { get; set; }
+
+    public byte Uti { get; set; } = (byte)200;
+
+    public ushort Usi { get; set; }
+
+    public uint Umi { get; set; }
+
+    public short Yr { get; set; } = (short)2024;
+
+    public ulong Ubi { get; set; } = 9007199254740993UL;
+
+    public float Fl { get; set; } = 1.5f;
+
+    public bool Flag { get; set; }
+
+    public short? Opt { get; set; }`)
+    expect(contextFile(plan).code).toContain(`            entity.Property(e => e.Id)
+                .ValueGeneratedNever()
+                .HasColumnName("id");
+            entity.Property(e => e.Ti)
+                .ValueGeneratedNever()
+                .HasDefaultValue((sbyte)-5)
+                .HasColumnName("ti");
+            entity.Property(e => e.Si)
+                .ValueGeneratedNever()
+                .HasDefaultValue((short)7)
+                .HasColumnName("si");
+            entity.Property(e => e.Mi)
+                .HasColumnType("mediumint")
+                .HasColumnName("mi");
+            entity.Property(e => e.Uti)
+                .ValueGeneratedNever()
+                .HasDefaultValue((byte)200)
+                .HasColumnName("uti");
+            entity.Property(e => e.Usi).HasColumnName("usi");
+            entity.Property(e => e.Umi)
+                .HasColumnType("mediumint unsigned")
+                .HasColumnName("umi");
+            entity.Property(e => e.Yr)
+                .ValueGeneratedNever()
+                .HasDefaultValue((short)2024)
+                .HasColumnType("year")
+                .HasColumnName("yr");
+            entity.Property(e => e.Ubi)
+                .ValueGeneratedNever()
+                .HasDefaultValue(9007199254740993UL)
+                .HasColumnName("ubi");
+            entity.Property(e => e.Fl)
+                .ValueGeneratedNever()
+                .HasDefaultValue(1.5f)
+                .HasColumnName("fl");
+            entity.Property(e => e.Flag).HasColumnName("flag");
+            entity.Property(e => e.Opt).HasColumnName("opt");`)
+  })
+
+  it('types a key and its foreign key alike, and leaves a lone sbyte, ushort or ulong key to EF Core', () => {
+    const { datamodel, plan } = fixture(schema, { ...DEFAULT_OPTIONS, provider: 'mysql' })
+    expect(entityFile(plan, model(datamodel, 'Kid')).code).toContain(
+      '    public ulong Id { get; set; }\n\n    public uint NId { get; set; }\n',
+    )
+    expect(entityFile(plan, model(datamodel, 'Tag')).code).toContain(
+      '    public ushort Id { get; set; }\n',
+    )
+    const context = contextFile(plan).code
+    expect(context).toContain(
+      '            entity.Property(e => e.Id).HasColumnName("id");\n            entity.Property(e => e.NId).HasColumnName("nId");\n',
+    )
+    // EF Core makes no byte column AUTO_INCREMENT by itself.
+    expect(context).toContain(`            entity.Property(e => e.Id)
+                .ValueGeneratedOnAdd()
+                .HasColumnName("id");`)
+    expect(context).toContain(
+      '                        j.HasKey("A", "B").HasName("_NToTag_AB_pkey");\n',
+    )
+  })
+
+  // A constant outside the type does not compile (CS0221, CS0594): such a default is the column's.
+  it('leaves a default outside its C# type to the column', () => {
+    const { datamodel, plan } = fixture(
+      `
+datasource db {
+  provider = "mysql"
+}
+
+model O {
+  id Int   @id
+  ti Int   @default(300) @db.TinyInt
+  us Int   @default(70000) @db.UnsignedSmallInt
+  fl Float @default(1000000000000000000000000000000000000000.0) @db.Float
+}
+`,
+      { ...DEFAULT_OPTIONS, provider: 'mysql' },
+    )
+    const entity = entityFile(plan, model(datamodel, 'O')).code
+    expect(entity).toContain('    public sbyte Ti { get; set; }\n')
+    expect(entity).toContain('    public ushort Us { get; set; }\n')
+    expect(entity).toContain('    public float Fl { get; set; }\n')
+    expect(contextFile(plan).code).not.toMatch(/\(sbyte\)300|\(ushort\)70000|e\+39f/u)
+  })
+
+  it('leaves PostgreSQL, whose SmallInt was already a short, as it was', () => {
+    const { datamodel, plan } = fixture(`
+datasource db {
+  provider = "postgresql"
+}
+
+model P {
+  id Int   @id
+  s  Int   @db.SmallInt
+  f  Float @db.Real
+}
+`)
+    expect(entityFile(plan, model(datamodel, 'P')).code).toContain(
+      '    public int Id { get; set; }\n\n    public short S { get; set; }\n\n    public float F { get; set; }\n',
+    )
+  })
+})

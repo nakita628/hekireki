@@ -198,6 +198,7 @@ requiredness
 resvg
 RUSTFLAGS
 rubocop
+sbyte
 schemaname
 scim
 secondaryjoin
