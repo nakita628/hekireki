@@ -546,11 +546,13 @@ function goTagLiteral(tag: string) {
 // `,` as settings and splits at a `;`, and a `\` at the end joins the setting with the next one;
 // in CREATE INDEX, the dialector's QuoteTo splits a name at a `.` into schema and name, takes its
 // quote (a backtick on MySQL and SQLite, a `"` elsewhere) at the start as a quote of its own, and
-// makes two of it in a row one.
+// makes two of it in a row one; SQL Server's does not escape a `"` at all.
 function nameFlaw(name: string, provider: string | undefined) {
   const mark = name.match(/[,;.]/u)?.[0]
   if (mark !== undefined) return `a "${mark}"`
   if (name.endsWith('\\')) return 'a \\ at its end'
+  // SQL Server's QuoteTo writes a `"` inside a name as it is, which ends the quoted name.
+  if (provider === 'sqlserver' && name.includes('"')) return 'a double quote'
   const quote = provider === 'mysql' || provider === 'sqlite' ? '`' : '"'
   if (name.startsWith(quote)) return 'a quote at its start'
   return name.includes(quote + quote) ? 'two quotes in a row' : undefined

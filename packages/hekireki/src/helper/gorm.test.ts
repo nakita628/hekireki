@@ -1233,6 +1233,26 @@ model Item {
     ])
   })
 
+  it('names a double quote anywhere in an index name on SQL Server, whose QuoteTo does not escape it', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "sqlserver"
+}
+
+model Item {
+  id   Int    @id
+  note String @unique(map: "item\\"note")
+  slug String @unique(map: "item\`slug")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'sqlserver', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on note is named "item\\"note", which GORM cannot write (a double quote); change it',
+    ])
+  })
+
   it('names a relation whose Go name a column takes as its json name', () => {
     const datamodel = datamodelOf(
       getDMMF({
