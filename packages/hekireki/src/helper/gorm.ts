@@ -149,23 +149,27 @@ function formatGoDefault(def: DMMF.Field['default'], type: string, kind: DMMF.Fi
   // BigInt and Decimal literals reach the DMMF as strings; GORM parses an
   // integer or float column's default with strconv, which a quote fails.
   if (type === 'BigInt' || type === 'Decimal') return def
-  // The value lives inside a backtick struct tag, so `"` and `\` are written
-  // as the two-character sequences \" and \\ (reflect.StructTag unquotes
-  // them), and a `;` as \\; (GORM's tag parser rejoins what it escapes).
-  // Quoted, so `default:USER` is not read as the identifier USER. A string
+  // The value lives inside the struct tag (escapeTagValue). Quoted, so `default:USER` is not read as the identifier USER. A string
   // column's default is a value to GORM: it trims the quotes and writes the
   // rest into the row, so a `'` inside is not doubled. Every other default,
   // and a string with parentheses, is an SQL expression GORM puts into DDL as
   // it is, where the SQL quote doubles.
   const isValue =
     (type === 'String' || kind === 'enum') && !(def.includes('(') && def.includes(')'))
-  const escaped = (isValue ? def : def.replaceAll("'", "''"))
+  return `'${escapeTagValue(isValue ? def : def.replaceAll("'", "''"))}'`
+}
+
+// A value inside the struct tag: `"` and `\` are written as the two-character sequences \" and
+// \\ (reflect.StructTag unquotes them), a `;` as \\; (GORM's tag parser rejoins what it
+// escapes), and a line break or tab as \n, \r, \t, which keeps the tag on one line.
+function escapeTagValue(value: string) {
+  return value
     .replaceAll('\\', '\\\\')
     .replaceAll('"', '\\"')
     .replaceAll(';', '\\\\;')
     .replaceAll('\n', '\\n')
     .replaceAll('\r', '\\r')
-  return `'${escaped}'`
+    .replaceAll('\t', '\\t')
 }
 
 /** Whether a field is one DateTime, held by one of the time types written beside the models. */
@@ -203,44 +207,14 @@ function enumMappedDefault(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum
   return formatGoDefault(value?.dbName ?? field.default, field.type, field.kind)
 }
 
-// dbgenerated() is a raw DDL expression, valid on any column including the PK. It goes into the
-// struct tag on one line: a run of whitespace outside a quoted literal or identifier is one
-// space (the same SQL), and what is left is escaped as formatGoDefault escapes a value. A
-// backtick would end the Go raw string the tag is, so such an expression is left out.
+// dbgenerated() is a raw DDL expression, valid on any column including the PK. It is kept as the
+// schema has it, escaped for the tag (escapeTagValue), so one that spans lines stays readable.
 function dbGeneratedDefault(field: DMMF.Field) {
   const expression =
     isFunctionDefault(field.default) && field.default.name === 'dbgenerated'
       ? field.default.args[0]
       : undefined
-  if (typeof expression !== 'string' || expression.includes('`')) return null
-  return collapseSqlWhitespace(expression)
-    .replaceAll('\\', '\\\\')
-    .replaceAll('"', '\\"')
-    .replaceAll(';', '\\\\;')
-    .replaceAll('\n', '\\n')
-    .replaceAll('\r', '\\r')
-    .replaceAll('\t', '\\t')
-}
-
-// Whitespace runs outside '...' and "..." become one space, and the ends are trimmed. A quote
-// doubled inside a literal ('it''s') closes and reopens it, which leaves its text as it is.
-function collapseSqlWhitespace(sql: string) {
-  const out: string[] = []
-  let quote: string | null = null
-  for (const char of sql) {
-    if (quote !== null) {
-      out.push(char)
-      if (char === quote) quote = null
-    } else if (char === "'" || char === '"') {
-      quote = char
-      out.push(char)
-    } else if (/\s/u.test(char)) {
-      if (out.length > 0 && out.at(-1) !== ' ') out.push(' ')
-    } else {
-      out.push(char)
-    }
-  }
-  return out.join('').trimEnd()
+  return typeof expression === 'string' ? escapeTagValue(expression) : null
 }
 
 // A DateTime literal is written as the model writes the value (BeforeCreate fills it, so this
@@ -445,7 +419,12 @@ export function buildGormTags(
     field.isRequired && !isPk && !field.isList ? 'not null' : null,
   ].filter((p) => p !== null)
 
-  return `\`gorm:"${parts.join(';')}" json:"${columnName}"\``
+  const tag = `gorm:"${parts.join(';')}" json:"${columnName}"`
+  // A backtick (a MySQL identifier in a dbgenerated() default) would end a raw string, so such a
+  // tag is written as an interpreted string literal, which Go reads as the same tag.
+  return tag.includes('`')
+    ? `"${tag.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+    : `\`${tag}\``
 }
 
 // A name the schema gives an index, unless the struct tag cannot hold it: GORM reads past a `,` as

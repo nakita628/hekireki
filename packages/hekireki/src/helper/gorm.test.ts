@@ -153,10 +153,11 @@ describe('buildGormTags', () => {
         hasDefaultValue: true,
         default: { name: 'dbgenerated', args: [expression] },
       }) as any
+    // The line breaks are written \n, which reflect.StructTag gives back as they were.
     expect(
       buildGormTags(
         field(
-          "\nCASE\n    WHEN ((accountable_type)::text = ANY (ARRAY['Loan'::text])) THEN 'liability'::text\n    ELSE 'asset'::text\nEND",
+          "\nCASE\n    WHEN (kind = 'Loan') THEN 'liability'::text\n    ELSE 'asset'::text\nEND",
         ),
         false,
         false,
@@ -165,17 +166,18 @@ describe('buildGormTags', () => {
         'postgresql',
       ),
     ).toBe(
-      "`gorm:\"column:classification;default:CASE WHEN ((accountable_type)::text = ANY (ARRAY['Loan'::text])) THEN 'liability'::text ELSE 'asset'::text END\" json:\"classification\"`",
+      String.raw`${'`'}gorm:"column:classification;default:\nCASE\n    WHEN (kind = 'Loan') THEN 'liability'::text\n    ELSE 'asset'::text\nEND" json:"classification"${'`'}`,
     )
-    // A literal keeps its whitespace (escaped), and a `;` and a `"` are escaped for the tag.
+    // A `;`, a `"`, a tab and a `--` comment's line end are escaped for the tag.
     expect(
-      buildGormTags(field('concat(\'a;\n  b\',\t"x")'), false, false, [], [], 'postgresql'),
+      buildGormTags(field('concat(\'a;\',\t"x", -- why\n 0)'), false, false, [], [], 'postgresql'),
     ).toBe(
-      '`gorm:"column:classification;default:concat(\'a\\\\;\\n  b\', \\"x\\")" json:"classification"`',
+      String.raw`${'`'}gorm:"column:classification;default:concat('a\\;',\t\"x\", -- why\n 0)" json:"classification"${'`'}`,
     )
-    // A backtick would end the raw string the tag is.
-    expect(buildGormTags(field('`a`'), false, false, [], [], 'mysql')).toBe(
-      '`gorm:"column:classification;type:varchar(191)" json:"classification"`',
+    // A backtick (MySQL quotes an identifier with it) would end a raw string, so the tag is an
+    // interpreted string literal.
+    expect(buildGormTags(field('(`a` + 1)'), false, false, [], [], 'mysql')).toBe(
+      String.raw`"gorm:\"column:classification;type:varchar(191);default:(${'`'}a${'`'} + 1)\" json:\"classification\""`,
     )
   })
 
