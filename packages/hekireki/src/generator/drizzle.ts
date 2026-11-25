@@ -10,24 +10,31 @@ import {
   makeTable,
   resolveDbProvider,
 } from '../helper/drizzle.js'
+import { partialIndexWhere } from '../prisma/partial-index.js'
+import type { PrismaBlock } from '../prisma/schema-text.js'
 
 /**
  * The drizzle schema of a datamodel: its enums, tables and relations. A model named in `views` is
  * a Prisma `view`, written as the dialect's view marked `.existing()`.
+ *
+ * @param blocks - The blocks of the Prisma schema as written, which carry the `where` of each
+ *   partial index (DMMF drops it).
  */
 export function drizzleSchema(
   datamodel: DMMF.Datamodel,
   provider: 'postgresql' | 'cockroachdb' | 'mysql' | 'sqlite',
   indexes: readonly DMMF.Index[],
   views: ReadonlySet<string> = new Set(),
+  blocks: readonly PrismaBlock[] = [],
 ) {
   const db = resolveDbProvider(provider)
   const imports = createImports()
+  const whereOf = partialIndexWhere(blocks)
 
   const enumLines = makeEnumDeclarations(datamodel.models, datamodel.enums, db, imports)
   const tableLines = [
     ...datamodel.models.map((model) =>
-      makeTable(model, datamodel.models, db, imports, datamodel.enums, indexes, views),
+      makeTable(model, datamodel.models, db, imports, datamodel.enums, indexes, views, whereOf),
     ),
     ...makeM2MJoinTables(datamodel.models, db, imports),
   ]

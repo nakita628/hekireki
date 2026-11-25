@@ -3,6 +3,7 @@ import { stripTypeScriptTypes } from 'node:module'
 import type { DMMF } from '@prisma/generator-helper'
 import { describe, expect, it } from 'vite-plus/test'
 
+import { prismaBlocks } from '../prisma/schema-text.js'
 import { drizzleSchema } from './drizzle.js'
 
 function makeModel(overrides: Partial<DMMF.Model> & { name: string }): DMMF.Model {
@@ -1808,6 +1809,111 @@ describe('keys, indexes and foreign keys as Prisma Migrate makes them', () => {
     expect(join('sqlite')).toBe(
       `(table) => [uniqueIndex('_PostToTag_AB_unique').on(table.A, table.B), ${rest}`,
     )
+  })
+})
+
+// The `where` of a partial index (the `partialIndexes` preview feature), which DMMF drops.
+describe('a partial index', () => {
+  const blocks = prismaBlocks(`
+model Account {
+  id     Int     @id
+  email  String  @unique(where: raw("alive"))
+  alive  Boolean
+  n      Int
+  status String?
+  code   String
+
+  @@unique([n], where: { status: "active" }, map: "account_n_active")
+  @@index([alive], where: { alive: true })
+  @@index([code], where: raw("code ~ '\\\\d' AND code <> '\`' AND code <> '\${x}'"))
+  @@unique([code])
+}
+
+model Login {
+  id    Int    @id
+  email String
+  account Account @relation(fields: [email], references: [email])
+}
+`)
+  const account = makeModel({
+    name: 'Account',
+    fields: [
+      makeField({ name: 'id', type: 'Int', isId: true }),
+      makeField({ name: 'email', type: 'String', isUnique: true }),
+      makeField({ name: 'alive', type: 'Boolean' }),
+      makeField({ name: 'n', type: 'Int' }),
+      makeField({ name: 'status', type: 'String', isRequired: false }),
+      makeField({ name: 'code', type: 'String' }),
+      makeField({
+        name: 'logins',
+        type: 'Login',
+        kind: 'object',
+        isList: true,
+        relationName: 'AccountToLogin',
+        relationFromFields: [],
+        relationToFields: [],
+      }),
+    ],
+  })
+  const login = makeModel({
+    name: 'Login',
+    fields: [
+      makeField({ name: 'id', type: 'Int', isId: true }),
+      makeField({ name: 'email', type: 'String' }),
+      makeField({
+        name: 'account',
+        type: 'Account',
+        kind: 'object',
+        relationName: 'AccountToLogin',
+        relationFromFields: ['email'],
+        relationToFields: ['email'],
+      }),
+    ],
+  })
+  const indexes: DMMF.Index[] = [
+    { model: 'Account', type: 'unique', isDefinedOnField: true, fields: [{ name: 'email' }] },
+    {
+      model: 'Account',
+      type: 'unique',
+      isDefinedOnField: false,
+      dbName: 'account_n_active',
+      fields: [{ name: 'n' }],
+    },
+    { model: 'Account', type: 'normal', isDefinedOnField: false, fields: [{ name: 'alive' }] },
+    { model: 'Account', type: 'normal', isDefinedOnField: false, fields: [{ name: 'code' }] },
+    { model: 'Account', type: 'unique', isDefinedOnField: false, fields: [{ name: 'code' }] },
+  ]
+  const accountTable = (provider: 'postgresql' | 'mysql' | 'sqlite') =>
+    drizzleSchema(makeDatamodel([account, login]), provider, indexes, new Set(), blocks)
+
+  // The email a relation points at is unique only where `alive`: an index, never a constraint.
+  it('keeps its condition on PostgreSQL, unique or not', () => {
+    expect(accountTable('postgresql'))
+      .toBe(`import { boolean, foreignKey, index, integer, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core'
+import { defineRelations, sql } from 'drizzle-orm'
+
+export const account = pgTable('Account', { id: integer('id').primaryKey(), email: text('email').notNull(), alive: boolean('alive').notNull(), n: integer('n').notNull(), status: text('status'), code: text('code').notNull() }, (table) => [uniqueIndex('Account_email_key').on(table.email).where(sql\`(alive)\`), uniqueIndex('account_n_active').on(table.n).where(sql\`("status" = 'active')\`), index('Account_alive_idx').on(table.alive).where(sql\`("alive" = true)\`), index('Account_code_idx').on(table.code).where(sql\`(code ~ '\\\\d' AND code <> '\\\`' AND code <> '\\\${x}')\`), uniqueIndex('Account_code_key').on(table.code)])
+
+export const login = pgTable('Login', { id: integer('id').primaryKey(), email: text('email').notNull() }, (table) => [foreignKey({ name: 'Login_email_fkey', columns: [table.email], foreignColumns: [account.email] }).onDelete('restrict').onUpdate('cascade')])
+
+export const relations = defineRelations({ account, login }, (r) => ({ account: { logins: r.many.login() }, login: { account: r.one.account({ from: r.login.email, to: r.account.email, optional: false }) } }))`)
+  })
+
+  it('keeps its condition on SQLite', () => {
+    expect(accountTable('sqlite').split('\n').slice(0, 4)).toStrictEqual([
+      "import { foreignKey, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'",
+      "import { defineRelations, sql } from 'drizzle-orm'",
+      '',
+      "export const account = sqliteTable('Account', { id: integer('id').primaryKey(), email: text('email').notNull(), alive: integer('alive', { mode: 'boolean' }).notNull(), n: integer('n').notNull(), status: text('status'), code: text('code').notNull() }, (table) => [uniqueIndex('Account_email_key').on(table.email).where(sql`(alive)`), uniqueIndex('account_n_active').on(table.n).where(sql`(\"status\" = 'active')`), index('Account_alive_idx').on(table.alive).where(sql`(\"alive\" = true)`), index('Account_code_idx').on(table.code).where(sql`(code ~ '\\\\d' AND code <> '\\`' AND code <> '\\${x}')`), uniqueIndex('Account_code_key').on(table.code)])",
+    ])
+  })
+
+  // drizzle's MySQL index has no `.where`, and Prisma takes no partial index on MySQL.
+  it('is a plain index on MySQL', () => {
+    const code = accountTable('mysql')
+    expect(code).toContain("unique('Account_email_key').on(table.email), ")
+    expect(code).not.toContain('.where(')
+    expect(code).toContain("import { defineRelations } from 'drizzle-orm'")
   })
 })
 

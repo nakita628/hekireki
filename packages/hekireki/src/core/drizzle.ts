@@ -18,11 +18,13 @@ export function drizzle(options: GeneratorOptions) {
       })
     }
     const resolved = outputFile(output, 'schema.ts')
+    const blocks = prismaBlocks(options.datamodel)
     const code = drizzleSchema(
       options.dmmf.datamodel,
       providerResult.value,
       options.dmmf.datamodel.indexes,
-      viewNames(prismaBlocks(options.datamodel)),
+      viewNames(blocks),
+      blocks,
     )
     return yield* emit(code, resolved.dir, resolved.file)
   })
