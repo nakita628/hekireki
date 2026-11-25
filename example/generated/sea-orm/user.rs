@@ -26,7 +26,10 @@ pub struct Model {
     pub role: Role,
     #[sea_orm(column_type = "Array(RcOrArc::new(ColumnType::Text))")]
     pub interests: Vec<String>,
-    #[sea_orm(column_type = "custom(\"timestamp(3)\")")]
+    #[sea_orm(
+        column_type = "custom(\"timestamp(3)\")",
+        default_expr = "Expr::current_timestamp()"
+    )]
     pub created_at: DateTime,
     #[sea_orm(column_type = "custom(\"timestamp(3)\")")]
     pub updated_at: DateTime,

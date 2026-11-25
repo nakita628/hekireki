@@ -14,7 +14,10 @@ pub struct Model {
     pub user_id: String,
     #[sea_orm(column_type = "Decimal(Some((12, 2)))")]
     pub total: Decimal,
-    #[sea_orm(column_type = "custom(\"timestamp(3)\")")]
+    #[sea_orm(
+        column_type = "custom(\"timestamp(3)\")",
+        default_expr = "Expr::current_timestamp()"
+    )]
     pub placed_at: DateTime,
 }
 

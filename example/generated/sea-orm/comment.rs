@@ -17,7 +17,10 @@ pub struct Model {
     pub post_id: String,
     #[sea_orm(column_type = "Text")]
     pub author_id: Option<String>,
-    #[sea_orm(column_type = "custom(\"timestamp(3)\")")]
+    #[sea_orm(
+        column_type = "custom(\"timestamp(3)\")",
+        default_expr = "Expr::current_timestamp()"
+    )]
     pub created_at: DateTime,
 }
 

@@ -606,7 +606,45 @@ function columnAttributeParts(
       columnParts.push(`default_value = ${defaultVal}`)
     }
   }
+  const defaultExpr = databaseDefaultExpr(field, provider)
+  if (defaultExpr !== null) {
+    columnParts.push(`default_expr = ${rustString(defaultExpr)}`)
+  }
   return columnParts
+}
+
+/**
+ * The `default_expr` of a default the database fills: `now()` and `dbgenerated("...")`. sea-orm
+ * leaves it out of an insert's values either way, but `Schema::create_table_from_entity` writes it
+ * as the column's DEFAULT, so a row inserted past the entity is filled as in Prisma's table.
+ *
+ * @example
+ * ```rust
+ * #[sea_orm(default_expr = "Expr::current_timestamp()")]
+ * #[sea_orm(default_expr = "Expr::cust(\"gen_random_uuid()::text\")")]
+ * ```
+ */
+function databaseDefaultExpr(field: DMMF.Field, provider: string | undefined) {
+  if (!isFunctionDefault(field.default)) return null
+  if (field.default.name === 'now') {
+    const now = nowSql(field, provider)
+    return now === 'CURRENT_TIMESTAMP' ? 'Expr::current_timestamp()' : `Expr::cust("${now}")`
+  }
+  const [sql] = field.default.args
+  if (field.default.name !== 'dbgenerated' || typeof sql !== 'string' || sql === '') return null
+  return `Expr::cust(${rustString(sql)})`
+}
+
+// The DEFAULT Prisma Migrate writes for now(). MySQL takes CURRENT_TIMESTAMP as the default of a
+// DATETIME(n) or TIMESTAMP(n) column only at the column's own precision (3 for a DateTime with no
+// native type), and refuses the bare form for any n but 0.
+function nowSql(field: DMMF.Field, provider: string | undefined) {
+  const nativeName = field.nativeType?.[0]
+  const isStamp =
+    nativeName === undefined || nativeName === 'DateTime' || nativeName === 'Timestamp'
+  if (provider !== 'mysql' || !isStamp) return 'CURRENT_TIMESTAMP'
+  const precision = field.nativeType ? (field.nativeType[1][0] ?? '0') : '3'
+  return precision === '0' ? 'CURRENT_TIMESTAMP' : `CURRENT_TIMESTAMP(${precision})`
 }
 
 export function buildSeaOrmAttributes(
