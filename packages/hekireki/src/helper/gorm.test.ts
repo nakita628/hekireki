@@ -139,6 +139,37 @@ describe('buildGormTags', () => {
     )
   })
 
+  // GORM reads a string default without both parentheses as a literal value. (#281)
+  it('wraps a dbgenerated() expression on a String or enum field in parentheses, which GORM takes as SQL', () => {
+    const field = (expression: string, type = 'String', kind = 'scalar') =>
+      ({
+        name: 'owner',
+        kind,
+        type,
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'dbgenerated', args: [expression] },
+      }) as any
+    const tag = (f: unknown) => buildGormTags(f as any, false, false, [], [], 'postgresql')
+    expect([
+      tag(field('CURRENT_USER')),
+      tag(field("'a'::text || 'b'")),
+      tag(field('\'admin\'::"Role"', 'Role', 'enum')),
+      tag(field('gen_random_uuid()')),
+      tag(field('1 + 1', 'Int')),
+    ]).toStrictEqual([
+      '`gorm:"column:owner;default:(CURRENT_USER);not null" json:"owner"`',
+      String.raw`${'`'}gorm:"column:owner;default:('a'::text || 'b');not null" json:"owner"${'`'}`,
+      String.raw`${'`'}gorm:"column:owner;default:('admin'::\"Role\");not null" json:"owner"${'`'}`,
+      '`gorm:"column:owner;default:gen_random_uuid();not null" json:"owner"`',
+      '`gorm:"column:owner;size:32;default:1 + 1;not null" json:"owner"`',
+    ])
+  })
+
   it('writes a dbgenerated() expression that spans lines on one line Go can read', () => {
     const field = (expression: string) =>
       ({

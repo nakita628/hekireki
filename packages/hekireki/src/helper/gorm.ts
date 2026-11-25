@@ -267,12 +267,18 @@ function enumMappedDefault(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum
 
 // dbgenerated() is a raw DDL expression, valid on any column including the PK. It is kept as the
 // schema has it, escaped for the tag (escapeTagValue), so one that spans lines stays readable.
+// GORM takes a string or enum column's default as SQL only when it holds both `(` and `)`;
+// otherwise it trims the quotes and fills the rest in as a literal value. An expression without
+// them is wrapped in parentheses, which MySQL needs around an expression default anyway.
 function dbGeneratedDefault(field: DMMF.Field) {
   const expression =
     isFunctionDefault(field.default) && field.default.name === 'dbgenerated'
       ? field.default.args[0]
       : undefined
-  return typeof expression === 'string' ? escapeTagValue(expression) : null
+  if (typeof expression !== 'string') return null
+  const isText = field.type === 'String' || field.kind === 'enum'
+  const isSql = expression.includes('(') && expression.includes(')')
+  return escapeTagValue(isText && !isSql ? `(${expression})` : expression)
 }
 
 // A DateTime literal is written as the model writes the value (BeforeCreate fills it, so this
