@@ -3374,6 +3374,22 @@ ${models}`
   @@index([rank(sort: Asc)])
 }`
 
+  it('escapes an index name and a column name for Python, ascending or descending', () => {
+    const code = sortCode(
+      'postgresql',
+      `model Odd {
+  id Int    @id
+  a  String @map("a\\"b")
+  b  String @map("c\\\\d")
+
+  @@index([a, b(sort: Desc)], map: "odd\\"idx")
+}`,
+    )
+    expect(code).toContain(
+      'Index("odd\\"idx", "a\\"b", literal_column("\\"c\\\\d\\"").desc()),',
+    )
+  })
+
   it('writes a descending column in double quotes on PostgreSQL', () => {
     expect(sortCode('postgresql', LOG_ENTRY))
       .toBe(`from sqlalchemy import Dialect, Index, MetaData, Text, TypeDecorator, literal_column

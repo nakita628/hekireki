@@ -205,7 +205,7 @@ function sqlQuoted(name: string, provider: string) {
 function indexColumnArg(column: string, sortOrder: string | undefined, provider: string) {
   return sortOrder === 'desc'
     ? `literal_column(${toPythonString(sqlQuoted(column, provider))}).desc()`
-    : `"${column}"`
+    : toPythonString(column)
 }
 
 // Whether the indexes of a model read literal_column(): for a partial index's condition or a
@@ -1131,7 +1131,7 @@ function generateTableArgs(
     const name = idx.dbName ?? constraintName(tableName, columns, unique ? 'key' : 'idx', provider)
     const where = whereArg(idx, provider)
     const args = [
-      `"${name}"`,
+      toPythonString(name),
       ...idx.fields.map((f) => indexColumnArg(fieldColumn(model, f.name), f.sortOrder, provider)),
       ...(unique ? ['unique=True'] : []),
       ...(where === null ? [] : [where]),
