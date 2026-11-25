@@ -1108,6 +1108,177 @@ class Document extends Model
 }`)
   })
 
+  it('reads back a key the database makes where the insert returns it', () => {
+    const blob = makeModel({
+      name: 'Blob',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'dbgenerated', args: ['gen_random_uuid()'] },
+          nativeType: ['Uuid', []],
+        }),
+        makeField({ name: 'filename', type: 'String' }),
+      ],
+    })
+
+    expect(eloquentModels([blob], 'App\\Models', undefined, undefined, { provider: 'postgresql' }))
+      .toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+
+class Blob extends Model
+{
+    protected $table = 'Blob';
+
+    protected $keyType = 'string';
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'id',
+        'filename',
+    ];
+}`)
+    expect(eloquentModels([blob], 'App\\Models', undefined, undefined, { provider: 'cockroachdb' }))
+      .toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+
+class Blob extends Model
+{
+    protected $table = 'Blob';
+
+    protected $keyType = 'string';
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'id',
+        'filename',
+    ];
+}`)
+    expect(eloquentModels([blob], 'App\\Models', undefined, undefined, { provider: 'mysql' }))
+      .toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+
+class Blob extends Model
+{
+    protected $table = 'Blob';
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'id',
+        'filename',
+    ];
+}`)
+  })
+
+  it('reads back an Int key the database makes where the insert returns it', () => {
+    const counter = makeModel({
+      name: 'Counter',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'Int',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'dbgenerated', args: ["nextval('counter_seq'::regclass)"] },
+        }),
+      ],
+    })
+
+    expect(
+      eloquentModels([counter], 'App\\Models', undefined, undefined, { provider: 'postgresql' }),
+    ).toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+
+class Counter extends Model
+{
+    protected $table = 'Counter';
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'id',
+    ];
+}`)
+    expect(eloquentModels([counter], 'App\\Models', undefined, undefined, { provider: 'mysql' }))
+      .toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+
+class Counter extends Model
+{
+    protected $table = 'Counter';
+
+    public $incrementing = false;
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'id',
+    ];
+}`)
+  })
+
+  it('keeps incrementing false for a text key the database makes, which may read as a number', () => {
+    const ticket = makeModel({
+      name: 'Ticket',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'String',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'dbgenerated', args: ["lpad(nextval('ticket_seq')::text, 8, '0')"] },
+        }),
+      ],
+    })
+
+    expect(
+      eloquentModels([ticket], 'App\\Models', undefined, undefined, { provider: 'postgresql' }),
+    ).toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+
+class Ticket extends Model
+{
+    protected $table = 'Ticket';
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'id',
+    ];
+}`)
+  })
+
   it('keeps incrementing false for a non-autoincrement Int primary key', () => {
     const counter = makeModel({
       name: 'Counter',
