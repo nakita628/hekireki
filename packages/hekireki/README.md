@@ -441,6 +441,11 @@ only, and a `Json` column holds any JSON value, so an array, a string, a number 
 Prisma Client wrote reads back as it is (on SQLite as the column keeps it: a `1.0` is `1`), and an
 `@default("[]")` is a default of the field.
 
+On SQL Server, a `String @db.UniqueIdentifier` is `:binary_id`, or `Tds.Ecto.UUID` where Ecto
+fills it (a `uuid()` or `uuid(7)` default, a `uuid(7)` key): the Tds adapter loads and dumps both
+in SQL Server's byte order, where `Ecto.UUID` would write the bytes of another GUID and `:string`
+would hold the raw bytes.
+
 `examples/ecto` in the repository runs a schema against Ecto on SQLite.
 
 ## Studio
