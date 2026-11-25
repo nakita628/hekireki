@@ -103,14 +103,11 @@ key, `save()` on a new instance given an existing key inserts, as with `uuid()`:
 `update_or_create()` or `save(force_update=True)`.
 
 On PostgreSQL, `hekireki-django` writes a `Json @db.Json` field as Prisma Client does: the value
-goes in as compact JSON text, which a `json` column keeps as given, key order included. Filters
-and key lookups compare the column as `jsonb`. `distinct()`, `order_by()` and grouping on the
-whole column still fail, because `json` has no equality or ordering.
-
-On PostgreSQL, `hekireki-django` writes a `Json @db.Json` field as Prisma Client does: the value
-goes in as compact JSON text, which a `json` column keeps as given, key order included. Filters
-and key lookups compare the column as `jsonb`. `distinct()`, `order_by()` and grouping on the
-whole column still fail, because `json` has no equality or ordering.
+goes in as compact JSON text, which a `json` column keeps as given, key order included. Lookups and
+key lookups on the column compare it as `jsonb`. The value on the other side of a comparison is not
+cast, so these still fail: comparing two `@db.Json` columns with `F()`, filtering a whole
+`Json[] @db.Json` list, and `distinct()`, `order_by()` or grouping on the whole column, since
+`json` has no equality or ordering.
 
 On PostgreSQL, hand the `MapEnums` of the `DbContext` `hekireki-efcore` writes to Npgsql:
 `UseNpgsql(connectionString, AppDbContext.MapEnums)`, or `AppDbContext.MapEnums(builder)` on your
