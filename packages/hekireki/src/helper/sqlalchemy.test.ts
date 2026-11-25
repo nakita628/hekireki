@@ -1618,6 +1618,21 @@ model TableNameThatIsQuiteLongForTheSequenceToFit1234 {
     )
   })
 
+  it("is SQL Server's IDENTITY, which the model leaves to the database", () => {
+    const code = generateFor(
+      'sqlserver',
+      `model Counter {
+  id       Int @id
+  metricId Int @unique @default(autoincrement()) @map("metric_id")
+}`,
+    )
+
+    expect(code).toContain(
+      '    metric_id: Mapped[int] = mapped_column(server_default=FetchedValue())\n',
+    )
+    expect(code).not.toContain('Sequence')
+  })
+
   it("leaves a view's column as it is: the table's alone takes a sequence", () => {
     const code = generateFor(
       'postgresql',

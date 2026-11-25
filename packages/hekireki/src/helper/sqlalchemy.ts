@@ -1018,7 +1018,9 @@ function serialSequenceName(table: string, column: string) {
 // Prisma Migrate: the model only knows the database sets it.
 function autoincrementArgs(field: DMMF.Field, provider: string, table: string, column: string) {
   if (!isAutoincrement(field) || provider === 'sqlite') return []
-  if (provider === 'mysql') return ['server_default=FetchedValue()']
+  // MySQL's AUTO_INCREMENT and SQL Server's IDENTITY are the column's own; SQLAlchemy writes neither
+  // on a column that is not the key.
+  if (provider === 'mysql' || provider === 'sqlserver') return ['server_default=FetchedValue()']
   if (provider === 'cockroachdb') return ['server_default=text("unique_rowid()")']
   const sequence = toPythonString(serialSequenceName(table, column))
   return [`server_default=Sequence(${sequence}, metadata=Base.metadata).next_value()`]
@@ -1029,7 +1031,7 @@ function autoincrementSaImports(model: DMMF.Model, provider: string) {
   const keys = new Set(model.primaryKey?.fields)
   const fields = model.fields.filter((f) => !f.isId && !keys.has(f.name) && isAutoincrement(f))
   if (fields.length === 0 || provider === 'sqlite') return []
-  if (provider === 'mysql') return ['FetchedValue']
+  if (provider === 'mysql' || provider === 'sqlserver') return ['FetchedValue']
   return provider === 'cockroachdb' ? ['text'] : ['Sequence']
 }
 

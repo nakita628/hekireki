@@ -1005,6 +1005,13 @@ model Tick {
 // A key with no autoincrement() says autoIncrement:false, and GORM writes its value, 0 included,
 // in an INSERT.
 describe('generateGormModels integer key with no autoincrement()', () => {
+  // CockroachDB's sequence() fills the key, as autoincrement() does: GORM leaves a zero one out.
+  it('leaves a sequence() key on CockroachDB to GORM', () => {
+    expect(
+      gormFor('model Seq {\n  id Int @id @default(sequence())\n}\n', 'cockroachdb'),
+    ).not.toContain('autoIncrement:false')
+  })
+
   const schema = `
 model Counter {
   id Int @id

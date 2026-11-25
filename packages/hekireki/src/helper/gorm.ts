@@ -320,10 +320,16 @@ function gormDefault(
 // native type is @db.SmallInt) and AUTO_INCREMENT on MySQL, where Prisma makes a plain integer
 // column. With autoIncrement:false GORM writes the field in an INSERT even when it is zero, as
 // such a key's value comes from the caller (or the row it belongs to).
+// A key the database fills (autoincrement(), CockroachDB's sequence(), a dbgenerated()) stays one GORM
+// leaves out of the INSERT when zero and reads back.
+const DATABASE_FILLED_DEFAULTS = new Set(['autoincrement', 'sequence', 'dbgenerated'])
+
 function isImplicitAutoIncrement(field: DMMF.Field, gormPicksKey: boolean) {
   const isInteger =
     field.kind === 'scalar' && !field.isList && ['Int', 'BigInt'].includes(field.type)
-  return gormPicksKey && isInteger && !isAutoincrement(field)
+  const isDatabaseFilled =
+    isFunctionDefault(field.default) && DATABASE_FILLED_DEFAULTS.has(field.default.name)
+  return gormPicksKey && isInteger && !isDatabaseFilled
 }
 
 function primaryKeyTags(
@@ -440,12 +446,11 @@ function usesScalarList(models: readonly DMMF.Model[], provider: string | undefi
 
 // GORM's PostgreSQL dialector makes an autoIncrement column serial only from its own integer types;
 // a `type:` it does not know is written as given, without a default. An autoincrement column with a
-// native integer type is therefore given its serial type, as Prisma Migrate makes it (`SMALLSERIAL`
-// for an Int @db.SmallInt). MySQL's dialector adds AUTO_INCREMENT to any type.
+// native integer type is therefore given its serial type, as Prisma Migrate makes it: `SMALLSERIAL`
+// for an Int @db.SmallInt (@db.Integer and @db.BigInt write no `type:`). MySQL's dialector adds
+// AUTO_INCREMENT to any type.
 const SERIAL_TYPES: { readonly [type: string]: string | undefined } = {
   smallint: 'smallserial',
-  integer: 'serial',
-  bigint: 'bigserial',
 }
 
 function serialType(field: DMMF.Field, nativeType: string, provider: string | undefined) {
