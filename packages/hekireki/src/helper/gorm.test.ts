@@ -181,6 +181,32 @@ describe('buildGormTags', () => {
     )
   })
 
+  it('escapes a mapped column name for the struct tag, so GORM reads the column and every setting after it', () => {
+    const field = (dbName: string) =>
+      ({
+        name: 'label',
+        dbName,
+        kind: 'scalar' as const,
+        type: 'String',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: false,
+      }) as any
+    // GORM rejoins what it splits at a `\;`, and reflect.StructTag unquotes a `\"` and a `\\`.
+    expect(buildGormTags(field('a;b'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:a\\;b;not null" json:"a;b"${'`'}`,
+    )
+    expect(buildGormTags(field('a"b'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:a\"b;not null" json:"a\"b"${'`'}`,
+    )
+    expect(buildGormTags(field('a\\b'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:a\\b;not null" json:"a\\b"${'`'}`,
+    )
+  })
+
   it('generates primaryKey;autoIncrement for autoincrement', () => {
     const field = {
       name: 'id',
@@ -989,6 +1015,26 @@ model Team {
       'model ScalarList: its Go name is ScalarList, what the models hold a scalar list in; rename the model and keep its table with @@map',
     ])
     expect(gormProblems(listModels('Tag'), 'postgresql')).toStrictEqual([])
+  })
+
+  it('names a column whose mapped name ends in a backslash, which GORM joins to the next setting', () => {
+    const models = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Note {
+  id    Int    @id
+  label String @map("label\\\\")
+  body  String @map("a\\\\b")
+}
+`,
+      }),
+    ).models
+    expect(gormProblems(models, 'postgresql')).toStrictEqual([
+      "model Note: the column of label ends in \\, which GORM's tag cannot hold; change its @map",
+    ])
   })
 
   it('types a native list as Prisma names it, and an Int list on CockroachDB as INT4', () => {

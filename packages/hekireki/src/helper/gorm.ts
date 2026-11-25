@@ -483,7 +483,7 @@ export function buildGormTags(
   const defaultVal = gormDefault(field, isPk, isCompositePk, enums, provider)
 
   const parts = [
-    `column:${columnName}`,
+    `column:${escapeTagValue(columnName)}`,
     ...primaryKeyTags(field, isPk, provider),
     // A model's own unique fields come named in compositeIndexTags.
     field.isUnique && !compositeIndexTags.some((tag) => tag.startsWith('uniqueIndex:'))
@@ -508,7 +508,10 @@ export function buildGormTags(
       : null,
   ].filter((p) => p !== null)
 
-  return goTagLiteral(`gorm:"${parts.join(';')}" json:"${columnName}"`)
+  // encoding/json takes no name with a `"` or `\` and falls back to the field's, but the tag
+  // still has to end where it should.
+  const jsonName = columnName.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+  return goTagLiteral(`gorm:"${parts.join(';')}" json:"${jsonName}"`)
 }
 
 // A struct tag as Go source: a raw string, unless the tag holds a backtick (a MySQL identifier in
@@ -1598,11 +1601,22 @@ export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
   return models.flatMap((model) => {
     const name = goModelName(model.name)
     const holds = held.get(name)
-    return holds === undefined
-      ? []
-      : [
-          `model ${model.name}: its Go name is ${name}, ${holds}; rename the model and keep its table with @@map`,
-        ]
+    // GORM rejoins a tag setting that ends in `\` with the next one, so a column name ending in
+    // one swallows the settings after it, whatever the escaping.
+    const columns = model.fields
+      .filter((field) => field.kind !== 'object' && (field.dbName ?? field.name).endsWith('\\'))
+      .map(
+        (field) =>
+          `model ${model.name}: the column of ${field.name} ends in \\, which GORM's tag cannot hold; change its @map`,
+      )
+    return [
+      ...(holds === undefined
+        ? []
+        : [
+            `model ${model.name}: its Go name is ${name}, ${holds}; rename the model and keep its table with @@map`,
+          ]),
+      ...columns,
+    ]
   })
 }
 
