@@ -32,6 +32,7 @@ from app.models import (
     Event,
     Inventory,
     Monarch,
+    NativeGrid,
     Post,
     Profile,
     Tag,
@@ -164,9 +165,24 @@ def _query_smoke() -> None:
         Claim.objects.select_related("handle").query
     )
 
+    # A @db.Json column is PostgreSQL's json, which has none of jsonb's operators: a lookup or a
+    # key transform compares it as jsonb, as Prisma Client does.
+    assert '("NativeGrid"."plain")::jsonb' in str(NativeGrid.objects.filter(plain__a=1).query)
+    assert '("NativeGrid"."plain")::jsonb' in str(NativeGrid.objects.filter(plain={"a": 1}).query)
+
+
+def _json_text_smoke() -> None:
+    """A @db.Json value is bound as the compact text Prisma Client sends, which
+    json keeps as it is: key order included."""
+    from django.db import connection
+
+    plain = NativeGrid._meta.get_field("plain")
+    assert plain.get_db_prep_value({"zz": 1, "a": "x"}, connection) == '{"zz":1,"a":"x"}'
+
 
 if __name__ == "__main__":
     _runtime_smoke()
     _default_value_smoke()
     _query_smoke()
+    _json_text_smoke()
     print("django smoke OK")
