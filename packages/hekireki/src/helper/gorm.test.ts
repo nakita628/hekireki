@@ -1228,6 +1228,38 @@ model Crate {
     expect(code).toContain('\treturn "cr\\"a\\\\te"\n')
   })
 
+  it('names the join table of an implicit many-to-many relation the dialector would quote as another', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id     Int    @id
+  tags   Tag[]  @relation("post.tags")
+  labels Tag[]  @relation("labels\\\\")
+  notes  Tag[]  @relation("no\\"\\"tes")
+  marks  Tag[]  @relation("ma;r\\"ks")
+}
+
+model Tag {
+  id     Int    @id
+  posts  Post[] @relation("post.tags")
+  labels Post[] @relation("labels\\\\")
+  notes  Post[] @relation("no\\"\\"tes")
+  marks  Post[] @relation("ma;r\\"ks")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Post: the join table of tags is named "_post.tags", which GORM cannot write (a "."); change the name of its @relation',
+      'model Post: the join table of labels is named "_labels\\\\", which GORM cannot write (a \\ at its end); change the name of its @relation',
+      'model Post: the join table of notes is named "_no\\"\\"tes", which GORM cannot write (two quotes in a row); change the name of its @relation',
+    ])
+  })
+
   it('names a column or table name the dialector would quote as another', () => {
     const problemsOf = (provider: string, body: string) => {
       const datamodel = datamodelOf(
@@ -1679,6 +1711,21 @@ func (Profile) TableName() string {
 	return "Profile"
 }
 `)
+  })
+
+  it('escapes a ";" or a double quote of a relation name in the many2many tag', () => {
+    const code = gormFor(`
+model Post {
+  id   Int   @id
+  tags Tag[] @relation("a;b\\"c")
+}
+
+model Tag {
+  id    Int    @id
+  posts Post[] @relation("a;b\\"c")
+}
+`)
+    expect(code).toContain('`gorm:"many2many:_a\\\\;b\\"c;joinForeignKey:A;joinReferences:B"`')
   })
 
   // Under GORM's default naming the table would be `_post_to_tags` and its columns `post_id` and
