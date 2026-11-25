@@ -194,3 +194,36 @@ export function partialIndexWhere(blocks: readonly PrismaBlock[], provider?: str
     return condition === undefined ? undefined : conditionSql(model, condition.condition, provider)
   }
 }
+
+/**
+ * The models, with `isUnique` set again on a field whose plain `@unique` DMMF leaves it off: it
+ * does so when a partial unique index sits beside it on the same field, but the `@unique` holds
+ * every row all the same. The key of a model without an `@id` (`primaryKeyFields`) is taken from
+ * `isUnique`, so this comes before it.
+ */
+export function withPlainUniques(
+  models: readonly DMMF.Model[],
+  indexes: readonly DMMF.Index[],
+  where: (model: DMMF.Model, index: DMMF.Index) => string | undefined,
+) {
+  const modelByName = new Map(models.map((m) => [m.name, m]))
+  const unique = new Set(
+    indexes
+      .filter((i) => i.type === 'unique' && i.isDefinedOnField && i.fields.length === 1)
+      .filter((i) => {
+        const model = modelByName.get(i.model)
+        return model !== undefined && where(model, i) === undefined
+      })
+      .map((i) => `${i.model}.${i.fields[0]?.name ?? ''}`),
+  )
+  const isPlainUnique = (model: DMMF.Model, f: DMMF.Field) =>
+    !f.isUnique && unique.has(`${model.name}.${f.name}`)
+  return models.map((model) =>
+    model.fields.some((f) => isPlainUnique(model, f))
+      ? {
+          ...model,
+          fields: model.fields.map((f) => (isPlainUnique(model, f) ? { ...f, isUnique: true } : f)),
+        }
+      : model,
+  )
+}

@@ -1625,6 +1625,29 @@ func (User) TableName() string {
 // drops the condition; the tag gives it to GORM in `where:`, so AutoMigrate makes the index Prisma
 // Migrate makes (schema.Parse, gorm v1.31.2, reads each condition back as written here).
 describe('generateGormModels partial indexes', () => {
+  // DMMF leaves isUnique off a @unique with a partial unique beside it, so the key of a model
+  // without an @id was lost. (#287)
+  it('keys a model without an @id by a @unique that has a partial unique beside it', () => {
+    const code = gormFor(
+      `
+generator client {
+  provider        = "prisma-client"
+  output          = "./generated"
+  previewFeatures = ["partialIndexes"]
+}
+
+model A {
+  email String  @unique
+  alive Boolean
+
+  @@unique([email], where: raw("alive"), map: "a_email_alive")
+}
+`,
+      'postgresql',
+    )
+    expect(code.split('\n').find((line) => line.includes('column:email'))).toContain('primaryKey')
+  })
+
   it('writes a Boolean as 1 and a name in brackets on SQL Server, which has no boolean literal', () => {
     const code = gormFor(
       `
