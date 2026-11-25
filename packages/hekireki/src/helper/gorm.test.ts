@@ -1011,10 +1011,10 @@ model Team {
   })
 
   it('names a model whose Go name is the list type, where the schema has a list', () => {
-    expect(gormProblems(listModels('ScalarList'), 'postgresql')).toStrictEqual([
+    expect(gormProblems(listModels('ScalarList'), 'postgresql', [])).toStrictEqual([
       'model ScalarList: its Go name is ScalarList, what the models hold a scalar list in; rename the model and keep its table with @@map',
     ])
-    expect(gormProblems(listModels('Tag'), 'postgresql')).toStrictEqual([])
+    expect(gormProblems(listModels('Tag'), 'postgresql', [])).toStrictEqual([])
   })
 
   it('names a column whose mapped name ends in a backslash, which GORM joins to the next setting', () => {
@@ -1033,7 +1033,7 @@ model Note {
 `,
       }),
     ).models
-    expect(gormProblems(models, 'postgresql')).toStrictEqual([
+    expect(gormProblems(models, 'postgresql', [])).toStrictEqual([
       "model Note: the column of label ends in \\, which GORM's tag cannot hold; change its @map",
       'model Note: the column of title holds a ";", at which GORM splits the tag; change its @map',
     ])
@@ -1060,8 +1060,8 @@ model Plain {
 `
     const { models, indexes } = datamodelOf(getDMMF({ datamodel: [['schema.prisma', source]] }))
     expect(gormProblems(models, 'mysql', indexes)).toStrictEqual([
-      "model Doc: its key takes the first 100 of key (length: 100), which GORM's primaryKey cannot write",
-      "model Pair: its key takes the first 50 of a (length: 50), which GORM's primaryKey cannot write",
+      "model Doc: its key is on a column prefix (key(length: 100)), which GORM's primaryKey cannot write; key it on whole columns (a VarChar the key can hold) or use another generator",
+      "model Pair: its key is on a column prefix (a(length: 50)), which GORM's primaryKey cannot write; key it on whole columns (a VarChar the key can hold) or use another generator",
     ])
   })
 

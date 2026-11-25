@@ -1600,13 +1600,14 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
 /**
  * What keeps the schema from becoming models that compile and read as it says: a model whose Go
  * name is that of a type or function written beside the models, where the schema needs it, and a
- * column whose name the struct tag cannot hold (a `;`, or a `\` at its end). Index names made
- * from a column are escaped for the tag (escapeTagValue), so a `"` or `\` in one is held.
+ * column whose name the struct tag cannot hold (a `;`, or a `\` at its end), and a MySQL key on a
+ * prefix of a column, which GORM's primaryKey cannot write. Index names made from a column are
+ * escaped for the tag (escapeTagValue), so a `"` or `\` in one is held.
  */
 export function gormProblems(
   models: readonly DMMF.Model[],
-  provider?: string,
-  indexes: readonly DMMF.Index[] = [],
+  provider: string | undefined,
+  indexes: readonly DMMF.Index[],
 ) {
   const held = new Map<string, string>([
     ...dateTypes(models).map((name): [string, string] => [
@@ -1652,24 +1653,25 @@ export function gormProblems(
 
 // A MySQL key on a prefix of a column (`@id(length: N)`, `@@id([a(length: N)])`), which MySQL
 // needs on a TEXT or BLOB key: GORM's primaryKey takes the whole column, and has no setting for a
-// prefix, so AutoMigrate's table would be refused (error 1170) or keyed on another column.
+// prefix, so AutoMigrate's table would be refused (error 1170) or keyed on the whole column.
 function keyPrefixProblems(
   model: DMMF.Model,
   provider: string | undefined,
   indexes: readonly DMMF.Index[],
 ) {
   if (provider !== 'mysql') return []
-  return indexes
+  const prefixed = indexes
     .filter((idx) => idx.model === model.name && idx.type === 'id')
     .flatMap((idx) => idx.fields)
     .flatMap((field) => {
       const prefix = indexPrefix(model, field)
-      return prefix === undefined
-        ? []
-        : [
-            `model ${model.name}: its key takes the first ${prefix} of ${field.name} (length: ${prefix}), which GORM's primaryKey cannot write`,
-          ]
+      return prefix === undefined ? [] : [`${field.name}(length: ${prefix})`]
     })
+  return prefixed.length === 0
+    ? []
+    : [
+        `model ${model.name}: its key is on a column prefix (${prefixed.join(', ')}), which GORM's primaryKey cannot write; key it on whole columns (a VarChar the key can hold) or use another generator`,
+      ]
 }
 
 function standardImports(
