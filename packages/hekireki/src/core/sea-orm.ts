@@ -4,7 +4,7 @@ import { Effect } from 'effect'
 import { emitMany } from '../emit/index.js'
 import { seaOrmFiles } from '../generator/sea-orm.js'
 import { getString } from '../prisma/config.js'
-import { prismaBlocks, viewNames } from '../prisma/schema-text.js'
+import { prismaBlocks, relationMaps, viewNames } from '../prisma/schema-text.js'
 import { GeneratorConfigError } from './errors.js'
 import { requireOutput } from './output.js'
 
@@ -25,12 +25,14 @@ export function seaOrm(options: GeneratorOptions) {
       })
     }
     const provider = options.datasources[0]?.activeProvider
+    const blocks = prismaBlocks(options.datamodel)
     const files = seaOrmFiles(
       models,
       enums,
       serde,
       provider,
-      viewNames(prismaBlocks(options.datamodel)),
+      viewNames(blocks),
+      relationMaps(blocks),
     )
     return yield* emitMany(files, output)
   })

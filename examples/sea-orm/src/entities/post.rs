@@ -29,7 +29,8 @@ pub enum Relation {
         belongs_to = "super::author::Entity",
         from = "Column::AuthorId",
         to = "super::author::Column::Id",
-        on_delete = "Cascade"
+        on_delete = "Cascade",
+        fk_name = "posts_author_id_fkey"
     )]
     Author,
 }

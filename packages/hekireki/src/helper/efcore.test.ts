@@ -2023,6 +2023,38 @@ public partial class AppDbContext : DbContext
     })
   })
 
+  it('names a foreign key as its @relation(map:) says, and as Prisma does otherwise', () => {
+    // DMMF drops `map:`, so it only reaches the plan through the schema's text.
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+
+model auth_group {
+  id          Int                      @id
+  permissions auth_group_permissions[]
+  owners      auth_group_owner[]
+}
+
+model auth_group_permissions {
+  id       Int        @id
+  group_id Int
+  group    auth_group @relation(fields: [group_id], references: [id], map: "auth_group_permissions_group_id_b120cbf9_fk_auth_group_id")
+}
+
+model auth_group_owner {
+  id       Int        @id
+  group_id Int
+  group    auth_group @relation(fields: [group_id], references: [id])
+}
+`
+    const { plan } = fixture(schema, { ...DEFAULT_OPTIONS, source: schema })
+    const code = contextFile(plan).code
+    expect(code).toContain(
+      '.HasConstraintName("auth_group_permissions_group_id_b120cbf9_fk_auth_group_id");',
+    )
+    expect(code).toContain('.HasConstraintName("auth_group_owner_group_id_fkey");')
+  })
+
   it('maps implicit many-to-many relations onto the _A/_B join tables Prisma creates', () => {
     const { datamodel, plan } = fixture(MANY_TO_MANY)
     expect(entityFile(plan, model(datamodel, 'Person'))).toStrictEqual({

@@ -37,7 +37,8 @@ pub enum Relation {
         belongs_to = "super::user::Entity",
         from = "Column::AuthorId",
         to = "super::user::Column::Id",
-        on_delete = "Cascade"
+        on_delete = "Cascade",
+        fk_name = "posts_author_id_fkey"
     )]
     Author,
     #[sea_orm(has_many = "super::comment::Entity")]

@@ -1,6 +1,8 @@
 import type { DMMF } from '@prisma/generator-helper'
+import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
+import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import {
   buildSeaOrmAttributes,
   canDeriveEq,
@@ -12,6 +14,11 @@ import {
   resolveSeaOrmColumnType,
   seaOrmAttribute,
 } from './sea-orm.js'
+
+/** The datamodel of a schema `getDMMF` parses without error. */
+function datamodelOf(source: string) {
+  return (getDMMF({ datamodel: [['schema.prisma', source]] }) as DMMF.Document).datamodel
+}
 
 describe('buildSeaOrmAttributes', () => {
   it('generates primary_key + auto_increment = false for uuid PK', () => {
@@ -566,13 +573,15 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::post::Entity",
         from = "Column::PostId",
-        to = "super::post::Column::Id"
+        to = "super::post::Column::Id",
+        fk_name = "_PostToTag_A_fkey"
     )]
     Post,
     #[sea_orm(
         belongs_to = "super::tag::Entity",
         from = "Column::TagId",
-        to = "super::tag::Column::Id"
+        to = "super::tag::Column::Id",
+        fk_name = "_PostToTag_B_fkey"
     )]
     Tag,
 }
@@ -602,13 +611,15 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::files::Entity",
         from = "Column::FilesId",
-        to = "super::files::Column::Id"
+        to = "super::files::Column::Id",
+        fk_name = "_filesTotags_A_fkey"
     )]
     Files,
     #[sea_orm(
         belongs_to = "super::tags::Entity",
         from = "Column::TagsId",
-        to = "super::tags::Column::Id"
+        to = "super::tags::Column::Id",
+        fk_name = "_filesTotags_B_fkey"
     )]
     Tags,
 }
@@ -876,13 +887,15 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::extraordinarily_long_model_name_for_testing_rustfmt_width_limits_in_generated_code::Entity",
         from = "Column::ExtraordinarilyLongModelNameForTestingRustfmtWidthLimitsInGeneratedCodeId",
-        to = "super::extraordinarily_long_model_name_for_testing_rustfmt_width_limits_in_generated_code::Column::Id"
+        to = "super::extraordinarily_long_model_name_for_testing_rustfmt_width_limits_in_generated_code::Column::Id",
+        fk_name = "_LongToTag_A_fkey"
     )]
     ExtraordinarilyLongModelNameForTestingRustfmtWidthLimitsInGeneratedCode,
     #[sea_orm(
         belongs_to = "super::tag::Entity",
         from = "Column::TagId",
-        to = "super::tag::Column::Id"
+        to = "super::tag::Column::Id",
+        fk_name = "_LongToTag_B_fkey"
     )]
     Tag,
 }
@@ -1503,7 +1516,8 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::owner::Entity",
         from = "Column::OwnerId",
-        to = "super::owner::Column::Id"
+        to = "super::owner::Column::Id",
+        fk_name = "Item_ownerId_fkey"
     )]
     Owner,
 }
@@ -1931,5 +1945,91 @@ impl ActiveModelBehavior for ActiveModel {}
     )]
     pub tag_id: String,
 `)
+  })
+})
+
+describe('foreign key names', () => {
+  const source = `datasource db {
+  provider = "postgresql"
+}
+
+model auth_group {
+  id          Int                      @id @default(autoincrement())
+  permissions auth_group_permissions[]
+  members     auth_membership[]
+}
+
+model auth_group_permissions {
+  id       Int        @id @default(autoincrement())
+  group_id Int
+  group    auth_group @relation(fields: [group_id], references: [id], map: "auth_group_permissions_group_id_b120cbf9_fk_auth_group_id")
+}
+
+model auth_membership {
+  id      Int        @id @default(autoincrement())
+  groupId Int        @map("group_id")
+  group   auth_group @relation(fields: [groupId], references: [id])
+
+  @@map("auth_memberships")
+}
+`
+  const datamodel = datamodelOf(source)
+  const maps = relationMaps(prismaBlocks(source))
+  const entity = (name: string) =>
+    datamodel.models
+      .filter((model) => model.name === name)
+      .map((model) =>
+        generateEntityFile(model, datamodel.models, [], {}, 'postgresql', new Set(), maps),
+      )
+      .join('')
+
+  it('names a foreign key with the name @relation(map:) gives it', () => {
+    expect(entity('auth_group_permissions')).toContain(`    #[sea_orm(
+        belongs_to = "super::auth_group::Entity",
+        from = "Column::GroupId",
+        to = "super::auth_group::Column::Id",
+        fk_name = "auth_group_permissions_group_id_b120cbf9_fk_auth_group_id"
+    )]
+    Group,`)
+  })
+
+  it('names a foreign key the schema does not name as Prisma does: <table>_<columns>_fkey', () => {
+    expect(entity('auth_membership')).toContain(`    #[sea_orm(
+        belongs_to = "super::auth_group::Entity",
+        from = "Column::GroupId",
+        to = "super::auth_group::Column::Id",
+        fk_name = "auth_memberships_group_id_fkey"
+    )]
+    Group,`)
+  })
+})
+
+// The name is written as a Rust string: a quote or a backslash in it is escaped.
+describe('foreign key name escaping', () => {
+  it('escapes a @relation(map:) name for Rust', () => {
+    const source = `datasource db {
+  provider = "postgresql"
+}
+
+model a {
+  id Int @id
+  bs b[]
+}
+
+model b {
+  id   Int @id
+  a_id Int
+  a    a   @relation(fields: [a_id], references: [id], map: "fk_\\"q\\\\b'")
+}
+`
+    const datamodel = datamodelOf(source)
+    const maps = relationMaps(prismaBlocks(source))
+    const code = datamodel.models
+      .filter((model) => model.name === 'b')
+      .map((model) =>
+        generateEntityFile(model, datamodel.models, [], {}, 'postgresql', new Set(), maps),
+      )
+      .join('')
+    expect(code).toContain(`fk_name = "fk_\\"q\\\\b'"`)
   })
 })
