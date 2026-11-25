@@ -542,17 +542,33 @@ function goTagLiteral(tag: string) {
     : `\`${tag}\``
 }
 
-// A name the schema gives an index, unless the struct tag cannot hold it: GORM reads past a `,` as
-// settings and splits at a `;`, a `\` at the end joins the setting with the next one, and the
-// dialector's QuoteTo takes a `"` or a backtick at the edge of a name as a quote of its own. Such a
-// name is reported by gormProblems.
-function readableTagName(name: string | undefined) {
-  return name !== undefined && !/[,;"`]/u.test(name) && !name.endsWith('\\') ? name : undefined
+// What keeps GORM from writing an index under a name, or undefined: in the tag, GORM reads past a
+// `,` as settings and splits at a `;`, and a `\` at the end joins the setting with the next one;
+// in CREATE INDEX, the dialector's QuoteTo splits a name at a `.` into schema and name, takes its
+// quote (a backtick on MySQL and SQLite, a `"` elsewhere) at the start as a quote of its own, and
+// makes two of it in a row one; SQL Server's does not escape a `"` at all.
+function nameFlaw(name: string, provider: string | undefined) {
+  const mark = name.match(/[,;.]/u)?.[0]
+  if (mark !== undefined) return `a "${mark}"`
+  if (name.endsWith('\\')) return 'a \\ at its end'
+  // SQL Server's QuoteTo writes a `"` inside a name as it is, which ends the quoted name.
+  if (provider === 'sqlserver' && name.includes('"')) return 'a double quote'
+  const quote = provider === 'mysql' || provider === 'sqlite' ? '`' : '"'
+  if (name.startsWith(quote)) return 'a quote at its start'
+  return name.includes(quote + quote) ? 'two quotes in a row' : undefined
+}
+
+// A name the schema gives an index, unless GORM cannot write it (nameFlaw); such a name is
+// reported by gormProblems.
+function readableTagName(name: string | null | undefined, provider: string | undefined) {
+  return name !== undefined && name !== null && nameFlaw(name, provider) === undefined
+    ? name
+    : undefined
 }
 
 // The name a unique or plain index takes in the tag: the one the schema gives it (`map:`, or an
 // index's `name:`), or Prisma's own where it gives none (`Post_authorId_idx`, `User_email_key`), so
-// AutoMigrate and the migration agree. A given name the tag cannot hold (readableTagName) is
+// AutoMigrate and the migration agree. A given name GORM cannot write (readableTagName) is
 // reported by gormProblems before any tag is written.
 function indexTagName(
   model: DMMF.Model,
@@ -563,8 +579,8 @@ function indexTagName(
   const columns = idx.fields.map((f) => columnOf.get(f.name) ?? f.name)
   const unique = idx.type === 'unique'
   return (
-    readableTagName(idx.dbName) ??
-    (unique ? undefined : readableTagName(idx.name)) ??
+    readableTagName(idx.dbName, provider) ??
+    (unique ? undefined : readableTagName(idx.name, provider)) ??
     constraintName(model.dbName ?? model.name, columns, unique ? 'key' : 'idx', provider ?? '')
   )
 }
@@ -685,12 +701,12 @@ function collectCompositeIndexTags(
   const uniques = ownIndexes.filter((idx) => idx.type === 'unique')
   const partialUniques = uniques.filter((idx) => indexWhere(model, idx) !== undefined)
   const plainUniques = uniques.filter((idx) => indexWhere(model, idx) === undefined)
-  // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it; one the
-  // struct tag cannot hold (readableTagName) is reported by gormProblems.
+  // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it; one GORM
+  // cannot write (readableTagName) is reported by gormProblems.
   const mappedUniques = new Map(
     plainUniques.map((idx) => [
       idx.fields.map((f) => f.name).join(','),
-      readableTagName(idx.dbName),
+      readableTagName(idx.dbName, provider),
     ]),
   )
   // DMMF leaves isUnique off a field whose @unique has a partial unique index beside it on the same
@@ -737,7 +753,7 @@ function collectCompositeIndexTags(
     if (condition === null) {
       notes.push([
         idx.fields[0]?.name ?? '',
-        `The partial ${setting === 'uniqueIndex' ? 'unique ' : ''}index ${JSON.stringify(name)} is left out: its condition holds a ";", at which GORM splits the tag.`,
+        `The partial ${setting === 'uniqueIndex' ? 'unique ' : ''}index ${JSON.stringify(idx.dbName ?? name)} is left out: its condition holds a ";", at which GORM splits the tag.`,
       ])
       return []
     }
@@ -749,7 +765,7 @@ function collectCompositeIndexTags(
       notes.push([
         idx.fields[0]?.name ?? '',
         // The column and the operator class are quoted, so a line break in either stays in the comment.
-        `The index ${JSON.stringify(name)} is left out: the expression of its column ${JSON.stringify(unreadable.name)} with the operator class ${JSON.stringify(unreadable.operatorClass)} holds a ";", at which GORM splits the tag.`,
+        `The index ${JSON.stringify(idx.dbName ?? name)} is left out: the expression of its column ${JSON.stringify(unreadable.name)} with the operator class ${JSON.stringify(unreadable.operatorClass)} holds a ";", at which GORM splits the tag.`,
       ])
       return []
     }
@@ -1640,11 +1656,10 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
 /**
  * What keeps the schema from becoming models that compile and read as it says: a model whose Go
  * name is that of a type or function written beside the models, where the schema needs it; a
- * column whose name the struct tag cannot hold (a `;`, or a `\` at its end); an index whose
- * `map:` name the tag cannot hold (readableTagName), or written into the tags under a name holding
- * a `,` or `;`; and two fields under one json name (jsonTagName), which encoding/json drops. Index
- * names made from a column are escaped for the tag (escapeTagValue), so a `"` or `\` in one is
- * held.
+ * column whose name the struct tag cannot hold (a `;`, or a `\` at its end); an index whose name
+ * GORM cannot write (nameFlaw), whether the schema gives it or Prisma's naming makes it; and two
+ * fields under one json name (jsonTagName), a relation's Go name among them, of which encoding/json
+ * keeps at most one.
  */
 export function gormProblems(
   models: readonly DMMF.Model[],
@@ -1686,47 +1701,48 @@ export function gormProblems(
           ]
         : []
     })
-    // GORM takes an index's name up to its first `,` and splits the whole tag at every `;`, with no
-    // escape for either, so an index whose name holds one (made from a column or a @@map that does)
-    // cannot be written. One left out of the tags with a note never reaches them.
+    // An index whose name GORM cannot write (nameFlaw), whether the schema gives it or Prisma's
+    // naming makes it from a column or a @@map, is reported. One left out of the tags with a note
+    // never reaches them.
     const indexNames = (indexesOf.get(model.name) ?? [])
       .filter((idx) => idx.type !== 'id' && !leavesOutIndex(model, idx, provider, indexWhere))
       .flatMap((idx) => {
         const fields = idx.fields.map((f) => f.name).join(', ')
-        // A name the schema gives is the index's name in the database, so one the tag cannot hold
+        // A name the schema gives is the index's name in the database, so one GORM cannot write
         // would leave AutoMigrate making the index under another name.
         const given = idx.dbName ?? (idx.type === 'unique' ? undefined : idx.name)
-        if (given !== undefined && given !== null && readableTagName(given) === undefined) {
+        const givenFlaw =
+          given === undefined || given === null ? undefined : nameFlaw(given, provider)
+        if (givenFlaw !== undefined) {
           return [
-            `model ${model.name}: the index on ${fields} is named ${JSON.stringify(given)}, which GORM's tag cannot hold (a , ; " or backtick, or a \\ at its end); change it`,
+            `model ${model.name}: the index on ${fields} is named ${JSON.stringify(given)}, which GORM cannot write (${givenFlaw}); change it`,
           ]
         }
         const indexName = indexTagName(model, idx, provider)
-        const mark = indexName.match(/[,;]/u)?.[0]
-        return mark === undefined
+        const flaw = nameFlaw(indexName, provider)
+        return flaw === undefined
           ? []
           : [
-              `model ${model.name}: the index on ${fields} is named ${JSON.stringify(indexName)}, whose "${mark}" GORM's tag cannot hold; change the @map of its column or table, or give it a name with map:`,
+              `model ${model.name}: the index on ${fields} is named ${JSON.stringify(indexName)}, which GORM cannot write (${flaw}); change the @map of its column or table, or give it a name with map:`,
             ]
       })
-    // A json name is the column's, or the field's where the column holds a `,` (jsonTagName), so
-    // two fields can come to one; encoding/json then drops both without a word.
+    // A json name is the column's, or the field's Go name where encoding/json cannot take the
+    // column's (jsonTagName); a relation has no json tag, so its key is its Go name. Two fields can
+    // come to one key, and encoding/json then drops them without a word.
     const goNames = goFieldNames(model)
-    const jsonNames = model.fields
-      .filter((field) => field.kind !== 'object')
-      .map((field) => ({
+    const jsonNames = model.fields.map((field) => {
+      const goName = goNames.get(field.name) ?? goFieldName(field.name)
+      return {
         field: field.name,
-        json: jsonTagName(
-          field.dbName ?? field.name,
-          goNames.get(field.name) ?? goFieldName(field.name),
-        ),
-      }))
+        json: field.kind === 'object' ? goName : jsonTagName(field.dbName ?? field.name, goName),
+      }
+    })
     const jsonClashes = jsonNames.flatMap(({ field, json }, i) => {
       const earlier = jsonNames.slice(0, i).find((other) => other.json === json)
       return earlier === undefined
         ? []
         : [
-            `model ${model.name}: ${earlier.field} and ${field} are both written json:${JSON.stringify(json)}, and encoding/json drops both; change the @map of one`,
+            `model ${model.name}: ${earlier.field} and ${field} are both written json:${JSON.stringify(json)}, and encoding/json drops one or both; change the @map of one`,
           ]
     })
     return [
