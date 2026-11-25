@@ -3379,11 +3379,11 @@ class Account(Base):
   })
 })
 
-// A column MySQL indexes by a prefix (`length:`) keeps it, as Prisma Migrate writes it, `note`(100):
-// mysql_length keyed by the column's name, or the prefix inside a descending column's
-// literal_column(). A TEXT column cannot be indexed without one.
+// A column MySQL indexes by a prefix (`length:`) keeps it, as Prisma Migrate writes it, `note`(100),
+// in a literal_column(): mysql_length would be read by `.name`, which a descending column beside it
+// does not have. A TEXT column cannot be indexed without one.
 describe('index prefix length', () => {
-  it('writes mysql_length, and the prefix of a descending column, on MySQL', () => {
+  it('writes each prefixed column with its prefix on MySQL, ascending or descending', () => {
     const schema = `datasource db {
   provider = "mysql"
 }
@@ -3403,9 +3403,9 @@ model LogEntry {
     const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
     expect(generateSingleFile(result.models, result.enums, result.indexes, 'mysql')).toContain(`
     __table_args__ = (
-        Index("LogEntry_code_key", "code", unique=True, mysql_length={"code": 50}),
-        Index("LogEntry_note_idx", "note", mysql_length={"note": 100}),
-        Index("LogEntry_title_note_idx", literal_column("\`title\`(20)").desc(), "note", mysql_length={"note": 10}),
+        Index("LogEntry_code_key", literal_column("\`code\`(50)"), unique=True),
+        Index("LogEntry_note_idx", literal_column("\`note\`(100)")),
+        Index("LogEntry_title_note_idx", literal_column("\`title\`(20)").desc(), literal_column("\`note\`(10)")),
         Index("LogEntry_short_idx", "short"),
         {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
     )
