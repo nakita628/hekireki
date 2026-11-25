@@ -457,6 +457,14 @@ function sortSetting(idx: Pick<DMMF.Index, 'fields'> | undefined, field: string)
   return idx?.fields.find((f) => f.name === field)?.sortOrder === 'desc' ? ',sort:desc' : ''
 }
 
+// GORM's `priority:` index setting for a field of a composite index: GORM orders an index's columns
+// by priority (10 where none is given) and otherwise by struct field order, so each field carries
+// its 1-based position in the schema's field list, `@@index([c, b])` giving `(c, b)` as Prisma
+// does. A single-column index needs none.
+function prioritySetting(fields: readonly string[], field: string) {
+  return fields.length > 1 ? `,priority:${fields.indexOf(field) + 1}` : ''
+}
+
 /** The condition of a partial index, as `partialIndexWhere` gives it. */
 type IndexWhere = (
   model: DMMF.Model,
@@ -518,7 +526,7 @@ function collectCompositeIndexTags(
       const idx = plainUniqueOf.get(fields.join(','))
       return fields.map((f): [string, string] => [
         f,
-        `uniqueIndex:${idxName}${sortSetting(idx, f)}`,
+        `uniqueIndex:${idxName}${prioritySetting(fields, f)}${sortSetting(idx, f)}`,
       ])
     })
 
@@ -537,9 +545,10 @@ function collectCompositeIndexTags(
       return []
     }
     const whereSetting = condition === '' ? '' : `,where:${condition}`
-    return idx.fields.map((f): [string, string] => [
-      f.name,
-      `${setting}:${name}${sortSetting(idx, f.name)}${whereSetting}`,
+    const fieldNames = idx.fields.map((f) => f.name)
+    return fieldNames.map((f): [string, string] => [
+      f,
+      `${setting}:${name}${prioritySetting(fieldNames, f)}${sortSetting(idx, f)}${whereSetting}`,
     ])
   }
 
@@ -1075,6 +1084,24 @@ function viewCommentLines(structName: string) {
   ]
 }
 
+/**
+ * The scalar fields in the order the struct declares them. GORM gives a primary key no priority
+ * and orders a composite one's columns by struct field order, so the key's fields are declared in
+ * the key's order (`@@id([b, a])` gives `PRIMARY KEY (b, a)`, as Prisma does), together where the
+ * first of them is; every other field keeps its place.
+ */
+function keyOrdered(fields: readonly DMMF.Field[], keyFields: readonly string[]) {
+  const keys = new Set(keyFields)
+  const byName = new Map(fields.map((f) => [f.name, f]))
+  const first = fields.findIndex((f) => keys.has(f.name))
+  if (first === -1) return fields
+  const keyed = keyFields.flatMap((name) => byName.get(name) ?? [])
+  return fields.flatMap((f, i) => {
+    if (i === first) return keyed
+    return keys.has(f.name) ? [] : [f]
+  })
+}
+
 export function generateModelStruct(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
@@ -1096,7 +1123,10 @@ export function generateModelStruct(
   const indexTags = collectCompositeIndexTags(model, indexes, provider, indexWhere)
 
   const tableName = model.dbName ?? model.name
-  const scalarFields = model.fields.filter((f) => f.kind !== 'object')
+  const scalarFields = keyOrdered(
+    model.fields.filter((f) => f.kind !== 'object'),
+    isCompositePk ? primaryKeyFields(model) : [],
+  )
 
   const names = goFieldNames(model)
   const fieldLines = scalarFields.flatMap((field) => {
