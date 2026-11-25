@@ -739,71 +739,15 @@ function stampedFieldClass(field: DMMF.Field, provider: string): StampedField['n
   return holdsUtc(field, provider) ? 'UtcAutoNowDateTimeField' : 'AutoNowDateTimeField'
 }
 
-/** An autoincrement column that is not the model's primary key, which Django has no AutoField for. */
-function isSerial(field: DMMF.Field, isPk: boolean) {
-  return !isPk && isAutoincrement(field)
-}
-
-/** The fields of the models that are a non-key autoincrement column. */
-function serialFields(models: readonly DMMF.Model[]) {
-  return models.flatMap((model) => {
-    const pkFields = primaryKeyFields(model)
-    const singlePk = pkFields.length === 1 ? pkFields[0] : undefined
-    return model.fields.filter((f) => f.kind !== 'object' && isSerial(f, f.name === singlePk))
-  })
-}
-
-// The serial PostgreSQL makes for an autoincrement column of each width; an IntegerField's is serial.
-const PG_SERIAL_TYPES: { readonly [ctor: string]: string } = {
-  SmallIntegerField: 'smallserial',
-  BigIntegerField: 'bigserial',
-}
-
-// A non-key autoincrement column (`@unique @default(autoincrement())`) is the database's to fill,
-// from a sequence on PostgreSQL (Prisma makes it serial) and AUTO_INCREMENT on MySQL; Django has an
-// auto field only for a primary key. Left unset, its value is sent as DEFAULT, Django's
-// DatabaseDefault, so the column's own default numbers the row (on SQLite, which has no DEFAULT in
-// VALUES, it stays the NULL it was), and db_returning reads it back where INSERT has RETURNING:
-// PostgreSQL and MariaDB, not MySQL, which leaves None on the instance. A later save() of such an
-// instance writes the column back onto itself rather than NULL. db_type is the column Prisma
-// creates, so that migrate makes the sequence as well; blank as on an AutoField.
-function serialField(ctor: string) {
-  const pgType = PG_SERIAL_TYPES[ctor] ?? 'serial'
-  return `class Serial${ctor}(models.${ctor}):  # type: ignore[type-arg]
-    db_returning = True
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        kwargs["blank"] = True
-        super().__init__(*args, **kwargs)
-
-    def db_type(self, connection: BaseDatabaseWrapper) -> str | None:
-        if connection.vendor == "postgresql":
-            return "${pgType}"
-        if connection.vendor == "mysql":
-            return f"{super().db_type(connection)} AUTO_INCREMENT"
-        return super().db_type(connection)
-
-    def pre_save(self, model_instance: models.Model, add: bool) -> Any:
-        value = super().pre_save(model_instance, add)
-        if value is not None:
-            return value
-        if add:
-            return DatabaseDefault(models.Value(None), output_field=self)
-        return models.F(self.attname)`
-}
-
 // The field every zoneless DateTime column is declared with, those of an
-// @updatedAt column, the one an enum list is declared with, those of a non-key autoincrement
-// column, and the QuerySet a model with an @updatedAt field is managed by, each written once per
-// file.
+// @updatedAt column, the one an enum list is declared with, and the QuerySet a model with an @updatedAt field is
+// managed by, each written once per file.
 export function collectFieldClasses(models: readonly DMMF.Model[], provider: string) {
   const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
   const stamped = new Set(scalarFields.map((f) => stampedFieldClass(f, provider)))
-  const serialCtors = new Set(serialFields(models).map((f) => columnDjangoField(f, provider).ctor))
   return [
     scalarFields.some((f) => holdsUtc(f, provider)) ? UTC_DATETIME_FIELD : null,
     ...STAMPED_FIELDS.filter((f) => stamped.has(f.name)).map((f) => stampedField(f)),
-    ...[...serialCtors].map((ctor) => serialField(ctor)),
     scalarFields.some((f) => isEnumArray(f, provider)) ? ENUM_ARRAY_FIELD : null,
     scalarFields.some((f) => isPlainJson(f, provider)) ? PLAIN_JSON_FIELD : null,
     scalarFields.some((f) => f.isUpdatedAt === true) ? AUTO_NOW_QUERY_SET : null,
@@ -916,11 +860,10 @@ function autoFieldCtor(field: DMMF.Field) {
   return field.type === 'BigInt' ? 'BigAutoField' : 'AutoField'
 }
 
-function scalarFieldClass(field: DMMF.Field, isPk: boolean, provider: string, ctor: string) {
+function scalarFieldClass(field: DMMF.Field, provider: string, ctor: string) {
   const stamped = stampedFieldClass(field, provider)
   if (stamped !== null) return stamped
   if (holdsUtc(field, provider)) return 'UtcDateTimeField'
-  if (isSerial(field, isPk)) return `Serial${ctor}`
   return isPlainJson(field, provider) ? 'PlainJSONField' : `models.${ctor}`
 }
 
@@ -976,7 +919,7 @@ function generateScalarField(
     emptyStringPk ? 'default=None' : null,
   ].filter((a) => a !== null)
 
-  const fieldClass = scalarFieldClass(field, isPk, provider, ctorResolved.ctor)
+  const fieldClass = scalarFieldClass(field, provider, ctorResolved.ctor)
   if (field.isList) {
     const inner = `${fieldClass}(${ctorResolved.typeArgs.join(', ')})`
     if (isEnumArray(field, provider)) {
@@ -1760,7 +1703,6 @@ type ImportNeeds = {
   readonly plainJson: boolean
   readonly databaseWrapper: boolean
   readonly autoNow: boolean
-  readonly serial: boolean
   readonly decimal: boolean
   readonly any: boolean
   readonly fromDatetime: readonly string[]
@@ -1771,12 +1713,7 @@ type ImportNeeds = {
 
 function stdlibImports(needs: ImportNeeds) {
   const fromTyping = [
-    needs.any ||
-    needs.utcField ||
-    needs.autoNow ||
-    needs.enumArray ||
-    needs.plainJson ||
-    needs.serial
+    needs.any || needs.utcField || needs.autoNow || needs.enumArray || needs.plainJson
       ? 'Any'
       : null,
     needs.autoNow ? 'TypeVar' : null,
@@ -1789,13 +1726,6 @@ function stdlibImports(needs: ImportNeeds) {
     needs.partial ? 'from functools import partial' : null,
     fromTyping.length > 0 ? `from typing import ${fromTyping.join(', ')}` : null,
   ].filter((l) => l !== null)
-}
-
-function expressionsImport(needs: ImportNeeds) {
-  const names = [needs.serial ? 'DatabaseDefault' : null, needs.rawSql ? 'RawSQL' : null].filter(
-    (name) => name !== null,
-  )
-  return names.length > 0 ? `from django.db.models.expressions import ${names.join(', ')}` : null
 }
 
 function thirdPartyImports(needs: ImportNeeds) {
@@ -1813,7 +1743,7 @@ function thirdPartyImports(needs: ImportNeeds) {
       : null,
     'from django.db import models',
     needs.databaseWrapper ? 'from django.db.backends.base.base import BaseDatabaseWrapper' : null,
-    expressionsImport(needs),
+    needs.rawSql ? 'from django.db.models.expressions import RawSQL' : null,
     needs.utcField || needs.autoNow || needs.nowDatetime
       ? 'from django.utils import timezone'
       : null,
@@ -1829,7 +1759,6 @@ export function collectGlobalImports(
 ) {
   const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
   const needsUtcField = scalarFields.some((f) => holdsUtc(f, provider))
-  const needsSerial = serialFields(models).length > 0
   const literalKinds = scalarFields
     .filter(
       (f) =>
@@ -1862,14 +1791,11 @@ export function collectGlobalImports(
     utcField: needsUtcField,
     enumArray: scalarFields.some((f) => isEnumArray(f, provider)),
     plainJson: scalarFields.some((f) => isPlainJson(f, provider)),
-    // The field classes that take a connection: UtcDateTimeField, EnumArrayField, PlainJSONField,
-    // and those of a non-key autoincrement column.
+    // The field classes that take a connection: UtcDateTimeField, EnumArrayField, PlainJSONField.
     databaseWrapper:
       needsUtcField ||
-      needsSerial ||
       scalarFields.some((f) => isEnumArray(f, provider) || isPlainJson(f, provider)),
     autoNow: scalarFields.some((f) => f.isUpdatedAt === true),
-    serial: needsSerial,
     decimal: needsDecimalImport(scalarFields),
     any: needsAnyImport(scalarFields),
     fromDatetime: ['date', 'datetime', 'time'].filter((kind) => kinds.has(kind)),
