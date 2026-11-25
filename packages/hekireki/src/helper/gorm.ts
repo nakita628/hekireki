@@ -524,13 +524,13 @@ function defaultParts(defaultVal: string | null) {
   return defaultVal.endsWith('\\') ? { before: [], last: [part] } : { before: [part], last: [] }
 }
 
-// The json name of a column: encoding/json reads what follows a `,` as options and a lone `-` as
-// "leave the field out", so a `-` is written `-,` and a name with a `,` is left for the field's
-// own, as encoding/json does for a name it cannot take (a `"` or `\`). A name with a `;` is
-// refused by gormProblems.
+// The json name of a column: a lone `-` means "leave the field out" to encoding/json, so it is
+// written `-,`, and a name encoding/json cannot take as a key (isValidTag: letters, digits and
+// !#$%&()*+-./:;<=>?@[]^_{|}~ and a space; a `,` would start the options) is left for the field's
+// own, which is the key encoding/json gives it anyway.
 function jsonTagName(columnName: string, fieldName: string) {
   if (columnName === '-') return '-,'
-  return columnName.includes(',') ? fieldName : columnName
+  return /^[\p{L}\p{Nd}!#$%&()*+\-./:;<=>?@[\]^_{|}~ ]+$/u.test(columnName) ? columnName : fieldName
 }
 
 // A struct tag as Go source: a raw string, unless the tag holds a backtick (a MySQL identifier in
@@ -543,16 +543,17 @@ function goTagLiteral(tag: string) {
 }
 
 // A name the schema gives an index, unless the struct tag cannot hold it: GORM reads past a `,` as
-// settings and splits at a `;`, and a `\` at the end joins the setting with the next one. Such a
-// name is reported by gormProblems. A `"` or a backtick is escaped for the tag (escapeTagValue,
-// goTagLiteral).
+// settings and splits at a `;`, a `\` at the end joins the setting with the next one, and the
+// dialector's QuoteTo takes a `"` or a backtick at the edge of a name as a quote of its own. Such a
+// name is reported by gormProblems.
 function readableTagName(name: string | undefined) {
-  return name !== undefined && !/[,;]/u.test(name) && !name.endsWith('\\') ? name : undefined
+  return name !== undefined && !/[,;"`]/u.test(name) && !name.endsWith('\\') ? name : undefined
 }
 
 // The name a unique or plain index takes in the tag: the one the schema gives it (`map:`, or an
-// index's `name:`), unless the tag cannot hold it (readableTagName), and Prisma's own otherwise
-// (`Post_authorId_idx`, `User_email_key`), so AutoMigrate and the migration agree.
+// index's `name:`), or Prisma's own where it gives none (`Post_authorId_idx`, `User_email_key`), so
+// AutoMigrate and the migration agree. A given name the tag cannot hold (readableTagName) is
+// reported by gormProblems before any tag is written.
 function indexTagName(
   model: DMMF.Model,
   idx: Pick<DMMF.Index, 'type' | 'dbName' | 'name' | 'fields'>,
@@ -684,8 +685,8 @@ function collectCompositeIndexTags(
   const uniques = ownIndexes.filter((idx) => idx.type === 'unique')
   const partialUniques = uniques.filter((idx) => indexWhere(model, idx) !== undefined)
   const plainUniques = uniques.filter((idx) => indexWhere(model, idx) === undefined)
-  // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it, unless the
-  // struct tag cannot hold it (readableTagName).
+  // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it; one the
+  // struct tag cannot hold (readableTagName) is reported by gormProblems.
   const mappedUniques = new Map(
     plainUniques.map((idx) => [
       idx.fields.map((f) => f.name).join(','),
@@ -1639,10 +1640,11 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
 /**
  * What keeps the schema from becoming models that compile and read as it says: a model whose Go
  * name is that of a type or function written beside the models, where the schema needs it; a
- * column whose name the struct tag cannot hold (a `;`, or a `\` at its end); and an index written
- * into the tags under a name holding a `,` or `;`.
- * Index names made from a column are escaped for the tag (escapeTagValue), so a `"` or `\` in
- * one is held.
+ * column whose name the struct tag cannot hold (a `;`, or a `\` at its end); an index whose
+ * `map:` name the tag cannot hold (readableTagName), or written into the tags under a name holding
+ * a `,` or `;`; and two fields under one json name (jsonTagName), which encoding/json drops. Index
+ * names made from a column are escaped for the tag (escapeTagValue), so a `"` or `\` in one is
+ * held.
  */
 export function gormProblems(
   models: readonly DMMF.Model[],
@@ -1696,7 +1698,7 @@ export function gormProblems(
         const given = idx.dbName ?? (idx.type === 'unique' ? undefined : idx.name)
         if (given !== undefined && given !== null && readableTagName(given) === undefined) {
           return [
-            `model ${model.name}: the index on ${fields} is named ${JSON.stringify(given)}, which GORM's tag cannot hold (a , or ;, or a \\ at its end); change it`,
+            `model ${model.name}: the index on ${fields} is named ${JSON.stringify(given)}, which GORM's tag cannot hold (a , ; " or backtick, or a \\ at its end); change it`,
           ]
         }
         const indexName = indexTagName(model, idx, provider)
@@ -1709,11 +1711,15 @@ export function gormProblems(
       })
     // A json name is the column's, or the field's where the column holds a `,` (jsonTagName), so
     // two fields can come to one; encoding/json then drops both without a word.
+    const goNames = goFieldNames(model)
     const jsonNames = model.fields
       .filter((field) => field.kind !== 'object')
       .map((field) => ({
         field: field.name,
-        json: jsonTagName(field.dbName ?? field.name, goFieldName(field.name)),
+        json: jsonTagName(
+          field.dbName ?? field.name,
+          goNames.get(field.name) ?? goFieldName(field.name),
+        ),
       }))
     const jsonClashes = jsonNames.flatMap(({ field, json }, i) => {
       const earlier = jsonNames.slice(0, i).find((other) => other.json === json)
