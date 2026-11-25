@@ -3394,10 +3394,14 @@ model LogEntry {
   title String @db.VarChar(255)
   code  String @unique(length: 50) @db.Text
   short String @db.VarChar(20)
+  data  Bytes
+  bin   Bytes  @db.VarBinary(20)
 
   @@index([note(length: 100)])
   @@index([title(length: 20, sort: Desc), note(length: 10)])
   @@index([short(length: 30)])
+  @@index([data(length: 200)])
+  @@index([bin(length: 30)])
 }
 `
     const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
@@ -3407,6 +3411,8 @@ model LogEntry {
         Index("LogEntry_note_idx", literal_column("\`note\`(100)")),
         Index("LogEntry_title_note_idx", literal_column("\`title\`(20)").desc(), literal_column("\`note\`(10)")),
         Index("LogEntry_short_idx", "short"),
+        Index("LogEntry_data_idx", literal_column("\`data\`(200)")),
+        Index("LogEntry_bin_idx", "bin"),
         {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
     )
 `)

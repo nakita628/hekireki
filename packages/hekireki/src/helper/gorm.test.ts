@@ -1964,10 +1964,14 @@ model LogEntry {
   title String @db.VarChar(255)
   code  String @unique(length: 50) @db.Text
   short String @db.VarChar(20)
+  data  Bytes
+  bin   Bytes  @db.VarBinary(20)
 
   @@index([note(length: 100)])
   @@index([title(length: 20, sort: Desc), note(length: 10)])
   @@index([short(length: 30)])
+  @@index([data(length: 200)])
+  @@index([bin(length: 30)])
 }
 `
 
@@ -1980,6 +1984,8 @@ type LogEntry struct {
 	Title string \`gorm:"column:title;index:LogEntry_title_note_idx,priority:1,length:20,sort:desc;type:varchar(255);not null" json:"title"\`
 	Code  string \`gorm:"column:code;uniqueIndex:LogEntry_code_key,length:50;type:text;not null" json:"code"\`
 	Short string \`gorm:"column:short;index:LogEntry_short_idx;type:varchar(20);not null" json:"short"\`
+	Data  []byte \`gorm:"column:data;index:LogEntry_data_idx,length:200;not null" json:"data"\`
+	Bin   []byte \`gorm:"column:bin;index:LogEntry_bin_idx;type:varbinary(20);not null" json:"bin"\`
 }
 
 func (LogEntry) TableName() string {
