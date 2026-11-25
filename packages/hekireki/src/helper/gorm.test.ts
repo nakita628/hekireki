@@ -1891,6 +1891,26 @@ func readPrismaTime(src any) (time.Time, error) {
 // schema's list and the key's fields are declared in @@id order: the columns come out in the order
 // Prisma Migrate gives them.
 describe('generateGormModels composite column order', () => {
+  it('leaves the fields where they are when the @@id order is theirs, apart or not', () => {
+    const code = gormFor(
+      `
+model trio {
+  a Int
+  b Int
+  c Int
+
+  @@id([a, c])
+}
+`,
+      'postgresql',
+    )
+    const a = code.indexOf('\tA int')
+    const b = code.indexOf('\tB int')
+    const c = code.indexOf('\tC int')
+    expect(a).toBeGreaterThan(-1)
+    expect(a < b && b < c).toBe(true)
+  })
+
   it('declares @@id fields in key order and writes priority: on composite index fields', () => {
     expect(
       gormFor(

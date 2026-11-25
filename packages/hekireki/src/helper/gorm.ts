@@ -1096,6 +1096,9 @@ function keyOrdered(fields: readonly DMMF.Field[], keyFields: readonly string[])
   const first = fields.findIndex((f) => keys.has(f.name))
   if (first === -1) return fields
   const keyed = keyFields.flatMap((name) => byName.get(name) ?? [])
+  // A key already in field order leaves every field where it is, apart or not.
+  const inFieldOrder = fields.filter((f) => keys.has(f.name))
+  if (keyed.every((f, i) => f === inFieldOrder[i])) return fields
   return fields.flatMap((f, i) => {
     if (i === first) return keyed
     return keys.has(f.name) ? [] : [f]
