@@ -2458,6 +2458,34 @@ object DocTable : IdTable<Int>("\\"Doc\\"") {
     })
   })
 
+  it('leaves a foreign key column another foreign key references a plain column, keeping that relation', () => {
+    const { datamodel, plan } = fixture(`model Code {
+  code String @id @db.VarChar(5)
+  refs Ref[]
+}
+
+model Ref {
+  id     Int     @id
+  codeId String  @unique
+  code   Code    @relation(fields: [codeId], references: [code])
+  others Other[]
+}
+
+model Other {
+  id      Int    @id
+  refCode String
+  ref     Ref    @relation(fields: [refCode], references: [codeId])
+}
+`)
+    expect(tableFile(plan, model(datamodel, 'Ref')).code).not.toContain('entityIdOf')
+    expect(entityFile(plan, model(datamodel, 'Other'))?.code).toContain(
+      'var ref by RefEntity referencedOn OtherTable.refCode',
+    )
+    expect(entityFile(plan, model(datamodel, 'Ref'))?.code).toContain(
+      'val others by OtherEntity referrersOn OtherTable.refCode',
+    )
+  })
+
   it('leaves a foreign key with char(n) on either side a plain column, which reads back padded', () => {
     const { datamodel, plan } = fixture(`model Country {
   code String @id @db.Char(2)

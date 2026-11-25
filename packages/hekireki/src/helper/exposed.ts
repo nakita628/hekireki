@@ -890,7 +890,10 @@ function columnNavigation(
 // another smallserial, and a column of another type cannot copy it: such a key is referenced by a
 // plain column, whose setter the DAO cannot use — unless the column is its table's key, or holds
 // the key as an EntityID all the same (isEntityIdColumn).
-function isPlainKeyReference(schema: Pick<SchemaInfo, 'dao' | 'keyOf'>, fk: ForeignKey) {
+function isPlainKeyReference(
+  schema: Pick<SchemaInfo, 'dao' | 'keyOf' | 'foreignKeys'>,
+  fk: ForeignKey,
+) {
   if (fk.kind !== 'id') return false
   const principalField = fk.principal.fields.find((f) => f.name === fk.to[0])
   if (principalField && isSmallserial(principalField)) return true
@@ -1786,9 +1789,10 @@ function isReferenceColumn(schema: Pick<SchemaInfo, 'keyOf'>, fk: ForeignKey | u
 // referencing an IdTable's key with another native type (`varchar` onto a `varchar(5)` key), which
 // a `reference()` would give the key's type. The DAO then follows it as it follows a reference. A
 // key of its own table or a part of a composite key is left a plain column, as is one onto a
-// smallserial, one with char(n) on either side, and every column without the DAO.
+// smallserial, one with char(n) on either side, one another foreign key references, and every
+// column without the DAO.
 function isEntityIdColumn(
-  schema: Pick<SchemaInfo, 'dao' | 'keyOf'>,
+  schema: Pick<SchemaInfo, 'dao' | 'keyOf' | 'foreignKeys'>,
   fk: ForeignKey | undefined,
 ): boolean {
   if (fk?.kind !== 'id' || !fk.inline || fk.sameType || !schema.dao) return false
@@ -1799,11 +1803,22 @@ function isEntityIdColumn(
   // A char(n) value reads back padded, which a varchar or text column on the other side would not
   // compare equal to: the DAO would miss rows and write the padding.
   const padded = [target, column].some((f) => f?.nativeType?.[0] === 'Char')
-  return !padded && !(target && isSmallserial(target))
+  return !padded && !(target && isSmallserial(target)) && !isReferencedColumn(schema, fk)
+}
+
+// Whether another foreign key references a foreign key's column (a unique one), whose plain value
+// the DAO would then compare with an EntityID: such a column stays plain, and that relation with it.
+function isReferencedColumn(schema: Pick<SchemaInfo, 'foreignKeys'>, fk: ForeignKey) {
+  return schema.foreignKeys.some(
+    (other) => other.principal === fk.dependent && other.to.includes(fk.from[0] ?? ''),
+  )
 }
 
 // Whether a foreign key's column holds the referenced key as an EntityID.
-function holdsEntityId(schema: Pick<SchemaInfo, 'dao' | 'keyOf'>, fk: ForeignKey | undefined) {
+function holdsEntityId(
+  schema: Pick<SchemaInfo, 'dao' | 'keyOf' | 'foreignKeys'>,
+  fk: ForeignKey | undefined,
+) {
   return isReferenceColumn(schema, fk) || isEntityIdColumn(schema, fk)
 }
 
