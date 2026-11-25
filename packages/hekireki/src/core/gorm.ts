@@ -15,6 +15,7 @@ export function gorm(options: GeneratorOptions) {
     const problems = gormProblems(
       options.dmmf.datamodel.models,
       options.datasources[0]?.activeProvider,
+      options.dmmf.datamodel.indexes,
     )
     if (problems.length > 0) {
       return yield* new GeneratorConfigError({

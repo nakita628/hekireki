@@ -508,9 +508,18 @@ export function buildGormTags(
       : null,
   ].filter((p) => p !== null)
 
-  // encoding/json takes no name with a `"` or `\` and falls back to the field's, but the tag
-  // still has to end where it should. A name with a `;` is refused by gormProblems.
-  return goTagLiteral(`gorm:"${parts.join(';')}" json:"${escapeTagValue(columnName)}"`)
+  return goTagLiteral(
+    `gorm:"${parts.join(';')}" json:"${escapeTagValue(jsonTagName(columnName, fieldName))}"`,
+  )
+}
+
+// The json name of a column: encoding/json reads what follows a `,` as options and a lone `-` as
+// "leave the field out", so a `-` is written `-,` and a name with a `,` is left for the field's
+// own, as encoding/json does for a name it cannot take (a `"` or `\`). A name with a `;` is
+// refused by gormProblems.
+function jsonTagName(columnName: string, fieldName: string) {
+  if (columnName === '-') return '-,'
+  return columnName.includes(',') ? fieldName : columnName
 }
 
 // A struct tag as Go source: a raw string, unless the tag holds a backtick (a MySQL identifier in
@@ -527,6 +536,24 @@ function goTagLiteral(tag: string) {
 // setting with the next one. Such a name is left for Prisma's default.
 function readableTagName(name: string | undefined) {
   return name !== undefined && !/[,;"`]/u.test(name) && !name.endsWith('\\') ? name : undefined
+}
+
+// The name a unique or plain index takes in the tag: the one the schema gives it (`map:`, or an
+// index's `name:`), unless the tag cannot hold it (readableTagName), and Prisma's own otherwise
+// (`Post_authorId_idx`, `User_email_key`), so AutoMigrate and the migration agree.
+function indexTagName(
+  model: DMMF.Model,
+  idx: Pick<DMMF.Index, 'type' | 'dbName' | 'name' | 'fields'>,
+  provider: string | undefined,
+) {
+  const columnOf = new Map(model.fields.map((mf) => [mf.name, mf.dbName ?? mf.name]))
+  const columns = idx.fields.map((f) => columnOf.get(f.name) ?? f.name)
+  const unique = idx.type === 'unique'
+  return (
+    readableTagName(idx.dbName) ??
+    (unique ? undefined : readableTagName(idx.name)) ??
+    constraintName(model.dbName ?? model.name, columns, unique ? 'key' : 'idx', provider ?? '')
+  )
 }
 
 // A partial index's condition (the SQL Prisma Migrate writes after WHERE) as the value of GORM's
@@ -679,7 +706,7 @@ function collectCompositeIndexTags(
     if (condition === null) {
       notes.push([
         idx.fields[0]?.name ?? '',
-        `The partial ${setting === 'uniqueIndex' ? 'unique ' : ''}index ${name} is left out: its condition holds a ";", at which GORM splits the tag.`,
+        `The partial ${setting === 'uniqueIndex' ? 'unique ' : ''}index ${JSON.stringify(name)} is left out: its condition holds a ";", at which GORM splits the tag.`,
       ])
       return []
     }
@@ -691,7 +718,7 @@ function collectCompositeIndexTags(
       notes.push([
         idx.fields[0]?.name ?? '',
         // The column and the operator class are quoted, so a line break in either stays in the comment.
-        `The index ${name} is left out: the expression of its column ${JSON.stringify(unreadable.name)} with the operator class ${JSON.stringify(unreadable.operatorClass)} holds a ";", at which GORM splits the tag.`,
+        `The index ${JSON.stringify(name)} is left out: the expression of its column ${JSON.stringify(unreadable.name)} with the operator class ${JSON.stringify(unreadable.operatorClass)} holds a ";", at which GORM splits the tag.`,
       ])
       return []
     }
@@ -705,30 +732,12 @@ function collectCompositeIndexTags(
   }
 
   const partialUniqueTags = partialUniques.flatMap((idx) =>
-    tagsOf(
-      idx,
-      'uniqueIndex',
-      readableTagName(idx.dbName) ??
-        constraintName(tableName, columnsOf(idx.fields.map((f) => f.name)), 'key', provider ?? ''),
-    ),
+    tagsOf(idx, 'uniqueIndex', indexTagName(model, idx, provider)),
   )
 
   const indexTags = ownIndexes
     .filter((idx) => idx.type === 'normal' || idx.type === 'fulltext')
-    .flatMap((idx) =>
-      tagsOf(
-        idx,
-        'index',
-        readableTagName(idx.dbName) ??
-          readableTagName(idx.name) ??
-          constraintName(
-            tableName,
-            columnsOf(idx.fields.map((f) => f.name)),
-            'idx',
-            provider ?? '',
-          ),
-      ),
-    )
+    .flatMap((idx) => tagsOf(idx, 'index', indexTagName(model, idx, provider)))
 
   return {
     tags: groupByField([...singleUniqueTags, ...uniqueTags, ...partialUniqueTags, ...indexTags]),
@@ -1603,7 +1612,11 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
  * column whose name the struct tag cannot hold (a `;`, or a `\` at its end). Index names made
  * from a column are escaped for the tag (escapeTagValue), so a `"` or `\` in one is held.
  */
-export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
+export function gormProblems(
+  models: readonly DMMF.Model[],
+  provider?: string,
+  indexes: readonly DMMF.Index[] = [],
+) {
   const held = new Map<string, string>([
     ...dateTypes(models).map((name): [string, string] => [
       name,
@@ -1614,6 +1627,10 @@ export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
       'what the models hold a scalar list in',
     ]),
   ])
+  const indexesOf = indexes.reduce<Map<string, DMMF.Index[]>>((map, idx) => {
+    map.set(idx.model, [...(map.get(idx.model) ?? []), idx])
+    return map
+  }, new Map())
   return models.flatMap((model) => {
     const name = goModelName(model.name)
     const holds = held.get(name)
@@ -1634,6 +1651,31 @@ export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
           ]
         : []
     })
+    // A dbgenerated() default is written into the tag as it is, so one ending in `\` joins the
+    // setting after it.
+    const defaults = model.fields.flatMap((field) =>
+      isFunctionDefault(field.default) &&
+      field.default.name === 'dbgenerated' &&
+      String(field.default.args[0] ?? '').endsWith('\\')
+        ? [
+            `model ${model.name}: the dbgenerated() default of ${field.name} ends in \\, which GORM's tag cannot hold`,
+          ]
+        : [],
+    )
+    // GORM takes an index's name up to its first `,` and splits the whole tag at every `;`, with no
+    // escape for either, so an index whose name holds one (made from a column or a @@map that does)
+    // cannot be written.
+    const indexNames = (indexesOf.get(model.name) ?? [])
+      .filter((idx) => idx.type !== 'id')
+      .flatMap((idx) => {
+        const indexName = indexTagName(model, idx, provider)
+        const mark = indexName.match(/[,;]/u)?.[0]
+        return mark === undefined
+          ? []
+          : [
+              `model ${model.name}: the index on ${idx.fields.map((f) => f.name).join(', ')} is named ${JSON.stringify(indexName)}, whose "${mark}" GORM's tag cannot hold; give it a name with map:`,
+            ]
+      })
     return [
       ...(holds === undefined
         ? []
@@ -1641,6 +1683,8 @@ export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
             `model ${model.name}: its Go name is ${name}, ${holds}; rename the model and keep its table with @@map`,
           ]),
       ...columns,
+      ...defaults,
+      ...indexNames,
     ]
   })
 }

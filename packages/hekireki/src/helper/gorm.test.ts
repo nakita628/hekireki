@@ -181,6 +181,28 @@ describe('buildGormTags', () => {
     )
   })
 
+  it('writes a json name encoding/json reads as the key: "-," for a "-", the field name for one with a ","', () => {
+    const field = (dbName: string) =>
+      ({
+        name: 'label',
+        dbName,
+        kind: 'scalar' as const,
+        type: 'String',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: false,
+      }) as any
+    expect(buildGormTags(field('-'), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:-;not null" json:"-,"`',
+    )
+    expect(buildGormTags(field('id,string'), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:id,string;not null" json:"Label"`',
+    )
+  })
+
   it('escapes a mapped column name for the struct tag, so GORM reads the column and every setting after it', () => {
     const field = (dbName: string) =>
       ({
@@ -1039,6 +1061,39 @@ model Note {
     ])
   })
 
+  it('names an index whose name in the tag holds a "," or ";", and a dbgenerated() ending in a backslash', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Note {
+  id    Int    @id
+  pair  String @unique @map("a,b")
+  named String @unique(map: "note_named_key") @map("c,d")
+  path  String @default(dbgenerated("x\\\\"))
+}
+
+model Tag {
+  id    Int    @id
+  label String
+  slug  String
+
+  @@index([label])
+  @@index([slug], map: "tag_slug_idx")
+  @@map("tag;s")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      "model Note: the dbgenerated() default of path ends in \\, which GORM's tag cannot hold",
+      'model Note: the index on pair is named "Note_a,b_key", whose "," GORM\'s tag cannot hold; give it a name with map:',
+      'model Tag: the index on label is named "tag;s_label_idx", whose ";" GORM\'s tag cannot hold; give it a name with map:',
+    ])
+  })
+
   it('escapes an index name made from a mapped column for the struct tag', () => {
     const code = gormFor(
       `model Note {
@@ -1787,7 +1842,7 @@ type Account struct {
 	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	Email string \`gorm:"column:email;uniqueIndex:Account_email_key;uniqueIndex:account_email_alive,where:(alive);not null" json:"email"\`
 	Alive bool   \`gorm:"column:alive;uniqueIndex:Account_alive_n_key,priority:1,where:(\\"alive\\" = true);index:Account_alive_idx,where:(\\"alive\\" = true);not null" json:"alive"\`
-	// The partial index Account_n_note_idx is left out: its condition holds a ";", at which GORM splits the tag.
+	// The partial index "Account_n_note_idx" is left out: its condition holds a ";", at which GORM splits the tag.
 	N    int     \`gorm:"column:n;uniqueIndex:Account_alive_n_key,priority:2,where:(\\"alive\\" = true);size:32;not null" json:"n"\`
 	Code string  \`gorm:"column:code;uniqueIndex:Account_code_key,where:(n > 0);not null" json:"code"\`
 	Note *string \`gorm:"column:note;index:Account_note_idx,where:(note IN ('a\\\\,b'\\\\, 'c\\\\\\\\\\"d'\\\\, 'e\\\\\\\\,f'))" json:"note"\`
@@ -1938,7 +1993,7 @@ model Doc {
         'postgresql',
       ),
     ).toContain(
-      '// The index doc_title_ops is left out: the expression of its column "title" with the operator class "a;b" holds a ";", at which GORM splits the tag.\n\tTitle string `gorm:"column:title;not null"',
+      '// The index "doc_title_ops" is left out: the expression of its column "title" with the operator class "a;b" holds a ";", at which GORM splits the tag.\n\tTitle string `gorm:"column:title;not null"',
     )
   })
 
