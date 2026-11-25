@@ -1115,7 +1115,7 @@ model Tag {
     ])
   })
 
-  it('passes over an index left out with a note, and says when the map: name is refused too', () => {
+  it('passes over an index left out with a note, and names a map: name the tag cannot hold', () => {
     const source = `datasource db {
   provider = "postgresql"
 }
@@ -1145,8 +1145,54 @@ model Item {
         partialIndexWhere(prismaBlocks(source), 'postgresql'),
       ),
     ).toStrictEqual([
-      'model Item: the index on code is named "item,s_c,d_idx", whose "," GORM\'s tag cannot hold; its map: name "item,code" cannot be held either (a , ; " or backtick, or a \\ at its end); change it',
+      'model Item: the index on code is named "item,code", which GORM\'s tag cannot hold (a , or ;, or a \\ at its end); change it',
     ])
+  })
+
+  it('names a map: name the tag cannot hold even where the name Prisma would give fits, and two fields written under one json name', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Item {
+  id    Int    @id
+  code  String @unique(map: "a,b")
+  slug  String
+  label String @map("x,y")
+  other String @map("Label")
+
+  @@index([slug], map: "slug;idx")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on code is named "a,b", which GORM\'s tag cannot hold (a , or ;, or a \\ at its end); change it',
+      'model Item: the index on slug is named "slug;idx", which GORM\'s tag cannot hold (a , or ;, or a \\ at its end); change it',
+      'model Item: label and other are both written json:"Label", and encoding/json drops both; change the @map of one',
+    ])
+  })
+
+  it('keeps a map: name with a quote or a backtick, escaped for the tag', () => {
+    const code = gormFor(
+      `model Item {
+  id   Int    @id
+  code String @unique(map: "item\\"code")
+  slug String
+
+  @@index([slug], map: "item\`slug")
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain(
+      String.raw`${'`'}gorm:"column:code;uniqueIndex:item\"code;not null" json:"code"${'`'}`,
+    )
+    expect(code).toContain(
+      String.raw`"gorm:\"column:slug;index:item${'`'}slug;not null\" json:\"slug\""`,
+    )
   })
 
   it('escapes an index name made from a mapped column for the struct tag', () => {

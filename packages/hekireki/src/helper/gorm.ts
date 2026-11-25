@@ -543,10 +543,11 @@ function goTagLiteral(tag: string) {
 }
 
 // A name the schema gives an index, unless the struct tag cannot hold it: GORM reads past a `,` as
-// settings and splits at a `;`, a `"` or a backtick ends the tag, and a `\` at the end joins the
-// setting with the next one. Such a name is left for Prisma's default.
+// settings and splits at a `;`, and a `\` at the end joins the setting with the next one. Such a
+// name is reported by gormProblems. A `"` or a backtick is escaped for the tag (escapeTagValue,
+// goTagLiteral).
 function readableTagName(name: string | undefined) {
-  return name !== undefined && !/[,;"`]/u.test(name) && !name.endsWith('\\') ? name : undefined
+  return name !== undefined && !/[,;]/u.test(name) && !name.endsWith('\\') ? name : undefined
 }
 
 // The name a unique or plain index takes in the tag: the one the schema gives it (`map:`, or an
@@ -1689,18 +1690,39 @@ export function gormProblems(
     const indexNames = (indexesOf.get(model.name) ?? [])
       .filter((idx) => idx.type !== 'id' && !leavesOutIndex(model, idx, provider, indexWhere))
       .flatMap((idx) => {
+        const fields = idx.fields.map((f) => f.name).join(', ')
+        // A name the schema gives is the index's name in the database, so one the tag cannot hold
+        // would leave AutoMigrate making the index under another name.
+        const given = idx.dbName ?? (idx.type === 'unique' ? undefined : idx.name)
+        if (given !== undefined && given !== null && readableTagName(given) === undefined) {
+          return [
+            `model ${model.name}: the index on ${fields} is named ${JSON.stringify(given)}, which GORM's tag cannot hold (a , or ;, or a \\ at its end); change it`,
+          ]
+        }
         const indexName = indexTagName(model, idx, provider)
         const mark = indexName.match(/[,;]/u)?.[0]
-        if (mark === undefined) return []
-        const fields = idx.fields.map((f) => f.name).join(', ')
-        const advice =
-          idx.dbName === undefined || idx.dbName === null
-            ? 'change the @map of its column or table, or give it a name with map:'
-            : `its map: name ${JSON.stringify(idx.dbName)} cannot be held either (a , ; " or backtick, or a \\ at its end); change it`
-        return [
-          `model ${model.name}: the index on ${fields} is named ${JSON.stringify(indexName)}, whose "${mark}" GORM's tag cannot hold; ${advice}`,
-        ]
+        return mark === undefined
+          ? []
+          : [
+              `model ${model.name}: the index on ${fields} is named ${JSON.stringify(indexName)}, whose "${mark}" GORM's tag cannot hold; change the @map of its column or table, or give it a name with map:`,
+            ]
       })
+    // A json name is the column's, or the field's where the column holds a `,` (jsonTagName), so
+    // two fields can come to one; encoding/json then drops both without a word.
+    const jsonNames = model.fields
+      .filter((field) => field.kind !== 'object')
+      .map((field) => ({
+        field: field.name,
+        json: jsonTagName(field.dbName ?? field.name, goFieldName(field.name)),
+      }))
+    const jsonClashes = jsonNames.flatMap(({ field, json }, i) => {
+      const earlier = jsonNames.slice(0, i).find((other) => other.json === json)
+      return earlier === undefined
+        ? []
+        : [
+            `model ${model.name}: ${earlier.field} and ${field} are both written json:${JSON.stringify(json)}, and encoding/json drops both; change the @map of one`,
+          ]
+    })
     return [
       ...(holds === undefined
         ? []
@@ -1709,6 +1731,7 @@ export function gormProblems(
           ]),
       ...columns,
       ...indexNames,
+      ...jsonClashes,
     ]
   })
 }
