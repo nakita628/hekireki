@@ -24,6 +24,29 @@ const PRISMA_TO_RUST: { [k: string]: string } = {
   Bytes: 'Vec<u8>',
 }
 
+function lookup(table: { readonly [key: string]: string }, key: string) {
+  return Object.hasOwn(table, key) ? table[key] : undefined
+}
+
+// The Rust type of a native type, under the Prisma type and the native type where it is the Rust
+// type of that Prisma type alone.
+const NATIVE_RUST_TYPES: { readonly [nativeType: string]: string } = {
+  Uuid: 'Uuid',
+  'Int SmallInt': 'i16',
+  'Int TinyInt': 'i8',
+  UnsignedTinyInt: 'u8',
+  UnsignedSmallInt: 'u16',
+  UnsignedMediumInt: 'u32',
+  UnsignedInt: 'u32',
+  UnsignedBigInt: 'u64',
+  Year: 'u16',
+  Oid: 'u32',
+  'Float Real': 'f32',
+  Timestamptz: 'DateTimeWithTimeZone',
+  Date: 'Date',
+  Time: 'Time',
+}
+
 // The Rust type of a DateTime column where it is not the Prisma-scalar default. On SQLite the
 // instant is text that is compared as text, and Prisma writes it with exactly three decimals
 // (`2030-01-02T03:04:05.000+00:00`); sqlx writes DateTimeUtc with none on a whole second and
@@ -32,16 +55,18 @@ const PRISMA_TO_RUST: { [k: string]: string } = {
 // @db.Uuid` is a `uuid` column, which sqlx-postgres neither binds a String to (PostgreSQL does not
 // cast a `text` parameter to `uuid`) nor decodes into one: it is a Uuid. sqlx decodes a `smallint`
 // only into an i16 and a MySQL `TINYINT` only into an i8, which sea-orm reads as SmallInteger and
-// TinyInteger.
+// TinyInteger. sqlx-mysql decodes an `UNSIGNED` integer or a `YEAR` only into an unsigned Rust
+// integer as wide as the column, and sqlx-postgres a `real` only into an f32 and an `oid` only
+// into a u32 (which sea-orm reads through sqlx's Oid).
 function rustTypeForNative(field: DMMF.Field, provider?: string) {
   const nativeName = field.nativeType?.[0]
-  if (nativeName === 'Uuid') return 'Uuid'
-  if (field.type === 'Int' && nativeName === 'SmallInt') return 'i16'
-  if (field.type === 'Int' && nativeName === 'TinyInt') return 'i8'
-  if (nativeName === 'Timestamptz') return 'DateTimeWithTimeZone'
   if (nativeName === 'Timestamp' && provider === 'mysql') return 'DateTimeUtc'
-  if (nativeName === 'Date') return 'Date'
-  if (nativeName === 'Time') return 'Time'
+  if (nativeName !== undefined) {
+    const native =
+      lookup(NATIVE_RUST_TYPES, `${field.type} ${nativeName}`) ??
+      lookup(NATIVE_RUST_TYPES, nativeName)
+    if (native !== undefined) return native
+  }
   if (field.type === 'DateTime' && provider === 'sqlite') return 'PrismaDateTime'
   return null
 }
@@ -232,38 +257,190 @@ function viaBody(path: string) {
   return inner.includes('\n') ? `        Some(\n${inner}\n        )` : line
 }
 
-// The sea-orm column type of a native type that takes no arguments of its own; one not here
-// (`Timestamp` among them) is left to the Rust type. `Uuid`, `SmallInt` and `TinyInt` are: the Rust
-// type is a Uuid, an i16 or an i8, which sea-orm reads as the column type `Uuid`, `SmallInteger` or
-// `TinyInteger` and, in a Vec, as an array of it.
+// The sea-orm column type of a native type whose column is the same for every argument; one not
+// here (`Timestamp` among them) is left to the Rust type. `Uuid`, `SmallInt`, `TinyInt`, the
+// unsigned integers and `Real` are: the Rust type is a Uuid, an i16, an i8, a u8 to u64 or an f32,
+// which sea-orm reads as the column type `Uuid`, `SmallInteger`, `TinyInteger`, `TinyUnsigned` to
+// `BigUnsigned` or `Float` (`real` on PostgreSQL).
 const NATIVE_COLUMN_TYPES: { readonly [nativeType: string]: string } = {
   Text: 'Text',
-  MediumText: 'Text',
-  LongText: 'Text',
-  TinyText: 'Text',
-  MediumInt: 'Integer',
   DoublePrecision: 'Double',
   Double: 'Double',
-  Real: 'Double',
+  Float: 'Float',
+  Year: 'Year',
   Timestamptz: 'TimestampWithTimeZone',
   Date: 'Date',
   Time: 'Time',
   JsonB: 'JsonBinary',
+  Blob: 'Blob',
+  Inet: 'Inet',
+  Money: 'Money(None)',
 }
 
-export function resolveSeaOrmColumnType(field: DMMF.Field) {
-  if (!field.nativeType) return null
+// The native types sea-query has no column type for, as the database names them.
+const CUSTOM_NATIVE_TYPES: { readonly [nativeType: string]: string } = {
+  TinyText: 'tinytext',
+  MediumText: 'mediumtext',
+  LongText: 'longtext',
+  TinyBlob: 'tinyblob',
+  MediumBlob: 'mediumblob',
+  LongBlob: 'longblob',
+  MediumInt: 'mediumint',
+  UnsignedMediumInt: 'mediumint unsigned',
+  Xml: 'xml',
+  Citext: 'citext',
+  Oid: 'oid',
+}
 
-  const [nativeName, nativeArgs] = field.nativeType
-  const args = nativeArgs ?? []
+// The date-time native types that take a precision, as the database names them. sea-query writes
+// none, so a column of another precision than the database gives one without (none on MySQL, six
+// digits on PostgreSQL) is a custom type.
+const FRACTIONAL_NATIVE_TYPES: { readonly [nativeType: string]: string } = {
+  DateTime: 'datetime',
+  Timestamp: 'timestamp',
+  Timestamptz: 'timestamptz',
+  Time: 'time',
+}
 
-  if (nativeName === 'VarChar' || nativeName === 'Char') {
-    return args.length > 0 ? `String(StringLen::N(${args[0]}))` : null
+// The column Prisma Migrate creates for a field without a native type, where sea-orm would derive
+// another from the Rust type: on MySQL `varchar(191)`, `decimal(65,30)`, `datetime(3)` and
+// `longblob` (not `varchar(255)`, `decimal`, `datetime` and `varbinary(255)`); on PostgreSQL
+// `text`, `numeric(65,30)`, `timestamp(3)` and `jsonb` (not `varchar`, `numeric`, `timestamp` and
+// `json`); on SQLite `TEXT` and `BLOB` (not `varchar` and `varbinary_blob`).
+const SCALAR_COLUMN_TYPES: {
+  readonly [provider: string]: { readonly [prismaType: string]: string }
+} = {
+  mysql: {
+    String: 'String(StringLen::N(191))',
+    Decimal: 'Decimal(Some((65, 30)))',
+    DateTime: 'custom("datetime(3)")',
+    Bytes: 'custom("longblob")',
+  },
+  postgresql: {
+    String: 'Text',
+    Decimal: 'Decimal(Some((65, 30)))',
+    DateTime: 'custom("timestamp(3)")',
+    Json: 'JsonBinary',
+  },
+  sqlite: {
+    String: 'Text',
+    Bytes: 'Blob',
+  },
+}
+
+function optionalLength(length: string | undefined) {
+  return length === undefined ? 'None' : `Some(${length})`
+}
+
+// The column type of a native type whose arguments are its size, or undefined for another.
+function sizedColumnType(
+  type: string,
+  nativeName: string,
+  first: string | undefined,
+  second: string | undefined,
+) {
+  switch (nativeName) {
+    case 'VarChar':
+      return first === undefined ? null : `String(StringLen::N(${first}))`
+    case 'Char':
+      return `Char(${optionalLength(first)})`
+    case 'Decimal':
+      return second === undefined ? 'Decimal(None)' : `Decimal(Some((${first}, ${second})))`
+    case 'VarBinary':
+      return first === undefined ? null : `VarBinary(StringLen::N(${first}))`
+    case 'Binary':
+      return `Binary(${first ?? 1})`
+    // sqlx decodes no Vec<u8> from a MySQL BIT, so a `Bytes @db.Bit` keeps the column it had.
+    case 'Bit':
+      return type === 'Bytes' ? null : `Bit(${optionalLength(first)})`
+    case 'VarBit':
+      return first === undefined ? 'custom("varbit")' : `VarBit(${first})`
+    default:
+      return undefined
   }
-  if (nativeName === 'Decimal' || nativeName === 'Money') {
-    return args.length >= 2 ? `Decimal(Some((${args[0]}, ${args[1]})))` : 'Decimal(None)'
+}
+
+function nativeColumnType(field: DMMF.Field, provider: string | undefined) {
+  const [nativeName, args] = field.nativeType ?? ['', []]
+  const [first, second] = args ?? []
+  const fractional = lookup(FRACTIONAL_NATIVE_TYPES, nativeName)
+  const defaultPrecision = provider === 'mysql' ? 0 : 6
+  if (fractional !== undefined && first !== undefined && Number(first) !== defaultPrecision) {
+    return `custom("${fractional}(${first})")`
   }
-  return NATIVE_COLUMN_TYPES[nativeName] ?? null
+  const sized = sizedColumnType(field.type, nativeName, first, second)
+  if (sized !== undefined) return sized
+  const custom = lookup(CUSTOM_NATIVE_TYPES, nativeName)
+  if (custom !== undefined) return `custom("${custom}")`
+  return lookup(NATIVE_COLUMN_TYPES, nativeName) ?? null
+}
+
+// CockroachDB takes PostgreSQL's types and the pgsql driver, as Prisma's connector does.
+function columnDialect(provider: string | undefined) {
+  return provider === 'cockroachdb' ? 'postgresql' : provider
+}
+
+/**
+ * The sea-orm column type (a `ColumnType` variant or constructor) of the column Prisma Migrate
+ * creates for a field, where it is not the one sea-orm derives from the Rust type; a list is an
+ * array of it.
+ *
+ * @example
+ * ```rust
+ * #[sea_orm(column_type = "Decimal(Some((65, 30)))")]
+ * #[sea_orm(column_type = "custom(\"longblob\")")]
+ * #[sea_orm(column_type = "Array(RcOrArc::new(ColumnType::Text))")]
+ * ```
+ */
+export function resolveSeaOrmColumnType(field: DMMF.Field, provider?: string) {
+  if (field.kind !== 'scalar') return null
+  const dialect = columnDialect(provider)
+  const columnType = field.nativeType
+    ? nativeColumnType(field, dialect)
+    : (lookup(SCALAR_COLUMN_TYPES[dialect ?? ''] ?? {}, field.type) ?? null)
+  if (columnType === null || !field.isList) return columnType
+  return `Array(RcOrArc::new(ColumnType::${columnType}))`
+}
+
+// The PostgreSQL types sqlx binds no String to and decodes none from, and the type each is read
+// back as. An `inet` is read as a `name`: its cast to text writes the netmask of a host
+// (`10.0.0.1/32`), while there is no cast to name, so PostgreSQL writes it as it prints it
+// (`10.0.0.1`, what Prisma Client reads), which sqlx decodes into a String as it does a text.
+const TEXT_NATIVE_TYPES: { readonly [nativeType: string]: string } = {
+  Inet: 'name',
+  Xml: 'text',
+  Bit: 'text',
+  VarBit: 'text',
+}
+
+/**
+ * The casts a PostgreSQL column takes on its way out of the database and into it, as `select_as`
+ * and `save_as`. An `inet`, `xml`, `bit` or `varbit` column is read as text (an `inet` as a
+ * `name`) and written from it (`CAST($1 AS inet)`: PostgreSQL does not cast a `text` parameter to
+ * one of these of itself), and a `money` column, which sqlx decodes no Decimal from, is read as
+ * `numeric`.
+ *
+ * @example
+ * ```rust
+ * #[sea_orm(column_type = "Inet", select_as = "name", save_as = "inet")]
+ * ```
+ */
+function seaOrmCasts(field: DMMF.Field, provider?: string) {
+  if (columnDialect(provider) !== 'postgresql' || field.kind !== 'scalar' || !field.nativeType) {
+    return null
+  }
+  const [nativeName, args] = field.nativeType
+  const [first] = args ?? []
+  const list = field.isList ? '[]' : ''
+  const readAs = lookup(TEXT_NATIVE_TYPES, nativeName)
+  if (field.type === 'String' && readAs !== undefined) {
+    const sqlType = `${nativeName.toLowerCase()}${first === undefined ? '' : `(${first})`}`
+    return { selectAs: `${readAs}${list}`, saveAs: `${sqlType}${list}` }
+  }
+  if (field.type === 'Decimal' && nativeName === 'Money') {
+    return { selectAs: `numeric${list}`, saveAs: `money${list}` }
+  }
+  return null
 }
 
 function generatedIdExpr(field: DMMF.Field) {
@@ -387,12 +564,18 @@ function enumMappedDefault(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum
   )
 }
 
+// The `column_type` argument of a column type, its quotes escaped in the Rust string.
+function columnTypePart(columnType: string) {
+  return `column_type = "${columnType.replaceAll('"', '\\"')}"`
+}
+
 function columnAttributeParts(
   field: DMMF.Field,
   isPk: boolean,
   isCompositePk: boolean,
   derivedColumn: string | undefined,
   enums: readonly DMMF.DatamodelEnum[] | undefined,
+  provider: string | undefined,
 ) {
   const columnParts: string[] = []
 
@@ -404,9 +587,13 @@ function columnAttributeParts(
     columnParts.push(`column_name = "${columnName}"`)
   }
 
-  const colType = resolveSeaOrmColumnType(field)
+  const colType = resolveSeaOrmColumnType(field, provider)
   if (colType !== null) {
-    columnParts.push(`column_type = "${colType}"`)
+    columnParts.push(columnTypePart(colType))
+  }
+  const casts = seaOrmCasts(field, provider)
+  if (casts !== null) {
+    columnParts.push(`select_as = "${casts.selectAs}"`, `save_as = "${casts.saveAs}"`)
   }
 
   // A DateTime default (now() or a literal) is filled in by ActiveModelBehavior, as Prisma Client
@@ -426,6 +613,7 @@ export function buildSeaOrmAttributes(
   isCompositePk: boolean,
   derivedColumn?: string,
   enums?: readonly DMMF.DatamodelEnum[],
+  provider?: string,
 ) {
   const attrs: string[] = []
 
@@ -441,7 +629,14 @@ export function buildSeaOrmAttributes(
     attrs.push('    #[sea_orm(unique)]')
   }
 
-  const columnParts = columnAttributeParts(field, isPk, isCompositePk, derivedColumn, enums)
+  const columnParts = columnAttributeParts(
+    field,
+    isPk,
+    isCompositePk,
+    derivedColumn,
+    enums,
+    provider,
+  )
   if (columnParts.length > 0) {
     attrs.push(seaOrmAttribute('    ', columnParts))
   }
@@ -1020,7 +1215,7 @@ export function generateEntityFile(
   const columns = scalarFields.map((field) => {
     const isPk = primaryKey.has(field.name)
     const { ident, derivedColumn } = identOf(field)
-    const attrs = buildSeaOrmAttributes(field, isPk, isCompositePk, derivedColumn, enums)
+    const attrs = buildSeaOrmAttributes(field, isPk, isCompositePk, derivedColumn, enums, provider)
     const { elemType, rustType } = fieldRustType(field, enumNames, provider)
     return {
       field,
@@ -1111,14 +1306,33 @@ export function generateEntityFile(
 }
 
 // The join table's column is of its model's key: a `uuid` for a `@db.Uuid` key, a `smallint` for
-// a `@db.SmallInt` one.
-function pkRustType(modelName: string, models: readonly DMMF.Model[]) {
+// a `@db.SmallInt` one, an `int unsigned` for a `@db.UnsignedInt` one, a `varchar(191)` for a
+// MySQL String.
+function joinColumn(
+  modelName: string,
+  models: readonly DMMF.Model[],
+  column: 'A' | 'B',
+  provider: string | undefined,
+) {
   const pkField = models.find((m) => m.name === modelName)?.fields.find((f) => f.isId)
-  if (!pkField) return 'String'
-  const native = rustTypeForNative(pkField)
-  return native === 'Uuid' || native === 'i16' || native === 'i8'
-    ? native
-    : prismaTypeToRustType(pkField.type, true)
+  const native = pkField ? rustTypeForNative(pkField) : null
+  const rustType =
+    native !== null && !isDateTimeForm(native)
+      ? native
+      : prismaTypeToRustType(pkField?.type ?? 'String', true)
+  const columnType = pkField
+    ? resolveSeaOrmColumnType({ ...pkField, isList: false }, provider)
+    : null
+  // A key of a type sqlx binds no String to (an `inet`) is cast as on the model's entity.
+  const casts = pkField ? seaOrmCasts({ ...pkField, isList: false }, provider) : null
+  const attribute = seaOrmAttribute('    ', [
+    'primary_key',
+    'auto_increment = false',
+    `column_name = "${column}"`,
+    ...(columnType === null ? [] : [columnTypePart(columnType)]),
+    ...(casts === null ? [] : [`select_as = "${casts.selectAs}"`, `save_as = "${casts.saveAs}"`]),
+  ])
+  return { rustType, attribute }
 }
 
 export function generateM2MEntity(
@@ -1127,6 +1341,7 @@ export function generateM2MEntity(
   relationName: string,
   allModels: readonly DMMF.Model[],
   serde: { readonly renameAll?: string } = {},
+  provider?: string,
 ) {
   const [sortedLeft, sortedRight] =
     leftModel < rightModel ? [leftModel, rightModel] : [rightModel, leftModel]
@@ -1144,8 +1359,8 @@ export function generateM2MEntity(
   const rightCol = isSelf ? 'B' : makePascalCase(`${makeSnakeCase(sortedRight)}Id`)
   const leftVariant = isSelf ? 'A' : makePascalCase(sortedLeft)
   const rightVariant = isSelf ? 'B' : makePascalCase(sortedRight)
-  const leftType = pkRustType(sortedLeft, allModels)
-  const rightType = pkRustType(sortedRight, allModels)
+  const left = joinColumn(sortedLeft, allModels, 'A', provider)
+  const right = joinColumn(sortedRight, allModels, 'B', provider)
   // The column each side's key is, as its entity names it: `Column::Id` only when the key is `id`.
   const leftKey = makePascalCase(
     allModels.find((m) => m.name === sortedLeft)?.fields.find((f) => f.isId)?.name ?? 'id',
@@ -1170,10 +1385,10 @@ export function generateM2MEntity(
     'pub struct Model {',
     // Prisma's implicit join table stores its FKs in columns "A"/"B" (models
     // in alphabetical order), not <model>_id.
-    '    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]',
-    rustField(leftFk, leftType),
-    '    #[sea_orm(primary_key, auto_increment = false, column_name = "B")]',
-    rustField(rightFk, rightType),
+    left.attribute,
+    rustField(leftFk, left.rustType),
+    right.attribute,
+    rustField(rightFk, right.rustType),
     '}',
     '',
     '#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]',

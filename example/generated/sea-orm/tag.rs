@@ -9,6 +9,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     #[sea_orm(unique)]
+    #[sea_orm(column_type = "Text")]
     pub label: String,
 }
 

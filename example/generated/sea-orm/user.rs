@@ -13,16 +13,22 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     /// Primary key (UUIDv7)
     #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(column_type = "Text")]
     pub id: String,
     /// Unique login email
     #[sea_orm(unique)]
+    #[sea_orm(column_type = "Text")]
     pub email: String,
     /// Display name
+    #[sea_orm(column_type = "Text")]
     pub name: String,
     #[sea_orm(default_value = "VIEWER")]
     pub role: Role,
+    #[sea_orm(column_type = "Array(RcOrArc::new(ColumnType::Text))")]
     pub interests: Vec<String>,
+    #[sea_orm(column_type = "custom(\"timestamp(3)\")")]
     pub created_at: DateTime,
+    #[sea_orm(column_type = "custom(\"timestamp(3)\")")]
     pub updated_at: DateTime,
 }
 

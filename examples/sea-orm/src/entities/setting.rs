@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "settings")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(column_type = "Text")]
     pub key: String,
+    #[sea_orm(column_type = "Text")]
     pub value: String,
     pub updated_at: PrismaDateTime,
     pub synced_at: PrismaDateTime,

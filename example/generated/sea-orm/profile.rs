@@ -9,8 +9,10 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "Profile")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(column_type = "Text")]
     pub id: String,
     #[sea_orm(unique)]
+    #[sea_orm(column_type = "Text")]
     pub user_id: String,
     #[sea_orm(column_type = "Text")]
     pub bio: Option<String>,
@@ -21,6 +23,7 @@ pub struct Model {
     pub balance: Decimal,
     #[sea_orm(default_value = false)]
     pub verified: bool,
+    #[sea_orm(column_type = "JsonBinary")]
     pub meta: Option<Json>,
     pub avatar: Option<Vec<u8>>,
     #[sea_orm(column_type = "TimestampWithTimeZone")]

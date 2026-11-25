@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
+    #[sea_orm(column_type = "Text")]
     pub room: String,
     #[sea_orm(unique)]
     pub starts_at: PrismaDateTime,

@@ -43,7 +43,7 @@ export function seaOrmFiles(
   const m2mFiles = collectM2MPairs(models).map((pair) => ({
     fileName: rustModule(pair.relationName).file,
     moduleName: rustModule(pair.relationName).ident,
-    code: generateM2MEntity(pair.left, pair.right, pair.relationName, models, serde),
+    code: generateM2MEntity(pair.left, pair.right, pair.relationName, models, serde, provider),
   }))
 
   // Only the models written above: a prelude naming a module there is no file for does not build.
