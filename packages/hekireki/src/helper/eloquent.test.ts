@@ -1334,18 +1334,18 @@ class Ticket extends Model
         'id',
     ];
 
-    protected function insertAndSetId(Builder \$query, \$attributes)
+    protected function insertAndSetId(Builder $query, $attributes)
     {
-        \$base = \$query->getQuery();
-        \$base->applyBeforeQueryCallbacks();
-        \$connection = \$base->getConnection();
-        \$connection->recordsHaveBeenModified();
-        \$keyName = \$this->getKeyName();
-        \$row = \$connection->selectFromWriteConnection(
-            \$base->getGrammar()->compileInsertGetId(\$base, \$attributes, \$keyName),
-            \$base->cleanBindings(\$attributes),
+        $base = $query->getQuery();
+        $base->applyBeforeQueryCallbacks();
+        $connection = $base->getConnection();
+        $connection->recordsHaveBeenModified();
+        $keyName = $this->getKeyName();
+        $row = $connection->selectFromWriteConnection(
+            $base->getGrammar()->compileInsertGetId($base, $attributes, $keyName),
+            $base->cleanBindings($attributes),
         )[0];
-        \$this->setAttribute(\$keyName, \$row->{\$keyName});
+        $this->setAttribute($keyName, $row->{$keyName});
     }
 }`
     expect(
