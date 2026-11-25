@@ -3881,6 +3881,105 @@ class UserStat(models.Model):
   })
 })
 
+describe('operator classes', () => {
+  function opsDjango(models: string, provider = 'postgresql') {
+    const source = `datasource db {
+  provider = "${provider}"
+}
+${models}`
+    const {
+      models: dmmfModels,
+      enums,
+      indexes,
+    } = datamodelOf(getDMMF({ datamodel: [['schema.prisma', source]] }))
+    return djangoCode(dmmfModels, enums, indexes, provider, source)
+  }
+
+  // Django makes a varchar_pattern_ops twin of an indexed string column for LIKE; prisma db pull
+  // writes it as an @@index with ops, which has to stay an index on that class, not a second plain
+  // one.
+  it('declares an index on an operator class with opclasses', () => {
+    const code = opsDjango(`
+model t {
+  id    Int    @id
+  slug  String @db.VarChar(50)
+  title String
+  data  Json
+
+  @@index([slug], map: "t_slug_1234abcd")
+  @@index([slug(ops: raw("varchar_pattern_ops"))], map: "t_slug_1234abcd_like")
+  @@index([data(ops: JsonbPathOps)], type: Gin)
+  @@index([id(sort: Desc), title(ops: raw("text_pattern_ops"))], map: "t_id_title_a_name_far_over_thirty")
+  @@index([title(sort: Desc, ops: raw("text_pattern_ops"))], map: "t_title_like_a_name_far_over_thirty")
+}
+`)
+    expect(code).toContain('from django.contrib.postgres.indexes import GinIndex\n')
+    expect(code).toContain(`        indexes = [
+            models.Index(fields=["slug"], name="t_slug_1234abcd"),
+            models.Index(fields=["slug"], name="t_slug_1234abcd_like", opclasses=["varchar_pattern_ops"]),
+            GinIndex(fields=["data"], name="t_data_idx", opclasses=["jsonb_path_ops"]),
+            models.Index(fields=["-title"], name="t_title_idx", opclasses=["text_pattern_ops"]),
+        ]
+        # The index "t_id_title_a_name_far_over_thirty" on ("id", "title") is left out: only some of its fields have an operator class,
+        # and Index.opclasses takes one per field, so it is left to a migration (e.g. RunSQL).`)
+  })
+
+  it('does not take the name of the _like index Django makes, nor one another index has, and leaves a mixed index out', () => {
+    const code = opsDjango(`
+model t {
+  id    Int    @id
+  slug  String @unique
+  title String
+  n     Int
+
+  @@index([title(ops: raw("text_pattern_ops"))], map: "t_slug_779dc315_like")
+  @@index([n, title(ops: raw("text_pattern_ops"))], map: "t_n_title")
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+`)
+    expect(code).toContain(
+      'models.Index(fields=["title"], name="t_title_idx", opclasses=["text_pattern_ops"]),',
+    )
+    // Prisma's name for the Gin index is the one just made, so it takes the next free one.
+    expect(code).toContain(
+      'GinIndex(fields=["title"], name="t_title_idx_2", opclasses=["gin_trgm_ops"]),',
+    )
+    expect(code).toContain(
+      `        # The index "t_n_title" on ("n", "title") is left out: only some of its fields have an operator class,`,
+    )
+  })
+
+  it('cuts a name Django refuses to 21 code points and a sha256 digest', () => {
+    const code = opsDjango(`
+model AVeryLongModelNameIndeed {
+  id    Int    @id
+  title String
+
+  @@index([title(ops: raw("text_pattern_ops"))])
+}
+`)
+    expect(code).toMatch(
+      /models\.Index\(fields=\["title"\], name="AVeryLongModelNameInd_[\da-f]{8}", opclasses=\["text_pattern_ops"\]\)/u,
+    )
+  })
+
+  it('leaves the operator class out on a database other than PostgreSQL', () => {
+    const code = opsDjango(
+      `
+model t {
+  id   Int    @id
+  slug String
+
+  @@index([slug(ops: raw("varchar_pattern_ops"))], map: "t_slug_like")
+}
+`,
+      'sqlite',
+    )
+    expect(code).toContain('models.Index(fields=["slug"], name="t_slug_like")')
+    expect(code).not.toContain('opclasses')
+  })
+})
+
 describe('partial indexes', () => {
   function partialDjango(models: string) {
     const source = `datasource db {
