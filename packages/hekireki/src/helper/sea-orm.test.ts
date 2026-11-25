@@ -1305,6 +1305,17 @@ describe('resolveSeaOrmColumnType', () => {
     ).toBe('Array(RcOrArc::new(ColumnType::String(StringLen::N(10))))')
   })
 
+  it('gives CockroachDB the PostgreSQL column types, and a native type with no arguments', () => {
+    expect(resolveSeaOrmColumnType(field({ type: 'String' }), 'cockroachdb')).toBe('Text')
+    expect(resolveSeaOrmColumnType(field({ type: 'Json' }), 'cockroachdb')).toBe('JsonBinary')
+    expect(
+      resolveSeaOrmColumnType(
+        field({ type: 'String', nativeType: ['Inet', null as unknown as string[]] }),
+        'postgresql',
+      ),
+    ).toBe('Inet')
+  })
+
   it('writes no column type for an enum', () => {
     expect(resolveSeaOrmColumnType(field({ type: 'Role', kind: 'enum' }), 'mysql')).toBeNull()
   })
@@ -1885,6 +1896,14 @@ impl ActiveModelBehavior for ActiveModel {}
     pub data: Vec<u8>,
 }
 `)
+  })
+
+  it('casts the join column of an inet key as the key is cast on its entity', () => {
+    const host = model('Host', [id({ ...native('Inet'), type: 'String', default: undefined })])
+    const tag = model('Tag', [field({ name: 'id', isId: true })])
+    expect(generateM2MEntity('Host', 'Tag', 'HostToTag', [host, tag], {}, 'postgresql')).toContain(
+      'select_as = "name",\n        save_as = "inet"',
+    )
   })
 
   it("gives the join table of an implicit many-to-many each key's column", () => {

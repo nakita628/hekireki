@@ -361,7 +361,8 @@ function sizedColumnType(
 }
 
 function nativeColumnType(field: DMMF.Field, provider: string | undefined) {
-  const [nativeName, [first, second]] = field.nativeType ?? ['', []]
+  const [nativeName, args] = field.nativeType ?? ['', []]
+  const [first, second] = args ?? []
   const fractional = lookup(FRACTIONAL_NATIVE_TYPES, nativeName)
   const defaultPrecision = provider === 'mysql' ? 0 : 6
   if (fractional !== undefined && first !== undefined && Number(first) !== defaultPrecision) {
@@ -372,6 +373,11 @@ function nativeColumnType(field: DMMF.Field, provider: string | undefined) {
   const custom = lookup(CUSTOM_NATIVE_TYPES, nativeName)
   if (custom !== undefined) return `custom("${custom}")`
   return lookup(NATIVE_COLUMN_TYPES, nativeName) ?? null
+}
+
+// CockroachDB takes PostgreSQL's types and the pgsql driver, as Prisma's connector does.
+function columnDialect(provider: string | undefined) {
+  return provider === 'cockroachdb' ? 'postgresql' : provider
 }
 
 /**
@@ -388,9 +394,10 @@ function nativeColumnType(field: DMMF.Field, provider: string | undefined) {
  */
 export function resolveSeaOrmColumnType(field: DMMF.Field, provider?: string) {
   if (field.kind !== 'scalar') return null
+  const dialect = columnDialect(provider)
   const columnType = field.nativeType
-    ? nativeColumnType(field, provider)
-    : (lookup(SCALAR_COLUMN_TYPES[provider ?? ''] ?? {}, field.type) ?? null)
+    ? nativeColumnType(field, dialect)
+    : (lookup(SCALAR_COLUMN_TYPES[dialect ?? ''] ?? {}, field.type) ?? null)
   if (columnType === null || !field.isList) return columnType
   return `Array(RcOrArc::new(ColumnType::${columnType}))`
 }
@@ -419,8 +426,11 @@ const TEXT_NATIVE_TYPES: { readonly [nativeType: string]: string } = {
  * ```
  */
 function seaOrmCasts(field: DMMF.Field, provider?: string) {
-  if (provider !== 'postgresql' || field.kind !== 'scalar' || !field.nativeType) return null
-  const [nativeName, [first]] = field.nativeType
+  if (columnDialect(provider) !== 'postgresql' || field.kind !== 'scalar' || !field.nativeType) {
+    return null
+  }
+  const [nativeName, args] = field.nativeType
+  const [first] = args ?? []
   const list = field.isList ? '[]' : ''
   const readAs = lookup(TEXT_NATIVE_TYPES, nativeName)
   if (field.type === 'String' && readAs !== undefined) {
@@ -1313,11 +1323,14 @@ function joinColumn(
   const columnType = pkField
     ? resolveSeaOrmColumnType({ ...pkField, isList: false }, provider)
     : null
+  // A key of a type sqlx binds no String to (an `inet`) is cast as on the model's entity.
+  const casts = pkField ? seaOrmCasts({ ...pkField, isList: false }, provider) : null
   const attribute = seaOrmAttribute('    ', [
     'primary_key',
     'auto_increment = false',
     `column_name = "${column}"`,
     ...(columnType === null ? [] : [columnTypePart(columnType)]),
+    ...(casts === null ? [] : [`select_as = "${casts.selectAs}"`, `save_as = "${casts.saveAs}"`]),
   ])
   return { rustType, attribute }
 }
