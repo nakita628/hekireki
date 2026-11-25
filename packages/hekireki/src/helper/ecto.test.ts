@@ -2168,6 +2168,107 @@ end`)
   })
 })
 
+describe('SQL Server uniqueidentifier columns', () => {
+  const schemasOf = (body: string) =>
+    ectoSchemas(
+      datamodelOf(getDMMF({ datamodel: `datasource db {\n  provider = "sqlserver"\n}\n${body}` }))
+        .models,
+      'App',
+    )
+
+  // Tds returns a uniqueidentifier as 16 bytes in SQL Server's order, and loads and dumps
+  // :binary_id through Tds.Ecto.UUID: a :string field would hold the raw bytes.
+  it('makes a field Ecto does not fill :binary_id, and one it fills Tds.Ecto.UUID', () => {
+    expect(
+      schemasOf(`
+model Share {
+  id     Int     @id @default(autoincrement())
+  token  String  @unique @db.UniqueIdentifier
+  spare  String? @db.UniqueIdentifier
+  fixed  String  @default("8F1D3B4A2C6E4F7A9B0C1D2E3F4A5B6C") @db.UniqueIdentifier
+  made   String  @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  random String  @default(uuid()) @db.UniqueIdentifier
+  timed  String  @default(uuid(7)) @db.UniqueIdentifier
+}`),
+    ).toBe(`defmodule App.Share do
+  use Ecto.Schema
+
+  @primary_key {:id, :id, autogenerate: true}
+
+  @type t :: %__MODULE__{
+          id: integer(),
+          token: Ecto.UUID.t(),
+          spare: Ecto.UUID.t() | nil,
+          fixed: Ecto.UUID.t(),
+          made: Ecto.UUID.t(),
+          random: Ecto.UUID.t(),
+          timed: Ecto.UUID.t()
+        }
+
+  schema "Share" do
+    field(:token, :binary_id)
+    field(:spare, :binary_id)
+    field(:fixed, :binary_id, default: "8f1d3b4a-2c6e-4f7a-9b0c-1d2e3f4a5b6c")
+    field(:made, :binary_id, read_after_writes: true)
+    field(:random, Tds.Ecto.UUID, autogenerate: {Ecto.UUID, :generate, []})
+    field(:timed, Tds.Ecto.UUID, autogenerate: {Ecto.UUID, :generate, [[version: 7]]})
+  end
+end`)
+  })
+
+  // Ecto.UUID would dump the key in text order while its foreign keys, :binary_id, dump it in
+  // SQL Server's: a child row would fail its foreign key.
+  it('makes a uuid(7) key Tds.Ecto.UUID, dumped as its :binary_id foreign keys are', () => {
+    const code = schemasOf(`
+model Event {
+  id    String  @id @default(uuid(7)) @db.UniqueIdentifier
+  notes Note[]
+}
+
+model Note {
+  id      Int    @id @default(autoincrement())
+  eventId String @db.UniqueIdentifier
+  event   Event  @relation(fields: [eventId], references: [id])
+}`)
+    expect(code).toContain(
+      '  @primary_key {:id, Tds.Ecto.UUID, autogenerate: {Ecto.UUID, :generate, [[version: 7]]}}\n  @foreign_key_type :binary_id\n',
+    )
+    expect(code).toContain('    field(:event_id, :binary_id, source: :eventId)\n')
+    expect(code).toContain(
+      '    belongs_to(:event, App.Event, foreign_key: :event_id, define_field: false, type: :binary_id)\n',
+    )
+  })
+
+  it('makes a key Ecto does not make, a part of a compound key and their foreign keys :binary_id', () => {
+    const code = schemasOf(`
+model Device {
+  id     String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  serial String  @unique @db.UniqueIdentifier
+  ports  Port[]
+  plugs  Plug[]
+}
+
+model Port {
+  deviceId String @db.UniqueIdentifier
+  number   Int
+  device   Device @relation(fields: [deviceId], references: [id])
+
+  @@id([deviceId, number])
+}
+
+model Plug {
+  id     Int    @id @default(autoincrement())
+  serial String @db.UniqueIdentifier
+  device Device @relation(fields: [serial], references: [serial])
+}`)
+    expect(code).not.toContain(':string')
+    expect(code).toContain('field(:id, :binary_id, primary_key: true, read_after_writes: true)')
+    expect(code).toContain('field(:serial, :binary_id)')
+    expect(code).toContain('field(:device_id, :binary_id, primary_key: true, source: :deviceId)')
+    expect(code).toContain('foreign_key: :serial, type: :binary_id, references: :serial')
+  })
+})
+
 describe('ulid primary key', () => {
   it('generates Ecto.ULID with autogenerate and module foreign key types', () => {
     const ticket = makeModel({
