@@ -1786,7 +1786,7 @@ function isReferenceColumn(schema: Pick<SchemaInfo, 'keyOf'>, fk: ForeignKey | u
 // referencing an IdTable's key with another native type (`varchar` onto a `varchar(5)` key), which
 // a `reference()` would give the key's type. The DAO then follows it as it follows a reference. A
 // key of its own table or a part of a composite key is left a plain column, as is one onto a
-// smallserial, and so is every column without the DAO.
+// smallserial, one with char(n) on either side, and every column without the DAO.
 function isEntityIdColumn(
   schema: Pick<SchemaInfo, 'dao' | 'keyOf'>,
   fk: ForeignKey | undefined,
@@ -1795,7 +1795,11 @@ function isEntityIdColumn(
   const key = schema.keyOf(fk.dependent)
   if (key.kind === 'none' || keyFieldNames(key).includes(fk.from[0] ?? '')) return false
   const target = fk.principal.fields.find((f) => f.name === fk.to[0])
-  return !(target && isSmallserial(target))
+  const column = fk.dependent.fields.find((f) => f.name === fk.from[0])
+  // A char(n) value reads back padded, which a varchar or text column on the other side would not
+  // compare equal to: the DAO would miss rows and write the padding.
+  const padded = [target, column].some((f) => f?.nativeType?.[0] === 'Char')
+  return !padded && !(target && isSmallserial(target))
 }
 
 // Whether a foreign key's column holds the referenced key as an EntityID.
@@ -2968,11 +2972,6 @@ const SUPPORT: readonly Declaration[] = [
       '}',
     ],
   },
-  // The column's DEFAULT is `sql`, the clause Prisma Migrate writes. With a `value`, every insert
-  // writes that instead, as Prisma Client does: a DSL insert leaves a column with a database default
-  // out of the statement, and CURRENT_TIMESTAMP in a column without a time zone is then the clock
-  // of the session's TimeZone, which pgjdbc sets to the JVM's. So the value is a client default and
-  // the DEFAULT only a clause of the column's definition.
   {
     // A column of its own type holding the key of another table as an EntityID of that table, as a
     // reference() column holds it with the key's type. Not entityId(), which would make the column
@@ -2984,6 +2983,11 @@ const SUPPORT: readonly Declaration[] = [
       `    table.replaceColumn(this, ${x(KT.Column)}(table, name, ${x(KT.EntityIDColumnType)}(${x(KT.Column)}(target, name, columnType))))`,
     ],
   },
+  // The column's DEFAULT is `sql`, the clause Prisma Migrate writes. With a `value`, every insert
+  // writes that instead, as Prisma Client does: a DSL insert leaves a column with a database default
+  // out of the statement, and CURRENT_TIMESTAMP in a column without a time zone is then the clock
+  // of the session's TimeZone, which pgjdbc sets to the JVM's. So the value is a client default and
+  // the DEFAULT only a clause of the column's definition.
   {
     name: 'databaseDefault',
     needs: ['SqlExpression'],

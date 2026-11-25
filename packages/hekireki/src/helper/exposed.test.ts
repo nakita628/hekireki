@@ -2458,6 +2458,25 @@ object DocTable : IdTable<Int>("\\"Doc\\"") {
     })
   })
 
+  it('leaves a foreign key with char(n) on either side a plain column, which reads back padded', () => {
+    const { datamodel, plan } = fixture(`model Country {
+  code String @id @db.Char(2)
+  ports Port[]
+}
+
+model Port {
+  id          Int     @id
+  countryCode String  @db.VarChar(2)
+  country     Country @relation(fields: [countryCode], references: [code])
+}
+`)
+    const table = tableFile(plan, model(datamodel, 'Port')).code
+    expect(table).toContain('val countryCode =\n        varchar("countryCode", 2).references(')
+    expect(table).not.toContain('entityIdOf')
+    expect(entityFile(plan, model(datamodel, 'Port'))?.code).not.toContain('referencedOn')
+    expect(entityFile(plan, model(datamodel, 'Country'))?.code).not.toContain('referrersOn')
+  })
+
   it('declares a foreign key between columns of different types apart from the column, and types one onto a key of another native type EntityID', () => {
     const { datamodel, plan } = fixture(`model Small {
   id   Int   @id @db.SmallInt
