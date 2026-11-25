@@ -1856,6 +1856,7 @@ function standardImports(
   const lists = types.some((name) => name.endsWith('List'))
   const uses = typeImportUses(types, lists, held)
   return [
+    held.money ? '"context"' : null,
     generators.has('ulid') ? '"crypto/rand"' : null,
     lists ? '"database/sql"' : null,
     uses.valuers ? '"database/sql/driver"' : null,
@@ -1923,6 +1924,7 @@ export function collectImports(models: readonly DMMF.Model[], provider?: string)
     generators.has('ulid') ? '"github.com/oklog/ulid/v2"' : null,
     needsDatatypes ? '"gorm.io/datatypes"' : null,
     generators.size > 0 || fillsTimes || money || plainJson ? '"gorm.io/gorm"' : null,
+    money ? '"gorm.io/gorm/clause"' : null,
     hasImplicitManyToMany(models) || money || plainJson ? '"gorm.io/gorm/schema"' : null,
   ]
   return [standard.filter((i) => i !== null), modules.filter((i) => i !== null)]
@@ -1945,12 +1947,6 @@ export function formatImports(groups: readonly (readonly string[])[]) {
   ]
 }
 
-/**
- * The type a scalar list is held in on PostgreSQL, where Prisma makes it an array column: written
- * as the array's text form (`{"a","b"}`), which the server casts to the column's type, and read
- * from it, as pgx returns an array it has no Go type for. A nil list is written as `{}` and a NULL
- * column read as an empty list, as Prisma Client reads it.
- */
 const MONEY_TYPE = [
   '',
   '// Money holds a PostgreSQL money column (@db.Money), which Prisma Migrate makes and the server',
@@ -1970,6 +1966,9 @@ const MONEY_TYPE = [
   'func (m *Money) Scan(src any) error {',
   '\tvar text string',
   '\tswitch value := src.(type) {',
+  '\tcase nil:',
+  '\t\t*m = 0',
+  '\t\treturn nil',
   '\tcase string:',
   '\t\ttext = value',
   '\tcase []byte:',
@@ -1994,6 +1993,12 @@ const MONEY_TYPE = [
   '\t}',
   '\t*m = Money(amount)',
   '\treturn nil',
+  '}',
+  '',
+  '// GormValue writes the amount through numeric, which PostgreSQL turns into money without reading',
+  '// it in the locale\'s form, where a locale whose decimal mark is "," would read "1234.5" as 12345.',
+  'func (m Money) GormValue(_ context.Context, _ *gorm.DB) clause.Expr {',
+  '\treturn clause.Expr{SQL: "CAST(CAST(? AS numeric) AS money)", Vars: []any{strconv.FormatFloat(float64(m), \'f\', -1, 64)}}',
   '}',
   '',
   'func (Money) GormDataType() string {',
@@ -2071,6 +2076,12 @@ export function generateNativeTypes(models: readonly DMMF.Model[], provider?: st
   ]
 }
 
+/**
+ * The type a scalar list is held in on PostgreSQL, where Prisma makes it an array column: written
+ * as the array's text form (`{"a","b"}`), which the server casts to the column's type, and read
+ * from it, as pgx returns an array it has no Go type for. A nil list is written as `{}` and a NULL
+ * column read as an empty list, as Prisma Client reads it.
+ */
 export function generateScalarListType(models: readonly DMMF.Model[], provider?: string) {
   if (!usesScalarList(models, provider)) return []
   return [

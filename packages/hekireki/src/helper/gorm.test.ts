@@ -2918,6 +2918,7 @@ model Wallet {
     expect(code).toContain('type Money float64\n')
     expect(code).toContain('type PlainJSON json.RawMessage\n')
     expect(code).toContain(`import (
+	"context"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -2927,8 +2928,12 @@ model Wallet {
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
 )`)
+    expect(code).toContain(
+      '\treturn clause.Expr{SQL: "CAST(CAST(? AS numeric) AS money)", Vars: []any{strconv.FormatFloat(float64(m), \'f\', -1, 64)}}\n',
+    )
   })
 
   it('keeps the money text it cannot read from becoming a wrong amount', () => {
