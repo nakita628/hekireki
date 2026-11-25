@@ -1708,6 +1708,35 @@ func (User) TableName() string {
 // With the partialIndexes preview feature an index can hold only the rows a `where` picks. DMMF
 // drops the condition; the tag gives it to GORM in `where:`, so AutoMigrate makes the index Prisma
 // Migrate makes (schema.Parse, gorm v1.31.2, reads each condition back as written here).
+// go-sql-driver returns a MySQL BIT(1) as a byte, which does not scan into a Go bool. (#302)
+describe('generateGormModels MySQL Boolean @db.Bit(1)', () => {
+  const schema = `
+model Flag {
+  id      Int      @id
+  on      Boolean  @db.Bit(1)
+  maybe   Boolean? @db.Bit(1)
+  started Boolean  @default(true) @db.Bit(1)
+  plain   Boolean  @db.TinyInt
+}
+`
+  it('makes the column BIT(1) and holds it in a BitBool, which scans the byte', () => {
+    const code = gormFor(schema, 'mysql')
+    expect(code).toContain('On      BitBool  `gorm:"column:on;type:bit(1);not null" json:"on"`')
+    expect(code).toContain('Maybe   *BitBool `gorm:"column:maybe;type:bit(1)" json:"maybe"`')
+    expect(code).toContain(
+      'Started *BitBool `gorm:"column:started;type:bit(1);default:true;not null" json:"started"`',
+    )
+    expect(code).toContain('Plain   bool     `gorm:"column:plain;not null" json:"plain"`')
+    expect(code).toContain('func (b *BitBool) Scan(src any) error {')
+    expect(code).toContain('\t"database/sql/driver"\n\t"fmt"\n')
+    expect(code).not.toContain('"strconv"')
+  })
+
+  it('writes no BitBool for a MySQL Boolean without @db.Bit(1)', () => {
+    expect(gormFor(schema.replaceAll(' @db.Bit(1)', ''), 'mysql')).not.toContain('BitBool')
+  })
+})
+
 describe('generateGormModels partial indexes', () => {
   // DMMF leaves isUnique off a @unique with a partial unique beside it, so the key of a model
   // without an @id was lost. (#287)
