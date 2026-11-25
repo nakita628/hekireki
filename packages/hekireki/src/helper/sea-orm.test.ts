@@ -224,6 +224,37 @@ describe('buildSeaOrmAttributes: a default the database fills (#276)', () => {
     ])
   })
 
+  it('writes no DEFAULT for now() on a MySQL DATE or TIME, which refuses CURRENT_TIMESTAMP', () => {
+    expect([
+      buildSeaOrmAttributes(
+        column('DateTime', now, ['Date', []]),
+        false,
+        false,
+        undefined,
+        [],
+        'mysql',
+      ),
+      buildSeaOrmAttributes(
+        column('DateTime', now, ['Time', ['3']]),
+        false,
+        false,
+        undefined,
+        [],
+        'mysql',
+      ),
+    ]).toStrictEqual([['    #[sea_orm(column_type = "Date")]'], [expect.any(String)]])
+    expect(
+      buildSeaOrmAttributes(
+        column('DateTime', now, ['Time', ['3']]),
+        false,
+        false,
+        undefined,
+        [],
+        'mysql',
+      ).join('\n'),
+    ).not.toContain('default_expr')
+  })
+
   it('writes the SQL of a dbgenerated() default, and nothing for an empty one', () => {
     expect([
       buildSeaOrmAttributes(

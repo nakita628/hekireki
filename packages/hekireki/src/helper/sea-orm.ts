@@ -628,6 +628,7 @@ function databaseDefaultExpr(field: DMMF.Field, provider: string | undefined) {
   if (!isFunctionDefault(field.default)) return null
   if (field.default.name === 'now') {
     const now = nowSql(field, provider)
+    if (now === null) return null
     return now === 'CURRENT_TIMESTAMP' ? 'Expr::current_timestamp()' : `Expr::cust("${now}")`
   }
   const [sql] = field.default.args
@@ -637,13 +638,15 @@ function databaseDefaultExpr(field: DMMF.Field, provider: string | undefined) {
 
 // The DEFAULT Prisma Migrate writes for now(). MySQL takes CURRENT_TIMESTAMP as the default of a
 // DATETIME(n) or TIMESTAMP(n) column only at the column's own precision (3 for a DateTime with no
-// native type), and refuses the bare form for any n but 0.
+// native type), and refuses the bare form for any n but 0; on a DATE or a TIME it refuses it
+// outright, so that column gets none (before_save fills it).
 function nowSql(field: DMMF.Field, provider: string | undefined) {
+  if (provider !== 'mysql') return 'CURRENT_TIMESTAMP'
   const nativeName = field.nativeType?.[0]
-  const isStamp =
-    nativeName === undefined || nativeName === 'DateTime' || nativeName === 'Timestamp'
-  if (provider !== 'mysql' || !isStamp) return 'CURRENT_TIMESTAMP'
-  const precision = field.nativeType ? (field.nativeType[1][0] ?? '0') : '3'
+  if (nativeName === undefined) return 'CURRENT_TIMESTAMP(3)'
+  if (nativeName !== 'DateTime' && nativeName !== 'Timestamp') return null
+  const precision = field.nativeType?.[1][0] ?? '0'
+  if (!/^\d+$/u.test(precision)) return null
   return precision === '0' ? 'CURRENT_TIMESTAMP' : `CURRENT_TIMESTAMP(${precision})`
 }
 
