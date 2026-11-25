@@ -149,11 +149,12 @@ function formatGoDefault(def: DMMF.Field['default'], type: string, kind: DMMF.Fi
   // BigInt and Decimal literals reach the DMMF as strings; GORM parses an
   // integer or float column's default with strconv, which a quote fails.
   if (type === 'BigInt' || type === 'Decimal') return def
-  // The value lives inside the struct tag (escapeTagValue). Quoted, so `default:USER` is not read as the identifier USER. A string
-  // column's default is a value to GORM: it trims the quotes and writes the
-  // rest into the row, so a `'` inside is not doubled. Every other default,
-  // and a string with parentheses, is an SQL expression GORM puts into DDL as
-  // it is, where the SQL quote doubles.
+  // The value lives inside the struct tag (escapeTagValue). Quoted, so
+  // `default:USER` is not read as the identifier USER. A string column's
+  // default is a value to GORM: it trims the quotes and writes the rest into
+  // the row, so a `'` inside is not doubled. Every other default, and a string
+  // with parentheses, is an SQL expression GORM puts into DDL as it is, where
+  // the SQL quote doubles.
   const isValue =
     (type === 'String' || kind === 'enum') && !(def.includes('(') && def.includes(')'))
   return `'${escapeTagValue(isValue ? def : def.replaceAll("'", "''"))}'`
@@ -419,9 +420,13 @@ export function buildGormTags(
     field.isRequired && !isPk && !field.isList ? 'not null' : null,
   ].filter((p) => p !== null)
 
-  const tag = `gorm:"${parts.join(';')}" json:"${columnName}"`
-  // A backtick (a MySQL identifier in a dbgenerated() default) would end a raw string, so such a
-  // tag is written as an interpreted string literal, which Go reads as the same tag.
+  return goTagLiteral(`gorm:"${parts.join(';')}" json:"${columnName}"`)
+}
+
+// A struct tag as Go source: a raw string, unless the tag holds a backtick (a MySQL identifier in
+// a dbgenerated() default, or a mapped name), which would end it; such a tag is written as an
+// interpreted string literal, which Go reads as the same tag.
+function goTagLiteral(tag: string) {
   return tag.includes('`')
     ? `"${tag.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
     : `\`${tag}\``
@@ -786,7 +791,7 @@ function foreignKeyName(
 }
 
 function buildRelationTag(parts: string[]) {
-  return `\`gorm:"${parts.join(';')}"\``
+  return goTagLiteral(`gorm:"${parts.join(';')}"`)
 }
 
 /**
@@ -926,7 +931,9 @@ function generateRelationFields(
     return withDoc(assoc.name, [
       own(assoc.name),
       `[]${goModelName(assoc.targetModel)}`,
-      `\`gorm:"many2many:${joinTable};joinForeignKey:${ownColumn};joinReferences:${related}"\``,
+      goTagLiteral(
+        `gorm:"many2many:${joinTable};joinForeignKey:${ownColumn};joinReferences:${related}"`,
+      ),
     ])
   })
 
