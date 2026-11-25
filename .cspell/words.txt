@@ -164,6 +164,7 @@ objectagg
 oklog
 omakase
 ondelete
+opclasses
 openssf
 OPTOUT
 Orderitem

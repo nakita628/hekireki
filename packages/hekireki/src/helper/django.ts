@@ -21,6 +21,7 @@ import {
   primaryKeyFields,
   uuidDefaultVersion,
 } from '../prisma/model.js'
+import { operatorClassName } from '../prisma/postgres.js'
 
 const PRISMA_TO_DJANGO: { [k: string]: string } = {
   String: 'TextField',
@@ -1162,6 +1163,29 @@ function postgresIndexClass(algorithm: string | undefined) {
   return algorithm === undefined ? null : (POSTGRES_INDEX_CLASS[algorithm] ?? null)
 }
 
+// The operator class of each field of an index, as PostgreSQL names it, for Index.opclasses: null
+// where every field is on its type's default class, or on a database other than PostgreSQL. Django
+// takes one class per field, and wraps an OpClass expression over a plain column in parentheses,
+// which PostgreSQL refuses, so an index with only some fields on a class is written as before.
+function indexOpclasses(model: DMMF.Model, idx: DMMF.Index, provider: string) {
+  if (provider !== 'postgresql') return null
+  const nativeTypes = new Map(model.fields.map((field) => [field.name, field.nativeType?.[0]]))
+  const classes = idx.fields.flatMap((f) =>
+    f.operatorClass === undefined
+      ? []
+      : [operatorClassName(f.operatorClass, nativeTypes.get(f.name))],
+  )
+  return classes.length === idx.fields.length ? classes : null
+}
+
+// An index name Django accepts (models.E033, E034): at most 30 characters, starting with a letter.
+// A longer one keeps its start and a digest of the whole, so two names sharing a prefix differ.
+function djangoIndexName(name: string) {
+  if (name.length <= 30 && /^[a-zA-Z]/u.test(name)) return name
+  const digest = createHash('md5').update(name).digest('hex').slice(0, 8)
+  return `${(name.replace(/^[^a-zA-Z]+/u, '') || 'idx').slice(0, 21)}_${digest}`
+}
+
 function singleColumnBelongsTo(model: DMMF.Model) {
   return model.fields.filter(
     (f) =>
@@ -1358,10 +1382,26 @@ function generateMetaLines(
     // An explicit index method has its own class in django.contrib.postgres;
     // an unrecognised one falls back to the plain btree Index rather than
     // naming a class that does not exist.
-    const ctor = postgresIndexClass(idx.algorithm)
-    return ctor === null
-      ? `models.Index(fields=[${fieldNames}]${name})`
-      : `${ctor}(fields=[${fieldNames}]${name})`
+    const ctor = postgresIndexClass(idx.algorithm) ?? 'models.Index'
+    const opclasses = indexOpclasses(model, idx, provider)
+    if (opclasses === null) return `${ctor}(fields=[${fieldNames}]${name})`
+    // An operator class (`ops:`, e.g. the varchar_pattern_ops twin Django makes for LIKE) needs a
+    // name, so one Django refuses is made into one it takes.
+    const opName = toPythonString(
+      carriesName && idx.dbName
+        ? idx.dbName
+        : djangoIndexName(
+            idx.dbName ??
+              constraintName(
+                tableName,
+                idx.fields.map((f) => columnRef(f.name)),
+                'idx',
+                provider,
+              ),
+          ),
+    )
+    const list = opclasses.map((o) => toPythonString(o)).join(', ')
+    return `${ctor}(fields=[${fieldNames}], name=${opName}, opclasses=[${list}])`
   })
 
   const partialComments = (unique: boolean) =>
@@ -1533,10 +1573,11 @@ function indexClassesOf(
 ) {
   return models
     .flatMap((model) =>
-      writtenIndexes(model, indexes, likeIndexNames(model, allModels, indexes, provider)),
+      writtenIndexes(model, indexes, likeIndexNames(model, allModels, indexes, provider)).flatMap(
+        (idx) => [postgresIndexClass(idx.algorithm)],
+      ),
     )
-    .map((idx) => postgresIndexClass(idx.algorithm))
-    .filter((ctor) => ctor !== null)
+    .filter((name) => name !== null)
 }
 
 function needsDecimalImport(scalarFields: readonly DMMF.Field[]) {

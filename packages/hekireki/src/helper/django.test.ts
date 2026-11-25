@@ -3881,6 +3881,64 @@ class UserStat(models.Model):
   })
 })
 
+describe('operator classes', () => {
+  function opsDjango(models: string, provider = 'postgresql') {
+    const source = `datasource db {
+  provider = "${provider}"
+}
+${models}`
+    const {
+      models: dmmfModels,
+      enums,
+      indexes,
+    } = datamodelOf(getDMMF({ datamodel: [['schema.prisma', source]] }))
+    return djangoCode(dmmfModels, enums, indexes, provider, source)
+  }
+
+  // Django makes a varchar_pattern_ops twin of an indexed string column for LIKE; prisma db pull
+  // writes it as an @@index with ops, which has to stay an index on that class, not a second plain
+  // one.
+  it('declares an index on an operator class with opclasses', () => {
+    const code = opsDjango(`
+model t {
+  id    Int    @id
+  slug  String @db.VarChar(50)
+  title String
+  data  Json
+
+  @@index([slug], map: "t_slug_1234abcd")
+  @@index([slug(ops: raw("varchar_pattern_ops"))], map: "t_slug_1234abcd_like")
+  @@index([data(ops: JsonbPathOps)], type: Gin)
+  @@index([id(sort: Desc), title(ops: raw("text_pattern_ops"))], map: "t_id_title_a_name_far_over_thirty")
+  @@index([title(sort: Desc, ops: raw("text_pattern_ops"))], map: "t_title_like_a_name_far_over_thirty")
+}
+`)
+    expect(code).toContain('from django.contrib.postgres.indexes import GinIndex\n')
+    expect(code).toContain(`        indexes = [
+            models.Index(fields=["slug"], name="t_slug_1234abcd"),
+            models.Index(fields=["slug"], name="t_slug_1234abcd_like", opclasses=["varchar_pattern_ops"]),
+            GinIndex(fields=["data"], name="t_data_idx", opclasses=["jsonb_path_ops"]),
+            models.Index(fields=["-id", "title"]),
+            models.Index(fields=["-title"], name="t_title_like_a_name_f_f278eeb2", opclasses=["text_pattern_ops"]),`)
+  })
+
+  it('leaves the operator class out on a database other than PostgreSQL', () => {
+    const code = opsDjango(
+      `
+model t {
+  id   Int    @id
+  slug String
+
+  @@index([slug(ops: raw("varchar_pattern_ops"))], map: "t_slug_like")
+}
+`,
+      'sqlite',
+    )
+    expect(code).toContain('models.Index(fields=["slug"], name="t_slug_like")')
+    expect(code).not.toContain('opclasses')
+  })
+})
+
 describe('partial indexes', () => {
   function partialDjango(models: string) {
     const source = `datasource db {
