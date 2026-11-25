@@ -1885,11 +1885,6 @@ func readPrismaTime(src any) (time.Time, error) {
   })
 })
 
-// GORM orders a composite index's columns by each field's `priority:` (10 where none is given) and
-// then by struct field order, and a composite primary key's by struct field order alone
-// (schema.Parse, gorm v1.31.2), so each field of a composite index carries its position in the
-// schema's list and the key's fields are declared in @@id order: the columns come out in the order
-// Prisma Migrate gives them.
 describe('generateGormModels key columns on SQLite', () => {
   // SQLite makes only an INTEGER PRIMARY KEY refuse NULL by itself; Prisma Migrate's key is NOT NULL.
   it('writes not null on a key field that is not an autoincrementing Int, on SQLite only', () => {
@@ -1919,6 +1914,11 @@ model counter {
   })
 })
 
+// GORM orders a composite index's columns by each field's `priority:` (10 where none is given) and
+// then by struct field order, and a composite primary key's by struct field order alone
+// (schema.Parse, gorm v1.31.2), so each field of a composite index carries its position in the
+// schema's list and the key's fields are declared in @@id order: the columns come out in the order
+// Prisma Migrate gives them.
 describe('generateGormModels composite column order', () => {
   it('leaves the fields where they are when the @@id order is theirs, apart or not', () => {
     const code = gormFor(

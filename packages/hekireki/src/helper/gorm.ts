@@ -384,10 +384,11 @@ function trackedTimeTags(field: DMMF.Field, fieldName: string) {
   ]
 }
 
-// On SQLite only an INTEGER PRIMARY KEY refuses NULL by itself: any other key column takes it
-// unless it says NOT NULL, which the key Prisma Migrate makes does. PostgreSQL and MySQL make every
-// key column NOT NULL.
-function keyTakesNull(field: DMMF.Field, provider: string | undefined) {
+// SQLite does not make a key column NOT NULL (an INTEGER PRIMARY KEY puts a new rowid in place of a
+// NULL; any other key column takes it), so every key column is marked, as Prisma Migrate marks it,
+// apart from an autoincrementing one, which GORM makes the rowid itself. PostgreSQL and MySQL make
+// every key column NOT NULL.
+function keyNeedsNotNull(field: DMMF.Field, provider: string | undefined) {
   return provider === 'sqlite' && !isAutoincrement(field)
 }
 
@@ -424,7 +425,7 @@ export function buildGormTags(
     defaultVal !== null ? `default:${defaultVal}` : null,
     ...trackedTimeTags(field, fieldName),
     // A scalar list is a nullable array column in the table Prisma makes.
-    field.isRequired && !field.isList && (!isPk || keyTakesNull(field, provider))
+    field.isRequired && !field.isList && (!isPk || keyNeedsNotNull(field, provider))
       ? 'not null'
       : null,
   ].filter((p) => p !== null)
