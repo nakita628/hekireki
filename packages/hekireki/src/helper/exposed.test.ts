@@ -2458,7 +2458,7 @@ object DocTable : IdTable<Int>("\\"Doc\\"") {
     })
   })
 
-  it('declares a foreign key between columns of different types apart from the column', () => {
+  it('declares a foreign key between columns of different types apart from the column, and types one onto a key of another native type EntityID', () => {
     const { datamodel, plan } = fixture(`model Small {
   id   Int   @id @db.SmallInt
   refs Ref[]
@@ -2496,12 +2496,14 @@ object RefTable : IdTable<Int>("\\"Ref\\"") {
     override val id = integer("id").autoIncrement().entityId()
     val smallId = integer("smallId")
     val codeId =
-        text("codeId").references(
-            CodeTable.id,
-            onDelete = ReferenceOption.RESTRICT,
-            onUpdate = ReferenceOption.CASCADE,
-            fkName = "\\"Ref_codeId_fkey\\"",
-        )
+        text("codeId")
+            .entityIdOf(CodeTable)
+            .references(
+                CodeTable.id,
+                onDelete = ReferenceOption.RESTRICT,
+                onUpdate = ReferenceOption.CASCADE,
+                fkName = "\\"Ref_codeId_fkey\\"",
+            )
     val labelName =
         text("labelName").references(
             LabelTable.name,
@@ -2537,6 +2539,7 @@ class RefEntity(
 
     var smallId by RefTable.smallId
     var codeId by RefTable.codeId
+    var code by CodeEntity referencedOn RefTable.codeId
     var labelName by RefTable.labelName
     var label by LabelEntity referencedOn RefTable.labelName
 }
@@ -2554,6 +2557,31 @@ class SmallEntity(
     id: EntityID<Short>,
 ) : Entity<Short>(id) {
     companion object : EntityClass<Short, SmallEntity>(SmallTable)
+}
+`,
+    })
+    // entityIdOf wraps the column in an EntityID of the referenced table without making it part of
+    // its own table's key, as entityId() would.
+    expect(supportFile(plan)?.code).toContain(
+      `internal fun <T : Any> Column<T>.entityIdOf(target: IdTable<T>): Column<EntityID<T>> =
+    table.replaceColumn(this, Column(table, name, EntityIDColumnType(Column(target, name, columnType))))
+`,
+    )
+    // The key a text column references with another native type is followed from both ends.
+    expect(entityFile(plan, model(datamodel, 'Code'))).toStrictEqual({
+      fileName: 'CodeEntity.kt',
+      code: `package models
+
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.dao.Entity
+import org.jetbrains.exposed.v1.dao.EntityClass
+
+class CodeEntity(
+    id: EntityID<String>,
+) : Entity<String>(id) {
+    companion object : EntityClass<String, CodeEntity>(CodeTable)
+
+    val refs by RefEntity referrersOn RefTable.codeId
 }
 `,
     })

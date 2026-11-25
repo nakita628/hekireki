@@ -99,6 +99,7 @@ const KT = {
   ColumnType: `${EXPOSED}.core.ColumnType`,
   DecimalColumnType: `${EXPOSED}.core.DecimalColumnType`,
   DoubleColumnType: `${EXPOSED}.core.DoubleColumnType`,
+  EntityIDColumnType: `${EXPOSED}.core.EntityIDColumnType`,
   FloatColumnType: `${EXPOSED}.core.FloatColumnType`,
   Function: `${EXPOSED}.core.Function`,
   IColumnType: `${EXPOSED}.core.IColumnType`,
@@ -866,24 +867,13 @@ function columnNavigation(
   schema: Pick<SchemaInfo, 'dao' | 'keyOf' | 'foreignKeys'>,
   fk: ForeignKey,
 ): 'column' | null {
-  const principalField = fk.principal.fields.find((f) => f.name === fk.to[0])
-  // A reference column copies the type of the key it references, which for a smallserial would be
-  // another smallserial, and a column of another type cannot copy it: such a key is referenced by a
-  // plain column, whose setter the DAO cannot use — unless the column is its table's key.
-  const dependentKey = schema.keyOf(fk.dependent)
-  const isOwnKey = dependentKey.kind === 'single' && dependentKey.field.name === fk.from[0]
-  if (
-    fk.kind === 'id' &&
-    ((principalField && isSmallserial(principalField)) || (!fk.sameType && !isOwnKey))
-  ) {
-    return null
-  }
+  if (isPlainKeyReference(schema, fk)) return null
   // A column that references a reference column holds a plain value the DAO would compare with an
   // EntityID.
   const target = schema.foreignKeys.find(
     (other) => other.dependent === fk.principal && other.inline && other.from[0] === fk.to[0],
   )
-  if (fk.kind === 'column' && target && isReferenceColumn(schema, target)) return null
+  if (fk.kind === 'column' && target && holdsEntityId(schema, target)) return null
   // A plain column that is part of a key holds an EntityID, and one referencing part of a
   // composite key references an EntityID: the DAO compares the two as different types.
   if (
@@ -894,6 +884,19 @@ function columnNavigation(
     return null
   }
   return 'column'
+}
+
+// A reference column copies the type of the key it references, which for a smallserial would be
+// another smallserial, and a column of another type cannot copy it: such a key is referenced by a
+// plain column, whose setter the DAO cannot use — unless the column is its table's key, or holds
+// the key as an EntityID all the same (isEntityIdColumn).
+function isPlainKeyReference(schema: Pick<SchemaInfo, 'dao' | 'keyOf'>, fk: ForeignKey) {
+  if (fk.kind !== 'id') return false
+  const principalField = fk.principal.fields.find((f) => f.name === fk.to[0])
+  if (principalField && isSmallserial(principalField)) return true
+  const dependentKey = schema.keyOf(fk.dependent)
+  const isOwnKey = dependentKey.kind === 'single' && dependentKey.field.name === fk.from[0]
+  return !fk.sameType && !isOwnKey && !isEntityIdColumn(schema, fk)
 }
 
 // The DAO follows a join table through its foreign keys, from EntityID columns.
@@ -1779,6 +1782,27 @@ function isReferenceColumn(schema: Pick<SchemaInfo, 'keyOf'>, fk: ForeignKey | u
   return !(target && isSmallserial(target))
 }
 
+// Whether a foreign key's column keeps its own type and is typed EntityID with `entityIdOf`: one
+// referencing an IdTable's key with another native type (`varchar` onto a `varchar(5)` key), which
+// a `reference()` would give the key's type. The DAO then follows it as it follows a reference. A
+// key of its own table or a part of a composite key is left a plain column, as is one onto a
+// smallserial, and so is every column without the DAO.
+function isEntityIdColumn(
+  schema: Pick<SchemaInfo, 'dao' | 'keyOf'>,
+  fk: ForeignKey | undefined,
+): boolean {
+  if (fk?.kind !== 'id' || !fk.inline || fk.sameType || !schema.dao) return false
+  const key = schema.keyOf(fk.dependent)
+  if (key.kind === 'none' || keyFieldNames(key).includes(fk.from[0] ?? '')) return false
+  const target = fk.principal.fields.find((f) => f.name === fk.to[0])
+  return !(target && isSmallserial(target))
+}
+
+// Whether a foreign key's column holds the referenced key as an EntityID.
+function holdsEntityId(schema: Pick<SchemaInfo, 'dao' | 'keyOf'>, fk: ForeignKey | undefined) {
+  return isReferenceColumn(schema, fk) || isEntityIdColumn(schema, fk)
+}
+
 // The call a column starts from, where it is not a reference.
 function plainColumnHead(field: DMMF.Field, map: Mapping, name: string, smallserial: boolean) {
   if (field.isList) {
@@ -1817,7 +1841,7 @@ function columnCalls(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) {
   const smallserial = def?.kind === 'autoincrement' && !field.isList && isSmallserial(field)
   const principal = fk ? tableRef(plan, fk.principal) : ''
   const wrap = (expr: Expr) =>
-    isReference ? { name: exprRef(KT.EntityID), args: [expr, principal] } : expr
+    holdsEntityId(plan, fk) ? { name: exprRef(KT.EntityID), args: [expr, principal] } : expr
   const head: Call =
     isReference && fk
       ? referenceHead(field, fk, name, principal)
@@ -1829,6 +1853,7 @@ function columnCalls(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) {
   const isAutoincrement = def?.kind === 'autoincrement'
   return [
     head,
+    ...entityIdCalls(plan, fk, principal),
     ...(isAutoincrement ? defaults : []),
     ...references,
     ...nullable,
@@ -1836,6 +1861,13 @@ function columnCalls(plan: ExposedPlan, model: DMMF.Model, field: DMMF.Field) {
     ...uniqueIndexCalls(plan, model, field),
     ...(isSingleKey ? [{ name: 'entityId', args: [] }] : []),
   ]
+}
+
+// `.entityIdOf(Target)` on a column that holds another table's key as an EntityID of its own type.
+function entityIdCalls(plan: ExposedPlan, fk: ForeignKey | undefined, principal: string): Call[] {
+  return isEntityIdColumn(plan, fk)
+    ? [{ name: funRef(local('entityIdOf')), args: [principal] }]
+    : []
 }
 
 function referenceHead(field: DMMF.Field, fk: ForeignKey, name: string, principal: string): Call {
@@ -2941,6 +2973,17 @@ const SUPPORT: readonly Declaration[] = [
   // out of the statement, and CURRENT_TIMESTAMP in a column without a time zone is then the clock
   // of the session's TimeZone, which pgjdbc sets to the JVM's. So the value is a client default and
   // the DEFAULT only a clause of the column's definition.
+  {
+    // A column of its own type holding the key of another table as an EntityID of that table, as a
+    // reference() column holds it with the key's type. Not entityId(), which would make the column
+    // part of its own table's key.
+    name: 'entityIdOf',
+    needs: [],
+    lines: [
+      `internal fun <T : ${t(KT.Any)}> ${t(KT.Column)}<T>.entityIdOf(target: ${t(KT.IdTable)}<T>): ${t(KT.Column)}<${t(KT.EntityID)}<T>> =`,
+      `    table.replaceColumn(this, ${x(KT.Column)}(table, name, ${x(KT.EntityIDColumnType)}(${x(KT.Column)}(target, name, columnType))))`,
+    ],
+  },
   {
     name: 'databaseDefault',
     needs: ['SqlExpression'],

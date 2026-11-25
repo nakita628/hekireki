@@ -125,12 +125,13 @@ object EdgeSmoke {
         val ref =
             TypedRefEntity.new {
                 smallId = 1
-                codeId = "c"
+                this.code = code
                 codeName = "n"
             }
         flushCache()
         check(ref.named.id == code.id && code.byName.single().id == ref.id, "a foreign key to a unique column of another type, followed by the DAO")
-        check(scalar("SELECT \"smallId\" || ' ' || \"codeId\" FROM \"TypedRef\" WHERE id = ${ref.id.value}") == "1 c", "and ones to keys of another type, held by plain columns")
+        check(ref.code.id == code.id && code.refs.single().id == ref.id, "a text column onto a varchar key, typed EntityID and followed by the DAO both ways")
+        check(scalar("SELECT \"smallId\" || ' ' || \"codeId\" FROM \"TypedRef\" WHERE id = ${ref.id.value}") == "1 c", "and the columns hold the keys")
     }
 
     private fun JdbcTransaction.clashes() {
