@@ -1039,6 +1039,32 @@ model Note {
     ])
   })
 
+  // GORM's primaryKey has no setting for a prefix, and MySQL refuses a TEXT/BLOB key without one
+  // (error 1170). (#331)
+  it('names a MySQL key on a prefix of its column, which GORM cannot write', () => {
+    const source = `datasource db {
+  provider = "mysql"
+}
+model Doc {
+  key  String @id(length: 100) @db.Text
+}
+model Pair {
+  a String @db.Text
+  b String @db.VarChar(20)
+
+  @@id([a(length: 50), b(length: 20)])
+}
+model Plain {
+  id String @id @db.VarChar(20)
+}
+`
+    const { models, indexes } = datamodelOf(getDMMF({ datamodel: [['schema.prisma', source]] }))
+    expect(gormProblems(models, 'mysql', indexes)).toStrictEqual([
+      "model Doc: its key takes the first 100 of key (length: 100), which GORM's primaryKey cannot write",
+      "model Pair: its key takes the first 50 of a (length: 50), which GORM's primaryKey cannot write",
+    ])
+  })
+
   it('escapes an index name made from a mapped column for the struct tag', () => {
     const code = gormFor(
       `model Note {

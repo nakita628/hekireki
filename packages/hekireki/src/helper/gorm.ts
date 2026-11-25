@@ -1603,7 +1603,11 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
  * column whose name the struct tag cannot hold (a `;`, or a `\` at its end). Index names made
  * from a column are escaped for the tag (escapeTagValue), so a `"` or `\` in one is held.
  */
-export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
+export function gormProblems(
+  models: readonly DMMF.Model[],
+  provider?: string,
+  indexes: readonly DMMF.Index[] = [],
+) {
   const held = new Map<string, string>([
     ...dateTypes(models).map((name): [string, string] => [
       name,
@@ -1641,8 +1645,31 @@ export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
             `model ${model.name}: its Go name is ${name}, ${holds}; rename the model and keep its table with @@map`,
           ]),
       ...columns,
+      ...keyPrefixProblems(model, provider, indexes),
     ]
   })
+}
+
+// A MySQL key on a prefix of a column (`@id(length: N)`, `@@id([a(length: N)])`), which MySQL
+// needs on a TEXT or BLOB key: GORM's primaryKey takes the whole column, and has no setting for a
+// prefix, so AutoMigrate's table would be refused (error 1170) or keyed on another column.
+function keyPrefixProblems(
+  model: DMMF.Model,
+  provider: string | undefined,
+  indexes: readonly DMMF.Index[],
+) {
+  if (provider !== 'mysql') return []
+  return indexes
+    .filter((idx) => idx.model === model.name && idx.type === 'id')
+    .flatMap((idx) => idx.fields)
+    .flatMap((field) => {
+      const prefix = indexPrefix(model, field)
+      return prefix === undefined
+        ? []
+        : [
+            `model ${model.name}: its key takes the first ${prefix} of ${field.name} (length: ${prefix}), which GORM's primaryKey cannot write`,
+          ]
+    })
 }
 
 function standardImports(
