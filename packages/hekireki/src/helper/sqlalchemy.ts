@@ -264,7 +264,10 @@ function annotationMapEntries(models: readonly DMMF.Model[], provider: string) {
   return [
     usesUtcDateTime(models) ? `datetime: ${plainType('DateTime', provider)}` : null,
     uses('String') ? `str: ${plainType('String', provider)}` : null,
-    uses('Float') && provider === 'sqlite' ? 'float: REAL' : null,
+    // SQLAlchemy's Float is a single-precision FLOAT on MySQL, where Prisma makes a DOUBLE.
+    uses('Float') && (provider === 'sqlite' || provider === 'mysql')
+      ? `float: ${plainType('Float', provider)}`
+      : null,
     uses('Decimal') ? `DecimalType: ${plainType('Decimal', provider)}` : null,
     uses('Bytes') && provider === 'mysql' ? 'bytes: LONGBLOB' : null,
   ].filter((entry) => entry !== null)
