@@ -139,6 +139,16 @@ API of Npgsql's own plugins, which Npgsql marks experimental (`NPG9001`; checked
 applied. `@db.Decimal(p, s)` with `s` up to 28 needs none of this. A Prisma `view` is mapped with
 `ToView`, so `EnsureCreated()` and migrations leave it alone.
 
+On MySQL, `hekireki-efcore` gives a native integer or float type the C# type the MySQL provider
+maps its column to, so `EnsureCreated()` and migrations make Prisma's column: `@db.TinyInt` is
+`sbyte`, `@db.SmallInt` and `@db.Year` `short`, `@db.UnsignedTinyInt` `byte`, `@db.UnsignedSmallInt`
+`ushort`, `@db.UnsignedMediumInt` and `@db.UnsignedInt` `uint`, `@db.UnsignedBigInt` `ulong` and
+`@db.Float` `float` (a `Boolean @db.TinyInt` stays a `bool`). An `int` written to a `smallint` would
+go through EF Core's unchecked cast, which writes a value out of range as another number where the
+database refuses it. These properties were `int`, `long` and `double` before 0.54, so code that uses
+them changes, and a column an earlier `EnsureCreated()` or migration made is altered by the next
+migration.
+
 On MySQL, `hekireki-efcore` writes an index's `length:` (on `@@index`, `@unique`, `@@unique` and
 `@id`) with `HasPrefixLength`, the API of Pomelo.EntityFrameworkCore.MySql and of its EF Core 10+
 fork Microting.EntityFrameworkCore.MySql, and gives a TEXT or BLOB column its store type in an index

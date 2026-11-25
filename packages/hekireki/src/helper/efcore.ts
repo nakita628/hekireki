@@ -486,7 +486,11 @@ function fieldMapping(field: DMMF.Field, names: Names, provider: Provider) {
     return (native ? postgresNativeMapping(...native) : null) ?? postgresScalarMapping(field.type)
   }
   if (provider === 'mysql') {
-    return (native ? mysqlNativeMapping(...native) : null) ?? mysqlScalarMapping(field.type)
+    return (
+      (native
+        ? (mysqlNumericMapping(field.type, native[0]) ?? mysqlNativeMapping(...native))
+        : null) ?? mysqlScalarMapping(field.type)
+    )
   }
   return sqliteMapping(field.type)
 }
@@ -639,6 +643,34 @@ const MYSQL_NATIVE: {
   Blob: () => mapping('byte[]', false, [columnType('blob')]),
   MediumBlob: () => mapping('byte[]', false, [columnType('mediumblob')]),
   LongBlob: () => mapping('byte[]', false, [columnType('longblob')]),
+}
+
+// The MySQL integer and float columns Prisma makes of a native type, each in the CLR type Pomelo
+// maps the column to, so EF Core neither casts a value nor alters the column: an unchecked cast
+// would write an out-of-range value as another number, where the database refuses it. A store type
+// is given where Pomelo maps the CLR type to another column (`int` to `int`, `short` to `smallint`).
+// Each is for one Prisma type: a `Boolean @db.TinyInt` stays a bool.
+const MYSQL_NUMERIC: {
+  readonly [name: string]: { readonly type: string; readonly make: () => ClrMapping }
+} = {
+  TinyInt: { type: 'Int', make: () => mapping('sbyte', true) },
+  SmallInt: { type: 'Int', make: () => mapping('short', true) },
+  MediumInt: { type: 'Int', make: () => mapping('int', true, [columnType('mediumint')]) },
+  UnsignedTinyInt: { type: 'Int', make: () => mapping('byte', true) },
+  UnsignedSmallInt: { type: 'Int', make: () => mapping('ushort', true) },
+  UnsignedMediumInt: {
+    type: 'Int',
+    make: () => mapping('uint', true, [columnType('mediumint unsigned')]),
+  },
+  UnsignedInt: { type: 'Int', make: () => mapping('uint', true) },
+  Year: { type: 'Int', make: () => mapping('short', true, [columnType('year')]) },
+  UnsignedBigInt: { type: 'BigInt', make: () => mapping('ulong', true) },
+  Float: { type: 'Float', make: () => mapping('float', true) },
+}
+
+function mysqlNumericMapping(type: string, nativeName: string) {
+  const numeric = MYSQL_NUMERIC[nativeName]
+  return numeric?.type === type ? numeric.make() : null
 }
 
 // The temporal types keep their store type, which is what decides a DateTime's precision; the
@@ -843,24 +875,46 @@ function temporalLiteral(value: string, temporal: TemporalKind) {
   return `new ${typeRef(CS.DateTime)}(${[moment.year, moment.month, moment.day, ...clockArgs(moment)].join(', ')}, ${exprRef(CS.DateTimeKind)}.Utc)`
 }
 
+// The values each integer type C# has no literal for holds; a constant outside them does not
+// compile (CS0221).
+const CAST_RANGES: { readonly [clr: string]: readonly [number, number] } = {
+  sbyte: [-128, 127],
+  short: [-32_768, 32_767],
+  byte: [0, 255],
+  ushort: [0, 65_535],
+}
+
+// An integer default of a type C# has no literal for, as a cast of the int literal, or null where
+// the value is outside the type (left to the column's DEFAULT).
+function castLiteral(clr: string, value: string | number | boolean) {
+  const text = integerLiteral(value)
+  const [min, max] = CAST_RANGES[clr] ?? [0, 0]
+  return text === null || Number(text) < min || Number(text) > max ? null : `(${clr})${text}`
+}
+
+// The largest finite float; a literal past it does not compile (CS0594).
+const FLOAT_MAX = 3.4028234663852886e38
+
 // Each C# type's spelling of a default, or null where the value has none.
 const CLR_LITERAL: { readonly [clr: string]: (value: string | number | boolean) => string | null } =
   {
     string: (value) => (typeof value === 'string' ? csharpString(value) : null),
     bool: (value) => (typeof value === 'boolean' ? String(value) : null),
     int: integerLiteral,
-    short: (value) => {
-      const text = integerLiteral(value)
-      return text === null ? null : `(short)${text}`
-    },
+    sbyte: (value) => castLiteral('sbyte', value),
+    short: (value) => castLiteral('short', value),
+    byte: (value) => castLiteral('byte', value),
+    ushort: (value) => castLiteral('ushort', value),
     uint: (value) => {
       const text = integerLiteral(value)
       return text === null || text.startsWith('-') ? null : `${text}u`
     },
     // DMMF carries a BigInt default as a string of digits when it is past 2^53.
     long: (value) => (/^-?\d+$/u.test(String(value)) ? `${value}L` : null),
+    ulong: (value) => (/^\d+$/u.test(String(value)) ? `${value}UL` : null),
     double: (value) => (typeof value === 'number' ? doubleLiteral(value) : null),
-    float: (value) => (typeof value === 'number' ? `${value}f` : null),
+    float: (value) =>
+      typeof value === 'number' && Math.abs(value) <= FLOAT_MAX ? `${value}f` : null,
     decimal: (value) =>
       /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/iu.test(String(value)) ? `${value}m` : null,
     // A Bytes default is the base64 of the bytes.
@@ -1557,7 +1611,8 @@ function isGeneratedByConvention(field: DMMF.Field, clr: ClrMapping, key: readon
     key.length === 1 &&
     key[0] === field.name &&
     !field.isList &&
-    ['int', 'long', 'short', 'uint', typeRef(CS.Guid)].includes(clr.clr)
+    // A byte key is not: EF Core makes no byte column AUTO_INCREMENT.
+    ['int', 'long', 'short', 'uint', 'sbyte', 'ushort', 'ulong', typeRef(CS.Guid)].includes(clr.clr)
   )
 }
 
