@@ -1782,6 +1782,8 @@ export function generateBitBoolType(models: readonly DMMF.Model[], provider?: st
     '\t\t*b = false',
     '\tcase []byte:',
     "\t\t*b = len(value) > 0 && value[len(value)-1] != 0 && value[len(value)-1] != '0'",
+    '\tcase string:',
+    "\t\t*b = len(value) > 0 && value[len(value)-1] != 0 && value[len(value)-1] != '0'",
     '\tcase int64:',
     '\t\t*b = value != 0',
     '\tcase uint64:',
