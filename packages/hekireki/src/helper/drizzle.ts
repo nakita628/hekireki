@@ -828,7 +828,7 @@ function makeTableConstraints(
         provider,
       )
     const { onDelete, onUpdate } = referentialActions(f)
-    return `foreignKey({ name: '${name}', columns: [${from.map((c) => `table.${c}`).join(', ')}], foreignColumns: [${(f.relationToFields ?? []).map((c) => `${target}.${c}`).join(', ')}] }).onDelete('${PRISMA_ACTION_MAP[onDelete] ?? 'no action'}').onUpdate('${PRISMA_ACTION_MAP[onUpdate] ?? 'no action'}')`
+    return `foreignKey({ name: ${tsString(name)}, columns: [${from.map((c) => `table.${c}`).join(', ')}], foreignColumns: [${(f.relationToFields ?? []).map((c) => `${target}.${c}`).join(', ')}] }).onDelete('${PRISMA_ACTION_MAP[onDelete] ?? 'no action'}').onUpdate('${PRISMA_ACTION_MAP[onUpdate] ?? 'no action'}')`
   })
 
   const all = [pkLine, ...indexLines, ...fkLines].filter((l) => l !== null)

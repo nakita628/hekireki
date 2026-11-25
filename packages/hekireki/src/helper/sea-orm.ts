@@ -461,15 +461,17 @@ function formatRustDefault(def: DMMF.Field['default']) {
   if (def === undefined || def === null) return null
   if (typeof def === 'boolean') return def ? 'true' : 'false'
   if (typeof def === 'number') return String(def)
-  if (typeof def === 'string') {
-    const escaped = def
-      .replaceAll('\\', '\\\\')
-      .replaceAll('"', '\\"')
-      .replaceAll('\n', '\\n')
-      .replaceAll('\r', '\\r')
-    return `"${escaped}"`
-  }
-  return null
+  return typeof def === 'string' ? rustString(def) : null
+}
+
+/** A Rust string literal: a backslash, a quote and a line break are escaped. */
+function rustString(value: string) {
+  const escaped = value
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
+  return `"${escaped}"`
 }
 
 // The columns rustfmt counts for a character: two for a wide one (CJK, most emoji), none for a
@@ -872,7 +874,7 @@ function generateRelationEnum(
       `from = "${fromCol}"`,
       `to = "${toCol}"`,
       ...actions,
-      `fk_name = "${foreignKeyName(model, assoc.name, assoc.foreignKeys, relationMaps, provider)}"`,
+      `fk_name = ${rustString(foreignKeyName(model, assoc.name, assoc.foreignKeys, relationMaps, provider))}`,
     ])
     variants.push(`${attribute}\n    ${variantName},`)
   }
@@ -1433,14 +1435,14 @@ export function generateM2MEntity(
     `        belongs_to = "super::${leftModule}::Entity",`,
     `        from = "Column::${leftCol}",`,
     `        to = "super::${leftModule}::Column::${leftKey}",`,
-    `        fk_name = "${fkName('A')}"`,
+    `        fk_name = ${rustString(fkName('A'))}`,
     '    )]',
     `    ${leftVariant},`,
     '    #[sea_orm(',
     `        belongs_to = "super::${rightModule}::Entity",`,
     `        from = "Column::${rightCol}",`,
     `        to = "super::${rightModule}::Column::${rightKey}",`,
-    `        fk_name = "${fkName('B')}"`,
+    `        fk_name = ${rustString(fkName('B'))}`,
     '    )]',
     `    ${rightVariant},`,
     '}',

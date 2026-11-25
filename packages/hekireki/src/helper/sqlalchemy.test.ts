@@ -3636,6 +3636,21 @@ model auth_group_permissions {
     )
   })
 
+  // The name is written as a Python string: a quote or a backslash in it is escaped.
+  it('escapes a @relation(map:) name for Python', () => {
+    expect(
+      fkCode(`model a {
+  id Int @id
+  bs b[]
+}
+model b {
+  id   Int @id
+  a_id Int
+  a    a   @relation(fields: [a_id], references: [id], map: "fk_\\"q\\\\b'")
+}`),
+    ).toContain(`name="fk_\\"q\\\\b'"))`)
+  })
+
   it('names a composite foreign key as its @relation(map:) says', () => {
     expect(
       fkCode(`model Org {

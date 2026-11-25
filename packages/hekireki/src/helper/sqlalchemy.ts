@@ -938,7 +938,7 @@ function foreignKeyArgs(
   const targetCol = targetField?.dbName ?? assoc.references
   const fkActions = referentialActionArgs(assoc.onDelete, assoc.onUpdate)
   const fkName = foreignKeyName(assoc.name, [columnName])
-  return [`ForeignKey("${targetTable}.${targetCol}"${fkActions}, name="${fkName}")`]
+  return [`ForeignKey("${targetTable}.${targetCol}"${fkActions}, name=${toPythonString(fkName)})`]
 }
 
 function referentialActionArgs(onDelete: string, onUpdate: string) {
@@ -1173,7 +1173,7 @@ function generateTableArgs(
       const { onDelete, onUpdate } = referentialActions(f)
       const actions = referentialActionArgs(onDelete, onUpdate)
       const name = foreignKeyName(f.name, localCols)
-      return `ForeignKeyConstraint([${localCols.map((c) => `"${c}"`).join(', ')}], [${targetCols.join(', ')}]${actions}, name="${name}")`
+      return `ForeignKeyConstraint([${localCols.map((c) => `"${c}"`).join(', ')}], [${targetCols.join(', ')}]${actions}, name=${toPythonString(name)})`
     })
 
   // The options Prisma Migrate gives each table: MySQL's character set and collation, and

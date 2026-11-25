@@ -2003,3 +2003,33 @@ model auth_membership {
     Group,`)
   })
 })
+
+// The name is written as a Rust string: a quote or a backslash in it is escaped.
+describe('foreign key name escaping', () => {
+  it('escapes a @relation(map:) name for Rust', () => {
+    const source = `datasource db {
+  provider = "postgresql"
+}
+
+model a {
+  id Int @id
+  bs b[]
+}
+
+model b {
+  id   Int @id
+  a_id Int
+  a    a   @relation(fields: [a_id], references: [id], map: "fk_\\"q\\\\b'")
+}
+`
+    const datamodel = datamodelOf(source)
+    const maps = relationMaps(prismaBlocks(source))
+    const code = datamodel.models
+      .filter((model) => model.name === 'b')
+      .map((model) =>
+        generateEntityFile(model, datamodel.models, [], {}, 'postgresql', new Set(), maps),
+      )
+      .join('')
+    expect(code).toContain(`fk_name = "fk_\\"q\\\\b'"`)
+  })
+})

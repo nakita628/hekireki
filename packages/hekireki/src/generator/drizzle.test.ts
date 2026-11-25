@@ -1949,6 +1949,15 @@ model auth_group_permissions {
     ).toContain(
       "(table) => [foreignKey({ name: 'auth_group_permissions_group_id_b120cbf9_fk_auth_group_id', columns: [table.group_id], foreignColumns: [authGroup.id] }).onDelete('restrict').onUpdate('cascade'), foreignKey({ name: 'auth_group_permissions_other_id_fkey', columns: [table.other_id], foreignColumns: [authGroup.id] }).onDelete('restrict').onUpdate('cascade')]",
     )
+    // The name is written as a TypeScript string: a quote or a backslash in it is escaped.
+    const escaped = prismaBlocks(`
+model auth_group_permissions {
+  group auth_group @relation("group", fields: [group_id], references: [id], map: "fk_'q\\\\b")
+}
+`)
+    expect(
+      drizzleSchema(makeDatamodel([group, permissions]), 'postgresql', [], new Set(), escaped),
+    ).toContain("foreignKey({ name: 'fk_\\'q\\\\b', columns: [table.group_id]")
   })
 })
 
