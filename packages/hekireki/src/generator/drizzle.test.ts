@@ -1917,6 +1917,111 @@ export const relations = defineRelations({ account, login }, (r) => ({ account: 
   })
 })
 
+// `sort: Desc` on a column of an index (#257): Prisma Migrate makes that column descending.
+describe('a descending index column', () => {
+  const logEntry = makeModel({
+    name: 'LogEntry',
+    fields: [
+      makeField({ name: 'id', type: 'Int', isId: true }),
+      makeField({ name: 'uuid', type: 'String' }),
+      makeField({ name: 'action', type: 'String' }),
+      makeField({ name: 'timestamp', type: 'DateTime' }),
+      makeField({ name: 'note', type: 'String', nativeType: ['Text', []] }),
+      makeField({ name: 'code', type: 'String' }),
+      makeField({
+        name: 'logins',
+        type: 'Login',
+        kind: 'object',
+        isList: true,
+        relationName: 'LogEntryToLogin',
+        relationFromFields: [],
+        relationToFields: [],
+      }),
+    ],
+  })
+  const login = makeModel({
+    name: 'Login',
+    fields: [
+      makeField({ name: 'id', type: 'Int', isId: true }),
+      makeField({ name: 'code', type: 'String' }),
+      makeField({
+        name: 'logEntry',
+        type: 'LogEntry',
+        kind: 'object',
+        relationName: 'LogEntryToLogin',
+        relationFromFields: ['code'],
+        relationToFields: ['code'],
+      }),
+    ],
+  })
+  // @@index([uuid, action, timestamp(sort: Desc)], map: "log_entry_uuid_idx")
+  // @@unique([action(sort: Asc), timestamp(sort: Desc)])
+  // @@index([note(length: 100, sort: Desc)])
+  // code String @unique(sort: Desc), which a relation points at
+  const indexes: DMMF.Index[] = [
+    {
+      model: 'LogEntry',
+      type: 'normal',
+      isDefinedOnField: false,
+      dbName: 'log_entry_uuid_idx',
+      fields: [
+        { name: 'uuid', sortOrder: 'asc' },
+        { name: 'action', sortOrder: 'asc' },
+        { name: 'timestamp', sortOrder: 'desc' },
+      ],
+    },
+    {
+      model: 'LogEntry',
+      type: 'unique',
+      isDefinedOnField: false,
+      fields: [
+        { name: 'action', sortOrder: 'asc' },
+        { name: 'timestamp', sortOrder: 'desc' },
+      ],
+    },
+    {
+      model: 'LogEntry',
+      type: 'normal',
+      isDefinedOnField: false,
+      fields: [{ name: 'note', length: 100, sortOrder: 'desc' }],
+    },
+    {
+      model: 'LogEntry',
+      type: 'unique',
+      isDefinedOnField: true,
+      fields: [{ name: 'code', sortOrder: 'desc' }],
+    },
+  ]
+  const table = (provider: 'postgresql' | 'mysql' | 'sqlite') => {
+    const code = drizzleSchema(makeDatamodel([logEntry, login]), provider, indexes)
+    const line = code.split('\n').find((l) => l.startsWith('export const logEntry =')) ?? ''
+    return [code.split('\n')[1], line.slice(line.indexOf('(table) =>'))]
+  }
+
+  // drizzle's `.desc()` alone is `DESC NULLS LAST`; Prisma's `DESC` is NULLS FIRST on PostgreSQL.
+  // A unique constraint names no order, and the one a relation points at stays a constraint.
+  it('is `.desc().nullsFirst()` on PostgreSQL, in an index and a unique index', () => {
+    expect(table('postgresql')).toStrictEqual([
+      "import { defineRelations } from 'drizzle-orm'",
+      "(table) => [index('log_entry_uuid_idx').on(table.uuid, table.action, table.timestamp.desc().nullsFirst()), uniqueIndex('LogEntry_action_timestamp_key').on(table.action, table.timestamp.desc().nullsFirst()), index('LogEntry_note_idx').on(table.note.desc().nullsFirst()), unique('LogEntry_code_key').on(table.code)])",
+    ])
+  })
+
+  it('is DESC in SQL on SQLite', () => {
+    expect(table('sqlite')).toStrictEqual([
+      "import { defineRelations, sql } from 'drizzle-orm'",
+      "(table) => [index('log_entry_uuid_idx').on(table.uuid, table.action, sql`${table.timestamp} DESC`), uniqueIndex('LogEntry_action_timestamp_key').on(table.action, sql`${table.timestamp} DESC`), index('LogEntry_note_idx').on(sql`${table.note} DESC`), uniqueIndex('LogEntry_code_key').on(sql`${table.code} DESC`)])",
+    ])
+  })
+
+  it('is DESC in SQL on MySQL, after the part of a TEXT', () => {
+    expect(table('mysql')).toStrictEqual([
+      "import { defineRelations, sql } from 'drizzle-orm'",
+      "(table) => [index('log_entry_uuid_idx').on(table.uuid, table.action, sql`${table.timestamp} DESC`), uniqueIndex('LogEntry_action_timestamp_key').on(table.action, sql`${table.timestamp} DESC`), index('LogEntry_note_idx').on(sql`${table.note}(100) DESC`), unique('LogEntry_code_key').on(table.code)])",
+    ])
+  })
+})
+
 // DMMF leaves an `@ignore` field out of the model and keeps it in the indexes that list it.
 describe('an index over an @ignore field', () => {
   it('is left out with the field', () => {

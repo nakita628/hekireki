@@ -772,12 +772,20 @@ function makeTableConstraints(
         referencedKeys.has(idx.fields.map((field) => field.name).join(','))
       const make = indexMaker(idx.type, referenced)
       imports.core.add(make)
-      // MySQL takes part of a TEXT in an index; drizzle has the part as SQL.
+      // A column a unique constraint names has no order, and a constraint is what a relation needs
+      // ahead of its foreign key: there `sort: Desc` is dropped, as nothing in drizzle can say it.
+      const descending = (f: DMMF.IndexField) => make !== 'unique' && f.sortOrder === 'desc'
+      // MySQL takes part of a TEXT in an index; drizzle has the part as SQL. A descending column is
+      // `.desc()` on PostgreSQL, with Prisma's `NULLS FIRST` (which drizzle-kit writes as plain
+      // `DESC`, as Prisma does); SQLite's and MySQL's columns have no `.desc()`, so it is SQL there.
       const on = idx.fields.map((f) => {
         const prefix = provider === 'mysql' ? indexPrefix(model, f) : undefined
-        if (prefix === undefined) return `table.${f.name}`
+        if (provider === 'postgresql' && descending(f)) return `table.${f.name}.desc().nullsFirst()`
+        if (prefix === undefined && !descending(f)) return `table.${f.name}`
         imports.orm.add('sql')
-        return `sql\`\${table.${f.name}}(${prefix})\``
+        const part = prefix === undefined ? '' : `(${prefix})`
+        const order = descending(f) ? ' DESC' : ''
+        return `sql\`\${table.${f.name}}${part}${order}\``
       })
       if (where !== undefined) imports.orm.add('sql')
       const condition = where === undefined ? '' : `.where(sql\`${templateText(where)}\`)`
