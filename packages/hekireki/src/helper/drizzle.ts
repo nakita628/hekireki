@@ -92,6 +92,9 @@ const PG_NATIVE_FIXED: { [k: string]: string } = {
   ByteA: 'bytea()',
   Inet: 'inet()',
   Xml: "typedText({ type: 'xml' })",
+  // A Decimal in money, which drizzle has no column for; drizzle's numeric() reads one as text too.
+  Money: "typedText({ type: 'money' })",
+  Oid: "typedInteger({ type: 'oid' })",
 }
 
 const PG_NATIVE_SIZED: { [k: string]: SizedColumn } = {
@@ -156,8 +159,13 @@ const MYSQL_NATIVE_SIZED: { [k: string]: SizedColumn } = {
   Time: ['utcTime', 'precision'],
 }
 
-function mysqlNativeType(name: string, args: readonly string[]) {
+function mysqlNativeType(name: string, args: readonly string[], type: string) {
   switch (name) {
+    // drizzle has no bit column on MySQL. Prisma makes a Boolean bit(1) and a Bytes bit(n).
+    case 'Bit':
+      return type === 'Boolean'
+        ? 'bitBoolean()'
+        : `bytes({ type: 'bit${isPresent(args[0]) ? `(${args[0]})` : ''}' })`
     case 'Decimal': {
       const opts = makeDecimalOpts(args)
       return opts === '' ? 'decimal()' : `decimal(${opts})`
@@ -179,8 +187,9 @@ function mysqlNativeType(name: string, args: readonly string[]) {
 }
 
 // Columns drizzle has none of its own for: a DateTime kept in UTC, in the form Prisma Client
-// writes and reads it, a Bytes as the Uint8Array Prisma Client gives, a String in a PostgreSQL type
-// drizzle has no column for (varbit, xml), and a BigInt on SQLite as
+// writes and reads it, a Bytes as the Uint8Array Prisma Client gives, a String or a Decimal in a
+// PostgreSQL type drizzle has no column for (varbit, xml, money), an Int in an oid, a Boolean in
+// MySQL's bit(1), which the driver reads as one byte, and a BigInt on SQLite as
 // the integer Prisma keeps it as. drizzle's own `blob({ mode: 'bigint' })` reads the column as
 // bytes and writes the digits as a BLOB, which neither reads what Prisma wrote nor writes what
 // Prisma reads. Its `blob()` with no mode is JSON in drizzle-orm 1.0, and the buffer mode types
@@ -203,6 +212,13 @@ const COLUMN_HELPERS: { readonly [name: string]: string } = {
 })`,
   typedText: `const typedText = customType<{ data: string; config: { type: string } }>({
   dataType: (config) => config?.type ?? 'text',
+})`,
+  typedInteger: `const typedInteger = customType<{ data: number; config: { type: string } }>({
+  dataType: (config) => config?.type ?? 'integer',
+})`,
+  bitBoolean: `const bitBoolean = customType<{ data: boolean; driverData: Uint8Array | number | boolean }>({
+  dataType: () => 'bit(1)',
+  fromDriver: (value) => (value instanceof Uint8Array ? value[0] === 1 : Boolean(value)),
 })`,
   utcDateTime: `const utcDateTime = customType<{ data: Date; driverData: string | number }>({
   dataType: () => 'datetime',
@@ -403,7 +419,7 @@ function resolveScalarType(field: DMMF.Field, provider: DbProvider) {
     const override =
       provider === 'postgresql'
         ? pgNativeType(nativeName, nativeArgs)
-        : mysqlNativeType(nativeName, nativeArgs)
+        : mysqlNativeType(nativeName, nativeArgs, field.type)
     if (override !== null) return override
   }
   return SCALAR_MAP_BY_PROVIDER[provider][field.type] ?? 'text()'

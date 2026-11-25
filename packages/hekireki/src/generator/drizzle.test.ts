@@ -1284,6 +1284,20 @@ const PG_NATIVE_TYPES: readonly (readonly [
     'customType, integer, pgTable',
     "typedText('value', { type: 'xml' })",
   ],
+  [
+    'Decimal',
+    '@db.Money',
+    ['Money', []],
+    'customType, integer, pgTable',
+    "typedText('value', { type: 'money' })",
+  ],
+  [
+    'Int',
+    '@db.Oid',
+    ['Oid', []],
+    'customType, integer, pgTable',
+    "typedInteger('value', { type: 'oid' })",
+  ],
 ]
 
 /** Prisma type, the attribute as it is written, its DMMF nativeType, the drizzle imports and column. */
@@ -1457,6 +1471,14 @@ const MYSQL_NATIVE_TYPES: readonly (readonly [
     "bigint('value', { mode: 'bigint', unsigned: true })",
   ],
   ['Int', '@db.Year', ['Year', []], 'int, mysqlTable, year', "year('value')"],
+  ['Boolean', '@db.Bit(1)', ['Bit', ['1']], 'customType, int, mysqlTable', "bitBoolean('value')"],
+  [
+    'Bytes',
+    '@db.Bit(8)',
+    ['Bit', ['8']],
+    'customType, int, mysqlTable',
+    "bytes('value', { type: 'bit(8)' })",
+  ],
   [
     'String',
     '@db.Nope',
