@@ -1229,14 +1229,16 @@ function isAutoincrementKey(idField: DMMF.Field | undefined) {
 // the pgsql driver that insert is `insert ... returning "id"`; the other drivers ask for the
 // last insert id, which is not this key. What comes back is made an integer where it reads as
 // a number, so this is for a key that is one (Int, BigInt) or never reads as one (a uuid).
+// CockroachDB's sequence() is an identity column on an Int or BigInt, read back the same way.
 function isReturnedKey(idField: DMMF.Field | undefined, provider: string | undefined) {
+  if (idField === undefined) return false
+  const name = functionDefault(idField)?.name
+  const isInteger = idField.type === 'Int' || idField.type === 'BigInt'
+  if (name === 'sequence') return provider === 'cockroachdb' && isInteger
   return (
-    idField !== undefined &&
     (provider === 'postgresql' || provider === 'cockroachdb') &&
-    functionDefault(idField)?.name === 'dbgenerated' &&
-    (idField.type === 'Int' ||
-      idField.type === 'BigInt' ||
-      (idField.type === 'String' && idField.nativeType?.[0] === 'Uuid'))
+    name === 'dbgenerated' &&
+    (isInteger || (idField.type === 'String' && idField.nativeType?.[0] === 'Uuid'))
   )
 }
 

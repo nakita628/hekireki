@@ -20,6 +20,7 @@ pub struct Model {
     pub zoned: Option<PrismaDateTime>,
     pub day: Option<PrismaDateTime>,
     pub time: Option<PrismaDateTime>,
+    #[sea_orm(default_expr = "Expr::current_timestamp()")]
     pub created_at: PrismaDateTime,
 }
 

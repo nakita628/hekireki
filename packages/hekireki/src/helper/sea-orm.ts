@@ -624,7 +624,50 @@ function columnAttributeParts(
       columnParts.push(`default_value = ${defaultVal}`)
     }
   }
+  const defaultExpr = databaseDefaultExpr(field, provider)
+  if (defaultExpr !== null) {
+    columnParts.push(`default_expr = ${rustString(defaultExpr)}`)
+  }
   return columnParts
+}
+
+/**
+ * The `default_expr` of a default the database fills: `now()` and `dbgenerated("...")`. sea-orm
+ * leaves it out of an insert's values either way, but `Schema::create_table_from_entity` writes it
+ * as the column's DEFAULT, the one Prisma Migrate writes, so a row inserted past the entity has
+ * these columns filled. A literal DateTime default and a literal default on a single-column key
+ * still have none.
+ *
+ * @example
+ * ```rust
+ * #[sea_orm(default_expr = "Expr::current_timestamp()")]
+ * #[sea_orm(default_expr = "Expr::cust(\"gen_random_uuid()::text\")")]
+ * ```
+ */
+function databaseDefaultExpr(field: DMMF.Field, provider: string | undefined) {
+  if (!isFunctionDefault(field.default)) return null
+  if (field.default.name === 'now') {
+    const now = nowSql(field, provider)
+    if (now === null) return null
+    return now === 'CURRENT_TIMESTAMP' ? 'Expr::current_timestamp()' : `Expr::cust("${now}")`
+  }
+  const [sql] = field.default.args
+  if (field.default.name !== 'dbgenerated' || typeof sql !== 'string' || sql === '') return null
+  return `Expr::cust(${rustString(sql)})`
+}
+
+// The DEFAULT Prisma Migrate writes for now(). MySQL takes CURRENT_TIMESTAMP as the default of a
+// DATETIME(n) or TIMESTAMP(n) column only at the column's own precision (3 for a DateTime with no
+// native type), and refuses the bare form for any n but 0; on a DATE or a TIME it refuses it
+// outright, so that column gets none (before_save fills it).
+function nowSql(field: DMMF.Field, provider: string | undefined) {
+  if (provider !== 'mysql') return 'CURRENT_TIMESTAMP'
+  const nativeName = field.nativeType?.[0]
+  if (nativeName === undefined) return 'CURRENT_TIMESTAMP(3)'
+  if (nativeName !== 'DateTime' && nativeName !== 'Timestamp') return null
+  const precision = field.nativeType?.[1]?.[0] ?? '0'
+  if (!/^\d+$/u.test(precision)) return null
+  return precision === '0' ? 'CURRENT_TIMESTAMP' : `CURRENT_TIMESTAMP(${precision})`
 }
 
 export function buildSeaOrmAttributes(

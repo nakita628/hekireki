@@ -17,7 +17,7 @@ pub struct Model {
     pub title: String,
     pub published_at: Option<PrismaDateTime>,
     pub released_at: PrismaDateTime,
-    #[sea_orm(column_name = "createdAt")]
+    #[sea_orm(column_name = "createdAt", default_expr = "Expr::current_timestamp()")]
     pub created_at: PrismaDateTime,
     #[sea_orm(column_name = "updatedAt")]
     pub updated_at: PrismaDateTime,
