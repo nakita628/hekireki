@@ -10,6 +10,7 @@ import {
   primaryKeyFields,
   relationEnds,
 } from '../prisma/model.js'
+import { INDEX_METHODS, operatorClassName } from '../prisma/postgres.js'
 
 const PRISMA_TO_GO: { [k: string]: string } = {
   String: 'string',
@@ -552,6 +553,37 @@ function prioritySetting(fields: readonly string[], field: string) {
   return fields.length > 1 ? `,priority:${fields.indexOf(field) + 1}` : ''
 }
 
+// GORM's `type:` index setting for the method an index uses on PostgreSQL and CockroachDB
+// (`type: Gin`), which the migrator writes as `USING gin` in CREATE INDEX. GORM keeps the first
+// type it reads among an index's fields, so each field carries it. BTree is the default and stays
+// plain.
+function indexTypeSetting(idx: Pick<DMMF.Index, 'algorithm'>, provider: string | undefined) {
+  const method =
+    isPostgresFamily(provider) && idx.algorithm !== undefined
+      ? INDEX_METHODS[idx.algorithm]
+      : undefined
+  return method === undefined ? '' : `,type:${method}`
+}
+
+// GORM's `expression:` index setting for a field the index reads with an operator class
+// (`ops: JsonbPathOps`, `ops: raw("gin_trgm_ops")`) on PostgreSQL and CockroachDB: the migrator
+// writes an expression in place of the quoted column in CREATE INDEX, and the sort after it, so
+// `"data" jsonb_path_ops` gives the column as Prisma Migrate writes it. It is escaped as a
+// condition is (indexWhereSetting), and is null where GORM cannot read it back.
+function operatorClassSetting(
+  field: DMMF.Field | undefined,
+  indexField: DMMF.IndexField,
+  provider: string | undefined,
+) {
+  const { operatorClass } = indexField
+  if (!isPostgresFamily(provider) || operatorClass === undefined || operatorClass === '') return ''
+  const column = (field?.dbName ?? indexField.name).replaceAll('"', '""')
+  const expression = indexWhereSetting(
+    `"${column}" ${operatorClassName(operatorClass, field?.nativeType?.[0])}`,
+  )
+  return expression === null ? null : `,expression:${expression}`
+}
+
 /** The condition of a partial index, as `partialIndexWhere` gives it. */
 type IndexWhere = (
   model: DMMF.Model,
@@ -619,7 +651,10 @@ function collectCompositeIndexTags(
 
   // A partial index's tag carries its condition in `where:`; one GORM cannot read back
   // (indexWhereSetting) is left out, so AutoMigrate makes no index that holds every row, and a
-  // comment on its first field says so.
+  // comment on its first field says so. Its method goes in `type:` (indexTypeSetting) and an
+  // operator class in `expression:` (operatorClassSetting); an index whose operator class GORM
+  // cannot read back is left out the same way, with a comment naming the operator class, so
+  // AutoMigrate makes no index without it.
   const notes: [string, string][] = []
   const tagsOf = (idx: DMMF.Index, setting: 'index' | 'uniqueIndex', name: string) => {
     const where = indexWhere(model, idx)
@@ -631,11 +666,23 @@ function collectCompositeIndexTags(
       ])
       return []
     }
+    const expressions = idx.fields.map((f) =>
+      operatorClassSetting(fieldByName.get(f.name), f, provider),
+    )
+    const unreadable = idx.fields.find((_, i) => expressions[i] === null)
+    if (unreadable !== undefined) {
+      notes.push([
+        idx.fields[0]?.name ?? '',
+        `The index ${name} is left out: its column ${unreadable.name} with the operator class ${unreadable.operatorClass} holds a ";", at which GORM splits the tag.`,
+      ])
+      return []
+    }
     const whereSetting = condition === '' ? '' : `,where:${condition}`
+    const typeSetting = indexTypeSetting(idx, provider)
     const fieldNames = idx.fields.map((f) => f.name)
-    return fieldNames.map((f): [string, string] => [
+    return fieldNames.map((f, i): [string, string] => [
       f,
-      `${setting}:${name}${prioritySetting(fieldNames, f)}${sortSetting(idx, f)}${whereSetting}`,
+      `${setting}:${name}${typeSetting}${expressions[i] ?? ''}${prioritySetting(fieldNames, f)}${sortSetting(idx, f)}${whereSetting}`,
     ])
   }
 
