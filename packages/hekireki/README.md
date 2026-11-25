@@ -124,6 +124,16 @@ API of Npgsql's own plugins, which Npgsql marks experimental (`NPG9001`; checked
 applied. `@db.Decimal(p, s)` with `s` up to 28 needs none of this. A Prisma `view` is mapped with
 `ToView`, so `EnsureCreated()` and migrations leave it alone.
 
+On MySQL, `hekireki-efcore` gives a native integer or float type the C# type the MySQL provider
+maps its column to, so `EnsureCreated()` and migrations make Prisma's column: `@db.TinyInt` is
+`sbyte`, `@db.SmallInt` and `@db.Year` `short`, `@db.UnsignedTinyInt` `byte`, `@db.UnsignedSmallInt`
+`ushort`, `@db.UnsignedMediumInt` and `@db.UnsignedInt` `uint`, `@db.UnsignedBigInt` `ulong` and
+`@db.Float` `float` (a `Boolean @db.TinyInt` stays a `bool`). An `int` written to a `smallint` would
+go through EF Core's unchecked cast, which writes a value out of range as another number where the
+database refuses it. These properties were `int`, `long` and `double` before 0.53, so code that uses
+them changes, and a column an earlier `EnsureCreated()` or migration made is altered by the next
+migration.
+
 A Prisma `view` is the database's own, which Prisma Migrate never creates. `hekireki-django`
 marks its model `managed = False` and a `ForeignKey` to or from it `db_constraint=False` (one from it also `on_delete=DO_NOTHING`), so `migrate`
 leaves it alone. GORM and SeaORM have no way for a model to say it is a view: the struct or entity
