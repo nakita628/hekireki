@@ -1739,8 +1739,10 @@ export function formatImports(groups: readonly (readonly string[])[]) {
 }
 
 /**
- * The type a MySQL `Boolean @db.Bit(1)` is held in: go-sql-driver returns a BIT(1) as a byte, which
- * Scan reads as false for 0 and true otherwise, and Value writes the bit back as that byte.
+ * The type a MySQL `Boolean @db.Bit(1)` is held in: go-sql-driver returns a BIT(1) as a byte (or
+ * the text "0"/"1", or an integer), which Scan reads, and Value writes the bit as the integer 0 or
+ * 1, which MySQL compares with a BIT as its number (a byte would be compared as a string). Its
+ * GORM data type is bool, so a `default:true` is read as the bool GORM fills in on create.
  */
 export function generateBitBoolType(models: readonly DMMF.Model[], provider?: string) {
   if (!usesBitBool(models, provider)) return []
@@ -1748,27 +1750,33 @@ export function generateBitBoolType(models: readonly DMMF.Model[], provider?: st
     '',
     'type BitBool bool',
     '',
+    'func (BitBool) GormDataType() string {',
+    '\treturn "bool"',
+    '}',
+    '',
     'func (b BitBool) Value() (driver.Value, error) {',
-    '	if b {',
-    '		return []byte{1}, nil',
-    '	}',
-    '	return []byte{0}, nil',
+    '\tif b {',
+    '\t\treturn int64(1), nil',
+    '\t}',
+    '\treturn int64(0), nil',
     '}',
     '',
     'func (b *BitBool) Scan(src any) error {',
-    '	switch value := src.(type) {',
-    '	case nil:',
-    '		*b = false',
-    '	case []byte:',
-    '		*b = len(value) > 0 && value[len(value)-1] != 0',
-    '	case int64:',
-    '		*b = value != 0',
-    '	case bool:',
-    '		*b = BitBool(value)',
-    '	default:',
-    '		return fmt.Errorf("a BIT(1) column held %T", src)',
-    '	}',
-    '	return nil',
+    '\tswitch value := src.(type) {',
+    '\tcase nil:',
+    '\t\t*b = false',
+    '\tcase []byte:',
+    "\t\t*b = len(value) > 0 && value[len(value)-1] != 0 && value[len(value)-1] != '0'",
+    '\tcase int64:',
+    '\t\t*b = value != 0',
+    '\tcase uint64:',
+    '\t\t*b = value != 0',
+    '\tcase bool:',
+    '\t\t*b = BitBool(value)',
+    '\tdefault:',
+    '\t\treturn fmt.Errorf("a BIT(1) column held %T", src)',
+    '\t}',
+    '\treturn nil',
     '}',
   ]
 }

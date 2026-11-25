@@ -1705,9 +1705,6 @@ func (User) TableName() string {
   })
 })
 
-// With the partialIndexes preview feature an index can hold only the rows a `where` picks. DMMF
-// drops the condition; the tag gives it to GORM in `where:`, so AutoMigrate makes the index Prisma
-// Migrate makes (schema.Parse, gorm v1.31.2, reads each condition back as written here).
 // go-sql-driver returns a MySQL BIT(1) as a byte, which does not scan into a Go bool. (#302)
 describe('generateGormModels MySQL Boolean @db.Bit(1)', () => {
   const schema = `
@@ -1727,6 +1724,8 @@ model Flag {
       'Started *BitBool `gorm:"column:started;type:bit(1);default:true;not null" json:"started"`',
     )
     expect(code).toContain('Plain   bool     `gorm:"column:plain;not null" json:"plain"`')
+    expect(code).toContain('func (BitBool) GormDataType() string {')
+    expect(code).toContain('\t\treturn int64(1), nil')
     expect(code).toContain('func (b *BitBool) Scan(src any) error {')
     expect(code).toContain('\t"database/sql/driver"\n\t"fmt"\n')
     expect(code).not.toContain('"strconv"')
@@ -1737,6 +1736,9 @@ model Flag {
   })
 })
 
+// With the partialIndexes preview feature an index can hold only the rows a `where` picks. DMMF
+// drops the condition; the tag gives it to GORM in `where:`, so AutoMigrate makes the index Prisma
+// Migrate makes (schema.Parse, gorm v1.31.2, reads each condition back as written here).
 describe('generateGormModels partial indexes', () => {
   // DMMF leaves isUnique off a @unique with a partial unique beside it, so the key of a model
   // without an @id was lost. (#287)
