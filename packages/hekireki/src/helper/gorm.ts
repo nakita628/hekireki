@@ -203,13 +203,44 @@ function enumMappedDefault(field: DMMF.Field, enums: readonly DMMF.DatamodelEnum
   return formatGoDefault(value?.dbName ?? field.default, field.type, field.kind)
 }
 
-// dbgenerated() is a raw DDL expression, valid on any column including the PK.
+// dbgenerated() is a raw DDL expression, valid on any column including the PK. It goes into the
+// struct tag on one line: a run of whitespace outside a quoted literal or identifier is one
+// space (the same SQL), and what is left is escaped as formatGoDefault escapes a value. A
+// backtick would end the Go raw string the tag is, so such an expression is left out.
 function dbGeneratedDefault(field: DMMF.Field) {
-  return isFunctionDefault(field.default) &&
-    field.default.name === 'dbgenerated' &&
-    typeof field.default.args[0] === 'string'
-    ? field.default.args[0]
-    : null
+  const expression =
+    isFunctionDefault(field.default) && field.default.name === 'dbgenerated'
+      ? field.default.args[0]
+      : undefined
+  if (typeof expression !== 'string' || expression.includes('`')) return null
+  return collapseSqlWhitespace(expression)
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll(';', '\\\\;')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
+    .replaceAll('\t', '\\t')
+}
+
+// Whitespace runs outside '...' and "..." become one space, and the ends are trimmed. A quote
+// doubled inside a literal ('it''s') closes and reopens it, which leaves its text as it is.
+function collapseSqlWhitespace(sql: string) {
+  const out: string[] = []
+  let quote: string | null = null
+  for (const char of sql) {
+    if (quote !== null) {
+      out.push(char)
+      if (char === quote) quote = null
+    } else if (char === "'" || char === '"') {
+      quote = char
+      out.push(char)
+    } else if (/\s/u.test(char)) {
+      if (out.length > 0 && out.at(-1) !== ' ') out.push(' ')
+    } else {
+      out.push(char)
+    }
+  }
+  return out.join('').trimEnd()
 }
 
 // A DateTime literal is written as the model writes the value (BeforeCreate fills it, so this

@@ -139,6 +139,46 @@ describe('buildGormTags', () => {
     )
   })
 
+  it('writes a dbgenerated() expression that spans lines on one line Go can read', () => {
+    const field = (expression: string) =>
+      ({
+        name: 'classification',
+        kind: 'scalar' as const,
+        type: 'String',
+        isRequired: false,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'dbgenerated', args: [expression] },
+      }) as any
+    expect(
+      buildGormTags(
+        field(
+          "\nCASE\n    WHEN ((accountable_type)::text = ANY (ARRAY['Loan'::text])) THEN 'liability'::text\n    ELSE 'asset'::text\nEND",
+        ),
+        false,
+        false,
+        [],
+        [],
+        'postgresql',
+      ),
+    ).toBe(
+      "`gorm:\"column:classification;default:CASE WHEN ((accountable_type)::text = ANY (ARRAY['Loan'::text])) THEN 'liability'::text ELSE 'asset'::text END\" json:\"classification\"`",
+    )
+    // A literal keeps its whitespace (escaped), and a `;` and a `"` are escaped for the tag.
+    expect(
+      buildGormTags(field('concat(\'a;\n  b\',\t"x")'), false, false, [], [], 'postgresql'),
+    ).toBe(
+      '`gorm:"column:classification;default:concat(\'a\\\\;\\n  b\', \\"x\\")" json:"classification"`',
+    )
+    // A backtick would end the raw string the tag is.
+    expect(buildGormTags(field('`a`'), false, false, [], [], 'mysql')).toBe(
+      '`gorm:"column:classification;type:varchar(191)" json:"classification"`',
+    )
+  })
+
   it('generates primaryKey;autoIncrement for autoincrement', () => {
     const field = {
       name: 'id',
