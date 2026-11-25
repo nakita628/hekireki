@@ -1511,11 +1511,14 @@ const JSON_LIBRARY_APPS: ReadonlyMap<string, string> = new Map([
  * an INTEGER or a REAL (a `1.0` comes back as `1`), which `ecto_sqlite3`'s `:map` loader refuses;
  * MySQL's JSON column is decoded by MyXQL already, and the `:map` loader decoded a string a second
  * time, while MariaDB's is text. A binary that is JSON text is decoded, so on MySQL a JSON string
- * whose contents are JSON text (`"42"`) loads as what it holds.
+ * whose contents are JSON text (`"42"`) loads as what it holds. The value alone cannot tell the two
+ * servers apart: `mysqlFlavor` says which one it is, and a binary is then always the string MyXQL
+ * decoded (`mysql`) or always the text MariaDB keeps (`mariadb`).
  *
  * @param app - The module the schemas are under.
  * @param provider - The datasource's provider: SQLite and MySQL are sent JSON text, every other one
  * the value.
+ * @param mysqlFlavor - On MySQL, the server: `mysql` or `mariadb`, or undefined for either.
  * @returns The Elixir source of the type.
  * @example
  * ```elixir
@@ -1531,7 +1534,11 @@ const JSON_LIBRARY_APPS: ReadonlyMap<string, string> = new Map([
  * end
  * ```
  */
-export function ectoJsonType(app: string, provider: string | undefined) {
+export function ectoJsonType(
+  app: string,
+  provider: string | undefined,
+  mysqlFlavor?: 'mysql' | 'mariadb',
+) {
   const library = JSON_LIBRARY_APPS.get(provider ?? '')
   if (library === undefined) {
     return [
@@ -1563,17 +1570,7 @@ export function ectoJsonType(app: string, provider: string | undefined) {
           '',
           '  def load(_), do: :error',
         ]
-      : [
-          '  def load(value) when is_binary(value) do',
-          `    case ${json}.decode(value) do`,
-          '      {:ok, json} -> {:ok, json}',
-          '      _ -> {:ok, value}',
-          '    end',
-          '  end',
-          '',
-          '  def load(value) when is_json(value), do: {:ok, value}',
-          '  def load(_), do: :error',
-        ]),
+      : mysqlJsonLoad(json, provider === 'mysql' ? mysqlFlavor : undefined)),
     '',
     '  @impl true',
     '  def dump(value) when is_json(value) do',
@@ -1586,6 +1583,26 @@ export function ectoJsonType(app: string, provider: string | undefined) {
     '  def dump(_), do: :error',
     'end',
   ].join('\n')
+}
+
+// PrismaJson's load/1 on MySQL: on MySQL itself a binary is a JSON string MyXQL decoded, kept as
+// it is; on MariaDB it is the column's text, decoded; on a server not named, decoded when it is
+// JSON text.
+function mysqlJsonLoad(json: string, flavor: 'mysql' | 'mariadb' | undefined) {
+  if (flavor === 'mysql') {
+    return ['  def load(value) when is_json(value), do: {:ok, value}', '  def load(_), do: :error']
+  }
+  return [
+    '  def load(value) when is_binary(value) do',
+    `    case ${json}.decode(value) do`,
+    '      {:ok, json} -> {:ok, json}',
+    flavor === 'mariadb' ? '      _ -> :error' : '      _ -> {:ok, value}',
+    '    end',
+    '  end',
+    '',
+    '  def load(value) when is_json(value), do: {:ok, value}',
+    '  def load(_), do: :error',
+  ]
 }
 
 // What every PrismaJson starts with: the module, its primitive type and a cast of any JSON value.

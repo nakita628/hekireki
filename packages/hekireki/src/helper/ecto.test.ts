@@ -2630,6 +2630,32 @@ end`)
 end`)
   })
 
+  // The value alone cannot tell MySQL's decoded string from MariaDB's text: mysqlFlavor says which.
+  it('on MySQL never decodes a binary, and on MariaDB decodes every one, when mysqlFlavor says which', () => {
+    const load = (code: string) =>
+      code.slice(code.indexOf('  def load'), code.indexOf('  @impl true\n  def dump'))
+    expect(load(ectoJsonType('App', 'mysql', 'mysql')))
+      .toBe(`  def load(value) when is_json(value), do: {:ok, value}
+  def load(_), do: :error
+
+`)
+    expect(load(ectoJsonType('App', 'mysql', 'mariadb')))
+      .toBe(`  def load(value) when is_binary(value) do
+    case Application.get_env(:myxql, :json_library, Jason).decode(value) do
+      {:ok, json} -> {:ok, json}
+      _ -> :error
+    end
+  end
+
+  def load(value) when is_json(value), do: {:ok, value}
+  def load(_), do: :error
+
+`)
+    // Another provider's type is the same whatever mysqlFlavor says.
+    expect(ectoJsonType('App', 'sqlite', 'mysql')).toBe(ectoJsonType('App', 'sqlite'))
+    expect(ectoJsonType('App', 'postgresql', 'mariadb')).toBe(ectoJsonType('App', 'postgresql'))
+  })
+
   it('names a model whose module is PrismaJson where the schema has a Json field', () => {
     const json = makeModel({
       name: 'PrismaJson',
