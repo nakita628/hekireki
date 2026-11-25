@@ -52,8 +52,58 @@ const GORM_NATIVE_FIXED: { [k: string]: string } = {
 // one without a zone, and a (0) into the dialect's default.
 const GORM_NATIVE_TEMPORAL = new Set(['Timestamp', 'Timestamptz', 'DateTime', 'Time', 'Timetz'])
 
-function resolveNativeType(field: DMMF.Field) {
+// The column Prisma Migrate makes for a native type on MySQL or PostgreSQL where the table above
+// gives another, its arguments after it (`char(2)`, `bit(3)`). A Go int holds every unsigned
+// integer column but a bigint unsigned past int64, which Prisma's BigInt does not hold either.
+const PROVIDER_NATIVE_TYPES: {
+  readonly [provider: string]: { readonly [name: string]: string } | undefined
+} = {
+  mysql: {
+    Char: 'char',
+    TinyText: 'tinytext',
+    MediumText: 'mediumtext',
+    LongText: 'longtext',
+    TinyInt: 'tinyint',
+    UnsignedTinyInt: 'tinyint unsigned',
+    UnsignedSmallInt: 'smallint unsigned',
+    UnsignedMediumInt: 'mediumint unsigned',
+    UnsignedInt: 'int unsigned',
+    UnsignedBigInt: 'bigint unsigned',
+    Year: 'year',
+    Binary: 'binary',
+    VarBinary: 'varbinary',
+    TinyBlob: 'tinyblob',
+    Blob: 'blob',
+    MediumBlob: 'mediumblob',
+  },
+  postgresql: {
+    VarChar: 'varchar',
+    Char: 'char',
+    Uuid: 'uuid',
+    Inet: 'inet',
+    Bit: 'bit',
+    VarBit: 'varbit',
+    Real: 'real',
+    Oid: 'oid',
+  },
+}
+
+/** The column of a native type that PROVIDER_NATIVE_TYPES names, or undefined where it names none. */
+function providerNativeType(field: DMMF.Field, provider: string | undefined) {
+  if (!field.nativeType) return undefined
+  const [nativeName, nativeArgs] = field.nativeType
+  // A Boolean @db.TinyInt is MySQL's BOOLEAN, which GORM makes of a bool.
+  if (provider === 'mysql' && field.type === 'Boolean') return null
+  const type = PROVIDER_NATIVE_TYPES[provider ?? '']?.[nativeName]
+  if (type === undefined) return undefined
+  const args = nativeArgs ?? []
+  return args.length > 0 ? `${type}(${args.join(',')})` : type
+}
+
+function resolveNativeType(field: DMMF.Field, provider: string | undefined) {
   if (!field.nativeType) return null
+  const providerType = providerNativeType(field, provider)
+  if (providerType !== undefined) return providerType
 
   const [nativeName, nativeArgs] = field.nativeType
   const args = nativeArgs ?? []
@@ -264,7 +314,9 @@ function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | und
   // A native type wins (columnTypeTag); on MySQL such a key is a String like any other,
   // VARCHAR(191) (isMysqlDefaultString), and on PostgreSQL text, as Prisma Migrate makes it.
   const fixedType =
-    provider !== 'mysql' && !isPostgresFamily(provider) && resolveNativeType(field) === null
+    provider !== 'mysql' &&
+    !isPostgresFamily(provider) &&
+    resolveNativeType(field, provider) === null
   return [
     'primaryKey',
     ...(isAutoincrement(field) ? ['autoIncrement'] : []),
@@ -287,6 +339,16 @@ const POSTGRES_DEFAULT_TYPES: { readonly [type: string]: string } = {
   Float: 'double precision',
   Decimal: 'decimal(65,30)',
   DateTime: 'timestamp(3)',
+}
+
+// The column Prisma Migrate makes of a type with no native type, by provider: on MySQL GORM makes
+// a float64 Decimal a `double`.
+const DEFAULT_TYPES: {
+  readonly [provider: string]: { readonly [type: string]: string } | undefined
+} = {
+  postgresql: POSTGRES_DEFAULT_TYPES,
+  cockroachdb: POSTGRES_DEFAULT_TYPES,
+  mysql: { Decimal: 'decimal(65,30)' },
 }
 
 // The element type of the array column Prisma Migrate makes for a scalar list on PostgreSQL.
@@ -346,30 +408,35 @@ function usesScalarList(models: readonly DMMF.Model[], provider: string | undefi
 
 function columnTypeTag(field: DMMF.Field, provider?: string) {
   if (isScalarList(field, provider)) return `type:${scalarListColumnType(field, provider)}`
-  const nativeType = resolveNativeType(field)
+  const nativeType = resolveNativeType(field, provider)
   // A DateTime[] is a PostgreSQL array, `timestamp(3)[]` unless the native type says otherwise,
   // which the list type writes and reads as Prisma Client does.
   if (isDateTimeList(field)) return `type:${nativeType ?? 'timestamp(3)'}[]`
   if (isMysqlDefaultString(field, provider)) return 'type:varchar(191)'
   if (nativeType !== null) return `type:${nativeType}`
-  const postgresType =
-    isPostgresFamily(provider) && field.kind === 'scalar' && !field.isList
-      ? POSTGRES_DEFAULT_TYPES[field.type]
+  const defaultType =
+    field.kind === 'scalar' && !field.isList
+      ? DEFAULT_TYPES[provider ?? '']?.[field.type]
       : undefined
-  return postgresType === undefined ? null : `type:${postgresType}`
+  return defaultType === undefined ? null : `type:${defaultType}`
 }
 
 // A Go int is 64 bits, which GORM makes a bigint (bigserial with autoIncrement); Prisma's Int is
-// 32 bits, `integer` (`serial`) on PostgreSQL and INT on MySQL. CockroachDB reads `integer` as
-// INT8 whatever the size, so it is left as it was.
+// 32 bits, `integer` (`serial`) on PostgreSQL and INT on MySQL, as is an Int @db.Int on MySQL or
+// @db.Integer on PostgreSQL. CockroachDB reads `integer` as INT8 whatever the size, so it is left
+// as it was. A MySQL @db.Float is a FLOAT, which GORM makes of a float64 32 bits wide (it reads
+// `type:float` as its own float type, a double for a float64).
 function sizeTag(field: DMMF.Field, provider: string | undefined) {
-  return provider !== 'cockroachdb' &&
-    field.kind === 'scalar' &&
+  if (field.kind !== 'scalar' || field.isList) return null
+  const nativeName = field.nativeType?.[0]
+  const isInt32 =
     field.type === 'Int' &&
-    !field.isList &&
-    !field.nativeType
-    ? 'size:32'
-    : null
+    provider !== 'cockroachdb' &&
+    (nativeName === undefined ||
+      (provider === 'mysql' && nativeName === 'Int') ||
+      (provider === 'postgresql' && nativeName === 'Integer'))
+  const isMysqlFloat = provider === 'mysql' && field.type === 'Float' && nativeName === 'Float'
+  return isInt32 || isMysqlFloat ? 'size:32' : null
 }
 
 // GORM fills a field named CreatedAt or UpdatedAt on its own, a time with the application's
