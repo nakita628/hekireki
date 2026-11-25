@@ -637,7 +637,7 @@ class NativeGrid(models.Model):
     id = models.AutoField(primary_key=True)
     code = models.CharField(max_length=3)
     label = models.CharField(max_length=32)
-    blurb = models.TextField()
+    blurb = models.CharField()
     notes = models.TextField()
     tiny = models.SmallIntegerField()
     ident = models.IntegerField()
@@ -661,6 +661,29 @@ class NativeGrid(models.Model):
         db_table = "NativeGrid"
 `,
     )
+  })
+
+  it("makes MySQL's unsigned integers Django's positive fields", () => {
+    const models = [
+      makeModel('Counter', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'ut', type: 'Int', nativeType: ['UnsignedTinyInt', []] }),
+        makeField({ name: 'us', type: 'Int', nativeType: ['UnsignedSmallInt', []] }),
+        makeField({ name: 'um', type: 'Int', nativeType: ['UnsignedMediumInt', []] }),
+        makeField({ name: 'ui', type: 'Int', nativeType: ['UnsignedInt', []] }),
+        makeField({ name: 'ub', type: 'BigInt', nativeType: ['UnsignedBigInt', []] }),
+        makeField({ name: 'ch', type: 'String', nativeType: ['Char', []] }),
+      ]),
+    ]
+
+    expect(djangoCode(models, undefined, undefined, 'mysql')).toContain(`
+    ut = models.PositiveSmallIntegerField()
+    us = models.PositiveSmallIntegerField()
+    um = models.PositiveIntegerField()
+    ui = models.PositiveIntegerField()
+    ub = models.PositiveBigIntegerField()
+    ch = models.CharField(max_length=1)
+`)
   })
 
   it('renames Python keywords with db_column and keeps soft keywords', () => {
