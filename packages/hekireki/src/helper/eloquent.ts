@@ -1346,13 +1346,19 @@ type ModelKeyInfo = {
   readonly compositeColumns: readonly string[]
 }
 
+// The key types Eloquent keeps as 'int'. Any other key is 'string': with 'int', eager loading
+// goes through whereIntegerInRaw, which casts each key with (int) (`(int) 'ADMIN'` is 0).
+const INTEGER_KEY_TYPES: ReadonlySet<string> = new Set(['Int', 'BigInt'])
+
 function keyPropertyBlocks(key: ModelKeyInfo) {
   return [
     ...(key.pkColumn !== null && key.pkColumn !== 'id'
       ? [[`    protected $primaryKey = ${phpString(key.pkColumn)};`]]
       : []),
     ...(key.compositeColumns.length > 0 ? [['    protected $primaryKey = null;']] : []),
-    ...(key.idField?.type === 'String' ? [["    protected $keyType = 'string';"]] : []),
+    ...(key.idField !== undefined && !INTEGER_KEY_TYPES.has(key.idField.type)
+      ? [["    protected $keyType = 'string';"]]
+      : []),
     ...(key.isAutoincrement || key.isReturned ? [] : [['    public $incrementing = false;']]),
   ]
 }
