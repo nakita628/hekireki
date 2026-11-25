@@ -137,6 +137,7 @@ maße
 mentees
 Meiryo
 Memberwise
+Microting
 Monarches
 msgpackr
 multicursor

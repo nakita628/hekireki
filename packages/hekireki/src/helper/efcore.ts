@@ -2,6 +2,7 @@ import type { DMMF } from '@prisma/generator-helper'
 
 import { stripAnnotations } from '../annotation/index.js'
 import { exprRef, typeRef } from '../literal/placeholder.js'
+import { indexPrefix } from '../naming/case.js'
 import { pluralize } from '../naming/humanizer.js'
 import { allocate, pascalCase } from '../naming/index.js'
 import {
@@ -476,7 +477,7 @@ function columnType(storeType: string) {
 /** The datasource providers the generated DbContext is written for. */
 export type Provider = 'postgresql' | 'mysql' | 'sqlite'
 
-function fieldMapping(field: DMMF.Field, names: Names, provider: Provider, isIndexed = false) {
+function fieldMapping(field: DMMF.Field, names: Names, provider: Provider) {
   if (field.kind === 'enum') {
     return mapping(typeRef(generatedRef(names, enumName(names, field.type))), true)
   }
@@ -485,7 +486,6 @@ function fieldMapping(field: DMMF.Field, names: Names, provider: Provider, isInd
     return (native ? postgresNativeMapping(...native) : null) ?? postgresScalarMapping(field.type)
   }
   if (provider === 'mysql') {
-    if (isIndexed && isMysqlPrefixIndexed(field)) return sqliteMapping(field.type)
     return (
       (native
         ? (mysqlNumericMapping(field.type, native[0]) ?? mysqlNativeMapping(...native))
@@ -643,25 +643,6 @@ const MYSQL_NATIVE: {
   Blob: () => mapping('byte[]', false, [columnType('blob')]),
   MediumBlob: () => mapping('byte[]', false, [columnType('mediumblob')]),
   LongBlob: () => mapping('byte[]', false, [columnType('longblob')]),
-}
-
-// The TEXT and BLOB columns MySQL indexes only by a prefix, which the generated code does not
-// give (Prisma's `length:`); in a key or an index such a column is left to Pomelo, which makes it a
-// varchar(255) or varbinary(255) there.
-const MYSQL_PREFIX_INDEXED = new Set([
-  'TinyText',
-  'Text',
-  'MediumText',
-  'LongText',
-  'TinyBlob',
-  'Blob',
-  'MediumBlob',
-  'LongBlob',
-])
-
-function isMysqlPrefixIndexed(field: DMMF.Field) {
-  const nativeName = field.nativeType?.[0]
-  return nativeName === undefined ? field.type === 'Bytes' : MYSQL_PREFIX_INDEXED.has(nativeName)
 }
 
 // The MySQL integer and float columns Prisma makes of a native type, each in the CLR type Pomelo
@@ -1198,19 +1179,8 @@ function summaryLines(text: string | undefined, indent: string) {
   return [`${indent}/// <summary>`, ...body, `${indent}/// </summary>`]
 }
 
-// Whether a field is a key column or in an index of its model.
-function isIndexedField(plan: EfCorePlan, field: DMMF.Field) {
-  if (field.isId || field.isUnique) return true
-  const model = plan.models.find((m) => m.fields.includes(field))
-  if (model === undefined) return false
-  return (
-    (model.primaryKey?.fields ?? []).includes(field.name) ||
-    plan.indexesOf(model).some((index) => fieldNames(index).includes(field.name))
-  )
-}
-
 function fieldPlan(plan: EfCorePlan, field: DMMF.Field) {
-  const clr = fieldMapping(field, plan.names, plan.provider, isIndexedField(plan, field))
+  const clr = fieldMapping(field, plan.names, plan.provider)
   return { clr, def: defaultPlan(field, clr, plan.names, plan.enums, plan.provider) }
 }
 
@@ -1813,13 +1783,22 @@ function manyToManyConfig(plan: EfCorePlan, m2m: ManyToMany) {
   ]
 }
 
+// MySQL indexes a TEXT or BLOB column, and a column given a `length:`, by a prefix of it, which
+// Pomelo's HasPrefixLength (and its EF Core 10+ fork Microting's) writes: one length a column, 0 for
+// the whole of one. A `length:` that covers the whole column writes none (indexPrefix).
+function prefixLengthCalls(plan: EfCorePlan, model: DMMF.Model, index: IndexInfo) {
+  if (plan.provider !== 'mysql') return []
+  const lengths = index.fields.map((f) => indexPrefix(model, f) ?? 0)
+  return lengths.some((length) => length > 0) ? [`.HasPrefixLength(${lengths.join(', ')})`] : []
+}
+
 function indexConfig(plan: EfCorePlan, model: DMMF.Model, index: EfIndex, isAlternateKey: boolean) {
   const properties = fieldNames(index).map((f) => propertyName(plan.names, model, f))
   const name = csharpString(indexName(model, index))
   if (isAlternateKey) {
     return chain(
       `entity.HasAlternateKey(${keyLambda('e', properties)})`,
-      [`.HasName(${name})`],
+      [`.HasName(${name})`, ...prefixLengthCalls(plan, model, index)],
       '            ',
     )
   }
@@ -1838,6 +1817,7 @@ function indexConfig(plan: EfCorePlan, model: DMMF.Model, index: EfIndex, isAlte
   const calls = [
     ...(index.type === 'unique' ? ['.IsUnique()'] : []),
     ...(descending.includes(true) ? [`.IsDescending(${descending.join(', ')})`] : []),
+    ...prefixLengthCalls(plan, model, index),
     ...(method === undefined ? [] : [`.HasMethod(${csharpString(method)})`]),
     ...(operators.some((operator) => operator !== '')
       ? [`.HasOperators(${operators.map(csharpString).join(', ')})`]
@@ -1864,7 +1844,10 @@ function entityConfig(plan: EfCorePlan, model: DMMF.Model) {
           'e',
           keyFields.map((f) => propertyName(names, model, f)),
         )})`,
-        [`.HasName(${csharpString(indexName(model, key))})`],
+        [
+          `.HasName(${csharpString(indexName(model, key))})`,
+          ...prefixLengthCalls(plan, model, key),
+        ],
         '            ',
       )
     : ['            entity.HasNoKey();']

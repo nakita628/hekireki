@@ -145,9 +145,16 @@ maps its column to, so `EnsureCreated()` and migrations make Prisma's column: `@
 `ushort`, `@db.UnsignedMediumInt` and `@db.UnsignedInt` `uint`, `@db.UnsignedBigInt` `ulong` and
 `@db.Float` `float` (a `Boolean @db.TinyInt` stays a `bool`). An `int` written to a `smallint` would
 go through EF Core's unchecked cast, which writes a value out of range as another number where the
-database refuses it. These properties were `int`, `long` and `double` before 0.54, so code that uses
+database refuses it. These properties were `int`, `long` and `double` before 0.55, so code that uses
 them changes, and a column an earlier `EnsureCreated()` or migration made is altered by the next
 migration.
+
+On MySQL, `hekireki-efcore` writes an index's `length:` (on `@@index`, `@unique`, `@@unique` and
+`@id`) with `HasPrefixLength`, the API of Pomelo.EntityFrameworkCore.MySql and of its EF Core 10+
+fork Microting.EntityFrameworkCore.MySql, and gives a TEXT or BLOB column its store type in an index
+too. With Oracle's MySql.EntityFrameworkCore, add `global using MySql.EntityFrameworkCore.Extensions;`
+to compile, and create those tables with Prisma Migrate, since that provider leaves the prefix out of
+its DDL. Before 0.56 such a column was left as `varchar(255)` or `varbinary(3072)` in an index.
 
 A Prisma `view` is the database's own, which Prisma Migrate never creates. `hekireki-django`
 marks its model `managed = False` and a `ForeignKey` to or from it `db_constraint=False` (one from it also `on_delete=DO_NOTHING`), so `migrate`
