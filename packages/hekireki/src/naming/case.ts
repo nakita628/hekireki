@@ -47,7 +47,7 @@ export function constraintName(
 /**
  * The part of a column an index takes: MySQL's `@@index([identifier(length: 191)])` on a TEXT. A
  * length the column does not reach is the whole of it, and MySQL keeps none: a String is
- * `varchar(191)` unless its native type says otherwise.
+ * `varchar(191)` and a Bytes `longblob` unless its native type says otherwise.
  *
  * @example
  * ```sql
@@ -55,24 +55,34 @@ export function constraintName(
  * CREATE INDEX `verification_identifier_idx` ON `verification`(`identifier`(191));
  * -- userId String, @@index([userId(length: 191)])
  * CREATE INDEX `account_userId_idx` ON `account`(`userId`);
+ * -- data Bytes, @@index([data(length: 200)])
+ * CREATE INDEX `blob_data_idx` ON `blob`(`data`(200));
  * ```
  */
 export function indexPrefix(
   model: {
     readonly fields: readonly {
       readonly name: string
+      readonly type: string
       readonly nativeType?: readonly [string, readonly string[]] | null
     }[]
   },
   field: { readonly name: string; readonly length?: number },
 ) {
-  const native = model.fields.find((f) => f.name === field.name)?.nativeType
-  const size = indexableLength(native)
+  const modelField = model.fields.find((f) => f.name === field.name)
+  const size = indexableLength(modelField?.type, modelField?.nativeType)
   return field.length === undefined || field.length >= size ? undefined : field.length
 }
 
-// How much of a column MySQL can index: a String with no native type is `varchar(191)`.
-function indexableLength(native: readonly [string, readonly string[]] | null | undefined) {
-  if (native === null || native === undefined) return 191
-  return native[0] === 'VarChar' || native[0] === 'Char' ? Number(native[1][0] ?? 1) : Infinity
+// How much of a column MySQL can index: the whole of a sized character or binary column, of a
+// String with no native type (`varchar(191)`), and no end to any other (TEXT, BLOB, a Bytes with no
+// native type, which is `longblob`).
+function indexableLength(
+  type: string | undefined,
+  native: readonly [string, readonly string[]] | null | undefined,
+) {
+  if (native === null || native === undefined) return type === 'String' ? 191 : Infinity
+  return ['VarChar', 'Char', 'VarBinary', 'Binary'].includes(native[0])
+    ? Number(native[1][0] ?? 1)
+    : Infinity
 }
