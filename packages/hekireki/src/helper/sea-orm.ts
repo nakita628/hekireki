@@ -616,7 +616,9 @@ function columnAttributeParts(
 /**
  * The `default_expr` of a default the database fills: `now()` and `dbgenerated("...")`. sea-orm
  * leaves it out of an insert's values either way, but `Schema::create_table_from_entity` writes it
- * as the column's DEFAULT, so a row inserted past the entity is filled as in Prisma's table.
+ * as the column's DEFAULT, the one Prisma Migrate writes, so a row inserted past the entity has
+ * these columns filled. A literal DateTime default and a literal default on a single-column key
+ * still have none.
  *
  * @example
  * ```rust
@@ -645,7 +647,7 @@ function nowSql(field: DMMF.Field, provider: string | undefined) {
   const nativeName = field.nativeType?.[0]
   if (nativeName === undefined) return 'CURRENT_TIMESTAMP(3)'
   if (nativeName !== 'DateTime' && nativeName !== 'Timestamp') return null
-  const precision = field.nativeType?.[1][0] ?? '0'
+  const precision = field.nativeType?.[1]?.[0] ?? '0'
   if (!/^\d+$/u.test(precision)) return null
   return precision === '0' ? 'CURRENT_TIMESTAMP' : `CURRENT_TIMESTAMP(${precision})`
 }
