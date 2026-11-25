@@ -1068,7 +1068,7 @@ export function makeM2MJoinTables(
       `index('${tableName}_B_index').on(table.B)`,
       ...sides.map(
         (side) =>
-          `foreignKey({ name: '${tableName}_${side.column}_fkey', columns: [table.${side.column}], foreignColumns: [${side.target}.${side.key}] }).onDelete('cascade').onUpdate('cascade')`,
+          `foreignKey({ name: '${constraintName(tableName, [side.column], 'fkey', provider ?? '')}', columns: [table.${side.column}], foreignColumns: [${side.target}.${side.key}] }).onDelete('cascade').onUpdate('cascade')`,
       ),
     ]
     return `export const ${joinVarName(pair.relationName)} = ${tableFunc}('${tableName}', { ${columns.join(', ')} }, (table) => [${constraints.join(', ')}])`

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { lowerFirst, makeSnakeCase } from './case.js'
+import { constraintName, lowerFirst, makeSnakeCase } from './case.js'
 
 describe('makeSnakeCase', () => {
   it('converts PascalCase to snake_case', () => {
@@ -43,5 +43,22 @@ describe('lowerFirst', () => {
     ['', ''],
   ])('%s → %s', (text, lowered) => {
     expect(lowerFirst(text)).toBe(lowered)
+  })
+})
+
+// PostgreSQL's limit of 63 is in bytes, and Prisma Migrate cuts a name at a character boundary
+// counting UTF-8 bytes. (#316)
+describe('constraintName', () => {
+  it('cuts a name of wide characters by UTF-8 bytes, at a character boundary', () => {
+    // 22 characters of 3 bytes each: 66 bytes, under 63 characters but over 63 bytes.
+    const table = '日'.repeat(22)
+    const name = constraintName(table, [], 'pkey', 'postgresql')
+    expect(name).toBe(`${'日'.repeat(19)}_pkey`)
+    expect(new TextEncoder().encode(name).length).toBeLessThanOrEqual(63)
+  })
+
+  it('keeps an ASCII name cut as before', () => {
+    expect(constraintName('t'.repeat(70), [], 'idx', 'postgresql')).toBe(`${'t'.repeat(59)}_idx`)
+    expect(constraintName('t'.repeat(70), ['c'], 'idx', 'sqlite')).toBe(`${'t'.repeat(70)}_c_idx`)
   })
 })

@@ -3257,6 +3257,44 @@ model Row {
   })
 })
 
+// Two relations over one foreign key column, each with a constraint of its own: both are created
+// by Prisma Migrate, and the column held only the first. (#316)
+describe('two foreign keys on one column', () => {
+  it('writes the second relation over a column as a ForeignKeyConstraint', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+model Account {
+  id    Int    @id
+  owned Item[] @relation("owner")
+  held  Item[] @relation("holder")
+}
+model Item {
+  id      Int     @id
+  ref     Int
+  owner   Account @relation("owner", fields: [ref], references: [id], map: "item_owner_fk")
+  holder  Account @relation("holder", fields: [ref], references: [id], map: "item_holder_fk")
+}
+`
+    const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
+    const code = generateSingleFile(
+      result.models,
+      result.enums,
+      result.indexes,
+      'postgresql',
+      new Set(),
+      () => undefined,
+      relationMaps(prismaBlocks(schema)),
+    )
+    expect(code).toContain(
+      'ForeignKey("Account.id", ondelete="RESTRICT", onupdate="CASCADE", name="item_owner_fk")',
+    )
+    expect(code).toContain(
+      'ForeignKeyConstraint(["ref"], ["Account.id"], ondelete="RESTRICT", onupdate="CASCADE", name="item_holder_fk")',
+    )
+  })
+})
+
 // A partial index (the `partialIndexes` preview feature) keeps its condition, which DMMF drops, as
 // the dialect's keyword to Index(): a partial unique is no plain unique index.
 describe('partial indexes', () => {

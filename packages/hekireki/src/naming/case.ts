@@ -1,3 +1,5 @@
+import { prismaConstraintName } from '../prisma/postgres.js'
+
 export function makeSnakeCase(name: string) {
   return name.replaceAll(/([a-z0-9])([A-Z])/gu, '$1_$2').toLowerCase()
 }
@@ -40,8 +42,13 @@ export function constraintName(
   suffix: string,
   provider: string,
 ) {
-  const limit = IDENTIFIER_LIMITS[provider] ?? 63
-  return `${[table, ...columns].join('_').slice(0, limit - suffix.length - 1)}_${suffix}`
+  // Cut at a character boundary, counting UTF-8 bytes as Prisma Migrate does (PostgreSQL's limit
+  // is in bytes): a name of Japanese or other wide characters is cut where the database cuts it.
+  return prismaConstraintName(
+    [table, ...columns].join('_'),
+    `_${suffix}`,
+    IDENTIFIER_LIMITS[provider] ?? 63,
+  )
 }
 
 /**

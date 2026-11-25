@@ -1204,12 +1204,19 @@ function generateTableArgs(
   })
 
   const modelByName = new Map(allModels.map((m) => [m.name, m]))
+  // A column takes one inline ForeignKey (foreignKeyArgs), the first relation's over it; another
+  // relation over the same single column, with a constraint of its own, is written here.
+  const { belongsTo } = getAssociations(model, allModels)
+  const isInline = (f: DMMF.Field) =>
+    f.relationFromFields?.length === 1 &&
+    belongsTo.find((a) => a.foreignKey === f.relationFromFields?.[0])?.name === f.name
   const fkConstraints = model.fields
     .filter(
       (f) =>
         f.kind === 'object' &&
         f.relationFromFields !== undefined &&
-        f.relationFromFields.length > 1 &&
+        f.relationFromFields.length > 0 &&
+        !isInline(f) &&
         f.relationToFields !== undefined &&
         !views.has(f.type),
     )
