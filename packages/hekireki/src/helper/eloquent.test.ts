@@ -1273,6 +1273,26 @@ class Counter extends Model
         'id',
     ];
 }`)
+    expect(
+      eloquentModels([counter], 'App\\Models', undefined, undefined, { provider: 'postgresql' }),
+    ).toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+
+class Counter extends Model
+{
+    protected $table = 'Counter';
+
+    public $incrementing = false;
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'id',
+    ];
+}`)
   })
 
   it('keeps incrementing false for a text key the database makes, which may read as a number', () => {
