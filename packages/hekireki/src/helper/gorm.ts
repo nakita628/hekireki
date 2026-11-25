@@ -417,6 +417,20 @@ function usesScalarList(models: readonly DMMF.Model[], provider: string | undefi
   return models.some((m) => m.fields.some((f) => isScalarList(f, provider)))
 }
 
+// GORM's PostgreSQL dialector makes an autoIncrement column serial only from its own integer types;
+// a `type:` it does not know is written as given, without a default. An autoincrement column with a
+// native integer type is therefore given its serial type, as Prisma Migrate makes it (`SMALLSERIAL`
+// for an Int @db.SmallInt). MySQL's dialector adds AUTO_INCREMENT to any type.
+const SERIAL_TYPES: { readonly [type: string]: string | undefined } = {
+  smallint: 'smallserial',
+  integer: 'serial',
+  bigint: 'bigserial',
+}
+
+function serialType(field: DMMF.Field, nativeType: string, provider: string | undefined) {
+  return provider === 'postgresql' && isAutoincrement(field) ? SERIAL_TYPES[nativeType] : undefined
+}
+
 function columnTypeTag(field: DMMF.Field, provider?: string) {
   if (isScalarList(field, provider)) return `type:${scalarListColumnType(field, provider)}`
   const nativeType = resolveNativeType(field, provider)
@@ -424,7 +438,7 @@ function columnTypeTag(field: DMMF.Field, provider?: string) {
   // which the list type writes and reads as Prisma Client does.
   if (isDateTimeList(field)) return `type:${nativeType ?? 'timestamp(3)'}[]`
   if (isMysqlDefaultString(field, provider)) return 'type:varchar(191)'
-  if (nativeType !== null) return `type:${nativeType}`
+  if (nativeType !== null) return `type:${serialType(field, nativeType, provider) ?? nativeType}`
   const defaultType =
     field.kind === 'scalar' && !field.isList
       ? DEFAULT_TYPES[provider ?? '']?.[field.type]

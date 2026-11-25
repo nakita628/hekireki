@@ -962,6 +962,23 @@ model Counter {
       '\tMetricID int    `gorm:"column:metric_id;autoIncrement;uniqueIndex:Counter_metric_id_key;size:32;not null" json:"metric_id"`',
     )
   })
+  // GORM writes a `type:` it does not know as given, so a native integer type takes its serial type.
+  it('gives an autoincrement @db.SmallInt column its serial type on PostgreSQL', () => {
+    const code = gormFor(
+      `
+model Tick {
+  id  Int    @id @default(autoincrement()) @db.SmallInt
+  seq BigInt @unique @default(autoincrement()) @db.BigInt
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain('`gorm:"column:id;primaryKey;autoIncrement;type:smallserial" json:"id"`')
+    // An int64 is GORM's own type, which it makes bigserial.
+    expect(code).toContain(
+      '`gorm:"column:seq;autoIncrement;uniqueIndex:Tick_seq_key;not null" json:"seq"`',
+    )
+  })
 })
 
 // Prisma makes every scalar list a PostgreSQL array column, which takes no JSON text: each list is
