@@ -2299,3 +2299,96 @@ export const user = pgTable('User', {
 export const tag = pgTable('Tag', { id: integer('id').primaryKey() })`)
   })
 })
+
+// `type:` and `ops:` on an index (#272): on PostgreSQL Prisma Migrate makes the index with that
+// method and each column with that operator class, as `CREATE INDEX ... USING gin ("data"
+// jsonb_path_ops)`. DMMF has the method as `algorithm` and the class as each field's
+// `operatorClass`, in Prisma's name (`JsonbPathOps`) or as `raw("...")` gives it.
+describe('an index method and operator class', () => {
+  const blocks = prismaBlocks(`
+model Doc {
+  id    Int      @id
+  tags  String[]
+  data  Json
+  title String
+  code  String
+
+  @@index([tags], map: "doc_tags_gin", type: Gin)
+  @@index([data(ops: JsonbPathOps)], map: "doc_data_gin", type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "doc_title_trgm", type: Gin)
+  @@index([code(ops: raw("text_pattern_ops"), sort: Desc)], where: raw("code <> ''"))
+  @@index([code], map: "doc_code_hash", type: Hash)
+}
+`)
+  const doc = makeModel({
+    name: 'Doc',
+    fields: [
+      makeField({ name: 'id', type: 'Int', isId: true }),
+      makeField({ name: 'tags', type: 'String', isList: true }),
+      makeField({ name: 'data', type: 'Json' }),
+      makeField({ name: 'title', type: 'String' }),
+      makeField({ name: 'code', type: 'String' }),
+    ],
+  })
+  const indexes: DMMF.Index[] = [
+    {
+      model: 'Doc',
+      type: 'normal',
+      isDefinedOnField: false,
+      dbName: 'doc_tags_gin',
+      algorithm: 'Gin',
+      fields: [{ name: 'tags' }],
+    },
+    {
+      model: 'Doc',
+      type: 'normal',
+      isDefinedOnField: false,
+      dbName: 'doc_data_gin',
+      algorithm: 'Gin',
+      fields: [{ name: 'data', operatorClass: 'JsonbPathOps' }],
+    },
+    {
+      model: 'Doc',
+      type: 'normal',
+      isDefinedOnField: false,
+      dbName: 'doc_title_trgm',
+      algorithm: 'Gin',
+      fields: [{ name: 'title', operatorClass: 'gin_trgm_ops' }],
+    },
+    {
+      model: 'Doc',
+      type: 'normal',
+      isDefinedOnField: false,
+      fields: [{ name: 'code', sortOrder: 'desc', operatorClass: 'text_pattern_ops' }],
+    },
+    {
+      model: 'Doc',
+      type: 'normal',
+      isDefinedOnField: false,
+      dbName: 'doc_code_hash',
+      algorithm: 'Hash',
+      fields: [{ name: 'code' }],
+    },
+  ]
+  const constraints = (provider: 'postgresql' | 'mysql' | 'sqlite') => {
+    const code = drizzleSchema(makeDatamodel([doc]), provider, indexes, new Set(), blocks)
+    const line = code.split('\n').find((l) => l.startsWith('export const doc =')) ?? ''
+    return line.slice(line.indexOf('(table) =>'))
+  }
+
+  // A BTree index with an operator class stays `.on`, its column with the `.op` ahead of the
+  // order; a partial index keeps its `.where`.
+  it('is `.using(method, ...)` and the column `.op(...)` on PostgreSQL', () => {
+    expect(constraints('postgresql')).toBe(
+      "(table) => [index('doc_tags_gin').using('gin', table.tags), index('doc_data_gin').using('gin', table.data.op('jsonb_path_ops')), index('doc_title_trgm').using('gin', table.title.op('gin_trgm_ops')), index('Doc_code_idx').on(table.code.op('text_pattern_ops').desc().nullsFirst()).where(sql`(code <> '')`), index('doc_code_hash').using('hash', table.code)])",
+    )
+  })
+
+  // Prisma takes `type:` and `ops:` on PostgreSQL only: elsewhere the index is as it was.
+  it('is a plain index on SQLite and MySQL', () => {
+    expect([constraints('sqlite'), constraints('mysql')]).toStrictEqual([
+      "(table) => [index('doc_tags_gin').on(table.tags), index('doc_data_gin').on(table.data), index('doc_title_trgm').on(table.title), index('Doc_code_idx').on(sql`${table.code} DESC`).where(sql`(code <> '')`), index('doc_code_hash').on(table.code)])",
+      "(table) => [index('doc_tags_gin').on(table.tags), index('doc_data_gin').on(table.data), index('doc_title_trgm').on(table.title), index('Doc_code_idx').on(sql`${table.code} DESC`), index('doc_code_hash').on(table.code)])",
+    ])
+  })
+})
