@@ -3674,6 +3674,105 @@ model Event {
 }`)
   })
 
+  it('gives a MySQL string, decimal and binary column the type Prisma Migrate gives it', () => {
+    const { plan } = fixture(
+      `
+datasource db {
+  provider = "mysql"
+}
+
+model T {
+  id     Int     @id
+  name   String
+  title  String  @db.VarChar(40)
+  code   String  @db.Char(2)
+  tt     String  @db.TinyText
+  body   String  @db.Text
+  mt     String  @db.MediumText
+  lt     String  @db.LongText
+  price  Decimal @db.Decimal(10, 2)
+  digest Bytes   @db.VarBinary(16)
+  fixed  Bytes   @db.Binary(16)
+  tb     Bytes   @db.TinyBlob
+  bl     Bytes   @db.Blob
+  mb     Bytes   @db.MediumBlob
+  raw    Bytes
+}
+`,
+      { ...DEFAULT_OPTIONS, provider: 'mysql' },
+    )
+    expect(contextFile(plan).code).toContain(`            entity.Property(e => e.Name)
+                .HasMaxLength(191)
+                .HasColumnName("name");
+            entity.Property(e => e.Title)
+                .HasMaxLength(40)
+                .HasColumnName("title");
+            entity.Property(e => e.Code)
+                .HasMaxLength(2)
+                .IsFixedLength()
+                .HasColumnName("code");
+            entity.Property(e => e.Tt)
+                .HasColumnType("tinytext")
+                .HasColumnName("tt");
+            entity.Property(e => e.Body)
+                .HasColumnType("text")
+                .HasColumnName("body");
+            entity.Property(e => e.Mt)
+                .HasColumnType("mediumtext")
+                .HasColumnName("mt");
+            entity.Property(e => e.Lt)
+                .HasColumnType("longtext")
+                .HasColumnName("lt");
+            entity.Property(e => e.Price)
+                .HasPrecision(10, 2)
+                .HasColumnName("price");
+            entity.Property(e => e.Digest)
+                .HasMaxLength(16)
+                .HasColumnName("digest");
+            entity.Property(e => e.Fixed)
+                .HasMaxLength(16)
+                .IsFixedLength()
+                .HasColumnName("fixed");
+            entity.Property(e => e.Tb)
+                .HasColumnType("tinyblob")
+                .HasColumnName("tb");
+            entity.Property(e => e.Bl)
+                .HasColumnType("blob")
+                .HasColumnName("bl");
+            entity.Property(e => e.Mb)
+                .HasColumnType("mediumblob")
+                .HasColumnName("mb");
+            entity.Property(e => e.Raw)
+                .HasColumnType("longblob")
+                .HasColumnName("raw");`)
+  })
+
+  // MySQL indexes a TEXT or BLOB column only by a prefix, which the context does not give.
+  it('leaves an indexed MySQL TEXT or BLOB column to Pomelo', () => {
+    const { plan } = fixture(
+      `
+datasource db {
+  provider = "mysql"
+}
+
+model T {
+  id   Int    @id
+  body String @db.Text
+  lt   String @db.LongText
+  raw  Bytes
+
+  @@index([body(length: 100)])
+  @@index([lt(length: 50), raw(length: 8)])
+}
+`,
+      { ...DEFAULT_OPTIONS, provider: 'mysql' },
+    )
+    expect(contextFile(plan).code)
+      .toContain(`            entity.Property(e => e.Body).HasColumnName("body");
+            entity.Property(e => e.Lt).HasColumnName("lt");
+            entity.Property(e => e.Raw).HasColumnName("raw");`)
+  })
+
   // MySQL refuses DEFAULT CURRENT_TIMESTAMP on a DATETIME(3): "Invalid default value". (#196)
   it('gives a MySQL now() default the precision of its column', () => {
     const { plan } = fixture(
