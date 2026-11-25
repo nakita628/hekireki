@@ -1908,7 +1908,8 @@ model trio {
     const b = code.indexOf('\tB int')
     const c = code.indexOf('\tC int')
     expect(a).toBeGreaterThan(-1)
-    expect(a < b && b < c).toBe(true)
+    expect(b).toBeGreaterThan(a)
+    expect(c).toBeGreaterThan(b)
   })
 
   it('declares @@id fields in key order and writes priority: on composite index fields', () => {
