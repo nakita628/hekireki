@@ -192,6 +192,30 @@ function whereArg(index: SqlIndex, provider: string) {
   return `${keyword}=literal_column(${toPythonString(index.where)})`
 }
 
+// A column name as the dialect quotes it, the quote a name holds doubled.
+function sqlQuoted(name: string, provider: string) {
+  if (provider === 'mysql') return `\`${name.replaceAll('`', '``')}\``
+  if (provider === 'sqlserver') return `[${name.replaceAll(']', ']]')}]`
+  return `"${name.replaceAll('"', '""')}"`
+}
+
+// A column of an index as the argument of Index(): its name, or, sorted descending, the quoted
+// column with its order, which a name alone cannot carry. The index keeps its table from
+// `__table_args__` all the same.
+function indexColumnArg(column: string, sortOrder: string | undefined, provider: string) {
+  return sortOrder === 'desc'
+    ? `literal_column(${toPythonString(sqlQuoted(column, provider))}).desc()`
+    : toPythonString(column)
+}
+
+// Whether the indexes of a model read literal_column(): for a partial index's condition or a
+// descending column.
+function readsLiteralColumn(model: DMMF.Model, indexes: readonly SqlIndex[], provider: string) {
+  return modelIndexes(model, indexes).some(
+    (idx) => whereArg(idx, provider) !== null || idx.fields.some((f) => f.sortOrder === 'desc'),
+  )
+}
+
 // The indexes and uniques of a model whose fields are all on it: one that lists an `@ignore`d
 // field, which has no column, is left out.
 function modelIndexes(model: DMMF.Model, indexes: readonly SqlIndex[]) {
@@ -1107,8 +1131,8 @@ function generateTableArgs(
     const name = idx.dbName ?? constraintName(tableName, columns, unique ? 'key' : 'idx', provider)
     const where = whereArg(idx, provider)
     const args = [
-      `"${name}"`,
-      ...columns.map((c) => `"${c}"`),
+      toPythonString(name),
+      ...idx.fields.map((f) => indexColumnArg(fieldColumn(model, f.name), f.sortOrder, provider)),
       ...(unique ? ['unique=True'] : []),
       ...(where === null ? [] : [where]),
     ]
@@ -1608,9 +1632,7 @@ function modelSaImports(
     ...(foreignKeys.length > 0 ? ['ForeignKey'] : []),
     ...(foreignKeys.some((assoc) => assoc.foreignKeys.length > 1) ? ['ForeignKeyConstraint'] : []),
     ...(modelIndexes(model, indexes).length > 0 ? ['Index'] : []),
-    ...(modelIndexes(model, indexes).some((idx) => whereArg(idx, provider) !== null)
-      ? ['literal_column']
-      : []),
+    ...(readsLiteralColumn(model, indexes, provider) ? ['literal_column'] : []),
   ]
 }
 

@@ -450,6 +450,13 @@ function indexWhereSetting(sql: string) {
   return escapeTagValue(sql.replaceAll('\\"', '\\\\"').replaceAll(',', '\\,'))
 }
 
+// GORM's `sort:desc` index setting for a field the index keeps descending (`sort: Desc`), which the
+// migrator writes after the column in CREATE INDEX; GORM reads `sort:` per field, so each field of
+// one named index carries its own. `sort: Asc` is the default and stays plain.
+function sortSetting(idx: Pick<DMMF.Index, 'fields'> | undefined, field: string) {
+  return idx?.fields.find((f) => f.name === field)?.sortOrder === 'desc' ? ',sort:desc' : ''
+}
+
 /** The condition of a partial index, as `partialIndexWhere` gives it. */
 type IndexWhere = (
   model: DMMF.Model,
@@ -489,13 +496,16 @@ function collectCompositeIndexTags(
   const uniqueByIndex = new Set(
     plainUniques.filter((idx) => idx.fields.length === 1).map((idx) => idx.fields[0]?.name),
   )
+  const plainUniqueOf = new Map(
+    plainUniques.map((idx) => [idx.fields.map((f) => f.name).join(','), idx]),
+  )
   const singleUniqueTags = model.fields
     .filter((f) => f.isUnique || uniqueByIndex.has(f.name))
     .map((f): [string, string] => {
       const named = mappedUniques.get(f.name)
       return [
         f.name,
-        `uniqueIndex:${named ?? constraintName(tableName, [f.dbName ?? f.name], 'key', provider ?? '')}`,
+        `uniqueIndex:${named ?? constraintName(tableName, [f.dbName ?? f.name], 'key', provider ?? '')}${sortSetting(plainUniqueOf.get(f.name), f.name)}`,
       ]
     })
 
@@ -505,7 +515,11 @@ function collectCompositeIndexTags(
       const idxName =
         mappedUniques.get(fields.join(',')) ??
         constraintName(tableName, columnsOf(fields), 'key', provider ?? '')
-      return fields.map((f): [string, string] => [f, `uniqueIndex:${idxName}`])
+      const idx = plainUniqueOf.get(fields.join(','))
+      return fields.map((f): [string, string] => [
+        f,
+        `uniqueIndex:${idxName}${sortSetting(idx, f)}`,
+      ])
     })
 
   // A partial index's tag carries its condition in `where:`; one GORM cannot read back
@@ -522,8 +536,11 @@ function collectCompositeIndexTags(
       ])
       return []
     }
-    const tag = `${setting}:${name}${condition === '' ? '' : `,where:${condition}`}`
-    return idx.fields.map((f): [string, string] => [f.name, tag])
+    const whereSetting = condition === '' ? '' : `,where:${condition}`
+    return idx.fields.map((f): [string, string] => [
+      f.name,
+      `${setting}:${name}${sortSetting(idx, f.name)}${whereSetting}`,
+    ])
   }
 
   const partialUniqueTags = partialUniques.flatMap((idx) =>

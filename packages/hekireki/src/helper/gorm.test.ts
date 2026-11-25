@@ -1601,6 +1601,84 @@ func (Token) TableName() string {
   })
 })
 
+// An index column with `sort: Desc` takes GORM's `sort:desc` in that field's index setting, so
+// AutoMigrate writes it DESC in CREATE INDEX as Prisma Migrate does (schema.Parse, gorm v1.31.2,
+// reads Sort "desc" from each tag written here); `sort: Asc` is the default and stays plain.
+describe('generateGormModels descending index columns', () => {
+  it('writes sort:desc on a descending column of an index or a unique index', () => {
+    expect(
+      gormFor(
+        `
+model LogEntry {
+  id        Int      @id
+  uuid      String
+  action    String
+  timestamp Int
+  code      String   @unique(sort: Desc)
+  a         Int
+  b         Int
+
+  @@index([uuid, action, timestamp(sort: Desc)], map: "log_entry_uuid_idx")
+  @@index([action(sort: Asc)])
+  @@unique([a(sort: Desc), b])
+}
+`,
+        'mysql',
+      ),
+    ).toBe(`package model
+
+type LogEntry struct {
+	ID        int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	UUID      string \`gorm:"column:uuid;index:log_entry_uuid_idx;type:varchar(191);not null" json:"uuid"\`
+	Action    string \`gorm:"column:action;index:log_entry_uuid_idx;index:LogEntry_action_idx;type:varchar(191);not null" json:"action"\`
+	Timestamp int    \`gorm:"column:timestamp;index:log_entry_uuid_idx,sort:desc;size:32;not null" json:"timestamp"\`
+	Code      string \`gorm:"column:code;uniqueIndex:LogEntry_code_key,sort:desc;type:varchar(191);not null" json:"code"\`
+	A         int    \`gorm:"column:a;uniqueIndex:LogEntry_a_b_key,sort:desc;size:32;not null" json:"a"\`
+	B         int    \`gorm:"column:b;uniqueIndex:LogEntry_a_b_key;size:32;not null" json:"b"\`
+}
+
+func (LogEntry) TableName() string {
+	return "LogEntry"
+}
+`)
+  })
+
+  it("writes sort:desc before a partial index's where:", () => {
+    expect(
+      gormFor(
+        `
+generator client {
+  provider        = "prisma-client"
+  output          = "./generated"
+  previewFeatures = ["partialIndexes"]
+}
+
+model Account {
+  id    Int     @id
+  alive Boolean
+  n     Int
+
+  @@index([alive, n(sort: Desc)], where: raw("alive"))
+  @@unique([n(sort: Desc)], where: raw("n > 0"))
+}
+`,
+        'postgresql',
+      ),
+    ).toBe(`package model
+
+type Account struct {
+	ID    int  \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	Alive bool \`gorm:"column:alive;index:Account_alive_n_idx,where:(alive);not null" json:"alive"\`
+	N     int  \`gorm:"column:n;uniqueIndex:Account_n_key,sort:desc,where:(n > 0);index:Account_alive_n_idx,sort:desc,where:(alive);size:32;not null" json:"n"\`
+}
+
+func (Account) TableName() string {
+	return "Account"
+}
+`)
+  })
+})
+
 describe('generateGormModels fields that become one Go name', () => {
   // documenso's Account holds `createdAt` beside the `created_at` an OAuth provider returns; both
   // would be `CreatedAt`, which Go refuses as a redeclared field.

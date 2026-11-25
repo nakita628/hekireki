@@ -3348,3 +3348,111 @@ class Account(Base):
 `)
   })
 })
+
+// A column sorted descending (`sort: Desc`) keeps its order: a name alone cannot carry it, so the
+// column is written quoted as the dialect quotes it, with .desc(). `sort: Asc` stays a name.
+describe('descending index columns', () => {
+  function sortCode(provider: string, models: string) {
+    const schema = `datasource db {
+  provider = "${provider}"
+}
+${models}`
+    const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
+    return generateSingleFile(result.models, result.enums, result.indexes, provider)
+  }
+
+  const LOG_ENTRY = `model LogEntry {
+  id        Int      @id
+  uuid      String
+  action    String
+  timestamp DateTime @map("logged_at")
+  score     Int      @unique(sort: Desc)
+  rank      Int
+
+  @@index([uuid, action, timestamp(sort: Desc)], map: "log_entry_uuid_idx")
+  @@unique([action(sort: Asc), rank(sort: Desc)])
+  @@index([rank(sort: Asc)])
+}`
+
+  it('escapes an index name and a column name for Python, ascending or descending', () => {
+    const code = sortCode(
+      'postgresql',
+      `model Odd {
+  id Int    @id
+  a  String @map("a\\"b")
+  b  String @map("c\\\\d")
+
+  @@index([a, b(sort: Desc)], map: "odd\\"idx")
+}`,
+    )
+    expect(code).toContain('Index("odd\\"idx", "a\\"b", literal_column("\\"c\\\\d\\"").desc()),')
+  })
+
+  it('writes a descending column in double quotes on PostgreSQL', () => {
+    expect(sortCode('postgresql', LOG_ENTRY))
+      .toBe(`from sqlalchemy import Dialect, Index, MetaData, Text, TypeDecorator, literal_column
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
+from datetime import datetime, timezone
+
+
+${UTC_DATE_TIME}class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {datetime: UtcDateTime(precision=3), str: Text}
+
+
+class LogEntry(Base):
+    __tablename__ = "LogEntry"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    uuid: Mapped[str]
+    action: Mapped[str]
+    timestamp: Mapped[datetime] = mapped_column("logged_at")
+    score: Mapped[int]
+    rank: Mapped[int]
+
+    __table_args__ = (
+        Index("LogEntry_score_key", literal_column("\\"score\\"").desc(), unique=True),
+        Index("log_entry_uuid_idx", "uuid", "action", literal_column("\\"logged_at\\"").desc()),
+        Index("LogEntry_rank_idx", "rank"),
+        Index("LogEntry_action_rank_key", "action", literal_column("\\"rank\\"").desc(), unique=True),
+    )
+`)
+  })
+
+  it('writes a descending column in backticks on MySQL', () => {
+    expect(sortCode('mysql', LOG_ENTRY)).toContain(`
+    __table_args__ = (
+        Index("LogEntry_score_key", literal_column("\`score\`").desc(), unique=True),
+        Index("log_entry_uuid_idx", "uuid", "action", literal_column("\`logged_at\`").desc()),
+        Index("LogEntry_rank_idx", "rank"),
+        Index("LogEntry_action_rank_key", "action", literal_column("\`rank\`").desc(), unique=True),
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
+    )
+`)
+  })
+
+  it('writes a descending column in brackets on SQL Server', () => {
+    expect(sortCode('sqlserver', LOG_ENTRY)).toContain(`
+    __table_args__ = (
+        Index("LogEntry_score_key", literal_column("[score]").desc(), unique=True),
+        Index("log_entry_uuid_idx", "uuid", "action", literal_column("[logged_at]").desc()),
+        Index("LogEntry_rank_idx", "rank"),
+        Index("LogEntry_action_rank_key", "action", literal_column("[rank]").desc(), unique=True),
+    )
+`)
+  })
+
+  it('writes a descending column in double quotes on SQLite', () => {
+    expect(sortCode('sqlite', LOG_ENTRY)).toContain(`
+    __table_args__ = (
+        Index("LogEntry_score_key", literal_column("\\"score\\"").desc(), unique=True),
+        Index("log_entry_uuid_idx", "uuid", "action", literal_column("\\"logged_at\\"").desc()),
+        Index("LogEntry_rank_idx", "rank"),
+        Index("LogEntry_action_rank_key", "action", literal_column("\\"rank\\"").desc(), unique=True),
+        {"sqlite_autoincrement": True},
+    )
+`)
+  })
+})
