@@ -342,11 +342,13 @@ function gormDefault(
     ((!isPk || isCompositePk) && !isNowDefault && field.isUpdatedAt !== true
       ? (enumMappedDefault(field, enums) ?? formatGoDefault(field.default, field.type, field.kind))
       : null)
-  // GORM parses a number default into a float64 and inserts it bare where the field is zero, past
-  // Money's numeric cast; in parentheses it is not parsed, and the column is left to its DEFAULT.
-  return value !== null && isMoney(field, provider) && /^-?[\d.]+$/u.test(value)
-    ? `(${value})`
-    : value
+  return value !== null && isMoney(field, provider) ? moneyDefault(value) : value
+}
+
+// GORM parses a number default into a float64 and inserts it bare where the field is zero, past
+// Money's numeric cast; in parentheses it is not parsed, and the column is left to its DEFAULT.
+function moneyDefault(value: string) {
+  return /^-?[\d.]+$/u.test(value) ? `(${value})` : value
 }
 
 function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
