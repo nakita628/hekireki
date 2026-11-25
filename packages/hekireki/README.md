@@ -445,9 +445,14 @@ A `uuid()` or `uuid(7)` key without `@db.Uuid` or `@db.UniqueIdentifier` is a te
 is a `:string` key that `Repo.insert/2` fills with `Ecto.UUID.generate()` (`generate(version: 7)`
 for `uuid(7)`, Ecto 3.14 or later). As in Prisma Client, an id you give is neither checked nor
 lower-cased. `Repo.insert_all/3` fills only an `autoincrement()` key and a `uuid()` key of a
-`@db.Uuid` column (`:id` and `:binary_id`), so its rows need an `id` of their own for any other
-generated key (a text `uuid()`, a `uuid(7)`, a `ulid()`), as they need a value for a `uuid()` or
-`ulid()` field that is not the key.
+`@db.Uuid` or `@db.UniqueIdentifier` column (`:id` and `:binary_id`), so its rows need an `id` of
+their own for any other generated key (a text `uuid()`, a `uuid(7)`, a `ulid()`), as they need a
+value for a `uuid()` or `ulid()` field that is not the key.
+
+On SQL Server, a `String @db.UniqueIdentifier` is `:binary_id`, or `Tds.Ecto.UUID` where Ecto
+fills it (a `uuid()` or `uuid(7)` default, a `uuid(7)` key): the Tds adapter loads and dumps both
+in SQL Server's byte order, where `Ecto.UUID` would write the bytes of another GUID and `:string`
+would hold the raw bytes.
 
 `examples/ecto` in the repository runs a schema against Ecto on SQLite.
 
