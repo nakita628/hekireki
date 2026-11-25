@@ -1854,18 +1854,34 @@ function standardImports(
   held: { readonly scalarList: boolean; readonly money: boolean; readonly plainJson: boolean },
 ) {
   const lists = types.some((name) => name.endsWith('List'))
-  const valuers = types.length > 0 || held.scalarList || held.money || held.plainJson
+  const uses = typeImportUses(types, lists, held)
   return [
     generators.has('ulid') ? '"crypto/rand"' : null,
     lists ? '"database/sql"' : null,
-    valuers ? '"database/sql/driver"' : null,
+    uses.valuers ? '"database/sql/driver"' : null,
     held.plainJson ? '"encoding/json"' : null,
-    valuers ? '"fmt"' : null,
+    uses.valuers ? '"fmt"' : null,
     held.money ? '"regexp"' : null,
-    types.length > 0 || held.scalarList || held.money ? '"strconv"' : null,
-    types.includes('TimeOfDay') || lists || held.scalarList || held.money ? '"strings"' : null,
+    uses.parses ? '"strconv"' : null,
+    uses.splits ? '"strings"' : null,
     needsTime ? '"time"' : null,
   ]
+}
+
+// What the types written beside the models use of the standard library: each is a Valuer and a
+// Scanner that reports with fmt; the date types, ScalarList and Money parse numbers, and split
+// text where they read a time of day, a list or an amount.
+function typeImportUses(
+  types: readonly string[],
+  lists: boolean,
+  held: { readonly scalarList: boolean; readonly money: boolean; readonly plainJson: boolean },
+) {
+  const parses = types.length > 0 || held.scalarList || held.money
+  return {
+    valuers: parses || held.plainJson,
+    parses,
+    splits: types.includes('TimeOfDay') || lists || held.scalarList || held.money,
+  }
 }
 
 export function collectImports(models: readonly DMMF.Model[], provider?: string) {
@@ -1935,18 +1951,6 @@ export function formatImports(groups: readonly (readonly string[])[]) {
  * from it, as pgx returns an array it has no Go type for. A nil list is written as `{}` and a NULL
  * column read as an empty list, as Prisma Client reads it.
  */
-/**
- * The types a PostgreSQL `@db.Money` and `@db.Json` are held in, where the schema has one: GORM's
- * float64 cannot read the money text PostgreSQL prints, and datatypes.JSON makes AutoMigrate's
- * column jsonb.
- */
-export function generateNativeTypes(models: readonly DMMF.Model[], provider?: string) {
-  return [
-    ...(usesMoney(models, provider) ? MONEY_TYPE : []),
-    ...(usesPlainJson(models, provider) ? PLAIN_JSON_TYPE : []),
-  ]
-}
-
 const MONEY_TYPE = [
   '',
   '// Money holds a PostgreSQL money column (@db.Money), which Prisma Migrate makes and the server',
@@ -2054,6 +2058,18 @@ const PLAIN_JSON_TYPE = [
   '\treturn ""',
   '}',
 ]
+
+/**
+ * The types a PostgreSQL `@db.Money` and `@db.Json` are held in, where the schema has one: GORM's
+ * float64 cannot read the money text PostgreSQL prints, and datatypes.JSON makes AutoMigrate's
+ * column jsonb.
+ */
+export function generateNativeTypes(models: readonly DMMF.Model[], provider?: string) {
+  return [
+    ...(usesMoney(models, provider) ? MONEY_TYPE : []),
+    ...(usesPlainJson(models, provider) ? PLAIN_JSON_TYPE : []),
+  ]
+}
 
 export function generateScalarListType(models: readonly DMMF.Model[], provider?: string) {
   if (!usesScalarList(models, provider)) return []
