@@ -316,7 +316,11 @@ function gormDefault(
 }
 
 function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
-  if (!isPk) return []
+  // Prisma allows autoincrement() on a @unique field that is not the key (a serial column on
+  // PostgreSQL, AUTO_INCREMENT on MySQL). GORM gives such a column its default only when the tag
+  // says autoIncrement, and leaves the field out of an INSERT while it is zero; without it GORM
+  // makes a plain column and writes 0.
+  if (!isPk) return isAutoincrement(field) ? ['autoIncrement'] : []
   const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
   // A native type wins (columnTypeTag); on MySQL such a key is a String like any other,
   // VARCHAR(191) (isMysqlDefaultString), and on PostgreSQL text, as Prisma Migrate makes it.

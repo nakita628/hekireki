@@ -940,6 +940,30 @@ model Part {
   })
 })
 
+// Prisma allows autoincrement() on a @unique field that is not the key: a serial column on
+// PostgreSQL and an AUTO_INCREMENT one on MySQL. The tag says autoIncrement, so GORM makes the
+// column so and leaves the field out of an INSERT while it is zero rather than writing 0.
+describe('generateGormModels autoincrement on a field that is not the key', () => {
+  const schema = `
+model Counter {
+  id       String @id
+  metricId Int    @unique @default(autoincrement()) @map("metric_id")
+}
+`
+
+  it('marks the column autoIncrement on PostgreSQL, which GORM makes serial', () => {
+    expect(gormFor(schema, 'postgresql')).toContain(
+      '\tMetricID int    `gorm:"column:metric_id;autoIncrement;uniqueIndex:Counter_metric_id_key;size:32;not null" json:"metric_id"`',
+    )
+  })
+
+  it('marks the column autoIncrement on MySQL, which GORM makes INT AUTO_INCREMENT', () => {
+    expect(gormFor(schema, 'mysql')).toContain(
+      '\tMetricID int    `gorm:"column:metric_id;autoIncrement;uniqueIndex:Counter_metric_id_key;size:32;not null" json:"metric_id"`',
+    )
+  })
+})
+
 // Prisma makes every scalar list a PostgreSQL array column, which takes no JSON text: each list is
 // a ScalarList written and read in the array's text form.
 describe('generateGormModels scalar lists on PostgreSQL', () => {
