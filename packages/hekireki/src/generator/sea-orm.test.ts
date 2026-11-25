@@ -348,7 +348,7 @@ pub struct Model {
     pub name: String,
     /// When they joined.
     /// Two lines.
-    #[sea_orm(column_name = "createdAt")]
+    #[sea_orm(column_name = "createdAt", default_expr = "Expr::current_timestamp()")]
     pub created_at: DateTime,
     pub tone: Tone,
 }

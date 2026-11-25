@@ -14,6 +14,7 @@ pub struct Model {
     #[sea_orm(unique)]
     #[sea_orm(column_type = "Text")]
     pub email: String,
+    #[sea_orm(default_expr = "Expr::current_timestamp()")]
     pub created_at: PrismaDateTime,
     pub updated_at: PrismaDateTime,
 }

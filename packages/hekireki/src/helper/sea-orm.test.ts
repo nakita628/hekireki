@@ -154,6 +154,148 @@ describe('buildSeaOrmAttributes', () => {
   })
 })
 
+describe('buildSeaOrmAttributes: a default the database fills (#276)', () => {
+  const column = (type: string, def: unknown, nativeType: unknown = null) =>
+    ({
+      name: 'stamp',
+      kind: 'scalar' as const,
+      type,
+      isRequired: true,
+      isId: false,
+      isUnique: false,
+      isList: false,
+      isUpdatedAt: false,
+      hasDefaultValue: true,
+      default: def,
+      nativeType,
+    }) as any
+  const now = { name: 'now', args: [] }
+
+  it('writes now() as the CURRENT_TIMESTAMP of the table sea-orm creates', () => {
+    expect([
+      buildSeaOrmAttributes(column('DateTime', now), false, false, undefined, [], 'postgresql'),
+      buildSeaOrmAttributes(column('DateTime', now), false, false, undefined, [], 'sqlite'),
+    ]).toStrictEqual([
+      [
+        [
+          '    #[sea_orm(',
+          '        column_type = "custom(\\"timestamp(3)\\")",',
+          '        default_expr = "Expr::current_timestamp()"',
+          '    )]',
+        ].join('\n'),
+      ],
+      ['    #[sea_orm(default_expr = "Expr::current_timestamp()")]'],
+    ])
+  })
+
+  it('writes now() at the column precision on MySQL, which refuses the bare form', () => {
+    expect([
+      buildSeaOrmAttributes(column('DateTime', now), false, false, undefined, [], 'mysql').at(-1),
+      buildSeaOrmAttributes(
+        column('DateTime', now, ['Timestamp', ['6']]),
+        false,
+        false,
+        undefined,
+        [],
+        'mysql',
+      ).at(-1),
+      buildSeaOrmAttributes(
+        column('DateTime', now, ['DateTime', ['0']]),
+        false,
+        false,
+        undefined,
+        [],
+        'mysql',
+      ).at(-1),
+    ]).toStrictEqual([
+      [
+        '    #[sea_orm(',
+        '        column_type = "custom(\\"datetime(3)\\")",',
+        '        default_expr = "Expr::cust(\\"CURRENT_TIMESTAMP(3)\\")"',
+        '    )]',
+      ].join('\n'),
+      [
+        '    #[sea_orm(',
+        '        column_type = "custom(\\"timestamp(6)\\")",',
+        '        default_expr = "Expr::cust(\\"CURRENT_TIMESTAMP(6)\\")"',
+        '    )]',
+      ].join('\n'),
+      '    #[sea_orm(default_expr = "Expr::current_timestamp()")]',
+    ])
+  })
+
+  it('writes no DEFAULT for now() on a MySQL DATE or TIME, which refuses CURRENT_TIMESTAMP', () => {
+    expect([
+      buildSeaOrmAttributes(
+        column('DateTime', now, ['Date', []]),
+        false,
+        false,
+        undefined,
+        [],
+        'mysql',
+      ),
+      buildSeaOrmAttributes(
+        column('DateTime', now, ['Time', ['3']]),
+        false,
+        false,
+        undefined,
+        [],
+        'mysql',
+      ),
+    ]).toStrictEqual([['    #[sea_orm(column_type = "Date")]'], [expect.any(String)]])
+    expect(
+      buildSeaOrmAttributes(
+        column('DateTime', now, ['Time', ['3']]),
+        false,
+        false,
+        undefined,
+        [],
+        'mysql',
+      ).join('\n'),
+    ).not.toContain('default_expr')
+  })
+
+  it('writes the SQL of a dbgenerated() default, and nothing for an empty one', () => {
+    expect([
+      buildSeaOrmAttributes(
+        column('String', { name: 'dbgenerated', args: ['gen_random_uuid()::text'] }),
+        false,
+        false,
+        undefined,
+        [],
+        'postgresql',
+      ),
+      buildSeaOrmAttributes(
+        column('Int', { name: 'dbgenerated', args: ['(unixepoch())'] }),
+        false,
+        false,
+        undefined,
+        [],
+        'sqlite',
+      ),
+      buildSeaOrmAttributes(
+        column('String', { name: 'dbgenerated', args: [] }),
+        false,
+        false,
+        undefined,
+        [],
+        'sqlite',
+      ),
+    ]).toStrictEqual([
+      [
+        [
+          '    #[sea_orm(',
+          '        column_type = "Text",',
+          '        default_expr = "Expr::cust(\\"gen_random_uuid()::text\\")"',
+          '    )]',
+        ].join('\n'),
+      ],
+      ['    #[sea_orm(default_expr = "Expr::cust(\\"(unixepoch())\\")")]'],
+      ['    #[sea_orm(column_type = "Text")]'],
+    ])
+  })
+})
+
 describe('seaOrmAttribute', () => {
   it('keeps two or more arguments on one line while they take at most 70 columns', () => {
     const args = ['column_name = "jsonObj"', `default_value = "${'a'.repeat(27)}"`] as const
@@ -1174,7 +1316,10 @@ pub struct Model {
     pub id: i32,
     #[sea_orm(column_type = "custom(\\"timestamp(3)\\")")]
     pub at: DateTime,
-    #[sea_orm(column_type = "custom(\\"timestamp(3)\\")")]
+    #[sea_orm(
+        column_type = "custom(\\"timestamp(3)\\")",
+        default_expr = "Expr::current_timestamp()"
+    )]
     pub created: DateTime,
     #[sea_orm(column_type = "custom(\\"timestamp(3)\\")")]
     pub literal: DateTime,
@@ -1221,6 +1366,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub at: PrismaDateTime,
+    #[sea_orm(default_expr = "Expr::current_timestamp()")]
     pub created: PrismaDateTime,
     pub literal: PrismaDateTime,
     pub updated: Option<PrismaDateTime>,
@@ -1500,6 +1646,7 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "Item")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(default_expr = "Expr::cust(\\"gen_random_uuid()\\")")]
     pub id: Uuid,
     #[sea_orm(column_name = "ownerId")]
     pub owner_id: Uuid,
