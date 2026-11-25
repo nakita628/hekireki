@@ -130,7 +130,7 @@ maps its column to, so `EnsureCreated()` and migrations make Prisma's column: `@
 `ushort`, `@db.UnsignedMediumInt` and `@db.UnsignedInt` `uint`, `@db.UnsignedBigInt` `ulong` and
 `@db.Float` `float` (a `Boolean @db.TinyInt` stays a `bool`). An `int` written to a `smallint` would
 go through EF Core's unchecked cast, which writes a value out of range as another number where the
-database refuses it. These properties were `int`, `long` and `double` before 0.53, so code that uses
+database refuses it. These properties were `int`, `long` and `double` before 0.54, so code that uses
 them changes, and a column an earlier `EnsureCreated()` or migration made is altered by the next
 migration.
 
