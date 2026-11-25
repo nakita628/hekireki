@@ -782,6 +782,32 @@ model Post {
       '`gorm:"foreignKey:AuthorID;constraint:Post_authorId_fkey,OnUpdate:CASCADE,OnDelete:NO ACTION"`',
     )
   })
+
+  it('makes an Int @db.Int on SQL Server an INT, as a plain Int', () => {
+    const code = gormFor('model A {\n  id Int @id @db.Int\n  n  Int\n}\n', 'sqlserver')
+    expect(code).toContain('`gorm:"column:id;primaryKey;size:32" json:"id"`')
+    expect(code).toContain('`gorm:"column:n;size:32;not null" json:"n"`')
+  })
+
+  it('gives a CockroachDB native type the column Prisma Migrate makes', () => {
+    const code = gormFor(
+      `
+model A {
+  id String @id @db.Uuid
+  ch String @db.Char(2)
+  ip String @db.Inet
+  b  String @db.Bit(3)
+  vb String @db.VarBit(4)
+}
+`,
+      'cockroachdb',
+    )
+    expect(code).toContain('`gorm:"column:id;primaryKey;type:uuid" json:"id"`')
+    expect(code).toContain('`gorm:"column:ch;type:char(2);not null" json:"ch"`')
+    expect(code).toContain('`gorm:"column:ip;type:inet;not null" json:"ip"`')
+    expect(code).toContain('`gorm:"column:b;type:bit(3);not null" json:"b"`')
+    expect(code).toContain('`gorm:"column:vb;type:varbit(4);not null" json:"vb"`')
+  })
 })
 
 /** The models of a PostgreSQL schema holding one model of the given name, with a String[]. */
@@ -797,6 +823,122 @@ function listModels(name: string) {
   if ('type' in result) throw new Error(result.error.message)
   return result.datamodel.models
 }
+
+// The column `prisma migrate diff --from-empty` makes of each type is in the comment beside it.
+describe('generateGormModels native types as Prisma Migrate makes them on MySQL and PostgreSQL', () => {
+  it('gives a MySQL column the type Prisma makes, where GORM would make another', () => {
+    const code = gormFor(
+      `
+model Item {
+  id    Int     @id @default(autoincrement()) @db.UnsignedInt
+  price Decimal
+  mt    String  @db.MediumText
+  lt    String  @db.LongText
+  tt    String  @db.TinyText
+  ch    String  @db.Char(2)
+  ti    Int     @db.TinyInt
+  flag  Boolean @db.TinyInt
+  ui    Int     @db.UnsignedInt
+  us    Int     @db.UnsignedSmallInt
+  ut    Int     @db.UnsignedTinyInt
+  um    Int     @db.UnsignedMediumInt
+  yr    Int     @db.Year
+  ub    BigInt  @db.UnsignedBigInt
+  fl    Float   @db.Float
+  ii    Int     @db.Int
+  vb    Bytes   @db.VarBinary(16)
+  bi    Bytes   @db.Binary(16)
+  bl    Bytes   @db.Blob
+  tb    Bytes   @db.TinyBlob
+  mb    Bytes   @db.MediumBlob
+  lb    Bytes   @db.LongBlob
+}
+`,
+      'mysql',
+    )
+    expect(code).toContain(
+      [
+        // INTEGER UNSIGNED NOT NULL AUTO_INCREMENT
+        '\tID    int     `gorm:"column:id;primaryKey;autoIncrement;type:int unsigned" json:"id"`',
+        // DECIMAL(65, 30)
+        '\tPrice float64 `gorm:"column:price;type:decimal(65,30);not null" json:"price"`',
+        '\tMt    string  `gorm:"column:mt;type:mediumtext;not null" json:"mt"`',
+        '\tLt    string  `gorm:"column:lt;type:longtext;not null" json:"lt"`',
+        '\tTt    string  `gorm:"column:tt;type:tinytext;not null" json:"tt"`',
+        '\tCh    string  `gorm:"column:ch;type:char(2);not null" json:"ch"`',
+        '\tTi    int     `gorm:"column:ti;type:tinyint;not null" json:"ti"`',
+        // BOOLEAN, which GORM makes of a bool
+        '\tFlag  bool    `gorm:"column:flag;not null" json:"flag"`',
+        '\tUI    int     `gorm:"column:ui;type:int unsigned;not null" json:"ui"`',
+        '\tUs    int     `gorm:"column:us;type:smallint unsigned;not null" json:"us"`',
+        '\tUt    int     `gorm:"column:ut;type:tinyint unsigned;not null" json:"ut"`',
+        '\tUm    int     `gorm:"column:um;type:mediumint unsigned;not null" json:"um"`',
+        '\tYr    int     `gorm:"column:yr;type:year;not null" json:"yr"`',
+        '\tUb    int64   `gorm:"column:ub;type:bigint unsigned;not null" json:"ub"`',
+        // FLOAT: GORM makes a float64 of size 32 a float
+        '\tFl    float64 `gorm:"column:fl;size:32;not null" json:"fl"`',
+        // INTEGER
+        '\tIi    int     `gorm:"column:ii;size:32;not null" json:"ii"`',
+        '\tVb    []byte  `gorm:"column:vb;type:varbinary(16);not null" json:"vb"`',
+        '\tBi    []byte  `gorm:"column:bi;type:binary(16);not null" json:"bi"`',
+        '\tBl    []byte  `gorm:"column:bl;type:blob;not null" json:"bl"`',
+        '\tTb    []byte  `gorm:"column:tb;type:tinyblob;not null" json:"tb"`',
+        '\tMb    []byte  `gorm:"column:mb;type:mediumblob;not null" json:"mb"`',
+        // LONGBLOB, GORM's own
+        '\tLb    []byte  `gorm:"column:lb;not null" json:"lb"`',
+      ].join('\n'),
+    )
+  })
+
+  it('gives a PostgreSQL column the type Prisma makes, a uuid key and its foreign key alike', () => {
+    const code = gormFor(
+      `
+model Item {
+  id    String  @id @default(uuid()) @db.Uuid
+  vc    String  @unique @db.VarChar
+  ch    String  @db.Char(2)
+  inet  String  @db.Inet
+  bit   String  @db.Bit(3)
+  bits  String  @db.VarBit
+  re    Float   @db.Real
+  oid   Int     @db.Oid
+  ii    Int     @db.Integer
+  parts Part[]
+}
+
+model Part {
+  id     Int    @id @default(autoincrement()) @db.Integer
+  itemId String @db.Uuid
+  item   Item   @relation(fields: [itemId], references: [id])
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain(
+      [
+        '\tID    string  `gorm:"column:id;primaryKey;type:uuid" json:"id"`',
+        // VARCHAR
+        '\tVc    string  `gorm:"column:vc;uniqueIndex:Item_vc_key;type:varchar;not null" json:"vc"`',
+        '\tCh    string  `gorm:"column:ch;type:char(2);not null" json:"ch"`',
+        '\tInet  string  `gorm:"column:inet;type:inet;not null" json:"inet"`',
+        '\tBit   string  `gorm:"column:bit;type:bit(3);not null" json:"bit"`',
+        '\tBits  string  `gorm:"column:bits;type:varbit;not null" json:"bits"`',
+        '\tRe    float64 `gorm:"column:re;type:real;not null" json:"re"`',
+        '\tOid   int     `gorm:"column:oid;type:oid;not null" json:"oid"`',
+        // INTEGER
+        '\tIi    int     `gorm:"column:ii;size:32;not null" json:"ii"`',
+      ].join('\n'),
+    )
+    expect(code).toContain(
+      [
+        '\tID     int    `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`',
+        '\tItemID string `gorm:"column:itemId;type:uuid;not null" json:"itemId"`',
+      ].join('\n'),
+    )
+    // The key's uuid() is still made in BeforeCreate.
+    expect(code).toContain('uuid.NewString()')
+  })
+})
 
 // Prisma makes every scalar list a PostgreSQL array column, which takes no JSON text: each list is
 // a ScalarList written and read in the array's text form.

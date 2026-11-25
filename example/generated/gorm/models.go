@@ -232,7 +232,7 @@ func (OrderItem) TableName() string {
 
 // DB-side generated defaults (dbgenerated) plus Json / Bytes payloads.
 type AuditLog struct {
-	ID        string         `gorm:"column:id;primaryKey;type:char(36);default:gen_random_uuid()" json:"id"`
+	ID        string         `gorm:"column:id;primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
 	Action    string         `gorm:"column:action;not null" json:"action"`
 	Payload   datatypes.JSON `gorm:"column:payload;default:'{}';not null" json:"payload"`
 	Signature []byte         `gorm:"column:signature" json:"signature"`

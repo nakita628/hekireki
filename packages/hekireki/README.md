@@ -87,6 +87,13 @@ included. The next `AutoMigrate` alters a column an earlier one made `longtext`,
 characters: check with `SELECT MAX(CHAR_LENGTH(column))` first, and give a field that holds longer
 values `@db.Text`.
 
+`hekireki-gorm` also gives a native type the column Prisma Migrate makes for it: `uuid` for a
+PostgreSQL or CockroachDB `@db.Uuid` (not `char(36)`), `int unsigned` and the like for MySQL's
+unsigned types, `decimal(65,30)` for a MySQL `Decimal`. On a database an earlier `AutoMigrate`
+made, the next one alters such a column, and the database refuses that while a foreign key points
+at it or from it: drop the foreign keys, alter the key and its foreign key columns together, and
+add the foreign keys back, or migrate with Prisma Migrate.
+
 `hekireki-sqlalchemy` and `hekireki-django` give a `uuid()`, `cuid()`, `ulid()` or `nanoid()`
 default the value Prisma Client would make, with a package from PyPI where Python's standard
 library has none: `uuid6` for `uuid(7)`, `python-ulid` for `ulid()`, `cuid` for `cuid()`, `cuid2`
