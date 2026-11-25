@@ -114,8 +114,9 @@ function pgNativeType(name: string, args: readonly string[]) {
   }
   // drizzle's bit() (from pgvector, a bit string) needs its length, which Prisma's default is 1.
   if (name === 'Bit') return `bit({ dimensions: ${isPresent(args[0]) ? args[0] : 1} })`
+  // Written as drizzle-kit reads the column back, so a push does not alter it again.
   if (name === 'VarBit') {
-    return `typedText({ type: 'varbit${isPresent(args[0]) ? `(${args[0]})` : ''}' })`
+    return `typedText({ type: 'bit varying${isPresent(args[0]) ? `(${args[0]})` : ''}' })`
   }
   const sized = PG_NATIVE_SIZED[name]
   if (sized !== undefined) return sizedColumn(sized, args[0])

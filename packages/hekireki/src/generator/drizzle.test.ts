@@ -1268,14 +1268,14 @@ const PG_NATIVE_TYPES: readonly (readonly [
     '@db.VarBit(4)',
     ['VarBit', ['4']],
     'customType, integer, pgTable',
-    "typedText('value', { type: 'varbit(4)' })",
+    "typedText('value', { type: 'bit varying(4)' })",
   ],
   [
     'String',
     '@db.VarBit',
     ['VarBit', []],
     'customType, integer, pgTable',
-    "typedText('value', { type: 'varbit' })",
+    "typedText('value', { type: 'bit varying' })",
   ],
   [
     'String',
