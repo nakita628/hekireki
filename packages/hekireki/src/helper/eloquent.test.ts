@@ -1241,6 +1241,40 @@ class Counter extends Model
 }`)
   })
 
+  it('reads back a sequence() key on CockroachDB, which the insert returns', () => {
+    const counter = makeModel({
+      name: 'Counter',
+      fields: [
+        makeField({
+          name: 'id',
+          type: 'BigInt',
+          isId: true,
+          hasDefaultValue: true,
+          default: { name: 'sequence', args: [] },
+        }),
+      ],
+    })
+
+    expect(
+      eloquentModels([counter], 'App\\Models', undefined, undefined, { provider: 'cockroachdb' }),
+    ).toBe(`<?php
+
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+
+class Counter extends Model
+{
+    protected $table = 'Counter';
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'id',
+    ];
+}`)
+  })
+
   it('keeps incrementing false for a text key the database makes, which may read as a number', () => {
     const ticket = makeModel({
       name: 'Ticket',
