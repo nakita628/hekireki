@@ -63,19 +63,19 @@ The `provider` of the generator block picks the output. Every option is optional
 
 ### ORM models
 
-| Provider                | Writes                        | Options                                             |
-| ----------------------- | ----------------------------- | --------------------------------------------------- |
-| `hekireki-drizzle`      | Drizzle tables                |                                                     |
-| `hekireki-kysely`       | Kysely `DB` interface         |                                                     |
-| `hekireki-sqlalchemy`   | SQLAlchemy models             |                                                     |
-| `hekireki-django`       | Django models                 |                                                     |
-| `hekireki-activerecord` | Rails models                  | `locales`: directory of the translated messages     |
-| `hekireki-gorm`         | GORM structs                  | `package` (`model`)                                 |
-| `hekireki-sea-orm`      | SeaORM entities               | `renameAll`: serde's `rename_all`                   |
-| `hekireki-ecto`         | Ecto schemas                  | `app` (`MyApp`), `mysqlFlavor` (`mysql`, `mariadb`) |
-| `hekireki-eloquent`     | Eloquent models               | `namespace` (`App\Models`)                          |
-| `hekireki-efcore`       | EF Core entities, `DbContext` | `namespace` (`Models`), `context` (`AppDbContext`)  |
-| `hekireki-exposed`      | Exposed tables                | `package` (`models`), `dao` (`true`)                |
+| Provider                | Writes                        | Options                                              |
+| ----------------------- | ----------------------------- | ---------------------------------------------------- |
+| `hekireki-drizzle`      | Drizzle tables                |                                                      |
+| `hekireki-kysely`       | Kysely `DB` interface         |                                                      |
+| `hekireki-sqlalchemy`   | SQLAlchemy models             |                                                      |
+| `hekireki-django`       | Django models                 |                                                      |
+| `hekireki-activerecord` | Rails models                  | `locales`: directory of the translated messages      |
+| `hekireki-gorm`         | GORM structs                  | `package` (`model`)                                  |
+| `hekireki-sea-orm`      | SeaORM entities               | `renameAll`: serde's `rename_all`                    |
+| `hekireki-ecto`         | Ecto schemas                  | `app` (`MyApp`), `mysqlFlavor`: `mysql` or `mariadb` |
+| `hekireki-eloquent`     | Eloquent models               | `namespace` (`App\Models`)                           |
+| `hekireki-efcore`       | EF Core entities, `DbContext` | `namespace` (`Models`), `context` (`AppDbContext`)   |
+| `hekireki-exposed`      | Exposed tables                | `package` (`models`), `dao` (`true`)                 |
 
 Every ORM generator stores a `DateTime` as Prisma Client stores it, so the ORM and Prisma read
 each other's rows alike.

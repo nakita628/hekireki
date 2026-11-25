@@ -1523,10 +1523,10 @@ const JSON_LIBRARY_APPS: ReadonlyMap<string, string> = new Map([
  * Prisma's `JSONB` column on SQLite has NUMERIC affinity, so SQLite keeps the text of a number as
  * an INTEGER or a REAL (a `1.0` comes back as `1`), which `ecto_sqlite3`'s `:map` loader refuses;
  * MySQL's JSON column is decoded by MyXQL already, and the `:map` loader decoded a string a second
- * time, while MariaDB's is text. A binary that is JSON text is decoded, so on MySQL a JSON string
- * whose contents are JSON text (`"42"`) loads as what it holds. The value alone cannot tell the two
- * servers apart: `mysqlFlavor` says which one it is, and a binary is then always the string MyXQL
- * decoded (`mysql`) or always the text MariaDB keeps (`mariadb`).
+ * time, while MariaDB's is text. The value alone cannot tell the two servers apart: `mysqlFlavor`
+ * says which one it is, and a binary is then always the string MyXQL decoded (`mysql`) or always the
+ * text MariaDB keeps (`mariadb`). Without it, a binary that is JSON text is decoded, so on MySQL a
+ * JSON string whose contents are JSON text (`"42"`) loads as what it holds.
  *
  * @param app - The module the schemas are under.
  * @param provider - The datasource's provider: SQLite and MySQL are sent JSON text, every other one

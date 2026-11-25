@@ -19,10 +19,14 @@ export function ecto(options: GeneratorOptions) {
       })
     }
     // Which server a MySQL datasource is, for PrismaJson: the value alone cannot tell.
-    const flavor = getString(options.generator.config?.['mysqlFlavor'])
-    if (flavor !== undefined && flavor !== 'mysql' && flavor !== 'mariadb') {
+    const setting = options.generator.config?.['mysqlFlavor']
+    const flavor = getString(setting)
+    if (
+      Array.isArray(setting) ||
+      (flavor !== undefined && flavor !== 'mysql' && flavor !== 'mariadb')
+    ) {
       return yield* new GeneratorConfigError({
-        message: `mysqlFlavor of Hekireki-Ecto is "mysql" or "mariadb", not ${JSON.stringify(flavor)}.`,
+        message: `mysqlFlavor of Hekireki-Ecto is "mysql" or "mariadb", not ${JSON.stringify(setting)}.`,
       })
     }
     const app = options.generator.config?.['app'] ?? 'MyApp'

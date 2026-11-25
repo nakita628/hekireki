@@ -64,6 +64,13 @@ describe('ecto', () => {
     )
   })
 
+  it('refuses a list for mysqlFlavor, which names one server', async () => {
+    const { exit } = await run({ mysqlFlavor: ['mysql', 'mariadb'] })
+    expect(failure(exit)).toContain(
+      'mysqlFlavor of Hekireki-Ecto is "mysql" or "mariadb", not ["mysql","mariadb"].',
+    )
+  })
+
   it('refuses a mysqlFlavor that is neither mysql nor mariadb', async () => {
     const { exit } = await run({ mysqlFlavor: 'percona' })
     expect(failure(exit)).toContain(
