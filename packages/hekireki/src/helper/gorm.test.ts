@@ -1059,6 +1059,22 @@ model Note {
     )
   })
 
+  it('leaves a mapped index name ending in a backslash for Prisma default, as GORM joins it to the next setting', () => {
+    const code = gormFor(
+      `model Note {
+  id    Int    @id
+  code  String @unique(map: "code\\\\")
+  title String
+
+  @@index([title], map: "title\\\\")
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain('`gorm:"column:code;uniqueIndex:Note_code_key;not null" json:"code"`')
+    expect(code).toContain('`gorm:"column:title;index:Note_title_idx;not null" json:"title"`')
+  })
+
   it('types a native list as Prisma names it, and an Int list on CockroachDB as INT4', () => {
     const native = gormFor(
       `

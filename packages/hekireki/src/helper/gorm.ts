@@ -523,10 +523,10 @@ function goTagLiteral(tag: string) {
 }
 
 // A name the schema gives an index, unless the struct tag cannot hold it: GORM reads past a `,` as
-// settings and splits at a `;`, and a `"` or a backtick ends the tag. Such a name is left for
-// Prisma's default.
+// settings and splits at a `;`, a `"` or a backtick ends the tag, and a `\` at the end joins the
+// setting with the next one. Such a name is left for Prisma's default.
 function readableTagName(name: string | undefined) {
-  return name !== undefined && !/[,;"`]/u.test(name) ? name : undefined
+  return name !== undefined && !/[,;"`]/u.test(name) && !name.endsWith('\\') ? name : undefined
 }
 
 // A partial index's condition (the SQL Prisma Migrate writes after WHERE) as the value of GORM's
