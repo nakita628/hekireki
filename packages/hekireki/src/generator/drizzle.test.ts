@@ -1876,6 +1876,80 @@ describe('keys, indexes and foreign keys as Prisma Migrate makes them', () => {
       `(table) => [uniqueIndex('_PostToTag_AB_unique').on(table.A, table.B), ${rest}`,
     )
   })
+
+  // DMMF drops `@relation(map:)`: the name is read off the schema's text, as Prisma Migrate takes
+  // it, and a relation that names none keeps Prisma's `<table>_<columns>_fkey`.
+  it('names a foreign key after its @relation(map:), and an unmapped one as Prisma Migrate does', () => {
+    const blocks = prismaBlocks(`
+model auth_group {
+  id    Int    @id
+  perms auth_group_permissions[] @relation("group")
+  other auth_group_permissions[] @relation("other")
+}
+
+model auth_group_permissions {
+  id       Int        @id
+  group_id Int
+  other_id Int
+  group    auth_group @relation("group", fields: [group_id], references: [id], map: "auth_group_permissions_group_id_b120cbf9_fk_auth_group_id")
+  other    auth_group @relation("other", fields: [other_id], references: [id])
+}
+`)
+    const group = makeModel({
+      name: 'auth_group',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({
+          name: 'perms',
+          type: 'auth_group_permissions',
+          kind: 'object',
+          isList: true,
+          relationName: 'group',
+          relationFromFields: [],
+          relationToFields: [],
+        }),
+        makeField({
+          name: 'other',
+          type: 'auth_group_permissions',
+          kind: 'object',
+          isList: true,
+          relationName: 'other',
+          relationFromFields: [],
+          relationToFields: [],
+        }),
+      ],
+    })
+    const permissions = makeModel({
+      name: 'auth_group_permissions',
+      fields: [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'group_id', type: 'Int' }),
+        makeField({ name: 'other_id', type: 'Int' }),
+        makeField({
+          name: 'group',
+          type: 'auth_group',
+          kind: 'object',
+          relationName: 'group',
+          relationFromFields: ['group_id'],
+          relationToFields: ['id'],
+        }),
+        makeField({
+          name: 'other',
+          type: 'auth_group',
+          kind: 'object',
+          relationName: 'other',
+          relationFromFields: ['other_id'],
+          relationToFields: ['id'],
+        }),
+      ],
+    })
+
+    expect(
+      drizzleSchema(makeDatamodel([group, permissions]), 'postgresql', [], new Set(), blocks),
+    ).toContain(
+      "(table) => [foreignKey({ name: 'auth_group_permissions_group_id_b120cbf9_fk_auth_group_id', columns: [table.group_id], foreignColumns: [authGroup.id] }).onDelete('restrict').onUpdate('cascade'), foreignKey({ name: 'auth_group_permissions_other_id_fkey', columns: [table.other_id], foreignColumns: [authGroup.id] }).onDelete('restrict').onUpdate('cascade')]",
+    )
+  })
 })
 
 // The `where` of a partial index (the `partialIndexes` preview feature), which DMMF drops.
