@@ -1181,9 +1181,16 @@ function indexOpclasses(model: DMMF.Model, idx: DMMF.Index, provider: string) {
 // An index name Django accepts (models.E033, E034): at most 30 characters, starting with a letter.
 // A longer one keeps its start and a digest of the whole, so two names sharing a prefix differ.
 function djangoIndexName(name: string) {
-  if (name.length <= 30 && /^[a-zA-Z]/u.test(name)) return name
+  // Django counts code points, and refuses only a leading underscore or digit.
+  if (codePoints(name).length <= 30 && !/^[_\d]/u.test(name)) return name
   const digest = createHash('md5').update(name).digest('hex').slice(0, 8)
-  return `${(name.replace(/^[^a-zA-Z]+/u, '') || 'idx').slice(0, 21)}_${digest}`
+  return `${codePoints(name.replace(/^[_\d]+/u, '') || 'idx')
+    .slice(0, 21)
+    .join('')}_${digest}`
+}
+
+function codePoints(text: string) {
+  return text.match(/./gsu) ?? []
 }
 
 function singleColumnBelongsTo(model: DMMF.Model) {
@@ -1387,21 +1394,39 @@ function generateMetaLines(
     if (opclasses === null) return `${ctor}(fields=[${fieldNames}]${name})`
     // An operator class (`ops:`, e.g. the varchar_pattern_ops twin Django makes for LIKE) needs a
     // name, so one Django refuses is made into one it takes.
+    // A name Django gives its own _like index is not taken again: the index is named after its own
+    // columns instead.
+    const ownName = constraintName(
+      tableName,
+      idx.fields.map((f) => columnRef(f.name)),
+      'idx',
+      provider,
+    )
     const opName = toPythonString(
       carriesName && idx.dbName
         ? idx.dbName
         : djangoIndexName(
-            idx.dbName ??
-              constraintName(
-                tableName,
-                idx.fields.map((f) => columnRef(f.name)),
-                'idx',
-                provider,
-              ),
+            idx.dbName === null || idx.dbName === undefined || likeNames.has(idx.dbName)
+              ? ownName
+              : idx.dbName,
           ),
     )
     const list = opclasses.map((o) => toPythonString(o)).join(', ')
     return `${ctor}(fields=[${fieldNames}], name=${opName}, opclasses=[${list}])`
+  })
+
+  // An index with only some fields on an operator class is written without it (indexOpclasses),
+  // and says which classes it leaves out.
+  const operatorClassComments = writtenIndexes(model, indexes, likeNames).flatMap((idx) => {
+    const dropped = idx.fields.filter((f) => f.operatorClass !== undefined)
+    return provider === 'postgresql' &&
+      dropped.length > 0 &&
+      indexOpclasses(model, idx, provider) === null
+      ? [
+          `        # The index on (${idx.fields.map((f) => quotedIdentifier(columnRef(f.name))).join(', ')}) is declared without the operator class of ${dropped.map((f) => quotedIdentifier(columnRef(f.name))).join(', ')}:`,
+          '        # Index.opclasses takes one per field, so it is left to a migration (e.g. RunSQL).',
+        ]
+      : []
   })
 
   const partialComments = (unique: boolean) =>
@@ -1429,6 +1454,7 @@ function generateMetaLines(
           '        ]',
         ]
       : []),
+    ...operatorClassComments,
     ...partialComments(false),
   ]
 }
@@ -1573,11 +1599,10 @@ function indexClassesOf(
 ) {
   return models
     .flatMap((model) =>
-      writtenIndexes(model, indexes, likeIndexNames(model, allModels, indexes, provider)).flatMap(
-        (idx) => [postgresIndexClass(idx.algorithm)],
-      ),
+      writtenIndexes(model, indexes, likeIndexNames(model, allModels, indexes, provider)),
     )
-    .filter((name) => name !== null)
+    .map((idx) => postgresIndexClass(idx.algorithm))
+    .filter((ctor) => ctor !== null)
 }
 
 function needsDecimalImport(scalarFields: readonly DMMF.Field[]) {

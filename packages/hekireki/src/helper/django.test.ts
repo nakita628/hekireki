@@ -3922,6 +3922,26 @@ model t {
             models.Index(fields=["-title"], name="t_title_like_a_name_f_f278eeb2", opclasses=["text_pattern_ops"]),`)
   })
 
+  it('does not take the name of the _like index Django makes, and says which class it leaves out', () => {
+    const code = opsDjango(`
+model t {
+  id    Int    @id
+  slug  String @unique
+  title String
+  n     Int
+
+  @@index([title(ops: raw("text_pattern_ops"))], map: "t_slug_779dc315_like")
+  @@index([n, title(ops: raw("text_pattern_ops"))], map: "t_n_title")
+}
+`)
+    expect(code).toContain(
+      'models.Index(fields=["title"], name="t_title_idx", opclasses=["text_pattern_ops"]),',
+    )
+    expect(code).toContain(
+      `        # The index on ("n", "title") is declared without the operator class of "title":`,
+    )
+  })
+
   it('leaves the operator class out on a database other than PostgreSQL', () => {
     const code = opsDjango(
       `
