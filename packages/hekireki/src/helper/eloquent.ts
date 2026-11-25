@@ -1258,6 +1258,7 @@ function isTextReturnedKey(idField: DMMF.Field | undefined, provider: string | u
 }
 
 // Query\Builder::insertGetId without PostgresProcessor's integer cast of the key it returns.
+// A row comes back as an object or, under PDO::FETCH_ASSOC, an array, as the processor takes it.
 function insertAndSetIdMethod(ref: Ref) {
   return [
     `    protected function insertAndSetId(${ref(BUILDER)} $query, $attributes)`,
@@ -1271,7 +1272,7 @@ function insertAndSetIdMethod(ref: Ref) {
     '            $base->getGrammar()->compileInsertGetId($base, $attributes, $keyName),',
     '            $base->cleanBindings($attributes),',
     '        )[0];',
-    '        $this->setAttribute($keyName, $row->{$keyName});',
+    '        $this->setAttribute($keyName, is_object($row) ? $row->{$keyName} : $row[$keyName]);',
     '    }',
   ]
 }

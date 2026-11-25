@@ -1345,7 +1345,7 @@ class Ticket extends Model
             $base->getGrammar()->compileInsertGetId($base, $attributes, $keyName),
             $base->cleanBindings($attributes),
         )[0];
-        $this->setAttribute($keyName, $row->{$keyName});
+        $this->setAttribute($keyName, is_object($row) ? $row->{$keyName} : $row[$keyName]);
     }
 }`
     expect(
