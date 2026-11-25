@@ -8,6 +8,8 @@ import {
   generateNamingStrategy,
   generateScalarListType,
 } from '../helper/gorm.js'
+import { partialIndexWhere } from '../prisma/partial-index.js'
+import type { PrismaBlock } from '../prisma/schema-text.js'
 
 export function generateGormModels(
   models: readonly DMMF.Model[],
@@ -17,11 +19,15 @@ export function generateGormModels(
   provider?: string,
   foreignKeyNames: ReadonlyMap<string, string> = new Map(),
   views: ReadonlySet<string> = new Set(),
+  // The schema's text, read into its blocks: it carries the `where` of a partial index, which DMMF
+  // drops.
+  blocks: readonly PrismaBlock[] = [],
 ) {
   const idx = indexes ?? []
+  const indexWhere = partialIndexWhere(blocks)
 
   const modelBodies = models.map((model) =>
-    generateModelStruct(model, models, enums, idx, provider, foreignKeyNames, views),
+    generateModelStruct(model, models, enums, idx, provider, foreignKeyNames, views, indexWhere),
   )
 
   return [

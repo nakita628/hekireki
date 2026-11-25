@@ -34,6 +34,7 @@ export function gorm(options: GeneratorOptions) {
       options.datasources[0]?.activeProvider,
       relationMaps(blocks),
       viewNames(blocks),
+      blocks,
     )
     return yield* emitRaw(code, resolved.dir, resolved.file)
   })

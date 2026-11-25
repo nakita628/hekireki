@@ -646,6 +646,8 @@ function gormFor(schema: string, provider = 'sqlite') {
     'model',
     provider,
     relationMaps(prismaBlocks(source)),
+    new Set(),
+    prismaBlocks(source),
   )
 }
 
@@ -1472,6 +1474,106 @@ type User struct {
 
 func (User) TableName() string {
 	return "User"
+}
+`)
+  })
+})
+
+// With the partialIndexes preview feature an index can hold only the rows a `where` picks. DMMF
+// drops the condition; the tag gives it to GORM in `where:`, so AutoMigrate makes the index Prisma
+// Migrate makes (schema.Parse, gorm v1.31.2, reads each condition back as written here).
+describe('generateGormModels partial indexes', () => {
+  it("writes a partial index's condition in where:, escaped for GORM and the tag", () => {
+    expect(
+      gormFor(
+        `
+generator client {
+  provider        = "prisma-client"
+  output          = "./generated"
+  previewFeatures = ["partialIndexes"]
+}
+
+model Account {
+  id    Int     @id
+  email String  @unique
+  alive Boolean
+  n     Int
+  code  String  @unique(where: raw("n > 0"))
+  note  String?
+
+  @@unique([email], where: raw("alive"), map: "account_email_alive")
+  @@unique([alive, n], where: { alive: true })
+  @@index([alive], where: { alive: true })
+  @@index([note], where: raw("note IN ('a,b', 'c\\\\\\"d', 'e\\\\,f')"))
+  @@index([n, note], where: raw("note <> ';'"))
+}
+`,
+        'postgresql',
+      ),
+    ).toBe(`package model
+
+type Account struct {
+	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	Email string \`gorm:"column:email;uniqueIndex:Account_email_key;uniqueIndex:account_email_alive,where:(alive);not null" json:"email"\`
+	Alive bool   \`gorm:"column:alive;uniqueIndex:Account_alive_n_key,where:(\\"alive\\" = true);index:Account_alive_idx,where:(\\"alive\\" = true);not null" json:"alive"\`
+	// The partial index Account_n_note_idx is left out: its condition holds a ";", at which GORM splits the tag.
+	N    int     \`gorm:"column:n;uniqueIndex:Account_alive_n_key,where:(\\"alive\\" = true);size:32;not null" json:"n"\`
+	Code string  \`gorm:"column:code;uniqueIndex:Account_code_key,where:(n > 0);not null" json:"code"\`
+	Note *string \`gorm:"column:note;index:Account_note_idx,where:(note IN ('a\\\\,b'\\\\, 'c\\\\\\\\\\"d'\\\\, 'e\\\\\\\\,f'))" json:"note"\`
+}
+
+func (Account) TableName() string {
+	return "Account"
+}
+`)
+  })
+
+  it('keys nothing by a partial unique index and keeps a plain one on the same fields', () => {
+    expect(
+      gormFor(
+        `
+generator client {
+  provider        = "prisma-client"
+  output          = "./generated"
+  previewFeatures = ["partialIndexes"]
+}
+
+model Pair {
+  id Int @id
+  a  Int
+  b  Int
+  @@unique([a, b])
+  @@unique([a, b], where: raw("a > 0"), map: "pair_pos")
+}
+
+model Token {
+  value String
+  used  Boolean
+
+  @@unique([value], where: { used: false })
+}
+`,
+        'postgresql',
+      ),
+    ).toBe(`package model
+
+type Pair struct {
+	ID int \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	A  int \`gorm:"column:a;uniqueIndex:Pair_a_b_key;uniqueIndex:pair_pos,where:(a > 0);size:32;not null" json:"a"\`
+	B  int \`gorm:"column:b;uniqueIndex:Pair_a_b_key;uniqueIndex:pair_pos,where:(a > 0);size:32;not null" json:"b"\`
+}
+
+func (Pair) TableName() string {
+	return "Pair"
+}
+
+type Token struct {
+	Value string \`gorm:"column:value;uniqueIndex:Token_value_key,where:(\\"used\\" = false);not null" json:"value"\`
+	Used  bool   \`gorm:"column:used;not null" json:"used"\`
+}
+
+func (Token) TableName() string {
+	return "Token"
 }
 `)
   })
