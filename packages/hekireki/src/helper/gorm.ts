@@ -98,9 +98,11 @@ const PROVIDER_NATIVE_TYPES: {
 function providerNativeType(field: DMMF.Field, provider: string | undefined) {
   if (!field.nativeType) return undefined
   const [nativeName, nativeArgs] = field.nativeType
-  // A MySQL Boolean is given no type, whatever its native type: GORM makes a bool BOOLEAN, which
-  // is what Prisma Migrate makes of @db.TinyInt (a @db.Bit(1) is BIT(1) there).
-  if (provider === 'mysql' && field.type === 'Boolean') return null
+  // A MySQL Boolean is given no type but for a @db.Bit(1): GORM makes a bool BOOLEAN, which is what
+  // Prisma Migrate makes of @db.TinyInt, and a @db.Bit(1) is BIT(1) there, held in a BitBool.
+  if (provider === 'mysql' && field.type === 'Boolean') {
+    return isBitBool(field, provider) ? 'bit(1)' : null
+  }
   const type = PROVIDER_NATIVE_TYPES[provider ?? '']?.[nativeName]
   if (type === undefined) return undefined
   const args = nativeArgs ?? []
@@ -966,7 +968,27 @@ function hasNonZeroDefault(field: DMMF.Field, isPk: boolean) {
   )
 }
 
+/**
+ * Whether a field is a MySQL `Boolean @db.Bit(1)`: a BIT(1) column, which go-sql-driver returns as
+ * a byte (`[]byte{0x01}`) that does not scan into a Go bool, so it is held in a BitBool.
+ */
+function isBitBool(field: DMMF.Field, provider: string | undefined) {
+  return (
+    provider === 'mysql' &&
+    field.type === 'Boolean' &&
+    !field.isList &&
+    field.nativeType?.[0] === 'Bit'
+  )
+}
+
+function usesBitBool(models: readonly DMMF.Model[], provider: string | undefined) {
+  return models.some((m) => m.fields.some((f) => isBitBool(f, provider)))
+}
+
 function structFieldGoType(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
+  if (isBitBool(field, provider)) {
+    return `${field.isRequired && !hasNonZeroDefault(field, isPk) ? '' : '*'}BitBool`
+  }
   if (isDateTimeList(field)) return dateTimeGoType(field)
   // A scalar list (e.g. `tags String[]`) is a collection, not a scalar; collapse
   // it to a single value loses data. Emit a slice of the element type, a ScalarList where the
@@ -1613,6 +1635,10 @@ export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
       name,
       'what the models hold a scalar list in',
     ]),
+    ...(usesBitBool(models, provider) ? ['BitBool'] : []).map((name): [string, string] => [
+      name,
+      'what the models hold a MySQL BIT(1) Boolean in',
+    ]),
   ])
   return models.flatMap((model) => {
     const name = goModelName(model.name)
@@ -1650,15 +1676,17 @@ function standardImports(
   generators: ReadonlySet<string>,
   needsTime: boolean,
   scalarList: boolean,
+  bitBool: boolean,
 ) {
   const lists = types.some((name) => name.endsWith('List'))
-  const valuers = types.length > 0 || scalarList
+  const parses = types.length > 0 || scalarList
+  const valuers = parses || bitBool
   return [
     generators.has('ulid') ? '"crypto/rand"' : null,
     lists ? '"database/sql"' : null,
     valuers ? '"database/sql/driver"' : null,
     valuers ? '"fmt"' : null,
-    valuers ? '"strconv"' : null,
+    parses ? '"strconv"' : null,
     types.includes('TimeOfDay') || lists || scalarList ? '"strings"' : null,
     needsTime ? '"time"' : null,
   ]
@@ -1688,7 +1716,13 @@ export function collectImports(models: readonly DMMF.Model[], provider?: string)
   )
   // Standard library first, then the modules, each group sorted by path, as
   // gofmt keeps them.
-  const standard = standardImports(types, generators, needsTime, usesScalarList(models, provider))
+  const standard = standardImports(
+    types,
+    generators,
+    needsTime,
+    usesScalarList(models, provider),
+    usesBitBool(models, provider),
+  )
   const modules = [
     generators.has('uuid') ? '"github.com/google/uuid"' : null,
     generators.has('cuid') ? '"github.com/lucsky/cuid"' : null,
@@ -1716,6 +1750,51 @@ export function formatImports(groups: readonly (readonly string[])[]) {
       .join('\n\n')
       .split('\n'),
     ')',
+  ]
+}
+
+/**
+ * The type a MySQL `Boolean @db.Bit(1)` is held in: go-sql-driver returns a BIT(1) as a byte (or
+ * the text "0"/"1", or an integer), which Scan reads, and Value writes the bit as the integer 0 or
+ * 1, which MySQL compares with a BIT as its number (a byte would be compared as a string). Its
+ * GORM data type is bool, so a `default:true` is read as the bool GORM fills in on create.
+ */
+export function generateBitBoolType(models: readonly DMMF.Model[], provider?: string) {
+  if (!usesBitBool(models, provider)) return []
+  return [
+    '',
+    'type BitBool bool',
+    '',
+    'func (BitBool) GormDataType() string {',
+    '\treturn "bool"',
+    '}',
+    '',
+    'func (b BitBool) Value() (driver.Value, error) {',
+    '\tif b {',
+    '\t\treturn int64(1), nil',
+    '\t}',
+    '\treturn int64(0), nil',
+    '}',
+    '',
+    'func (b *BitBool) Scan(src any) error {',
+    '\tswitch value := src.(type) {',
+    '\tcase nil:',
+    '\t\t*b = false',
+    '\tcase []byte:',
+    "\t\t*b = len(value) > 0 && value[len(value)-1] != 0 && value[len(value)-1] != '0'",
+    '\tcase string:',
+    "\t\t*b = len(value) > 0 && value[len(value)-1] != 0 && value[len(value)-1] != '0'",
+    '\tcase int64:',
+    '\t\t*b = value != 0',
+    '\tcase uint64:',
+    '\t\t*b = value != 0',
+    '\tcase bool:',
+    '\t\t*b = BitBool(value)',
+    '\tdefault:',
+    '\t\treturn fmt.Errorf("a BIT(1) column held %T", src)',
+    '\t}',
+    '\treturn nil',
+    '}',
   ]
 }
 

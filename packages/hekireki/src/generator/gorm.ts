@@ -3,6 +3,7 @@ import type { DMMF } from '@prisma/generator-helper'
 import {
   collectImports,
   formatImports,
+  generateBitBoolType,
   generateDateTypes,
   generateModelStruct,
   generateNamingStrategy,
@@ -39,6 +40,7 @@ export function generateGormModels(
     modelBodies.join('\n\n'),
     ...generateDateTypes(models, provider),
     ...generateScalarListType(models, provider),
+    ...generateBitBoolType(models, provider),
     '',
   ].join('\n')
 }
