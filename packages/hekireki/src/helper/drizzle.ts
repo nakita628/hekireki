@@ -89,6 +89,8 @@ const PG_NATIVE_FIXED: { [k: string]: string } = {
   Json: 'json()',
   JsonB: 'jsonb()',
   ByteA: 'bytea()',
+  Inet: 'inet()',
+  Xml: "typedText({ type: 'xml' })",
 }
 
 const PG_NATIVE_SIZED: { [k: string]: SizedColumn } = {
@@ -110,6 +112,12 @@ function pgNativeType(name: string, args: readonly string[]) {
     )
     return `timestamp({ ${opts.join(', ')} })`
   }
+  // drizzle's bit() (from its vector extension, a bit string) needs its length, which Prisma's default is 1.
+  if (name === 'Bit') return `bit({ dimensions: ${isPresent(args[0]) ? args[0] : 1} })`
+  // Written as drizzle-kit reads the column back, so a push does not alter it again.
+  if (name === 'VarBit') {
+    return `typedText({ type: 'bit varying${isPresent(args[0]) ? `(${args[0]})` : ''}' })`
+  }
   const sized = PG_NATIVE_SIZED[name]
   if (sized !== undefined) return sizedColumn(sized, args[0])
   return PG_NATIVE_FIXED[name] ?? null
@@ -125,6 +133,12 @@ const MYSQL_NATIVE_FIXED: { [k: string]: string } = {
   MediumInt: 'mediumint()',
   Int: 'int()',
   BigInt: "bigint({ mode: 'bigint' })",
+  UnsignedTinyInt: 'tinyint({ unsigned: true })',
+  UnsignedSmallInt: 'smallint({ unsigned: true })',
+  UnsignedMediumInt: 'mediumint({ unsigned: true })',
+  UnsignedInt: 'int({ unsigned: true })',
+  UnsignedBigInt: "bigint({ mode: 'bigint', unsigned: true })",
+  Year: 'year()',
   Float: 'float()',
   Double: 'double()',
   Date: 'utcDate()',
@@ -164,7 +178,8 @@ function mysqlNativeType(name: string, args: readonly string[]) {
 }
 
 // Columns drizzle has none of its own for: a DateTime kept in UTC, in the form Prisma Client
-// writes and reads it, a Bytes as the Uint8Array Prisma Client gives, and a BigInt on SQLite as
+// writes and reads it, a Bytes as the Uint8Array Prisma Client gives, a String in a PostgreSQL type
+// drizzle has no column for (varbit, xml), and a BigInt on SQLite as
 // the integer Prisma keeps it as. drizzle's own `blob({ mode: 'bigint' })` reads the column as
 // bytes and writes the digits as a BLOB, which neither reads what Prisma wrote nor writes what
 // Prisma reads. Its `blob()` with no mode is JSON in drizzle-orm 1.0, and the buffer mode types
@@ -184,6 +199,9 @@ const COLUMN_HELPERS: { readonly [name: string]: string } = {
 })`,
   bytes: `const bytes = customType<{ data: Uint8Array; config: { type: string } }>({
   dataType: (config) => config?.type ?? 'longblob',
+})`,
+  typedText: `const typedText = customType<{ data: string; config: { type: string } }>({
+  dataType: (config) => config?.type ?? 'text',
 })`,
   utcDateTime: `const utcDateTime = customType<{ data: Date; driverData: string | number }>({
   dataType: () => 'datetime',
