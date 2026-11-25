@@ -14,7 +14,10 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     #[sea_orm(column_type = "Text")]
     pub following_id: String,
-    #[sea_orm(column_type = "custom(\"timestamp(3)\")")]
+    #[sea_orm(
+        column_type = "custom(\"timestamp(3)\")",
+        default_expr = "Expr::current_timestamp()"
+    )]
     pub since: DateTime,
 }
 
