@@ -204,6 +204,28 @@ describe('buildGormTags', () => {
     )
   })
 
+  it('writes a dbgenerated() default ending in a backslash last, as GORM joins it to the next setting', () => {
+    const field = (expression: string) =>
+      ({
+        name: 'path',
+        kind: 'scalar' as const,
+        type: 'Int',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'dbgenerated', args: [expression] },
+      }) as any
+    expect(buildGormTags(field('x\\'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:path;size:32;not null;default:x\\" json:"path"${'`'}`,
+    )
+    expect(buildGormTags(field('x + 1'), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:path;size:32;default:x + 1;not null" json:"path"`',
+    )
+  })
+
   it('escapes a mapped column name for the struct tag, so GORM reads the column and every setting after it', () => {
     const field = (dbName: string) =>
       ({
@@ -1062,7 +1084,7 @@ model Note {
     ])
   })
 
-  it('names an index whose name in the tag holds a "," or ";", and a dbgenerated() ending in a backslash', () => {
+  it('names an index whose name in the tag holds a "," or ";"', () => {
     const datamodel = datamodelOf(
       getDMMF({
         datamodel: `datasource db {
@@ -1073,7 +1095,6 @@ model Note {
   id    Int    @id
   pair  String @unique @map("a,b")
   named String @unique(map: "note_named_key") @map("c,d")
-  path  String @default(dbgenerated("x\\\\"))
 }
 
 model Tag {
@@ -1089,9 +1110,8 @@ model Tag {
       }),
     )
     expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
-      "model Note: the dbgenerated() default of path ends in \\, which GORM's tag cannot hold",
-      'model Note: the index on pair is named "Note_a,b_key", whose "," GORM\'s tag cannot hold; give it a name with map:',
-      'model Tag: the index on label is named "tag;s_label_idx", whose ";" GORM\'s tag cannot hold; give it a name with map:',
+      'model Note: the index on pair is named "Note_a,b_key", whose "," GORM\'s tag cannot hold; change the @map of its column or table, or give it a name with map:',
+      'model Tag: the index on label is named "tag;s_label_idx", whose ";" GORM\'s tag cannot hold; change the @map of its column or table, or give it a name with map:',
     ])
   })
 

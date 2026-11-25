@@ -481,6 +481,9 @@ export function buildGormTags(
 ) {
   const columnName = field.dbName ?? field.name
   const defaultVal = gormDefault(field, isPk, isCompositePk, enums, provider)
+  // GORM joins a setting that ends in `\` with the next one, so such a default (a dbgenerated()
+  // expression) is the last setting; GORM reads the settings in any order.
+  const defaultSetting = defaultParts(defaultVal)
 
   const parts = [
     `column:${escapeTagValue(columnName)}`,
@@ -500,17 +503,25 @@ export function buildGormTags(
     !isScalarList(field, provider)
       ? 'serializer:json'
       : null,
-    defaultVal !== null ? `default:${defaultVal}` : null,
+    ...defaultSetting.before,
     ...trackedTimeTags(field, fieldName),
     // A scalar list is a nullable array column in the table Prisma makes.
     field.isRequired && !field.isList && (!isPk || keyNeedsNotNull(field, provider))
       ? 'not null'
       : null,
+    ...defaultSetting.last,
   ].filter((p) => p !== null)
 
   return goTagLiteral(
     `gorm:"${parts.join(';')}" json:"${escapeTagValue(jsonTagName(columnName, fieldName))}"`,
   )
+}
+
+// The default setting, in its place among the others or, where it ends in `\`, after them all.
+function defaultParts(defaultVal: string | null) {
+  if (defaultVal === null) return { before: [], last: [] }
+  const part = `default:${defaultVal}`
+  return defaultVal.endsWith('\\') ? { before: [], last: [part] } : { before: [part], last: [] }
 }
 
 // The json name of a column: encoding/json reads what follows a `,` as options and a lone `-` as
@@ -1627,8 +1638,8 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
 /**
  * What keeps the schema from becoming models that compile and read as it says: a model whose Go
  * name is that of a type or function written beside the models, where the schema needs it; a
- * column whose name the struct tag cannot hold (a `;`, or a `\` at its end); a dbgenerated()
- * default ending in `\`; and an index written into the tags under a name holding a `,` or `;`.
+ * column whose name the struct tag cannot hold (a `;`, or a `\` at its end); and an index written
+ * into the tags under a name holding a `,` or `;`.
  * Index names made from a column are escaped for the tag (escapeTagValue), so a `"` or `\` in
  * one is held.
  */
@@ -1672,17 +1683,6 @@ export function gormProblems(
           ]
         : []
     })
-    // A dbgenerated() default is written into the tag as it is, so one ending in `\` joins the
-    // setting after it.
-    const defaults = model.fields.flatMap((field) =>
-      isFunctionDefault(field.default) &&
-      field.default.name === 'dbgenerated' &&
-      String(field.default.args[0] ?? '').endsWith('\\')
-        ? [
-            `model ${model.name}: the dbgenerated() default of ${field.name} ends in \\, which GORM's tag cannot hold`,
-          ]
-        : [],
-    )
     // GORM takes an index's name up to its first `,` and splits the whole tag at every `;`, with no
     // escape for either, so an index whose name holds one (made from a column or a @@map that does)
     // cannot be written. One left out of the tags with a note never reaches them.
@@ -1695,7 +1695,7 @@ export function gormProblems(
         const fields = idx.fields.map((f) => f.name).join(', ')
         const advice =
           idx.dbName === undefined || idx.dbName === null
-            ? 'give it a name with map:'
+            ? 'change the @map of its column or table, or give it a name with map:'
             : `its map: name ${JSON.stringify(idx.dbName)} cannot be held either (a , ; " or backtick, or a \\ at its end); change it`
         return [
           `model ${model.name}: the index on ${fields} is named ${JSON.stringify(indexName)}, whose "${mark}" GORM's tag cannot hold; ${advice}`,
@@ -1708,7 +1708,6 @@ export function gormProblems(
             `model ${model.name}: its Go name is ${name}, ${holds}; rename the model and keep its table with @@map`,
           ]),
       ...columns,
-      ...defaults,
       ...indexNames,
     ]
   })
