@@ -181,6 +181,32 @@ describe('buildGormTags', () => {
     )
   })
 
+  it('escapes a mapped column name for the struct tag, so GORM reads the column and every setting after it', () => {
+    const field = (dbName: string) =>
+      ({
+        name: 'label',
+        dbName,
+        kind: 'scalar' as const,
+        type: 'String',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: false,
+      }) as any
+    // reflect.StructTag unquotes a `\"`, a `\\` and a `\n`, and the tag stays on one line.
+    expect(buildGormTags(field('a\nb'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:a\nb;not null" json:"a\nb"${'`'}`,
+    )
+    expect(buildGormTags(field('a"b'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:a\"b;not null" json:"a\"b"${'`'}`,
+    )
+    expect(buildGormTags(field('a\\b'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:a\\b;not null" json:"a\\b"${'`'}`,
+    )
+  })
+
   it('generates primaryKey;autoIncrement for autoincrement', () => {
     const field = {
       name: 'id',
@@ -989,6 +1015,64 @@ model Team {
       'model ScalarList: its Go name is ScalarList, what the models hold a scalar list in; rename the model and keep its table with @@map',
     ])
     expect(gormProblems(listModels('Tag'), 'postgresql')).toStrictEqual([])
+  })
+
+  it('names a column whose mapped name ends in a backslash, which GORM joins to the next setting', () => {
+    const models = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Note {
+  id    Int    @id
+  label String @map("label\\\\")
+  body  String @map("a\\\\b")
+  title String @map("a;index")
+}
+`,
+      }),
+    ).models
+    expect(gormProblems(models, 'postgresql')).toStrictEqual([
+      "model Note: the column of label ends in \\, which GORM's tag cannot hold; change its @map",
+      'model Note: the column of title holds a ";", at which GORM splits the tag; change its @map',
+    ])
+  })
+
+  it('escapes an index name made from a mapped column for the struct tag', () => {
+    const code = gormFor(
+      `model Note {
+  id    Int    @id
+  quote String @unique @map("a\\"b")
+  path  String @map("a\\\\c")
+
+  @@index([path])
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain(
+      String.raw`${'`'}gorm:"column:a\"b;uniqueIndex:Note_a\"b_key;not null" json:"a\"b"${'`'}`,
+    )
+    expect(code).toContain(
+      String.raw`${'`'}gorm:"column:a\\c;index:Note_a\\c_idx;not null" json:"a\\c"${'`'}`,
+    )
+  })
+
+  it('leaves a mapped index name ending in a backslash for Prisma default, as GORM joins it to the next setting', () => {
+    const code = gormFor(
+      `model Note {
+  id    Int    @id
+  code  String @unique(map: "code\\\\")
+  title String
+
+  @@index([title], map: "title\\\\")
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain('`gorm:"column:code;uniqueIndex:Note_code_key;not null" json:"code"`')
+    expect(code).toContain('`gorm:"column:title;index:Note_title_idx;not null" json:"title"`')
   })
 
   it('types a native list as Prisma names it, and an Int list on CockroachDB as INT4', () => {
