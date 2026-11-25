@@ -315,7 +315,24 @@ function gormDefault(
   )
 }
 
-function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
+// GORM makes an integer key auto-increment unless its tag says autoIncrement either way: a key
+// with no autoincrement() would take a sequence default on PostgreSQL (a bigint one where the
+// native type is @db.SmallInt) and AUTO_INCREMENT on MySQL, where Prisma makes a plain integer
+// column. With autoIncrement:false GORM writes the field in an INSERT even when it is zero, as
+// such a key's value comes from the caller (or the row it belongs to).
+function isImplicitAutoIncrement(field: DMMF.Field, gormPicksKey: boolean) {
+  const isInteger =
+    field.kind === 'scalar' && !field.isList && ['Int', 'BigInt'].includes(field.type)
+  return gormPicksKey && isInteger && !isAutoincrement(field)
+}
+
+function primaryKeyTags(
+  field: DMMF.Field,
+  isPk: boolean,
+  isCompositePk: boolean,
+  provider: string | undefined,
+  gormPicksKey: boolean | undefined,
+) {
   // Prisma allows autoincrement() on a @unique field that is not the key (a serial column on
   // PostgreSQL, AUTO_INCREMENT on MySQL). GORM gives such a column its default only when the tag
   // says autoIncrement, and leaves the field out of an INSERT while it is zero; without it GORM
@@ -331,6 +348,10 @@ function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | und
   return [
     'primaryKey',
     ...(isAutoincrement(field) ? ['autoIncrement'] : []),
+    // Unless the caller says which key field GORM picks, a single-field key is the one.
+    ...(isImplicitAutoIncrement(field, gormPicksKey ?? !isCompositePk)
+      ? ['autoIncrement:false']
+      : []),
     ...(fixedType && defaultName === 'uuid' ? ['type:char(36)'] : []),
     ...(fixedType && defaultName === 'ulid' ? ['type:char(26)'] : []),
   ]
@@ -496,13 +517,14 @@ export function buildGormTags(
   enums?: readonly DMMF.DatamodelEnum[],
   provider?: string,
   fieldName = goFieldName(field.name),
+  gormPicksKey?: boolean,
 ) {
   const columnName = field.dbName ?? field.name
   const defaultVal = gormDefault(field, isPk, isCompositePk, enums, provider)
 
   const parts = [
     `column:${columnName}`,
-    ...primaryKeyTags(field, isPk, provider),
+    ...primaryKeyTags(field, isPk, isCompositePk, provider, gormPicksKey),
     // A model's own unique fields come named in compositeIndexTags.
     field.isUnique && !compositeIndexTags.some((tag) => tag.startsWith('uniqueIndex:'))
       ? 'uniqueIndex'
@@ -987,14 +1009,41 @@ function generateStructField(
   isPk: boolean,
   isCompositePk: boolean,
   compositeIndexTags: readonly string[],
-  enums?: readonly DMMF.DatamodelEnum[],
-  provider?: string,
+  enums: readonly DMMF.DatamodelEnum[] | undefined,
+  provider: string | undefined,
+  gormPicksKey: boolean,
 ) {
   return [
     fieldName,
     structFieldGoType(field, isPk, provider),
-    buildGormTags(field, isPk, isCompositePk, compositeIndexTags, enums, provider, fieldName),
+    buildGormTags(
+      field,
+      isPk,
+      isCompositePk,
+      compositeIndexTags,
+      enums,
+      provider,
+      fieldName,
+      gormPicksKey,
+    ),
   ]
+}
+
+// The key field GORM makes auto-increment when its tag does not say (schema.Parse, gorm v1.31.2):
+// the one it finds by the name id, then ID (a column name first, then a Go field name), when that
+// is a key field, and otherwise the sole key field. Of a composite key with no such field GORM
+// makes none auto-increment.
+function gormPickedKey(
+  scalarFields: readonly DMMF.Field[],
+  keyNames: ReadonlySet<string>,
+  names: ReadonlyMap<string, string>,
+) {
+  const lookUp = (name: string) =>
+    scalarFields.find((f) => (f.dbName ?? f.name) === name) ??
+    scalarFields.find((f) => (names.get(f.name) ?? goFieldName(f.name)) === name)
+  const byName = lookUp('id') ?? lookUp('ID')
+  if (byName !== undefined && keyNames.has(byName.name)) return byName.name
+  return keyNames.size === 1 ? [...keyNames][0] : undefined
 }
 
 function needsReferencesTag(references: string) {
@@ -1285,6 +1334,11 @@ export function generateModelStruct(
   )
 
   const names = goFieldNames(model)
+  const pickedKey = gormPickedKey(
+    scalarFields,
+    new Set(idField ? [idField.name] : compositePkFieldNames),
+    names,
+  )
   const fieldLines = scalarFields.flatMap((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const fieldIndexTags = indexTags.tags.get(field.name) ?? []
@@ -1301,6 +1355,7 @@ export function generateModelStruct(
         fieldIndexTags,
         enums,
         provider,
+        field.name === pickedKey,
       ),
     )
     return rows
