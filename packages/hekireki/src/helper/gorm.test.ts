@@ -3,6 +3,7 @@ import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { generateGormModels } from '../generator/gorm.js'
+import { partialIndexWhere } from '../prisma/partial-index.js'
 import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import { buildGormTags, goFieldName, gormProblems, prismaTypeToGoType } from './gorm.js'
 
@@ -1091,6 +1092,40 @@ model Tag {
       "model Note: the dbgenerated() default of path ends in \\, which GORM's tag cannot hold",
       'model Note: the index on pair is named "Note_a,b_key", whose "," GORM\'s tag cannot hold; give it a name with map:',
       'model Tag: the index on label is named "tag;s_label_idx", whose ";" GORM\'s tag cannot hold; give it a name with map:',
+    ])
+  })
+
+  it('passes over an index left out with a note, and says when the map: name is refused too', () => {
+    const source = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  output          = "./generated"
+  previewFeatures = ["partialIndexes"]
+}
+
+model Item {
+  id   Int    @id
+  slug String
+  code String @map("c,d")
+
+  @@index([slug], where: raw("slug <> 'a;b'"))
+  @@index([code], map: "item,code")
+  @@map("item,s")
+}
+`
+    const datamodel = datamodelOf(getDMMF({ datamodel: source }))
+    expect(
+      gormProblems(
+        datamodel.models,
+        'postgresql',
+        datamodel.indexes,
+        partialIndexWhere(prismaBlocks(source), 'postgresql'),
+      ),
+    ).toStrictEqual([
+      'model Item: the index on code is named "item,s_c,d_idx", whose "," GORM\'s tag cannot hold; its map: name "item,code" cannot be held either (a , ; " or backtick, or a \\ at its end); change it',
     ])
   })
 

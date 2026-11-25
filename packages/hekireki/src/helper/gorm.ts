@@ -628,6 +628,24 @@ function operatorClassSetting(
   return expression === null ? null : `,expression:${expression}`
 }
 
+/**
+ * Whether an index is left out of the tags, with a note in its place: a partial index whose
+ * condition, or an index whose operator class, GORM cannot read back (indexWhereSetting,
+ * operatorClassSetting). A unique index that holds every row is always written.
+ */
+function leavesOutIndex(
+  model: DMMF.Model,
+  idx: DMMF.Index,
+  provider: string | undefined,
+  indexWhere: IndexWhere,
+) {
+  const where = indexWhere(model, idx)
+  if (where !== undefined && indexWhereSetting(where) === null) return true
+  if (idx.type === 'unique' && where === undefined) return false
+  const fieldByName = new Map(model.fields.map((mf) => [mf.name, mf]))
+  return idx.fields.some((f) => operatorClassSetting(fieldByName.get(f.name), f, provider) === null)
+}
+
 /** The condition of a partial index, as `partialIndexWhere` gives it. */
 type IndexWhere = (
   model: DMMF.Model,
@@ -1608,14 +1626,17 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
 
 /**
  * What keeps the schema from becoming models that compile and read as it says: a model whose Go
- * name is that of a type or function written beside the models, where the schema needs it, and a
- * column whose name the struct tag cannot hold (a `;`, or a `\` at its end). Index names made
- * from a column are escaped for the tag (escapeTagValue), so a `"` or `\` in one is held.
+ * name is that of a type or function written beside the models, where the schema needs it; a
+ * column whose name the struct tag cannot hold (a `;`, or a `\` at its end); a dbgenerated()
+ * default ending in `\`; and an index written into the tags under a name holding a `,` or `;`.
+ * Index names made from a column are escaped for the tag (escapeTagValue), so a `"` or `\` in
+ * one is held.
  */
 export function gormProblems(
   models: readonly DMMF.Model[],
   provider?: string,
   indexes: readonly DMMF.Index[] = [],
+  indexWhere: IndexWhere = () => undefined,
 ) {
   const held = new Map<string, string>([
     ...dateTypes(models).map((name): [string, string] => [
@@ -1664,17 +1685,21 @@ export function gormProblems(
     )
     // GORM takes an index's name up to its first `,` and splits the whole tag at every `;`, with no
     // escape for either, so an index whose name holds one (made from a column or a @@map that does)
-    // cannot be written.
+    // cannot be written. One left out of the tags with a note never reaches them.
     const indexNames = (indexesOf.get(model.name) ?? [])
-      .filter((idx) => idx.type !== 'id')
+      .filter((idx) => idx.type !== 'id' && !leavesOutIndex(model, idx, provider, indexWhere))
       .flatMap((idx) => {
         const indexName = indexTagName(model, idx, provider)
         const mark = indexName.match(/[,;]/u)?.[0]
-        return mark === undefined
-          ? []
-          : [
-              `model ${model.name}: the index on ${idx.fields.map((f) => f.name).join(', ')} is named ${JSON.stringify(indexName)}, whose "${mark}" GORM's tag cannot hold; give it a name with map:`,
-            ]
+        if (mark === undefined) return []
+        const fields = idx.fields.map((f) => f.name).join(', ')
+        const advice =
+          idx.dbName === undefined || idx.dbName === null
+            ? 'give it a name with map:'
+            : `its map: name ${JSON.stringify(idx.dbName)} cannot be held either (a , ; " or backtick, or a \\ at its end); change it`
+        return [
+          `model ${model.name}: the index on ${fields} is named ${JSON.stringify(indexName)}, whose "${mark}" GORM's tag cannot hold; ${advice}`,
+        ]
       })
     return [
       ...(holds === undefined
