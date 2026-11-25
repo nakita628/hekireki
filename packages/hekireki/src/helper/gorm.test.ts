@@ -1483,6 +1483,28 @@ func (User) TableName() string {
 // drops the condition; the tag gives it to GORM in `where:`, so AutoMigrate makes the index Prisma
 // Migrate makes (schema.Parse, gorm v1.31.2, reads each condition back as written here).
 describe('generateGormModels partial indexes', () => {
+  it('writes a Boolean as 1 and a name in brackets on SQL Server, which has no boolean literal', () => {
+    const code = gormFor(
+      `
+generator client {
+  provider        = "prisma-client"
+  output          = "./generated"
+  previewFeatures = ["partialIndexes"]
+}
+
+model Account {
+  id    Int     @id
+  alive Boolean
+  n     Int
+
+  @@index([n], where: { alive: true })
+}
+`,
+      'sqlserver',
+    )
+    expect(code).toContain('index:Account_n_idx,where:([alive] = 1)')
+  })
+
   it("writes a partial index's condition in where:, escaped for GORM and the tag", () => {
     expect(
       gormFor(

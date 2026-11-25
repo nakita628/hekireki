@@ -28,7 +28,7 @@ export function djangoCode(
   const blocks = prismaBlocks(source)
   // Django's `condition=` takes a Q, not SQL, so a partial index is not declared at all: written
   // as a plain one it would hold every row. It is named in a comment instead.
-  const whereOf = partialIndexWhere(blocks)
+  const whereOf = partialIndexWhere(blocks, provider)
   const modelsByName = new Map(schemaModels.map((m) => [m.name, m]))
   const conditionOf = (index: DMMF.Index) => {
     const model = modelsByName.get(index.model)

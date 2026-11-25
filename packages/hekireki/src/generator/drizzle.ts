@@ -29,7 +29,7 @@ export function drizzleSchema(
 ) {
   const db = resolveDbProvider(provider)
   const imports = createImports()
-  const whereOf = partialIndexWhere(blocks)
+  const whereOf = partialIndexWhere(blocks, provider)
 
   const enumLines = makeEnumDeclarations(datamodel.models, datamodel.enums, db, imports)
   const tableLines = [

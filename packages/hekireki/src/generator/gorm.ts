@@ -24,7 +24,7 @@ export function generateGormModels(
   blocks: readonly PrismaBlock[] = [],
 ) {
   const idx = indexes ?? []
-  const indexWhere = partialIndexWhere(blocks)
+  const indexWhere = partialIndexWhere(blocks, provider)
 
   const modelBodies = models.map((model) =>
     generateModelStruct(model, models, enums, idx, provider, foreignKeyNames, views, indexWhere),
