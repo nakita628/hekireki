@@ -4274,6 +4274,30 @@ model B {
     )
   })
 
+  // A constant outside the type does not compile (CS0221, CS0594): such a default is the column's.
+  it('leaves a default outside its C# type to the column', () => {
+    const { datamodel, plan } = fixture(
+      `
+datasource db {
+  provider = "mysql"
+}
+
+model O {
+  id Int   @id
+  ti Int   @default(300) @db.TinyInt
+  us Int   @default(70000) @db.UnsignedSmallInt
+  fl Float @default(1000000000000000000000000000000000000000.0) @db.Float
+}
+`,
+      { ...DEFAULT_OPTIONS, provider: 'mysql' },
+    )
+    const entity = entityFile(plan, model(datamodel, 'O')).code
+    expect(entity).toContain('    public sbyte Ti { get; set; }\n')
+    expect(entity).toContain('    public ushort Us { get; set; }\n')
+    expect(entity).toContain('    public float Fl { get; set; }\n')
+    expect(contextFile(plan).code).not.toMatch(/\(sbyte\)300|\(ushort\)70000|e\+39f/u)
+  })
+
   it('leaves PostgreSQL, whose SmallInt was already a short, as it was', () => {
     const { datamodel, plan } = fixture(`
 datasource db {

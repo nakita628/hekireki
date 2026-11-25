@@ -894,12 +894,25 @@ function temporalLiteral(value: string, temporal: TemporalKind) {
   return `new ${typeRef(CS.DateTime)}(${[moment.year, moment.month, moment.day, ...clockArgs(moment)].join(', ')}, ${exprRef(CS.DateTimeKind)}.Utc)`
 }
 
-// An integer default of a type C# has no literal for, as a cast of the int literal; an unsigned
-// type has no negative value.
-function castLiteral(clr: string, value: string | number | boolean, signed: boolean) {
-  const text = integerLiteral(value)
-  return text === null || (!signed && text.startsWith('-')) ? null : `(${clr})${text}`
+// The values each integer type C# has no literal for holds; a constant outside them does not
+// compile (CS0221).
+const CAST_RANGES: { readonly [clr: string]: readonly [number, number] } = {
+  sbyte: [-128, 127],
+  short: [-32_768, 32_767],
+  byte: [0, 255],
+  ushort: [0, 65_535],
 }
+
+// An integer default of a type C# has no literal for, as a cast of the int literal, or null where
+// the value is outside the type (left to the column's DEFAULT).
+function castLiteral(clr: string, value: string | number | boolean) {
+  const text = integerLiteral(value)
+  const [min, max] = CAST_RANGES[clr] ?? [0, 0]
+  return text === null || Number(text) < min || Number(text) > max ? null : `(${clr})${text}`
+}
+
+// The largest finite float; a literal past it does not compile (CS0594).
+const FLOAT_MAX = 3.4028234663852886e38
 
 // Each C# type's spelling of a default, or null where the value has none.
 const CLR_LITERAL: { readonly [clr: string]: (value: string | number | boolean) => string | null } =
@@ -907,10 +920,10 @@ const CLR_LITERAL: { readonly [clr: string]: (value: string | number | boolean) 
     string: (value) => (typeof value === 'string' ? csharpString(value) : null),
     bool: (value) => (typeof value === 'boolean' ? String(value) : null),
     int: integerLiteral,
-    sbyte: (value) => castLiteral('sbyte', value, true),
-    short: (value) => castLiteral('short', value, true),
-    byte: (value) => castLiteral('byte', value, false),
-    ushort: (value) => castLiteral('ushort', value, false),
+    sbyte: (value) => castLiteral('sbyte', value),
+    short: (value) => castLiteral('short', value),
+    byte: (value) => castLiteral('byte', value),
+    ushort: (value) => castLiteral('ushort', value),
     uint: (value) => {
       const text = integerLiteral(value)
       return text === null || text.startsWith('-') ? null : `${text}u`
@@ -919,7 +932,8 @@ const CLR_LITERAL: { readonly [clr: string]: (value: string | number | boolean) 
     long: (value) => (/^-?\d+$/u.test(String(value)) ? `${value}L` : null),
     ulong: (value) => (/^\d+$/u.test(String(value)) ? `${value}UL` : null),
     double: (value) => (typeof value === 'number' ? doubleLiteral(value) : null),
-    float: (value) => (typeof value === 'number' ? `${value}f` : null),
+    float: (value) =>
+      typeof value === 'number' && Math.abs(value) <= FLOAT_MAX ? `${value}f` : null,
     decimal: (value) =>
       /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/iu.test(String(value)) ? `${value}m` : null,
     // A Bytes default is the base64 of the bytes.
