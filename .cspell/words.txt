@@ -222,6 +222,7 @@ sqlx
 sslmode
 Stampeds
 stringbool
+Submatch
 subplan
 subsecs
 supabase
@@ -261,6 +262,7 @@ uncapitalize
 unixepoch
 unixtime
 Unkeyeds
+Unmarshal
 unstub
 usecase
 usecases

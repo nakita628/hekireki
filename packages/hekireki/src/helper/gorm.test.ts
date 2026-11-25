@@ -2883,3 +2883,100 @@ func (Token) TableName() string {
 `)
   })
 })
+
+// PostgreSQL prints money in its locale's form ("$1,234.50"), which a float64 cannot scan, and
+// datatypes.JSON names jsonb to AutoMigrate whatever the tag says: both have a type of their own.
+describe('generateGormModels PostgreSQL money and json columns', () => {
+  const schema = `
+model Wallet {
+  id      Int      @id
+  balance Decimal  @db.Money
+  bonus   Decimal? @db.Money
+  tip     Decimal  @default(1.5) @db.Money
+  raw     Json     @db.Json
+  extra   Json?    @db.Json
+  doc     Json     @db.JsonB
+}
+`
+
+  it('holds @db.Money in Money and @db.Json in PlainJSON, written beside the models', () => {
+    const code = gormFor(schema, 'postgresql')
+    expect(code).toContain(
+      '\tBalance Money          `gorm:"column:balance;type:money;not null" json:"balance"`\n',
+    )
+    expect(code).toContain(
+      '\tBonus   *Money         `gorm:"column:bonus;type:money" json:"bonus"`\n',
+    )
+    expect(code).toContain(
+      '\tTip     *Money         `gorm:"column:tip;type:money;default:(1.5);not null" json:"tip"`\n',
+    )
+    expect(code).toContain('\tRaw     PlainJSON      `gorm:"column:raw;not null" json:"raw"`\n')
+    expect(code).toContain('\tExtra   PlainJSON      `gorm:"column:extra" json:"extra"`\n')
+    expect(code).toContain(
+      '\tDoc     datatypes.JSON `gorm:"column:doc;type:jsonb;not null" json:"doc"`\n',
+    )
+    expect(code).toContain('type Money float64\n')
+    expect(code).toContain('type PlainJSON json.RawMessage\n')
+    expect(code).toContain(`import (
+	"context"
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"gorm.io/gorm/schema"
+)`)
+    expect(code).toContain(
+      '\treturn clause.Expr{SQL: "CAST(CAST(? AS numeric) AS money)", Vars: []any{strconv.FormatFloat(float64(m), \'f\', -1, 64)}}\n',
+    )
+  })
+
+  it('keeps the money text it cannot read from becoming a wrong amount', () => {
+    const code = gormFor(schema, 'postgresql')
+    expect(code).toContain(
+      '\tmoneyText   = regexp.MustCompile("^(-?)\\\\$(\\\\d{1,3}(?:,\\\\d{3})*)\\\\.(\\\\d{2})$")\n',
+    )
+    expect(code).toContain(
+      '\t\treturn fmt.Errorf("a money column held %q, which is not in the C or en_US form", text)\n',
+    )
+    expect(code).toContain('\tif amount > maxExactMoney || amount < -maxExactMoney {\n')
+  })
+
+  it('leaves CockroachDB, which has no money and whose json is jsonb, as it was', () => {
+    const code = gormFor(
+      `
+model Wallet {
+  id  Int  @id
+  raw Json @db.JsonB
+}
+`,
+      'cockroachdb',
+    )
+    expect(code).not.toContain('PlainJSON')
+    expect(code).not.toContain('Money')
+  })
+
+  it('names a money list, which GORM cannot read, and a model that takes the name of a type', () => {
+    const result = getDMMF({
+      datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Money {
+  id     Int       @id
+  prices Decimal[] @db.Money
+  amount Decimal   @db.Money
+}
+`,
+    })
+    expect(gormProblems(datamodelOf(result).models, 'postgresql')).toStrictEqual([
+      'model Money: its Go name is Money, what the models hold a @db.Money in; rename the model and keep its table with @@map',
+      'model Money: prices is a list of money, which GORM cannot read from the money[] PostgreSQL prints; make it a list of @db.Decimal',
+    ])
+  })
+})

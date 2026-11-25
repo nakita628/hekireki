@@ -118,6 +118,8 @@ function resolveNativeType(field: DMMF.Field, provider: string | undefined) {
   if (nativeName === 'VarChar' || nativeName === 'Char') {
     return args.length > 0 ? `varchar(${args[0]})` : null
   }
+  // A PostgreSQL money column is held in Money, which names it to AutoMigrate as well.
+  if (isMoney(field, provider)) return 'money'
   if (nativeName === 'Decimal' || nativeName === 'Money') {
     return args.length >= 2 ? `decimal(${args[0]},${args[1]})` : 'decimal'
   }
@@ -294,6 +296,34 @@ function isPostgresFamily(provider: string | undefined) {
   return provider === 'postgresql' || provider === 'cockroachdb'
 }
 
+/** A PostgreSQL `Decimal @db.Money` that is not a list: held in the Money type beside the models. */
+function isMoney(field: DMMF.Field, provider: string | undefined) {
+  return (
+    provider === 'postgresql' &&
+    field.type === 'Decimal' &&
+    field.nativeType?.[0] === 'Money' &&
+    !field.isList
+  )
+}
+
+/** A PostgreSQL `Json @db.Json` that is not a list: held in the PlainJSON type beside the models. */
+function isPlainJson(field: DMMF.Field, provider: string | undefined) {
+  return (
+    provider === 'postgresql' &&
+    field.type === 'Json' &&
+    field.nativeType?.[0] === 'Json' &&
+    !field.isList
+  )
+}
+
+function usesMoney(models: readonly DMMF.Model[], provider: string | undefined) {
+  return models.some((m) => m.fields.some((f) => isMoney(f, provider)))
+}
+
+function usesPlainJson(models: readonly DMMF.Model[], provider: string | undefined) {
+  return models.some((m) => m.fields.some((f) => isPlainJson(f, provider)))
+}
+
 function gormDefault(
   field: DMMF.Field,
   isPk: boolean,
@@ -305,14 +335,20 @@ function gormDefault(
     field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
   // Prisma Migrate writes now() as DEFAULT CURRENT_TIMESTAMP; the hook fills the value all the same.
   const nowDefault = isNowDefault && isPostgresFamily(provider) ? 'CURRENT_TIMESTAMP' : null
-  return (
+  const value =
     dbGeneratedDefault(field) ??
     dateTimeDefault(field, provider) ??
     nowDefault ??
     ((!isPk || isCompositePk) && !isNowDefault && field.isUpdatedAt !== true
       ? (enumMappedDefault(field, enums) ?? formatGoDefault(field.default, field.type, field.kind))
       : null)
-  )
+  return value !== null && isMoney(field, provider) ? moneyDefault(value) : value
+}
+
+// GORM parses a number default into a float64 and inserts it bare where the field is zero, past
+// Money's numeric cast; in parentheses it is not parsed, and the column is left to its DEFAULT.
+function moneyDefault(value: string) {
+  return /^-?[\d.]+$/u.test(value) ? `(${value})` : value
 }
 
 function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
@@ -1040,6 +1076,10 @@ function structFieldGoType(field: DMMF.Field, isPk: boolean, provider: string | 
   }
   if (isDateTimeScalar(field)) return `${field.isRequired ? '' : '*'}${dateTimeGoType(field)}`
   if (field.kind === 'enum') return field.isRequired ? 'string' : '*string'
+  if (isPlainJson(field, provider)) return 'PlainJSON'
+  if (isMoney(field, provider)) {
+    return field.isRequired && !hasNonZeroDefault(field, isPk) ? 'Money' : '*Money'
+  }
   return prismaTypeToGoType(field.type, field.isRequired && !hasNonZeroDefault(field, isPk))
 }
 
@@ -1685,6 +1725,14 @@ export function gormProblems(
       name,
       'what the models hold a scalar list in',
     ]),
+    ...(usesMoney(models, provider) ? ['Money'] : []).map((name): [string, string] => [
+      name,
+      'what the models hold a @db.Money in',
+    ]),
+    ...(usesPlainJson(models, provider) ? ['PlainJSON'] : []).map((name): [string, string] => [
+      name,
+      'what the models hold a @db.Json in',
+    ]),
   ])
   const indexesOf = indexes.reduce<Map<string, DMMF.Index[]>>((map, idx) => {
     map.set(idx.model, [...(map.get(idx.model) ?? []), idx])
@@ -1717,6 +1765,15 @@ export function gormProblems(
             `model ${model.name}: the column of ${field.name} is named ${JSON.stringify(column)}, which GORM cannot write (${flaw}); change its @map`,
           ]
     })
+    // PostgreSQL prints each money of an array in its locale's form, which neither ScalarList nor
+    // the json serializer reads.
+    const moneyLists = model.fields.flatMap((field) =>
+      provider === 'postgresql' && field.isList && field.nativeType?.[0] === 'Money'
+        ? [
+            `model ${model.name}: ${field.name} is a list of money, which GORM cannot read from the money[] PostgreSQL prints; make it a list of @db.Decimal`,
+          ]
+        : [],
+    )
     // The table's name goes through the same QuoteTo in every statement GORM writes.
     const tableFlaw = quoteFlaw(model.dbName ?? model.name, provider)
     // So does the join table of an implicit many-to-many relation, `_` and the relation's name,
@@ -1788,6 +1845,7 @@ export function gormProblems(
             `model ${model.name}: its table is named ${JSON.stringify(model.dbName ?? model.name)}, which GORM cannot write (${tableFlaw}); change its @@map`,
           ]),
       ...columns,
+      ...moneyLists,
       ...joinTables,
       ...indexNames,
       ...jsonClashes,
@@ -1799,19 +1857,38 @@ function standardImports(
   types: readonly string[],
   generators: ReadonlySet<string>,
   needsTime: boolean,
-  scalarList: boolean,
+  held: { readonly scalarList: boolean; readonly money: boolean; readonly plainJson: boolean },
 ) {
   const lists = types.some((name) => name.endsWith('List'))
-  const valuers = types.length > 0 || scalarList
+  const uses = typeImportUses(types, lists, held)
   return [
+    held.money ? '"context"' : null,
     generators.has('ulid') ? '"crypto/rand"' : null,
     lists ? '"database/sql"' : null,
-    valuers ? '"database/sql/driver"' : null,
-    valuers ? '"fmt"' : null,
-    valuers ? '"strconv"' : null,
-    types.includes('TimeOfDay') || lists || scalarList ? '"strings"' : null,
+    uses.valuers ? '"database/sql/driver"' : null,
+    held.plainJson ? '"encoding/json"' : null,
+    uses.valuers ? '"fmt"' : null,
+    held.money ? '"regexp"' : null,
+    uses.parses ? '"strconv"' : null,
+    uses.splits ? '"strings"' : null,
     needsTime ? '"time"' : null,
   ]
+}
+
+// What the types written beside the models use of the standard library: each is a Valuer and a
+// Scanner that reports with fmt; the date types, ScalarList and Money parse numbers, and split
+// text where they read a time of day, a list or an amount.
+function typeImportUses(
+  types: readonly string[],
+  lists: boolean,
+  held: { readonly scalarList: boolean; readonly money: boolean; readonly plainJson: boolean },
+) {
+  const parses = types.length > 0 || held.scalarList || held.money
+  return {
+    valuers: parses || held.plainJson,
+    parses,
+    splits: types.includes('TimeOfDay') || lists || held.scalarList || held.money,
+  }
 }
 
 export function collectImports(models: readonly DMMF.Model[], provider?: string) {
@@ -1825,8 +1902,10 @@ export function collectImports(models: readonly DMMF.Model[], provider?: string)
     ),
   )
   const needsDatatypes = models.some((m) =>
-    m.fields.some((f) => f.kind !== 'object' && f.type === 'Json'),
+    m.fields.some((f) => f.kind !== 'object' && f.type === 'Json' && !isPlainJson(f, provider)),
   )
+  const money = usesMoney(models, provider)
+  const plainJson = usesPlainJson(models, provider)
   const generators = new Set(
     models.flatMap((m) =>
       generatedIdFields(m).flatMap((f) =>
@@ -1838,7 +1917,11 @@ export function collectImports(models: readonly DMMF.Model[], provider?: string)
   )
   // Standard library first, then the modules, each group sorted by path, as
   // gofmt keeps them.
-  const standard = standardImports(types, generators, needsTime, usesScalarList(models, provider))
+  const standard = standardImports(types, generators, needsTime, {
+    scalarList: usesScalarList(models, provider),
+    money,
+    plainJson,
+  })
   const modules = [
     generators.has('uuid') ? '"github.com/google/uuid"' : null,
     generators.has('cuid') ? '"github.com/lucsky/cuid"' : null,
@@ -1846,8 +1929,9 @@ export function collectImports(models: readonly DMMF.Model[], provider?: string)
     generators.has('cuid2') ? '"github.com/nrednav/cuid2"' : null,
     generators.has('ulid') ? '"github.com/oklog/ulid/v2"' : null,
     needsDatatypes ? '"gorm.io/datatypes"' : null,
-    generators.size > 0 || fillsTimes ? '"gorm.io/gorm"' : null,
-    hasImplicitManyToMany(models) ? '"gorm.io/gorm/schema"' : null,
+    generators.size > 0 || fillsTimes || money || plainJson ? '"gorm.io/gorm"' : null,
+    money ? '"gorm.io/gorm/clause"' : null,
+    hasImplicitManyToMany(models) || money || plainJson ? '"gorm.io/gorm/schema"' : null,
   ]
   return [standard.filter((i) => i !== null), modules.filter((i) => i !== null)]
 }
@@ -1866,6 +1950,144 @@ export function formatImports(groups: readonly (readonly string[])[]) {
       .join('\n\n')
       .split('\n'),
     ')',
+  ]
+}
+
+const MONEY_TYPE = [
+  '',
+  '// Money holds a PostgreSQL money column (@db.Money), which Prisma Migrate makes and the server',
+  '// prints in its locale\'s form. It reads the C and en_US form ("-$1,234.50") or a plain number,',
+  '// and refuses any other text rather than read a wrong amount; it writes the plain number.',
+  'type Money float64',
+  '',
+  'var (',
+  '\tmoneyText   = regexp.MustCompile("^(-?)\\\\$(\\\\d{1,3}(?:,\\\\d{3})*)\\\\.(\\\\d{2})$")',
+  '\tmoneyNumber = regexp.MustCompile("^-?\\\\d+(?:\\\\.\\\\d+)?$")',
+  ')',
+  '',
+  '// The largest amount a float64 holds to the cent: money counts cents in an int64, past 2^53.',
+  'const maxExactMoney = float64(1<<53) / 100',
+  '',
+  'func (m Money) Value() (driver.Value, error) {',
+  "\treturn strconv.FormatFloat(float64(m), 'f', -1, 64), nil",
+  '}',
+  '',
+  'func (m *Money) Scan(src any) error {',
+  '\tvar text string',
+  '\tswitch value := src.(type) {',
+  '\tcase nil:',
+  '\t\t*m = 0',
+  '\t\treturn nil',
+  '\tcase string:',
+  '\t\ttext = value',
+  '\tcase []byte:',
+  '\t\ttext = string(value)',
+  '\tcase float64:',
+  '\t\t*m = Money(value)',
+  '\t\treturn nil',
+  '\tcase int64:',
+  '\t\t*m = Money(value)',
+  '\t\treturn nil',
+  '\tdefault:',
+  '\t\treturn fmt.Errorf("a money column held %T", src)',
+  '\t}',
+  '\tif parts := moneyText.FindStringSubmatch(text); parts != nil {',
+  '\t\ttext = parts[1] + strings.ReplaceAll(parts[2], ",", "") + "." + parts[3]',
+  '\t} else if !moneyNumber.MatchString(text) {',
+  '\t\treturn fmt.Errorf("a money column held %q, which is not in the C or en_US form", text)',
+  '\t}',
+  '\tamount, err := strconv.ParseFloat(text, 64)',
+  '\tif err != nil {',
+  '\t\treturn err',
+  '\t}',
+  '\tif amount > maxExactMoney || amount < -maxExactMoney {',
+  '\t\treturn fmt.Errorf("a money column held %q, more than a float64 holds to the cent", text)',
+  '\t}',
+  '\t*m = Money(amount)',
+  '\treturn nil',
+  '}',
+  '',
+  '// GormValue writes the amount through numeric, which PostgreSQL turns into money without reading',
+  '// it in the locale\'s form, where a locale whose decimal mark is "," would read "1234.5" as 12345.',
+  'func (m Money) GormValue(_ context.Context, db *gorm.DB) clause.Expr {',
+  '\tif float64(m) > maxExactMoney || float64(m) < -maxExactMoney {',
+  '\t\t_ = db.AddError(fmt.Errorf("%v is more money than a float64 holds to the cent", float64(m)))',
+  '\t}',
+  '\treturn clause.Expr{SQL: "CAST(CAST(? AS numeric) AS money)", Vars: []any{strconv.FormatFloat(float64(m), \'f\', -1, 64)}}',
+  '}',
+  '',
+  'func (Money) GormDataType() string {',
+  '\treturn "money"',
+  '}',
+  '',
+  'func (Money) GormDBDataType(db *gorm.DB, _ *schema.Field) string {',
+  '\tif db.Dialector.Name() == "postgres" {',
+  '\t\treturn "money"',
+  '\t}',
+  '\treturn ""',
+  '}',
+]
+
+const PLAIN_JSON_TYPE = [
+  '',
+  '// PlainJSON holds a PostgreSQL json column (@db.Json), which keeps the text as it was written:',
+  '// datatypes.JSON names jsonb to AutoMigrate whatever the tag says.',
+  'type PlainJSON json.RawMessage',
+  '',
+  'func (j PlainJSON) Value() (driver.Value, error) {',
+  '\tif len(j) == 0 {',
+  '\t\treturn nil, nil',
+  '\t}',
+  '\treturn string(j), nil',
+  '}',
+  '',
+  'func (j *PlainJSON) Scan(src any) error {',
+  '\tswitch value := src.(type) {',
+  '\tcase nil:',
+  '\t\t*j = nil',
+  '\tcase []byte:',
+  '\t\t*j = append(PlainJSON(nil), value...)',
+  '\tcase string:',
+  '\t\t*j = PlainJSON(value)',
+  '\tdefault:',
+  '\t\treturn fmt.Errorf("a json column held %T", src)',
+  '\t}',
+  '\treturn nil',
+  '}',
+  '',
+  'func (j PlainJSON) MarshalJSON() ([]byte, error) {',
+  '\tif len(j) == 0 {',
+  '\t\treturn []byte("null"), nil',
+  '\t}',
+  '\treturn j, nil',
+  '}',
+  '',
+  'func (j *PlainJSON) UnmarshalJSON(data []byte) error {',
+  '\t*j = append((*j)[0:0], data...)',
+  '\treturn nil',
+  '}',
+  '',
+  'func (PlainJSON) GormDataType() string {',
+  '\treturn "json"',
+  '}',
+  '',
+  'func (PlainJSON) GormDBDataType(db *gorm.DB, _ *schema.Field) string {',
+  '\tif db.Dialector.Name() == "postgres" {',
+  '\t\treturn "json"',
+  '\t}',
+  '\treturn ""',
+  '}',
+]
+
+/**
+ * The types a PostgreSQL `@db.Money` and `@db.Json` are held in, where the schema has one: GORM's
+ * float64 cannot read the money text PostgreSQL prints, and datatypes.JSON makes AutoMigrate's
+ * column jsonb.
+ */
+export function generateNativeTypes(models: readonly DMMF.Model[], provider?: string) {
+  return [
+    ...(usesMoney(models, provider) ? MONEY_TYPE : []),
+    ...(usesPlainJson(models, provider) ? PLAIN_JSON_TYPE : []),
   ]
 }
 

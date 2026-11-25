@@ -6,6 +6,7 @@ import {
   generateDateTypes,
   generateModelStruct,
   generateNamingStrategy,
+  generateNativeTypes,
   generateScalarListType,
 } from '../helper/gorm.js'
 import { partialIndexWhere, withPlainUniques } from '../prisma/partial-index.js'
@@ -39,6 +40,7 @@ export function generateGormModels(
     modelBodies.join('\n\n'),
     ...generateDateTypes(models, provider),
     ...generateScalarListType(models, provider),
+    ...generateNativeTypes(models, provider),
     '',
   ].join('\n')
 }

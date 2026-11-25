@@ -94,6 +94,21 @@ made, the next one alters such a column, and the database refuses that while a f
 at it or from it: drop the foreign keys, alter the key and its foreign key columns together, and
 add the foreign keys back, or migrate with Prisma Migrate.
 
+On PostgreSQL, `hekireki-gorm` holds a `Decimal @db.Money` in `Money` and a `Json @db.Json` in
+`PlainJSON`, types written beside the models. PostgreSQL prints money in its locale's form
+(`$1,234.50`), which a `float64` cannot scan: `Money` reads the C and en_US form or a plain number,
+refuses any other text (a locale whose decimal mark is `,`) and an amount past $90 trillion,
+which a `float64` does not hold to the cent, and writes the amount through
+`numeric`, which no locale reads.
+`PlainJSON` keeps the JSON text as written and tells `AutoMigrate` the column is `json`, where
+`datatypes.JSON` makes it `jsonb`. Both answer `money` and `json` to `AutoMigrate`, so the next
+`AutoMigrate` on a table an earlier one made alters a `jsonb` column to `json` (which PostgreSQL
+refuses while a GIN index is on it: drop the index first), and a `decimal` column to `money`,
+which keeps two decimal places. These fields were a `float64` and a
+`datatypes.JSON` before 0.54, so code that uses them changes:
+`float64(field)` and `datatypes.JSON(field)` convert back. A `Decimal[] @db.Money` cannot be read
+at all and fails generation; make it a list of `@db.Decimal`.
+
 `hekireki-sqlalchemy` and `hekireki-django` give a `uuid()`, `cuid()`, `ulid()` or `nanoid()`
 default the value Prisma Client would make, with a package from PyPI where Python's standard
 library has none: `uuid6` for `uuid(7)`, `python-ulid` for `ulid()`, `cuid` for `cuid()`, `cuid2`
