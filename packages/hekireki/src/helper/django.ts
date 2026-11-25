@@ -157,6 +157,13 @@ const NATIVE_DJANGO_FIELDS: { readonly [nativeType: string]: string } = {
   Integer: 'IntegerField',
   Oid: 'IntegerField',
   BigInt: 'BigIntegerField',
+  // MySQL's unsigned integers: Django's positive fields are its unsigned columns there (a
+  // smallint unsigned for a tinyint unsigned, which Django has no field for).
+  UnsignedTinyInt: 'PositiveSmallIntegerField',
+  UnsignedSmallInt: 'PositiveSmallIntegerField',
+  UnsignedMediumInt: 'PositiveIntegerField',
+  UnsignedInt: 'PositiveIntegerField',
+  UnsignedBigInt: 'PositiveBigIntegerField',
   Real: 'FloatField',
   DoublePrecision: 'FloatField',
   Double: 'FloatField',
@@ -186,10 +193,11 @@ function resolveDjangoField(field: DMMF.Field) {
   const [nativeName, nativeArgs] = field.nativeType
   const args = nativeArgs ?? []
 
+  // An unbounded @db.VarChar (PostgreSQL) is a CharField without max_length, a varchar; a @db.Char
+  // without a length is Prisma's char(1).
   if (nativeName === 'VarChar' || nativeName === 'Char') {
-    return args.length > 0
-      ? { ctor: 'CharField', typeArgs: [`max_length=${args[0]}`] }
-      : { ctor: 'TextField', typeArgs: [] }
+    const length = args[0] ?? (nativeName === 'Char' ? '1' : undefined)
+    return { ctor: 'CharField', typeArgs: length === undefined ? [] : [`max_length=${length}`] }
   }
   if (nativeName === 'Decimal' || nativeName === 'Money') {
     return args.length >= 2
