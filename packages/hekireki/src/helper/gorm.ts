@@ -1240,7 +1240,7 @@ function generateRelationFields(
       own(assoc.name),
       `[]${goModelName(assoc.targetModel)}`,
       goTagLiteral(
-        `gorm:"many2many:${joinTable};joinForeignKey:${ownColumn};joinReferences:${related}"`,
+        `gorm:"many2many:${escapeTagValue(joinTable)};joinForeignKey:${ownColumn};joinReferences:${related}"`,
       ),
     ])
   })
@@ -1719,6 +1719,19 @@ export function gormProblems(
     })
     // The table's name goes through the same QuoteTo in every statement GORM writes.
     const tableFlaw = quoteFlaw(model.dbName ?? model.name, provider)
+    // So does the join table of an implicit many-to-many relation, `_` and the relation's name,
+    // written into the tag (escapeTagValue) of either field; a `\\` at its end would still join
+    // the setting with the next one. Reported once, on side A.
+    const joinTables = getAssociations(model, models, provider).manyToMany.flatMap((assoc) => {
+      if (!assoc.isSideA) return []
+      const joinTable = `_${assoc.relationName}`
+      const flaw = joinTable.endsWith('\\') ? 'a \\ at its end' : quoteFlaw(joinTable, provider)
+      return flaw === undefined
+        ? []
+        : [
+            `model ${model.name}: the join table of ${assoc.name} is named ${JSON.stringify(joinTable)}, which GORM cannot write (${flaw}); change the name of its @relation`,
+          ]
+    })
     // An index whose name GORM cannot write (nameFlaw), whether the schema gives it or Prisma's
     // naming makes it from a column or a @@map, is reported. One left out of the tags with a note
     // never reaches them.
@@ -1775,6 +1788,7 @@ export function gormProblems(
             `model ${model.name}: its table is named ${JSON.stringify(model.dbName ?? model.name)}, which GORM cannot write (${tableFlaw}); change its @@map`,
           ]),
       ...columns,
+      ...joinTables,
       ...indexNames,
       ...jsonClashes,
     ]
