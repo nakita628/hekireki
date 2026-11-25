@@ -7,6 +7,12 @@ import {
   generateBase,
   generateModelBody,
 } from '../helper/sqlalchemy.js'
+import type { SqlIndex } from '../helper/sqlalchemy.js'
+
+// An index with its condition, if it is partial.
+function withWhere(index: DMMF.Index, where: string | undefined): SqlIndex {
+  return where === undefined ? index : { ...index, where }
+}
 
 export function generateSingleFile(
   models: readonly DMMF.Model[],
@@ -14,8 +20,14 @@ export function generateSingleFile(
   indexes?: readonly DMMF.Index[],
   provider = 'postgresql',
   views: ReadonlySet<string> = new Set(),
+  partialWhere: (model: DMMF.Model, index: DMMF.Index) => string | undefined = () => undefined,
 ) {
-  const idx = indexes ?? []
+  // Each partial index (the `partialIndexes` preview feature) with its condition, which DMMF drops.
+  const modelByName = new Map(models.map((m) => [m.name, m]))
+  const idx = (indexes ?? []).map((index) => {
+    const model = modelByName.get(index.model)
+    return withWhere(index, model === undefined ? undefined : partialWhere(model, index))
+  })
   const m2mTables = collectManyToManyTables(models)
 
   const importLines = collectGlobalImports(models, enums, idx, m2mTables, provider, views)

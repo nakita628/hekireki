@@ -3,6 +3,8 @@ import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { generateSingleFile } from '../generator/sqlalchemy.js'
+import { partialIndexWhere } from '../prisma/partial-index.js'
+import { prismaBlocks } from '../prisma/schema-text.js'
 import { prismaTypeToPythonType, prismaTypeToSQLAlchemyType, pythonAttrName } from './sqlalchemy.js'
 
 /** The datamodel of a schema the test expects Prisma to parse. */
@@ -3222,5 +3224,111 @@ model Row {
     const code = generateSingleFile(models, enums, indexes, 'postgresql')
     expect(code).not.toMatch(/^from sqlalchemy import .*\btext\b/mu)
     expect(code).not.toContain('server_default')
+  })
+})
+
+// A partial index (the `partialIndexes` preview feature) keeps its condition, which DMMF drops, as
+// the dialect's keyword to Index(): a partial unique is no plain unique index.
+describe('partial indexes', () => {
+  function partialCode(provider: string, models: string) {
+    const schema = `datasource db {
+  provider = "${provider}"
+}
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["partialIndexes"]
+}
+${models}`
+    const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
+    return generateSingleFile(
+      result.models,
+      result.enums,
+      result.indexes,
+      provider,
+      new Set(),
+      partialIndexWhere(prismaBlocks(schema)),
+    )
+  }
+
+  it('writes postgresql_where=text(...) on PostgreSQL', () => {
+    expect(
+      partialCode(
+        'postgresql',
+        `model Account {
+  id     Int     @id
+  email  String  @unique(where: raw("note IS NULL"))
+  alive  Boolean
+  n      Int
+  note   String?
+  tag    String
+
+  @@unique([n], where: raw("note <> 'a\\"b' AND tag::text <> ':x'"), map: "account_n_key")
+  @@index([alive], where: { alive: true })
+  @@index([tag], where: { note: "it's", n: { not: 5 } })
+  @@index([n])
+}`,
+      ),
+    ).toBe(`from sqlalchemy import Index, MetaData, Text, text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention={"pk": "%(table_name)s_pkey"})
+    type_annotation_map = {str: Text}
+
+
+class Account(Base):
+    __tablename__ = "Account"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    email: Mapped[str]
+    alive: Mapped[bool]
+    n: Mapped[int]
+    note: Mapped[Optional[str]]
+    tag: Mapped[str]
+
+    __table_args__ = (
+        Index("Account_email_key", "email", unique=True, postgresql_where=text("(note IS NULL)")),
+        Index("Account_alive_idx", "alive", postgresql_where=text("(\\"alive\\" = true)")),
+        Index("Account_tag_idx", "tag", postgresql_where=text("(\\"note\\" = 'it''s' AND \\"n\\" != 5)")),
+        Index("Account_n_idx", "n"),
+        Index("account_n_key", "n", unique=True, postgresql_where=text("(note <> 'a\\"b' AND tag::text <> '\\\\:x')")),
+    )
+`)
+  })
+
+  it('writes sqlite_where=text(...) on SQLite', () => {
+    expect(
+      partialCode(
+        'sqlite',
+        `model Account {
+  id    Int     @id
+  email String
+  alive Boolean
+
+  @@unique([email], where: { alive: true })
+}`,
+      ),
+    ).toBe(`from sqlalchemy import Index, Text, text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    type_annotation_map = {str: Text}
+
+
+class Account(Base):
+    __tablename__ = "Account"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str]
+    alive: Mapped[bool]
+
+    __table_args__ = (
+        Index("Account_email_key", "email", unique=True, sqlite_where=text("(\\"alive\\" = true)")),
+        {"sqlite_autoincrement": True},
+    )
+`)
   })
 })
