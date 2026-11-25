@@ -614,10 +614,38 @@ function postgresScalarMapping(type: string) {
   }
 }
 
+// The MySQL columns of a string, a byte array or a decimal that Pomelo's defaults (`longtext`,
+// `longblob`, `decimal(65,30)`) are not: a length where Pomelo makes the column of it, the store
+// type otherwise. Each keeps the CLR type Prisma's type reads into.
+const MYSQL_NATIVE: {
+  readonly [name: string]: (length: string | null, args: readonly string[]) => ClrMapping
+} = {
+  VarChar: (length) => mapping('string', false, [`.HasMaxLength(${length ?? '191'})`]),
+  Char: (length) =>
+    mapping('string', false, [`.HasMaxLength(${length ?? '1'})`, '.IsFixedLength()']),
+  TinyText: () => mapping('string', false, [columnType('tinytext')]),
+  Text: () => mapping('string', false, [columnType('text')]),
+  MediumText: () => mapping('string', false, [columnType('mediumtext')]),
+  LongText: () => mapping('string', false),
+  Decimal: (_length, args) => {
+    const [precision, scale] = args
+    return mapping('decimal', true, [`.HasPrecision(${precision ?? '10'}, ${scale ?? '0'})`])
+  },
+  VarBinary: (length) => mapping('byte[]', false, [`.HasMaxLength(${length ?? '1'})`]),
+  Binary: (length) =>
+    mapping('byte[]', false, [`.HasMaxLength(${length ?? '1'})`, '.IsFixedLength()']),
+  TinyBlob: () => mapping('byte[]', false, [columnType('tinyblob')]),
+  Blob: () => mapping('byte[]', false, [columnType('blob')]),
+  MediumBlob: () => mapping('byte[]', false, [columnType('mediumblob')]),
+  LongBlob: () => mapping('byte[]', false),
+}
+
 // The temporal types keep their store type, which is what decides a DateTime's precision; the
 // others take the CLR type Prisma's type reads into, which MySQL converts to and from the column.
 function mysqlNativeMapping(nativeName: string, args: readonly string[]) {
   const precision = lengthArg(args) ?? '0'
+  const make = MYSQL_NATIVE[nativeName]
+  if (make !== undefined) return make(lengthArg(args), args)
   switch (nativeName) {
     case 'DateTime':
       return mapping(
@@ -652,6 +680,9 @@ function mysqlScalarMapping(type: string) {
       return mapping(typeRef(CS.DateTime), true, [columnType('datetime(3)')], null, 'timestamp')
     case 'Json':
       return mapping('string', false, [columnType('json')])
+    // Prisma's VARCHAR(191), which Pomelo makes a longtext (a varchar(255) as a key).
+    case 'String':
+      return mapping('string', false, ['.HasMaxLength(191)'])
     default:
       return sqliteMapping(type)
   }
