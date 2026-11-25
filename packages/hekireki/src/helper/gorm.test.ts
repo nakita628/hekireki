@@ -1209,7 +1209,95 @@ model Box {
       'model Item: the index on code is named "\\"code_key", which GORM cannot write (a quote at its start); change it',
       'model Item: the index on slug is named "item.slug_idx", which GORM cannot write (a "."); change it',
       'model Item: the index on tag is named "item\\"\\"tag", which GORM cannot write (two quotes in a row); change it',
+      'model Box: its table is named "\\"boxes", which GORM cannot write (a quote at its start); change its @@map',
       'model Box: the index on code is named "\\"boxes_code_key", which GORM cannot write (a quote at its start); change the @map of its column or table, or give it a name with map:',
+    ])
+  })
+
+  it('escapes a " or \\ of the table name in TableName()', () => {
+    const code = gormFor(
+      `
+model Crate {
+  id Int @id
+
+  @@map("cr\\"a\\\\te")
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain('\treturn "cr\\"a\\\\te"\n')
+  })
+
+  it('names a column or table name the dialector would quote as another', () => {
+    const problemsOf = (provider: string, body: string) => {
+      const datamodel = datamodelOf(
+        getDMMF({ datamodel: `datasource db {\n  provider = "${provider}"\n}\n${body}` }),
+      )
+      return gormProblems(datamodel.models, provider, datamodel.indexes)
+    }
+    expect(
+      problemsOf(
+        'postgresql',
+        `
+model Item {
+  id    Int    @id
+  dot   String @map("a.b")
+  lead  String @map("\\"lead")
+  twice String @map("a\\"\\"b")
+  tick  String @map("\`tick")
+  mid   String @map("a\\"b")
+  comma String @map("a,b")
+}
+
+model Box {
+  id Int @id
+
+  @@map("box.es")
+}
+
+model Crate {
+  id Int @id
+
+  @@map("cr\\"ate")
+}
+`,
+      ),
+    ).toStrictEqual([
+      'model Item: the column of dot is named "a.b", which GORM cannot write (a "."); change its @map',
+      'model Item: the column of lead is named "\\"lead", which GORM cannot write (a quote at its start); change its @map',
+      'model Item: the column of twice is named "a\\"\\"b", which GORM cannot write (two quotes in a row); change its @map',
+      'model Box: its table is named "box.es", which GORM cannot write (a "."); change its @@map',
+    ])
+    expect(
+      problemsOf(
+        'mysql',
+        `
+model Item {
+  id   Int    @id
+  tick String @map("\`tick")
+  lead String @map("\\"lead")
+
+  @@map("it\`\`ems")
+}
+`,
+      ),
+    ).toStrictEqual([
+      'model Item: its table is named "it``ems", which GORM cannot write (two quotes in a row); change its @@map',
+      'model Item: the column of tick is named "`tick", which GORM cannot write (a quote at its start); change its @map',
+    ])
+    expect(
+      problemsOf(
+        'sqlserver',
+        `
+model Item {
+  id  Int    @id
+  mid String @map("a\\"b")
+  tick String @map("a\`b")
+}
+`,
+      ),
+    ).toStrictEqual([
+      'model Item: the column of mid is named "a\\"b", which GORM cannot write (a double quote); change its @map',
     ])
   })
 

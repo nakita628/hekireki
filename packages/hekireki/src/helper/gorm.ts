@@ -544,13 +544,20 @@ function goTagLiteral(tag: string) {
 
 // What keeps GORM from writing an index under a name, or undefined: in the tag, GORM reads past a
 // `,` as settings and splits at a `;`, and a `\` at the end joins the setting with the next one;
-// in CREATE INDEX, the dialector's QuoteTo splits a name at a `.` into schema and name, takes its
-// quote (a backtick on MySQL and SQLite, a `"` elsewhere) at the start as a quote of its own, and
-// makes two of it in a row one; SQL Server's does not escape a `"` at all.
+// in CREATE INDEX, the name goes through the dialector's QuoteTo (quoteFlaw).
 function nameFlaw(name: string, provider: string | undefined) {
   const mark = name.match(/[,;.]/u)?.[0]
   if (mark !== undefined) return `a "${mark}"`
   if (name.endsWith('\\')) return 'a \\ at its end'
+  return quoteFlaw(name, provider)
+}
+
+// What keeps the dialector's QuoteTo from writing a name as one identifier, or undefined: it
+// splits a name at a `.` into schema and name, takes its quote (a backtick on MySQL and SQLite, a
+// `"` elsewhere) at the start as a quote of its own, and makes two of it in a row one; SQL
+// Server's does not escape a `"` at all. Table, column and index names all go through it.
+function quoteFlaw(name: string, provider: string | undefined) {
+  if (name.includes('.')) return 'a "."'
   // SQL Server's QuoteTo writes a `"` inside a name as it is, which ends the quoted name.
   if (provider === 'sqlserver' && name.includes('"')) return 'a double quote'
   const quote = provider === 'mysql' || provider === 'sqlite' ? '`' : '"'
@@ -1371,11 +1378,12 @@ export function generateModelStruct(
   )
 
   // GORM would pluralise the snake_cased struct name (Warehouse -> warehouses);
-  // the table is Prisma's, so every model says which.
+  // the table is Prisma's, so every model says which. A JSON string is a Go string literal, so a
+  // `"` or `\` in the name is escaped.
   const tableNameMethod = [
     '',
     `func (${goModelName(model.name)}) TableName() string {`,
-    `\treturn "${tableName}"`,
+    `\treturn ${JSON.stringify(tableName)}`,
     '}',
   ]
 
@@ -1656,7 +1664,8 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
 /**
  * What keeps the schema from becoming models that compile and read as it says: a model whose Go
  * name is that of a type or function written beside the models, where the schema needs it; a
- * column whose name the struct tag cannot hold (a `;`, or a `\` at its end); an index whose name
+ * table or column whose name GORM cannot write (a `;` or a `\` at its end in a column's tag, or a
+ * quoteFlaw in either); an index whose name
  * GORM cannot write (nameFlaw), whether the schema gives it or Prisma's naming makes it; and two
  * fields under one json name (jsonTagName), a relation's Go name among them, of which encoding/json
  * keeps at most one.
@@ -1686,7 +1695,8 @@ export function gormProblems(
     const holds = held.get(name)
     // GORM reads a field's indexes by splitting its whole tag at every `;`, with no escape, and
     // rejoins a tag setting that ends in `\` with the next one, so neither a column name holding a
-    // `;` nor one ending in `\` can be written into the tag.
+    // `;` nor one ending in `\` can be written into the tag; nor can one QuoteTo would write as
+    // another identifier (quoteFlaw).
     const columns = model.fields.flatMap((field) => {
       const column = field.dbName ?? field.name
       if (field.kind === 'object') return []
@@ -1695,12 +1705,20 @@ export function gormProblems(
           `model ${model.name}: the column of ${field.name} holds a ";", at which GORM splits the tag; change its @map`,
         ]
       }
-      return column.endsWith('\\')
-        ? [
-            `model ${model.name}: the column of ${field.name} ends in \\, which GORM's tag cannot hold; change its @map`,
+      if (column.endsWith('\\')) {
+        return [
+          `model ${model.name}: the column of ${field.name} ends in \\, which GORM's tag cannot hold; change its @map`,
+        ]
+      }
+      const flaw = quoteFlaw(column, provider)
+      return flaw === undefined
+        ? []
+        : [
+            `model ${model.name}: the column of ${field.name} is named ${JSON.stringify(column)}, which GORM cannot write (${flaw}); change its @map`,
           ]
-        : []
     })
+    // The table's name goes through the same QuoteTo in every statement GORM writes.
+    const tableFlaw = quoteFlaw(model.dbName ?? model.name, provider)
     // An index whose name GORM cannot write (nameFlaw), whether the schema gives it or Prisma's
     // naming makes it from a column or a @@map, is reported. One left out of the tags with a note
     // never reaches them.
@@ -1750,6 +1768,11 @@ export function gormProblems(
         ? []
         : [
             `model ${model.name}: its Go name is ${name}, ${holds}; rename the model and keep its table with @@map`,
+          ]),
+      ...(tableFlaw === undefined
+        ? []
+        : [
+            `model ${model.name}: its table is named ${JSON.stringify(model.dbName ?? model.name)}, which GORM cannot write (${tableFlaw}); change its @@map`,
           ]),
       ...columns,
       ...indexNames,
