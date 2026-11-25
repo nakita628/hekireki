@@ -63,19 +63,19 @@ The `provider` of the generator block picks the output. Every option is optional
 
 ### ORM models
 
-| Provider                | Writes                        | Options                                            |
-| ----------------------- | ----------------------------- | -------------------------------------------------- |
-| `hekireki-drizzle`      | Drizzle tables                |                                                    |
-| `hekireki-kysely`       | Kysely `DB` interface         |                                                    |
-| `hekireki-sqlalchemy`   | SQLAlchemy models             |                                                    |
-| `hekireki-django`       | Django models                 |                                                    |
-| `hekireki-activerecord` | Rails models                  | `locales`: directory of the translated messages    |
-| `hekireki-gorm`         | GORM structs                  | `package` (`model`)                                |
-| `hekireki-sea-orm`      | SeaORM entities               | `renameAll`: serde's `rename_all`                  |
-| `hekireki-ecto`         | Ecto schemas                  | `app` (`MyApp`)                                    |
-| `hekireki-eloquent`     | Eloquent models               | `namespace` (`App\Models`)                         |
-| `hekireki-efcore`       | EF Core entities, `DbContext` | `namespace` (`Models`), `context` (`AppDbContext`) |
-| `hekireki-exposed`      | Exposed tables                | `package` (`models`), `dao` (`true`)               |
+| Provider                | Writes                        | Options                                              |
+| ----------------------- | ----------------------------- | ---------------------------------------------------- |
+| `hekireki-drizzle`      | Drizzle tables                |                                                      |
+| `hekireki-kysely`       | Kysely `DB` interface         |                                                      |
+| `hekireki-sqlalchemy`   | SQLAlchemy models             |                                                      |
+| `hekireki-django`       | Django models                 |                                                      |
+| `hekireki-activerecord` | Rails models                  | `locales`: directory of the translated messages      |
+| `hekireki-gorm`         | GORM structs                  | `package` (`model`)                                  |
+| `hekireki-sea-orm`      | SeaORM entities               | `renameAll`: serde's `rename_all`                    |
+| `hekireki-ecto`         | Ecto schemas                  | `app` (`MyApp`), `mysqlFlavor`: `mysql` or `mariadb` |
+| `hekireki-eloquent`     | Eloquent models               | `namespace` (`App\Models`)                           |
+| `hekireki-efcore`       | EF Core entities, `DbContext` | `namespace` (`Models`), `context` (`AppDbContext`)   |
+| `hekireki-exposed`      | Exposed tables                | `package` (`models`), `dao` (`true`)                 |
 
 Every ORM generator stores a `DateTime` as Prisma Client stores it, so the ORM and Prisma read
 each other's rows alike.
@@ -440,6 +440,10 @@ A `Json` is kept in `PrismaJson`, written alongside them too: Ecto's `:map` load
 only, and a `Json` column holds any JSON value, so an array, a string, a number or a boolean that
 Prisma Client wrote reads back as it is (on SQLite as the column keeps it: a `1.0` is `1`), and an
 `@default("[]")` is a default of the field.
+On MySQL, the type cannot tell a JSON string MyXQL decoded from the JSON text MariaDB keeps in its
+`LONGTEXT` column, so by default it decodes a value that is JSON text: a MySQL string such as
+`"12345"`, `"true"` or `"null"` then loads as a number, a boolean or `nil`. `mysqlFlavor = "mysql"`
+keeps every MySQL string as it is, and `mysqlFlavor = "mariadb"` decodes every MariaDB value.
 
 A `uuid()` or `uuid(7)` key without `@db.Uuid` or `@db.UniqueIdentifier` is a text column, so it
 is a `:string` key that `Repo.insert/2` fills with `Ecto.UUID.generate()` (`generate(version: 7)`
