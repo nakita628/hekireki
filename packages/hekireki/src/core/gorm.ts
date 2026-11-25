@@ -5,6 +5,7 @@ import { emitRaw } from '../emit/index.js'
 import { generateGormModels } from '../generator/gorm.js'
 import { gormProblems } from '../helper/gorm.js'
 import { getString } from '../prisma/config.js'
+import { partialIndexWhere } from '../prisma/partial-index.js'
 import { prismaBlocks, relationMaps, viewNames } from '../prisma/schema-text.js'
 import { GeneratorConfigError } from './errors.js'
 import { outputFile, requireOutput } from './output.js'
@@ -15,6 +16,8 @@ export function gorm(options: GeneratorOptions) {
     const problems = gormProblems(
       options.dmmf.datamodel.models,
       options.datasources[0]?.activeProvider,
+      options.dmmf.datamodel.indexes,
+      partialIndexWhere(prismaBlocks(options.datamodel), options.datasources[0]?.activeProvider),
     )
     if (problems.length > 0) {
       return yield* new GeneratorConfigError({

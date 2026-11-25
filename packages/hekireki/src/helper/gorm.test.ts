@@ -3,6 +3,7 @@ import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { generateGormModels } from '../generator/gorm.js'
+import { partialIndexWhere } from '../prisma/partial-index.js'
 import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import { buildGormTags, goFieldName, gormProblems, prismaTypeToGoType } from './gorm.js'
 
@@ -178,6 +179,50 @@ describe('buildGormTags', () => {
     // interpreted string literal.
     expect(buildGormTags(field('(`a` + 1)'), false, false, [], [], 'mysql')).toBe(
       String.raw`"gorm:\"column:classification;type:varchar(191);default:(${'`'}a${'`'} + 1)\" json:\"classification\""`,
+    )
+  })
+
+  it('writes a json name encoding/json reads as the key: "-," for a "-", the field name for one with a ","', () => {
+    const field = (dbName: string) =>
+      ({
+        name: 'label',
+        dbName,
+        kind: 'scalar' as const,
+        type: 'String',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: false,
+      }) as any
+    expect(buildGormTags(field('-'), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:-;not null" json:"-,"`',
+    )
+    expect(buildGormTags(field('id,string'), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:id,string;not null" json:"Label"`',
+    )
+  })
+
+  it('writes a dbgenerated() default ending in a backslash last, as GORM joins it to the next setting', () => {
+    const field = (expression: string) =>
+      ({
+        name: 'path',
+        kind: 'scalar' as const,
+        type: 'Int',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'dbgenerated', args: [expression] },
+      }) as any
+    expect(buildGormTags(field('x\\'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:path;size:32;not null;default:x\\" json:"path"${'`'}`,
+    )
+    expect(buildGormTags(field('x + 1'), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:path;size:32;default:x + 1;not null" json:"path"`',
     )
   })
 
@@ -1039,6 +1084,71 @@ model Note {
     ])
   })
 
+  it('names an index whose name in the tag holds a "," or ";"', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Note {
+  id    Int    @id
+  pair  String @unique @map("a,b")
+  named String @unique(map: "note_named_key") @map("c,d")
+}
+
+model Tag {
+  id    Int    @id
+  label String
+  slug  String
+
+  @@index([label])
+  @@index([slug], map: "tag_slug_idx")
+  @@map("tag;s")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Note: the index on pair is named "Note_a,b_key", whose "," GORM\'s tag cannot hold; change the @map of its column or table, or give it a name with map:',
+      'model Tag: the index on label is named "tag;s_label_idx", whose ";" GORM\'s tag cannot hold; change the @map of its column or table, or give it a name with map:',
+    ])
+  })
+
+  it('passes over an index left out with a note, and says when the map: name is refused too', () => {
+    const source = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  output          = "./generated"
+  previewFeatures = ["partialIndexes"]
+}
+
+model Item {
+  id   Int    @id
+  slug String
+  code String @map("c,d")
+
+  @@index([slug], where: raw("slug <> 'a;b'"))
+  @@index([code], map: "item,code")
+  @@map("item,s")
+}
+`
+    const datamodel = datamodelOf(getDMMF({ datamodel: source }))
+    expect(
+      gormProblems(
+        datamodel.models,
+        'postgresql',
+        datamodel.indexes,
+        partialIndexWhere(prismaBlocks(source), 'postgresql'),
+      ),
+    ).toStrictEqual([
+      'model Item: the index on code is named "item,s_c,d_idx", whose "," GORM\'s tag cannot hold; its map: name "item,code" cannot be held either (a , ; " or backtick, or a \\ at its end); change it',
+    ])
+  })
+
   it('escapes an index name made from a mapped column for the struct tag', () => {
     const code = gormFor(
       `model Note {
@@ -1787,7 +1897,7 @@ type Account struct {
 	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	Email string \`gorm:"column:email;uniqueIndex:Account_email_key;uniqueIndex:account_email_alive,where:(alive);not null" json:"email"\`
 	Alive bool   \`gorm:"column:alive;uniqueIndex:Account_alive_n_key,priority:1,where:(\\"alive\\" = true);index:Account_alive_idx,where:(\\"alive\\" = true);not null" json:"alive"\`
-	// The partial index Account_n_note_idx is left out: its condition holds a ";", at which GORM splits the tag.
+	// The partial index "Account_n_note_idx" is left out: its condition holds a ";", at which GORM splits the tag.
 	N    int     \`gorm:"column:n;uniqueIndex:Account_alive_n_key,priority:2,where:(\\"alive\\" = true);size:32;not null" json:"n"\`
 	Code string  \`gorm:"column:code;uniqueIndex:Account_code_key,where:(n > 0);not null" json:"code"\`
 	Note *string \`gorm:"column:note;index:Account_note_idx,where:(note IN ('a\\\\,b'\\\\, 'c\\\\\\\\\\"d'\\\\, 'e\\\\\\\\,f'))" json:"note"\`
@@ -1938,7 +2048,7 @@ model Doc {
         'postgresql',
       ),
     ).toContain(
-      '// The index doc_title_ops is left out: the expression of its column "title" with the operator class "a;b" holds a ";", at which GORM splits the tag.\n\tTitle string `gorm:"column:title;not null"',
+      '// The index "doc_title_ops" is left out: the expression of its column "title" with the operator class "a;b" holds a ";", at which GORM splits the tag.\n\tTitle string `gorm:"column:title;not null"',
     )
   })
 
