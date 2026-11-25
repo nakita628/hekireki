@@ -544,20 +544,24 @@ function goTagLiteral(tag: string) {
 
 // What keeps GORM from writing an index under a name, or undefined: in the tag, GORM reads past a
 // `,` as settings and splits at a `;`, and a `\` at the end joins the setting with the next one;
-// in CREATE INDEX, the dialector's QuoteTo splits a name at a `.` into schema and name, takes a
-// `"` or backtick at its start as a quote of its own, and makes two in a row one.
-function nameFlaw(name: string) {
+// in CREATE INDEX, the dialector's QuoteTo splits a name at a `.` into schema and name, takes its
+// quote (a backtick on MySQL and SQLite, a `"` elsewhere) at the start as a quote of its own, and
+// makes two of it in a row one.
+function nameFlaw(name: string, provider: string | undefined) {
   const mark = name.match(/[,;.]/u)?.[0]
   if (mark !== undefined) return `a "${mark}"`
   if (name.endsWith('\\')) return 'a \\ at its end'
-  if (/^["`]/u.test(name)) return 'a quote at its start'
-  return /""|``/u.test(name) ? 'two quotes in a row' : undefined
+  const quote = provider === 'mysql' || provider === 'sqlite' ? '`' : '"'
+  if (name.startsWith(quote)) return 'a quote at its start'
+  return name.includes(quote + quote) ? 'two quotes in a row' : undefined
 }
 
 // A name the schema gives an index, unless GORM cannot write it (nameFlaw); such a name is
 // reported by gormProblems.
-function readableTagName(name: string | undefined) {
-  return name !== undefined && nameFlaw(name) === undefined ? name : undefined
+function readableTagName(name: string | null | undefined, provider: string | undefined) {
+  return name !== undefined && name !== null && nameFlaw(name, provider) === undefined
+    ? name
+    : undefined
 }
 
 // The name a unique or plain index takes in the tag: the one the schema gives it (`map:`, or an
@@ -573,8 +577,8 @@ function indexTagName(
   const columns = idx.fields.map((f) => columnOf.get(f.name) ?? f.name)
   const unique = idx.type === 'unique'
   return (
-    readableTagName(idx.dbName) ??
-    (unique ? undefined : readableTagName(idx.name)) ??
+    readableTagName(idx.dbName, provider) ??
+    (unique ? undefined : readableTagName(idx.name, provider)) ??
     constraintName(model.dbName ?? model.name, columns, unique ? 'key' : 'idx', provider ?? '')
   )
 }
@@ -700,7 +704,7 @@ function collectCompositeIndexTags(
   const mappedUniques = new Map(
     plainUniques.map((idx) => [
       idx.fields.map((f) => f.name).join(','),
-      readableTagName(idx.dbName),
+      readableTagName(idx.dbName, provider),
     ]),
   )
   // DMMF leaves isUnique off a field whose @unique has a partial unique index beside it on the same
@@ -1696,9 +1700,9 @@ export function gormProblems(
           ]
         : []
     })
-    // GORM takes an index's name up to its first `,` and splits the whole tag at every `;`, with no
-    // escape for either, so an index whose name holds one (made from a column or a @@map that does)
-    // cannot be written. One left out of the tags with a note never reaches them.
+    // An index whose name GORM cannot write (nameFlaw), whether the schema gives it or Prisma's
+    // naming makes it from a column or a @@map, is reported. One left out of the tags with a note
+    // never reaches them.
     const indexNames = (indexesOf.get(model.name) ?? [])
       .filter((idx) => idx.type !== 'id' && !leavesOutIndex(model, idx, provider, indexWhere))
       .flatMap((idx) => {
@@ -1706,14 +1710,15 @@ export function gormProblems(
         // A name the schema gives is the index's name in the database, so one GORM cannot write
         // would leave AutoMigrate making the index under another name.
         const given = idx.dbName ?? (idx.type === 'unique' ? undefined : idx.name)
-        const givenFlaw = given === undefined || given === null ? undefined : nameFlaw(given)
+        const givenFlaw =
+          given === undefined || given === null ? undefined : nameFlaw(given, provider)
         if (givenFlaw !== undefined) {
           return [
             `model ${model.name}: the index on ${fields} is named ${JSON.stringify(given)}, which GORM cannot write (${givenFlaw}); change it`,
           ]
         }
         const indexName = indexTagName(model, idx, provider)
-        const flaw = nameFlaw(indexName)
+        const flaw = nameFlaw(indexName, provider)
         return flaw === undefined
           ? []
           : [

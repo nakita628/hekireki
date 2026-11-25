@@ -1200,7 +1200,7 @@ model Box {
   id   Int    @id
   code String @unique
 
-  @@map("\`boxes")
+  @@map("\\"boxes")
 }
 `,
       }),
@@ -1209,7 +1209,27 @@ model Box {
       'model Item: the index on code is named "\\"code_key", which GORM cannot write (a quote at its start); change it',
       'model Item: the index on slug is named "item.slug_idx", which GORM cannot write (a "."); change it',
       'model Item: the index on tag is named "item\\"\\"tag", which GORM cannot write (two quotes in a row); change it',
-      'model Box: the index on code is named "`boxes_code_key", which GORM cannot write (a quote at its start); change the @map of its column or table, or give it a name with map:',
+      'model Box: the index on code is named "\\"boxes_code_key", which GORM cannot write (a quote at its start); change the @map of its column or table, or give it a name with map:',
+    ])
+  })
+
+  it("checks the quote of the provider's dialector only: a backtick on MySQL, a double quote elsewhere", () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "mysql"
+}
+
+model Item {
+  id   Int    @id
+  code String @unique(map: "\`code_key")
+  slug String @unique(map: "\\"slug_key")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'mysql', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on code is named "`code_key", which GORM cannot write (a quote at its start); change it',
     ])
   })
 
