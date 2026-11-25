@@ -673,7 +673,8 @@ function collectCompositeIndexTags(
     if (unreadable !== undefined) {
       notes.push([
         idx.fields[0]?.name ?? '',
-        `The index ${name} is left out: its column ${unreadable.name} with the operator class ${unreadable.operatorClass} holds a ";", at which GORM splits the tag.`,
+        // The column and the operator class are quoted, so a line break in either stays in the comment.
+        `The index ${name} is left out: the expression of its column ${JSON.stringify(unreadable.name)} with the operator class ${JSON.stringify(unreadable.operatorClass)} holds a ";", at which GORM splits the tag.`,
       ])
       return []
     }

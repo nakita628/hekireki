@@ -1831,8 +1831,25 @@ model Doc {
         'postgresql',
       ),
     ).toContain(
-      '// The index doc_title_ops is left out: its column title with the operator class a;b holds a ";", at which GORM splits the tag.\n\tTitle string `gorm:"column:title;not null"',
+      '// The index doc_title_ops is left out: the expression of its column "title" with the operator class "a;b" holds a ";", at which GORM splits the tag.\n\tTitle string `gorm:"column:title;not null"',
     )
+  })
+
+  // A line break in the operator class stays inside the comment, so the model still compiles.
+  it('keeps a line break in the left-out operator class inside the comment', () => {
+    expect(
+      gormFor(
+        `
+model Doc {
+  id    Int    @id
+  title String
+
+  @@index([title(ops: raw("a;\\nb"))], map: "doc_title_ops")
+}
+`,
+        'postgresql',
+      ),
+    ).toContain('with the operator class "a;\\nb" holds a ";"')
   })
 
   it('writes the method on CockroachDB, whose connector is PostgreSQL', () => {
