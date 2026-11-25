@@ -782,6 +782,32 @@ model Post {
       '`gorm:"foreignKey:AuthorID;constraint:Post_authorId_fkey,OnUpdate:CASCADE,OnDelete:NO ACTION"`',
     )
   })
+
+  it('makes an Int @db.Int on SQL Server an INT, as a plain Int', () => {
+    const code = gormFor('model A {\n  id Int @id @db.Int\n  n  Int\n}\n', 'sqlserver')
+    expect(code).toContain('`gorm:"column:id;primaryKey;size:32" json:"id"`')
+    expect(code).toContain('`gorm:"column:n;size:32;not null" json:"n"`')
+  })
+
+  it('gives a CockroachDB native type the column Prisma Migrate makes', () => {
+    const code = gormFor(
+      `
+model A {
+  id String @id @db.Uuid
+  ch String @db.Char(2)
+  ip String @db.Inet
+  b  String @db.Bit(3)
+  vb String @db.VarBit(4)
+}
+`,
+      'cockroachdb',
+    )
+    expect(code).toContain('`gorm:"column:id;primaryKey;type:uuid" json:"id"`')
+    expect(code).toContain('`gorm:"column:ch;type:char(2);not null" json:"ch"`')
+    expect(code).toContain('`gorm:"column:ip;type:inet;not null" json:"ip"`')
+    expect(code).toContain('`gorm:"column:b;type:bit(3);not null" json:"b"`')
+    expect(code).toContain('`gorm:"column:vb;type:varbit(4);not null" json:"vb"`')
+  })
 })
 
 /** The models of a PostgreSQL schema holding one model of the given name, with a String[]. */

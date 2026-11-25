@@ -52,9 +52,18 @@ const GORM_NATIVE_FIXED: { [k: string]: string } = {
 // one without a zone, and a (0) into the dialect's default.
 const GORM_NATIVE_TEMPORAL = new Set(['Timestamp', 'Timestamptz', 'DateTime', 'Time', 'Timetz'])
 
-// The column Prisma Migrate makes for a native type on MySQL or PostgreSQL where the table above
+// The column Prisma Migrate makes for a native type on MySQL, PostgreSQL or CockroachDB where the table above
 // gives another, its arguments after it (`char(2)`, `bit(3)`). A Go int holds every unsigned
 // integer column but a bigint unsigned past int64, which Prisma's BigInt does not hold either.
+const POSTGRES_COMPATIBLE_NATIVE_TYPES = {
+  Char: 'char',
+  Uuid: 'uuid',
+  Inet: 'inet',
+  Bit: 'bit',
+  VarBit: 'varbit',
+  Oid: 'oid',
+}
+
 const PROVIDER_NATIVE_TYPES: {
   readonly [provider: string]: { readonly [name: string]: string } | undefined
 } = {
@@ -77,22 +86,19 @@ const PROVIDER_NATIVE_TYPES: {
     MediumBlob: 'mediumblob',
   },
   postgresql: {
+    ...POSTGRES_COMPATIBLE_NATIVE_TYPES,
     VarChar: 'varchar',
-    Char: 'char',
-    Uuid: 'uuid',
-    Inet: 'inet',
-    Bit: 'bit',
-    VarBit: 'varbit',
     Real: 'real',
-    Oid: 'oid',
   },
+  cockroachdb: POSTGRES_COMPATIBLE_NATIVE_TYPES,
 }
 
 /** The column of a native type that PROVIDER_NATIVE_TYPES names, or undefined where it names none. */
 function providerNativeType(field: DMMF.Field, provider: string | undefined) {
   if (!field.nativeType) return undefined
   const [nativeName, nativeArgs] = field.nativeType
-  // A Boolean @db.TinyInt is MySQL's BOOLEAN, which GORM makes of a bool.
+  // A MySQL Boolean is given no type, whatever its native type: GORM makes a bool BOOLEAN, which
+  // is what Prisma Migrate makes of @db.TinyInt (a @db.Bit(1) is BIT(1) there).
   if (provider === 'mysql' && field.type === 'Boolean') return null
   const type = PROVIDER_NATIVE_TYPES[provider ?? '']?.[nativeName]
   if (type === undefined) return undefined
@@ -423,18 +429,22 @@ function columnTypeTag(field: DMMF.Field, provider?: string) {
 
 // A Go int is 64 bits, which GORM makes a bigint (bigserial with autoIncrement); Prisma's Int is
 // 32 bits, `integer` (`serial`) on PostgreSQL and INT on MySQL, as is an Int @db.Int on MySQL or
-// @db.Integer on PostgreSQL. CockroachDB reads `integer` as INT8 whatever the size, so it is left
+// SQL Server or @db.Integer on PostgreSQL. CockroachDB reads `integer` as INT8 whatever the size, so it is left
 // as it was. A MySQL @db.Float is a FLOAT, which GORM makes of a float64 32 bits wide (it reads
 // `type:float` as its own float type, a double for a float64).
+const INT32_NATIVE_NAMES: { readonly [provider: string]: string | undefined } = {
+  mysql: 'Int',
+  postgresql: 'Integer',
+  sqlserver: 'Int',
+}
+
 function sizeTag(field: DMMF.Field, provider: string | undefined) {
   if (field.kind !== 'scalar' || field.isList) return null
   const nativeName = field.nativeType?.[0]
   const isInt32 =
     field.type === 'Int' &&
     provider !== 'cockroachdb' &&
-    (nativeName === undefined ||
-      (provider === 'mysql' && nativeName === 'Int') ||
-      (provider === 'postgresql' && nativeName === 'Integer'))
+    (nativeName === undefined || nativeName === INT32_NATIVE_NAMES[provider ?? ''])
   const isMysqlFloat = provider === 'mysql' && field.type === 'Float' && nativeName === 'Float'
   return isInt32 || isMysqlFloat ? 'size:32' : null
 }
