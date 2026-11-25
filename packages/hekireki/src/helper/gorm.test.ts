@@ -160,13 +160,13 @@ describe('buildGormTags', () => {
       tag(field("'a'::text || 'b'")),
       tag(field('\'admin\'::"Role"', 'Role', 'enum')),
       tag(field('gen_random_uuid()')),
-      tag(field('1 + 1', 'Int')),
+      tag(field("'abc'")),
     ]).toStrictEqual([
       '`gorm:"column:owner;default:(CURRENT_USER);not null" json:"owner"`',
       String.raw`${'`'}gorm:"column:owner;default:('a'::text || 'b');not null" json:"owner"${'`'}`,
       String.raw`${'`'}gorm:"column:owner;default:('admin'::\"Role\");not null" json:"owner"${'`'}`,
       '`gorm:"column:owner;default:gen_random_uuid();not null" json:"owner"`',
-      '`gorm:"column:owner;size:32;default:1 + 1;not null" json:"owner"`',
+      String.raw`${'`'}gorm:"column:owner;default:'abc';not null" json:"owner"${'`'}`,
     ])
   })
 
