@@ -1284,6 +1284,7 @@ const PG_NATIVE_TYPES: readonly (readonly [
     'customType, integer, pgTable',
     "typedText('value', { type: 'xml' })",
   ],
+  ['Int', '@db.Oid', ['Oid', []], 'customType, integer, pgTable', "oidInteger('value')"],
 ]
 
 /** Prisma type, the attribute as it is written, its DMMF nativeType, the drizzle imports and column. */
@@ -1481,6 +1482,30 @@ const SQLITE_NATIVE_TYPES: readonly (readonly [
 ]
 
 describe('native database types', () => {
+  // PostgreSQL's JSON, which drizzle's relational queries read nested rows through, gives an oid as
+  // a string, so the helper reads it back as a number.
+  it('declares oidInteger for an oid column, with the oid codec and the value read back as a number', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'value', type: 'Int', nativeType: ['Oid', []] }),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, 'postgresql', []))
+      .toBe(`import { customType, integer, pgTable } from 'drizzle-orm/pg-core'
+
+const oidInteger = customType<{ data: number; driverData: number | string }>({
+  dataType: () => 'oid',
+  codec: 'oid',
+  fromDriver: (value) => Number(value),
+})
+
+export const row = pgTable('Row', { id: integer('id').primaryKey(), value: oidInteger('value').notNull() })`)
+  })
+
   it.each(PG_NATIVE_TYPES)(
     'maps %s `%s` on postgresql',
     (type, _attribute, nativeType, imports, column) => {
