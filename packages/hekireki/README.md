@@ -102,6 +102,13 @@ for mypy). A module imports only the ones its schema uses. With such a default o
 key, `save()` on a new instance given an existing key inserts, as with `uuid()`: update with
 `update_or_create()` or `save(force_update=True)`.
 
+On PostgreSQL, `hekireki-django` writes a `Json @db.Json` field as Prisma Client does: the value
+goes in as compact JSON text, which a `json` column keeps as given, key order included. Lookups and
+key lookups on the column compare it as `jsonb`. The value on the other side of a comparison is not
+cast, so these still fail: comparing two `@db.Json` columns with `F()`, filtering a whole
+`Json[] @db.Json` list, and `distinct()`, `order_by()` or grouping on the whole column, since
+`json` has no equality or ordering.
+
 On PostgreSQL, hand the `MapEnums` of the `DbContext` `hekireki-efcore` writes to Npgsql:
 `UseNpgsql(connectionString, AppDbContext.MapEnums)`, or `AppDbContext.MapEnums(builder)` on your
 own `NpgsqlDataSourceBuilder` as well when you pass `UseNpgsql` the data source it builds. It maps

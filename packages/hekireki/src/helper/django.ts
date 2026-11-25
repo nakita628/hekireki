@@ -674,6 +674,10 @@ const ENUM_ARRAY_FIELD = `class EnumArrayField(ArrayField):  # type: ignore[type
 // json.loads, and decode a JSON string a second time. On PostgreSQL what the driver loaded is kept as
 // it is, and db_type is the column Prisma creates, so that migrate makes json rather than jsonb;
 // another backend (a test settings file on SQLite) hands back the text, which JSONField decodes.
+// As Prisma Client does, a value is bound as compact JSON text, which json keeps as it is (JSONField
+// binds psycopg's Jsonb, which PostgreSQL normalises before the cast to json, losing key order),
+// and the column is compared as jsonb, since json has none of the operators JSONField's lookups
+// and transforms use.
 const PLAIN_JSON_FIELD = `class PlainJSONField(models.JSONField):
     def db_type(self, connection: BaseDatabaseWrapper) -> str | None:
         return "json" if connection.vendor == "postgresql" else super().db_type(connection)
@@ -681,7 +685,22 @@ const PLAIN_JSON_FIELD = `class PlainJSONField(models.JSONField):
     def from_db_value(self, value: Any, expression: Any, connection: BaseDatabaseWrapper) -> Any:
         if connection.vendor != "postgresql":
             return super().from_db_value(value, expression, connection)
-        return value`
+        return value
+
+    def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
+        if connection.vendor != "postgresql":
+            return super().get_db_prep_value(value, connection, prepared)
+        if not prepared:
+            value = self.get_prep_value(value)
+        return json.dumps(value, cls=self.encoder, ensure_ascii=False, separators=(",", ":"))
+
+    def get_lookup(self, lookup_name: str) -> Any:
+        lookup = super().get_lookup(lookup_name)
+        return None if lookup is None else lambda lhs, rhs: lookup(db_functions.Cast(lhs, models.JSONField()), rhs)
+
+    def get_transform(self, lookup_name: str) -> Any:
+        transform = super().get_transform(lookup_name)
+        return None if transform is None else lambda lhs: transform(db_functions.Cast(lhs, models.JSONField()))`
 
 /** A `@db.Json` column on PostgreSQL: the field PlainJSONField declares. */
 function isPlainJson(field: DMMF.Field, provider: string) {
@@ -1719,6 +1738,7 @@ function stdlibImports(needs: ImportNeeds) {
     needs.autoNow ? 'TypeVar' : null,
   ].filter((name) => name !== null)
   return [
+    needs.plainJson ? 'import json' : null,
     needs.uuid ? 'import uuid' : null,
     needs.fromDatetime.length > 0 ? `from datetime import ${needs.fromDatetime.join(', ')}` : null,
     needs.utcField || needs.nowHelpers ? 'from datetime import timezone as dt_timezone' : null,
@@ -1743,6 +1763,8 @@ function thirdPartyImports(needs: ImportNeeds) {
       : null,
     'from django.db import models',
     needs.databaseWrapper ? 'from django.db.backends.base.base import BaseDatabaseWrapper' : null,
+    // Under a name of its own: the module holds a class for each model, and one may be named Cast.
+    needs.plainJson ? 'from django.db.models import functions as db_functions' : null,
     needs.rawSql ? 'from django.db.models.expressions import RawSQL' : null,
     needs.utcField || needs.autoNow || needs.nowDatetime
       ? 'from django.utils import timezone'
