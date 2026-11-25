@@ -1902,6 +1902,37 @@ describe('keys, indexes and foreign keys as Prisma Migrate makes them', () => {
     )
   })
 
+  // A long relation name gives a join-table foreign key name Prisma Migrate cuts to the
+  // identifier limit. (#316)
+  it('cuts the name of a join-table foreign key as Prisma Migrate does', () => {
+    const long = 'P'.repeat(70)
+    const side = (name: string, other: string) =>
+      makeModel({
+        name,
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({
+            name: 'others',
+            type: other,
+            kind: 'object',
+            isList: true,
+            relationName: long,
+            relationFromFields: [],
+            relationToFields: [],
+          }),
+        ],
+      })
+    const schema = drizzleSchema(
+      makeDatamodel([side('Post', 'Tag'), side('Tag', 'Post')]),
+      'postgresql',
+      [],
+    )
+    // Prisma Migrate cuts the table's name and keeps `_A_fkey` and `_B_fkey` whole, so the two
+    // names stay apart.
+    expect(schema).toContain(`foreignKey({ name: '_${'P'.repeat(55)}_A_fkey', columns: [table.A]`)
+    expect(schema).toContain(`foreignKey({ name: '_${'P'.repeat(55)}_B_fkey', columns: [table.B]`)
+  })
+
   // DMMF drops `@relation(map:)`: the name is read off the schema's text, as Prisma Migrate takes
   // it, and a relation that names none keeps Prisma's `<table>_<columns>_fkey`.
   it('names a foreign key after its @relation(map:), and an unmapped one as Prisma Migrate does', () => {
