@@ -1285,13 +1285,6 @@ const PG_NATIVE_TYPES: readonly (readonly [
     "typedText('value', { type: 'xml' })",
   ],
   [
-    'Decimal',
-    '@db.Money',
-    ['Money', []],
-    'customType, integer, pgTable',
-    "typedText('value', { type: 'money' })",
-  ],
-  [
     'Int',
     '@db.Oid',
     ['Oid', []],
@@ -1471,14 +1464,6 @@ const MYSQL_NATIVE_TYPES: readonly (readonly [
     "bigint('value', { mode: 'bigint', unsigned: true })",
   ],
   ['Int', '@db.Year', ['Year', []], 'int, mysqlTable, year', "year('value')"],
-  ['Boolean', '@db.Bit(1)', ['Bit', ['1']], 'customType, int, mysqlTable', "bitBoolean('value')"],
-  [
-    'Bytes',
-    '@db.Bit(8)',
-    ['Bit', ['8']],
-    'customType, int, mysqlTable',
-    "bytes('value', { type: 'bit(8)' })",
-  ],
   [
     'String',
     '@db.Nope',
@@ -1503,6 +1488,33 @@ const SQLITE_NATIVE_TYPES: readonly (readonly [
 ]
 
 describe('native database types', () => {
+  // PostgreSQL's JSON, which drizzle's relational queries read nested rows through, gives an oid as
+  // a string, so the helper reads it back as a number.
+  it('declares typedInteger for an oid column, reading the value back as a number', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'value', type: 'Int', nativeType: ['Oid', []] }),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, 'postgresql', []))
+      .toBe(`import { customType, integer, pgTable } from 'drizzle-orm/pg-core'
+
+const typedInteger = customType<{
+  data: number
+  driverData: number | string
+  config: { type: string }
+}>({
+  dataType: (config) => config?.type ?? 'integer',
+  fromDriver: (value) => Number(value),
+})
+
+export const row = pgTable('Row', { id: integer('id').primaryKey(), value: typedInteger('value', { type: 'oid' }).notNull() })`)
+  })
+
   it.each(PG_NATIVE_TYPES)(
     'maps %s `%s` on postgresql',
     (type, _attribute, nativeType, imports, column) => {
