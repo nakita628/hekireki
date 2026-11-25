@@ -990,7 +990,7 @@ func (m *Post) BeforeCreate(tx *gorm.DB) error {
 }
 
 type User struct {
-	ID    string \`gorm:"column:id;primaryKey;type:char(36)" json:"id"\`
+	ID    string \`gorm:"column:id;primaryKey;type:char(36);not null" json:"id"\`
 	Posts []Post \`gorm:"foreignKey:UserID;constraint:Post_userId_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"\`
 }
 
@@ -1006,7 +1006,7 @@ func (m *User) BeforeCreate(_ *gorm.DB) error {
 }
 
 type Comment struct {
-	ID     int   \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	ID     int   \`gorm:"column:id;primaryKey;size:32;not null" json:"id"\`
 	PostID int   \`gorm:"column:postId;size:32;not null" json:"postId"\`
 	Post   *Post \`gorm:"belongsTo"\`
 }
@@ -1136,7 +1136,7 @@ func (Post) TableName() string {
 }
 
 type Tag struct {
-	ID    string \`gorm:"column:id;primaryKey" json:"id"\`
+	ID    string \`gorm:"column:id;primaryKey;not null" json:"id"\`
 	Posts []Post \`gorm:"many2many:_PostToTag;joinForeignKey:B;joinReferences:A"\`
 }
 
@@ -1216,7 +1216,7 @@ import (
 )
 
 type Key struct {
-	ID    string  \`gorm:"column:id;primaryKey" json:"id"\`
+	ID    string  \`gorm:"column:id;primaryKey;not null" json:"id"\`
 	V2    string  \`gorm:"column:v2;uniqueIndex:Key_v2_key;not null" json:"v2"\`
 	Short *string \`gorm:"column:short" json:"short"\`
 	Long  string  \`gorm:"column:long;not null" json:"long"\`
@@ -1374,7 +1374,7 @@ model VerificationToken {
     ).toBe(`package model
 
 type User struct {
-	ID       string    \`gorm:"column:id;primaryKey" json:"id"\`
+	ID       string    \`gorm:"column:id;primaryKey;not null" json:"id"\`
 	Sessions []Session \`gorm:"foreignKey:UserID;constraint:Session_userId_fkey,OnUpdate:CASCADE,OnDelete:CASCADE"\`
 }
 
@@ -1383,7 +1383,7 @@ func (User) TableName() string {
 }
 
 type Session struct {
-	SessionToken string \`gorm:"column:sessionToken;primaryKey;uniqueIndex:Session_sessionToken_key" json:"sessionToken"\`
+	SessionToken string \`gorm:"column:sessionToken;primaryKey;uniqueIndex:Session_sessionToken_key;not null" json:"sessionToken"\`
 	UserID       string \`gorm:"column:userId;not null" json:"userId"\`
 	User         *User  \`gorm:"belongsTo"\`
 }
@@ -1393,8 +1393,8 @@ func (Session) TableName() string {
 }
 
 type VerificationToken struct {
-	Identifier string \`gorm:"column:identifier;primaryKey;uniqueIndex:VerificationToken_identifier_token_key,priority:1" json:"identifier"\`
-	Token      string \`gorm:"column:token;primaryKey;uniqueIndex:VerificationToken_identifier_token_key,priority:2" json:"token"\`
+	Identifier string \`gorm:"column:identifier;primaryKey;uniqueIndex:VerificationToken_identifier_token_key,priority:1;not null" json:"identifier"\`
+	Token      string \`gorm:"column:token;primaryKey;uniqueIndex:VerificationToken_identifier_token_key,priority:2;not null" json:"token"\`
 }
 
 func (VerificationToken) TableName() string {
@@ -1424,7 +1424,7 @@ model Account {
     ).toBe(`package model
 
 type User struct {
-	ID        string   \`gorm:"column:id;primaryKey" json:"id"\`
+	ID        string   \`gorm:"column:id;primaryKey;not null" json:"id"\`
 	AccountID *string  \`gorm:"column:accountId" json:"accountId"\`
 	Account   *Account \`gorm:"belongsTo"\`
 	Current   *Account \`gorm:"foreignKey:CurrentUserID;constraint:Account_currentUserId_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"\`
@@ -1435,7 +1435,7 @@ func (User) TableName() string {
 }
 
 type Account struct {
-	ID            string  \`gorm:"column:id;primaryKey" json:"id"\`
+	ID            string  \`gorm:"column:id;primaryKey;not null" json:"id"\`
 	CurrentUserID *string \`gorm:"column:currentUserId;uniqueIndex:Account_currentUserId_key" json:"currentUserId"\`
 	CurrentUser   *User   \`gorm:"foreignKey:CurrentUserID;belongsTo"\`
 	Users         []User  \`gorm:"foreignKey:AccountID;constraint:User_accountId_fkey,OnUpdate:CASCADE,OnDelete:SET NULL"\`
@@ -1464,7 +1464,7 @@ model User {
     ).toBe(`package model
 
 type User struct {
-	ID          string  \`gorm:"column:id;primaryKey" json:"id"\`
+	ID          string  \`gorm:"column:id;primaryKey;not null" json:"id"\`
 	SuccessorID *string \`gorm:"column:successorId;uniqueIndex:User_successorId_key" json:"successorId"\`
 	Successor   *User   \`gorm:"foreignKey:SuccessorID;belongsTo"\`
 	// Who this user succeeds.
@@ -1693,7 +1693,7 @@ model Account {
     expect(code).toContain(
       [
         'type Account struct {',
-        '\tID         string   `gorm:"column:id;primaryKey" json:"id"`',
+        '\tID         string   `gorm:"column:id;primaryKey;not null" json:"id"`',
         '\tCreatedAt  DateTime `gorm:"column:createdAt;autoCreateTime:false;not null" json:"createdAt"`',
         '\tCreatedAt1 *int     `gorm:"column:created_at;size:32" json:"created_at"`',
         '}',
@@ -1890,6 +1890,35 @@ func readPrismaTime(src any) (time.Time, error) {
 // (schema.Parse, gorm v1.31.2), so each field of a composite index carries its position in the
 // schema's list and the key's fields are declared in @@id order: the columns come out in the order
 // Prisma Migrate gives them.
+describe('generateGormModels key columns on SQLite', () => {
+  // SQLite makes only an INTEGER PRIMARY KEY refuse NULL by itself; Prisma Migrate's key is NOT NULL.
+  it('writes not null on a key field that is not an autoincrementing Int, on SQLite only', () => {
+    const schema = `
+model kv {
+  key   String @id
+  value String
+}
+
+model pair {
+  a String
+  b Int
+
+  @@id([a, b])
+}
+
+model counter {
+  id Int @id @default(autoincrement())
+}
+`
+    const sqlite = gormFor(schema, 'sqlite')
+    expect(sqlite).toContain('`gorm:"column:key;primaryKey;not null" json:"key"`')
+    expect(sqlite).toContain('`gorm:"column:a;primaryKey;not null" json:"a"`')
+    expect(sqlite).toContain('`gorm:"column:b;primaryKey;size:32;not null" json:"b"`')
+    expect(sqlite).toContain('`gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`')
+    expect(gormFor(schema, 'postgresql')).toContain('`gorm:"column:key;primaryKey" json:"key"`')
+  })
+})
+
 describe('generateGormModels composite column order', () => {
   it('leaves the fields where they are when the @@id order is theirs, apart or not', () => {
     const code = gormFor(

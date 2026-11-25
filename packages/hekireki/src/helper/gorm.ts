@@ -384,6 +384,13 @@ function trackedTimeTags(field: DMMF.Field, fieldName: string) {
   ]
 }
 
+// On SQLite only an INTEGER PRIMARY KEY refuses NULL by itself: any other key column takes it
+// unless it says NOT NULL, which the key Prisma Migrate makes does. PostgreSQL and MySQL make every
+// key column NOT NULL.
+function keyTakesNull(field: DMMF.Field, provider: string | undefined) {
+  return provider === 'sqlite' && !isAutoincrement(field)
+}
+
 export function buildGormTags(
   field: DMMF.Field,
   isPk: boolean,
@@ -417,7 +424,9 @@ export function buildGormTags(
     defaultVal !== null ? `default:${defaultVal}` : null,
     ...trackedTimeTags(field, fieldName),
     // A scalar list is a nullable array column in the table Prisma makes.
-    field.isRequired && !isPk && !field.isList ? 'not null' : null,
+    field.isRequired && !field.isList && (!isPk || keyTakesNull(field, provider))
+      ? 'not null'
+      : null,
   ].filter((p) => p !== null)
 
   return goTagLiteral(`gorm:"${parts.join(';')}" json:"${columnName}"`)
