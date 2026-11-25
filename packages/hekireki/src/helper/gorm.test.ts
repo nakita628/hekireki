@@ -1214,6 +1214,20 @@ model Box {
     ])
   })
 
+  it('escapes a " or \\ of the table name in TableName()', () => {
+    const code = gormFor(
+      `
+model Crate {
+  id Int @id
+
+  @@map("cr\\"a\\\\te")
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain('\treturn "cr\\"a\\\\te"\n')
+  })
+
   it('names a column or table name the dialector would quote as another', () => {
     const problemsOf = (provider: string, body: string) => {
       const datamodel = datamodelOf(

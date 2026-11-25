@@ -1378,11 +1378,12 @@ export function generateModelStruct(
   )
 
   // GORM would pluralise the snake_cased struct name (Warehouse -> warehouses);
-  // the table is Prisma's, so every model says which.
+  // the table is Prisma's, so every model says which. A JSON string is a Go string literal, so a
+  // `"` or `\` in the name is escaped.
   const tableNameMethod = [
     '',
     `func (${goModelName(model.name)}) TableName() string {`,
-    `\treturn "${tableName}"`,
+    `\treturn ${JSON.stringify(tableName)}`,
     '}',
   ]
 
