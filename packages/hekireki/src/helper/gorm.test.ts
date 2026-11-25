@@ -2908,7 +2908,7 @@ model Wallet {
       '\tBonus   *Money         `gorm:"column:bonus;type:money" json:"bonus"`\n',
     )
     expect(code).toContain(
-      '\tTip     *Money         `gorm:"column:tip;type:money;default:1.5;not null" json:"tip"`\n',
+      '\tTip     *Money         `gorm:"column:tip;type:money;default:(1.5);not null" json:"tip"`\n',
     )
     expect(code).toContain('\tRaw     PlainJSON      `gorm:"column:raw;not null" json:"raw"`\n')
     expect(code).toContain('\tExtra   PlainJSON      `gorm:"column:extra" json:"extra"`\n')

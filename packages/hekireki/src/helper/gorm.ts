@@ -335,14 +335,18 @@ function gormDefault(
     field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
   // Prisma Migrate writes now() as DEFAULT CURRENT_TIMESTAMP; the hook fills the value all the same.
   const nowDefault = isNowDefault && isPostgresFamily(provider) ? 'CURRENT_TIMESTAMP' : null
-  return (
+  const value =
     dbGeneratedDefault(field) ??
     dateTimeDefault(field, provider) ??
     nowDefault ??
     ((!isPk || isCompositePk) && !isNowDefault && field.isUpdatedAt !== true
       ? (enumMappedDefault(field, enums) ?? formatGoDefault(field.default, field.type, field.kind))
       : null)
-  )
+  // GORM parses a number default into a float64 and inserts it bare where the field is zero, past
+  // Money's numeric cast; in parentheses it is not parsed, and the column is left to its DEFAULT.
+  return value !== null && isMoney(field, provider) && /^-?[\d.]+$/u.test(value)
+    ? `(${value})`
+    : value
 }
 
 function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
@@ -2003,7 +2007,10 @@ const MONEY_TYPE = [
   '',
   '// GormValue writes the amount through numeric, which PostgreSQL turns into money without reading',
   '// it in the locale\'s form, where a locale whose decimal mark is "," would read "1234.5" as 12345.',
-  'func (m Money) GormValue(_ context.Context, _ *gorm.DB) clause.Expr {',
+  'func (m Money) GormValue(_ context.Context, db *gorm.DB) clause.Expr {',
+  '\tif float64(m) > maxExactMoney || float64(m) < -maxExactMoney {',
+  '\t\t_ = db.AddError(fmt.Errorf("%v is more money than a float64 holds to the cent", float64(m)))',
+  '\t}',
   '\treturn clause.Expr{SQL: "CAST(CAST(? AS numeric) AS money)", Vars: []any{strconv.FormatFloat(float64(m), \'f\', -1, 64)}}',
   '}',
   '',

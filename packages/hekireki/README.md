@@ -103,7 +103,8 @@ which a `float64` does not hold to the cent, and writes the amount through
 `PlainJSON` keeps the JSON text as written and tells `AutoMigrate` the column is `json`, where
 `datatypes.JSON` makes it `jsonb`. Both answer `money` and `json` to `AutoMigrate`, so the next
 `AutoMigrate` on a table an earlier one made alters a `jsonb` column to `json` (which PostgreSQL
-refuses while a GIN index is on it: drop the index first). These fields were a `float64` and a
+refuses while a GIN index is on it: drop the index first), and a `decimal` column to `money`,
+which keeps two decimal places. These fields were a `float64` and a
 `datatypes.JSON` before 0.54, so code that uses them changes:
 `float64(field)` and `datatypes.JSON(field)` convert back. A `Decimal[] @db.Money` cannot be read
 at all and fails generation; make it a list of `@db.Decimal`.
