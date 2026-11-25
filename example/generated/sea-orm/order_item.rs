@@ -23,7 +23,8 @@ pub enum Relation {
         belongs_to = "super::order::Entity",
         from = "Column::OrderId",
         to = "super::order::Column::Id",
-        on_delete = "Cascade"
+        on_delete = "Cascade",
+        fk_name = "order_items_order_id_fkey"
     )]
     Order,
 }

@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { stripAnnotations } from '../annotation/index.js'
-import { makePascalCase, makeSnakeCase } from '../naming/case.js'
+import { constraintName, makePascalCase, makeSnakeCase } from '../naming/case.js'
 import { allocate } from '../naming/index.js'
 import {
   isAutoincrement,
@@ -783,10 +783,42 @@ function referentialAction(option: string, action: string | undefined) {
   return action === undefined || action === '' ? null : `${option} = "${action}"`
 }
 
+/**
+ * The name of the foreign key `model` holds in `fieldNames`: the `@relation(map: "...")` one, or
+ * the `<table>_<columns>_fkey` Prisma Migrate gives it. Without `fk_name`, SeaORM's
+ * `create_table_from_entity` names it `fk-<table>-<column>`.
+ *
+ * @example
+ * ```rust
+ * #[sea_orm(
+ *     belongs_to = "super::user::Entity",
+ *     from = "Column::AuthorId",
+ *     to = "super::user::Column::Id",
+ *     fk_name = "posts_author_id_fkey"
+ * )]
+ * ```
+ */
+function foreignKeyName(
+  model: DMMF.Model,
+  relationField: string,
+  fieldNames: readonly string[],
+  relationMaps: ReadonlyMap<string, string>,
+  provider: string | undefined,
+) {
+  const columnOf = new Map(model.fields.map((f) => [f.name, f.dbName ?? f.name]))
+  const columns = fieldNames.map((name) => columnOf.get(name) ?? name)
+  return (
+    relationMaps.get(`${model.name}.${relationField}`) ??
+    constraintName(model.dbName ?? model.name, columns, 'fkey', provider ?? '')
+  )
+}
+
 function generateRelationEnum(
   model: DMMF.Model,
   associations: ReturnType<typeof getAssociations>,
   allModels: readonly DMMF.Model[],
+  provider: string | undefined,
+  relationMaps: ReadonlyMap<string, string>,
 ) {
   const hasAny =
     associations.belongsTo.length > 0 ||
@@ -840,6 +872,7 @@ function generateRelationEnum(
       `from = "${fromCol}"`,
       `to = "${toCol}"`,
       ...actions,
+      `fk_name = "${foreignKeyName(model, assoc.name, assoc.foreignKeys, relationMaps, provider)}"`,
     ])
     variants.push(`${attribute}\n    ${variantName},`)
   }
@@ -1197,6 +1230,7 @@ export function generateEntityFile(
   serde: { readonly renameAll?: string } = {},
   provider?: string,
   views: ReadonlySet<string> = new Set(),
+  relationMaps: ReadonlyMap<string, string> = new Map(),
 ) {
   const keyFields = primaryKeyFields(model)
   const primaryKey = new Set(keyFields)
@@ -1238,7 +1272,7 @@ export function generateEntityFile(
   const stampsNow = stamped.some(({ value }) => value.startsWith('now'))
   const stampsOnInsert = stamped.some(({ field }) => field.isUpdatedAt !== true)
 
-  const relationEnum = generateRelationEnum(model, associations, allModels)
+  const relationEnum = generateRelationEnum(model, associations, allModels, provider, relationMaps)
   const relatedImpls = generateRelatedImpls(model, associations)
 
   const superImports = [
@@ -1368,6 +1402,8 @@ export function generateM2MEntity(
   const rightKey = makePascalCase(
     allModels.find((m) => m.name === sortedRight)?.fields.find((f) => f.isId)?.name ?? 'id',
   )
+  // Prisma names the join table's foreign keys `_<relation>_A_fkey` and `_<relation>_B_fkey`.
+  const fkName = (column: string) => constraintName(tableName, [column], 'fkey', provider ?? '')
 
   const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
@@ -1396,13 +1432,15 @@ export function generateM2MEntity(
     '    #[sea_orm(',
     `        belongs_to = "super::${leftModule}::Entity",`,
     `        from = "Column::${leftCol}",`,
-    `        to = "super::${leftModule}::Column::${leftKey}"`,
+    `        to = "super::${leftModule}::Column::${leftKey}",`,
+    `        fk_name = "${fkName('A')}"`,
     '    )]',
     `    ${leftVariant},`,
     '    #[sea_orm(',
     `        belongs_to = "super::${rightModule}::Entity",`,
     `        from = "Column::${rightCol}",`,
-    `        to = "super::${rightModule}::Column::${rightKey}"`,
+    `        to = "super::${rightModule}::Column::${rightKey}",`,
+    `        fk_name = "${fkName('B')}"`,
     '    )]',
     `    ${rightVariant},`,
     '}',

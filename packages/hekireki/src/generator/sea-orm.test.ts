@@ -164,7 +164,8 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::user::Entity",
         from = "Column::AuthorId",
-        to = "super::user::Column::Id"
+        to = "super::user::Column::Id",
+        fk_name = "BlogPost_authorId_fkey"
     )]
     Author,
 }
@@ -440,7 +441,8 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::user::Entity",
         from = "Column::UserId",
-        to = "super::user::Column::Id"
+        to = "super::user::Column::Id",
+        fk_name = "UserStat_userId_fkey"
     )]
     User,
 }
@@ -512,7 +514,8 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::user_stat::Entity",
         from = "Column::StatId",
-        to = "super::user_stat::Column::UserId"
+        to = "super::user_stat::Column::UserId",
+        fk_name = "Badge_statId_fkey"
     )]
     Stat,
 }
@@ -605,7 +608,8 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::pairs::Entity",
         from = "(Column::Pb, Column::Pa)",
-        to = "(super::pairs::Column::B, super::pairs::Column::A)"
+        to = "(super::pairs::Column::B, super::pairs::Column::A)",
+        fk_name = "notes_pb_pa_fkey"
     )]
     Pair,
 }

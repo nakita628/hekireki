@@ -17,6 +17,7 @@ export function seaOrmFiles(
   serde: { readonly renameAll?: string } = {},
   provider?: string,
   views: ReadonlySet<string> = new Set(),
+  relationMaps: ReadonlyMap<string, string> = new Map(),
 ) {
   const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
 
@@ -31,7 +32,7 @@ export function seaOrmFiles(
       model,
       fileName: rustModule(model.name).file,
       moduleName: rustModule(model.name).ident,
-      code: generateEntityFile(model, models, enums, serde, provider, views),
+      code: generateEntityFile(model, models, enums, serde, provider, views, relationMaps),
     }))
     .filter((entry) => entry.code.trim().length > 0)
   const entityFiles = entities.map(({ fileName, moduleName, code }) => ({
