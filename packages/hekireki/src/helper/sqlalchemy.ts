@@ -23,7 +23,7 @@ import {
   relationEnds,
   uuidDefaultVersion,
 } from '../prisma/model.js'
-import { sqlString } from '../prisma/postgres.js'
+import { INDEX_METHODS, operatorClassName, sqlString } from '../prisma/postgres.js'
 
 const PRISMA_TO_PYTHON: { [k: string]: string } = {
   String: 'str',
@@ -199,13 +199,49 @@ function sqlQuoted(name: string, provider: string) {
   return `"${name.replaceAll('"', '""')}"`
 }
 
+// Whether the provider is PostgreSQL or CockroachDB, whose dialect in SQLAlchemy is PostgreSQL's.
+function isPostgres(provider: string) {
+  return provider === 'postgresql' || provider === 'cockroachdb'
+}
+
+// The operator class of an index's column (`ops:`) as PostgreSQL names it; null where none is
+// given or the dialect has none.
+function columnOperatorClass(model: DMMF.Model, field: DMMF.IndexField, provider: string) {
+  if (!isPostgres(provider) || field.operatorClass === undefined || field.operatorClass === '') {
+    return null
+  }
+  const nativeType = model.fields.find((mf) => mf.name === field.name)?.nativeType?.[0]
+  return operatorClassName(field.operatorClass, nativeType)
+}
+
 // A column of an index as the argument of Index(): its name, or, sorted descending, the quoted
-// column with its order, which a name alone cannot carry. The index keeps its table from
-// `__table_args__` all the same.
-function indexColumnArg(column: string, sortOrder: string | undefined, provider: string) {
-  return sortOrder === 'desc'
-    ? `literal_column(${toPythonString(sqlQuoted(column, provider))}).desc()`
-    : toPythonString(column)
+// column with its operator class and order, which a name alone cannot carry (postgresql_ops would
+// put the class after DESC). The index keeps its table from `__table_args__` all the same.
+function indexColumnArg(model: DMMF.Model, field: DMMF.IndexField, provider: string) {
+  const column = fieldColumn(model, field.name)
+  if (field.sortOrder !== 'desc') return toPythonString(column)
+  const operatorClass = columnOperatorClass(model, field, provider)
+  const sql = `${sqlQuoted(column, provider)}${operatorClass === null ? '' : ` ${operatorClass}`}`
+  return `literal_column(${toPythonString(sql)}).desc()`
+}
+
+// The method (`type:`) and the operator classes of the ascending columns of an index on
+// PostgreSQL, as the keywords of Index(): postgresql_ops is keyed by the column's key, which is
+// its name in the database. A B-tree is the default and is left unsaid.
+function postgresIndexArgs(model: DMMF.Model, index: SqlIndex, provider: string) {
+  if (!isPostgres(provider)) return []
+  const method = index.algorithm === undefined ? undefined : INDEX_METHODS[index.algorithm]
+  const ops = index.fields
+    .filter((f) => f.sortOrder !== 'desc')
+    .flatMap((f) => {
+      const operatorClass = columnOperatorClass(model, f, provider)
+      if (operatorClass === null) return []
+      return [`${toPythonString(fieldColumn(model, f.name))}: ${toPythonString(operatorClass)}`]
+    })
+  return [
+    ...(method === undefined ? [] : [`postgresql_using=${toPythonString(method)}`]),
+    ...(ops.length === 0 ? [] : [`postgresql_ops={${ops.join(', ')}}`]),
+  ]
 }
 
 // Whether the indexes of a model read literal_column(): for a partial index's condition or a
@@ -1139,7 +1175,8 @@ function generateTableArgs(
   const tableName = model.dbName ?? model.name
 
   // Prisma Migrate makes every unique a unique index, named `<table>_<columns>_key`, and every
-  // index `<table>_<columns>_idx`; a partial one keeps its condition.
+  // index `<table>_<columns>_idx`; a partial one keeps its condition, and one on PostgreSQL its
+  // method and operator classes.
   const indexConstraints = modelIndexes(model, indexes).map((idx) => {
     const columns = idx.fields.map((f) => fieldColumn(model, f.name))
     const unique = idx.type === 'unique'
@@ -1147,8 +1184,9 @@ function generateTableArgs(
     const where = whereArg(idx, provider)
     const args = [
       toPythonString(name),
-      ...idx.fields.map((f) => indexColumnArg(fieldColumn(model, f.name), f.sortOrder, provider)),
+      ...idx.fields.map((f) => indexColumnArg(model, f, provider)),
       ...(unique ? ['unique=True'] : []),
+      ...postgresIndexArgs(model, idx, provider),
       ...(where === null ? [] : [where]),
     ]
     return `Index(${args.join(', ')})`
