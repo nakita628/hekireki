@@ -7,7 +7,7 @@ import {
   pythonDocstringLines,
   toPythonString,
 } from '../literal/python.js'
-import { constraintName, makePascalCase, makeSnakeCase } from '../naming/case.js'
+import { constraintName, indexPrefix, makePascalCase, makeSnakeCase } from '../naming/case.js'
 import { allocate } from '../naming/index.js'
 import {
   backRelation,
@@ -214,15 +214,37 @@ function columnOperatorClass(model: DMMF.Model, field: DMMF.IndexField, provider
   return operatorClassName(field.operatorClass, nativeType)
 }
 
+// The prefix MySQL indexes a column of an index by (`note(length: 100)`), as Prisma Migrate writes
+// it, `note`(100); a TEXT or BLOB column cannot be indexed without one. Other dialects take none.
+function columnPrefix(model: DMMF.Model, field: DMMF.IndexField, provider: string) {
+  return provider === 'mysql' ? indexPrefix(model, field) : undefined
+}
+
 // A column of an index as the argument of Index(): its name, or, sorted descending, the quoted
-// column with its operator class and order, which a name alone cannot carry (postgresql_ops would
-// put the class after DESC). The index keeps its table from `__table_args__` all the same.
+// column with its prefix, operator class and order, which a name alone cannot carry
+// (postgresql_ops would put the class after DESC, and mysql_length is keyed by a column's name).
+// The index keeps its table from `__table_args__` all the same.
 function indexColumnArg(model: DMMF.Model, field: DMMF.IndexField, provider: string) {
   const column = fieldColumn(model, field.name)
   if (field.sortOrder !== 'desc') return toPythonString(column)
   const operatorClass = columnOperatorClass(model, field, provider)
-  const sql = `${sqlQuoted(column, provider)}${operatorClass === null ? '' : ` ${operatorClass}`}`
+  const prefix = columnPrefix(model, field, provider)
+  const sql = `${sqlQuoted(column, provider)}${prefix === undefined ? '' : `(${prefix})`}${operatorClass === null ? '' : ` ${operatorClass}`}`
   return `literal_column(${toPythonString(sql)}).desc()`
+}
+
+// The prefixes of the ascending columns of an index on MySQL, as Index()'s mysql_length, keyed
+// by the column's name.
+function mysqlIndexArgs(model: DMMF.Model, index: SqlIndex, provider: string) {
+  const lengths = index.fields
+    .filter((f) => f.sortOrder !== 'desc')
+    .flatMap((f) => {
+      const prefix = columnPrefix(model, f, provider)
+      return prefix === undefined
+        ? []
+        : [`${toPythonString(fieldColumn(model, f.name))}: ${prefix}`]
+    })
+  return lengths.length === 0 ? [] : [`mysql_length={${lengths.join(', ')}}`]
 }
 
 // The method (`type:`) and the operator classes of the ascending columns of an index on
@@ -1185,6 +1207,7 @@ function generateTableArgs(
       ...idx.fields.map((f) => indexColumnArg(model, f, provider)),
       ...(unique ? ['unique=True'] : []),
       ...postgresIndexArgs(model, idx, provider),
+      ...mysqlIndexArgs(model, idx, provider),
       ...(where === null ? [] : [where]),
     ]
     return `Index(${args.join(', ')})`

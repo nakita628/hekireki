@@ -3379,6 +3379,40 @@ class Account(Base):
   })
 })
 
+// A column MySQL indexes by a prefix (`length:`) keeps it, as Prisma Migrate writes it, `note`(100):
+// mysql_length keyed by the column's name, or the prefix inside a descending column's
+// literal_column(). A TEXT column cannot be indexed without one.
+describe('index prefix length', () => {
+  it('writes mysql_length, and the prefix of a descending column, on MySQL', () => {
+    const schema = `datasource db {
+  provider = "mysql"
+}
+
+model LogEntry {
+  id    Int    @id
+  note  String @db.Text
+  title String @db.VarChar(255)
+  code  String @unique(length: 50) @db.Text
+  short String @db.VarChar(20)
+
+  @@index([note(length: 100)])
+  @@index([title(length: 20, sort: Desc), note(length: 10)])
+  @@index([short(length: 30)])
+}
+`
+    const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
+    expect(generateSingleFile(result.models, result.enums, result.indexes, 'mysql')).toContain(`
+    __table_args__ = (
+        Index("LogEntry_code_key", "code", unique=True, mysql_length={"code": 50}),
+        Index("LogEntry_note_idx", "note", mysql_length={"note": 100}),
+        Index("LogEntry_title_note_idx", literal_column("\`title\`(20)").desc(), "note", mysql_length={"note": 10}),
+        Index("LogEntry_short_idx", "short"),
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
+    )
+`)
+  })
+})
+
 // A column sorted descending (`sort: Desc`) keeps its order: a name alone cannot carry it, so the
 // column is written quoted as the dialect quotes it, with .desc(). `sort: Asc` stays a name.
 describe('descending index columns', () => {

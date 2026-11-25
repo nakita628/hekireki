@@ -1953,6 +1953,42 @@ model Doc {
   })
 })
 
+// An index column MySQL indexes by a prefix (`length:`) takes GORM's `length:` in that field's index
+// setting, which the migrator writes after the column, `note`(100), as Prisma Migrate does; a TEXT
+// column cannot be indexed without one. A length the column does not exceed is no prefix.
+describe('generateGormModels index prefix length', () => {
+  const LOG_ENTRY = `
+model LogEntry {
+  id    Int    @id
+  note  String @db.Text
+  title String @db.VarChar(255)
+  code  String @unique(length: 50) @db.Text
+  short String @db.VarChar(20)
+
+  @@index([note(length: 100)])
+  @@index([title(length: 20, sort: Desc), note(length: 10)])
+  @@index([short(length: 30)])
+}
+`
+
+  it('writes length: on MySQL', () => {
+    expect(gormFor(LOG_ENTRY, 'mysql')).toBe(`package model
+
+type LogEntry struct {
+	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	Note  string \`gorm:"column:note;index:LogEntry_note_idx,length:100;index:LogEntry_title_note_idx,priority:2,length:10;type:text;not null" json:"note"\`
+	Title string \`gorm:"column:title;index:LogEntry_title_note_idx,priority:1,length:20,sort:desc;type:varchar(255);not null" json:"title"\`
+	Code  string \`gorm:"column:code;uniqueIndex:LogEntry_code_key,length:50;type:text;not null" json:"code"\`
+	Short string \`gorm:"column:short;index:LogEntry_short_idx;type:varchar(20);not null" json:"short"\`
+}
+
+func (LogEntry) TableName() string {
+	return "LogEntry"
+}
+`)
+  })
+})
+
 // An index column with `sort: Desc` takes GORM's `sort:desc` in that field's index setting, so
 // AutoMigrate writes it DESC in CREATE INDEX as Prisma Migrate does (schema.Parse, gorm v1.31.2,
 // reads Sort "desc" from each tag written here); `sort: Asc` is the default and stays plain.
