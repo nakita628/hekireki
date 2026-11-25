@@ -11,9 +11,13 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
+    #[sea_orm(column_type = "Text")]
     pub body: String,
+    #[sea_orm(column_type = "Text")]
     pub post_id: String,
+    #[sea_orm(column_type = "Text")]
     pub author_id: Option<String>,
+    #[sea_orm(column_type = "custom(\"timestamp(3)\")")]
     pub created_at: DateTime,
 }
 

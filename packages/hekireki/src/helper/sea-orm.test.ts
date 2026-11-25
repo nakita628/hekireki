@@ -1010,42 +1010,99 @@ impl ActiveModelBehavior for ActiveModel {
   })
 })
 
-/** Prisma type, the attribute as written, its DMMF nativeType and the sea-orm ColumnType. */
+/**
+ * The provider, the Prisma type, the attribute as written, its DMMF nativeType and the sea-orm
+ * ColumnType of the column Prisma Migrate creates for it. `null` means the Rust type already says
+ * everything sea-orm needs, so no `column_type` attribute is written at all - which is a different
+ * statement from "unmapped", and the one this table exists to keep honest.
+ */
 const NATIVE_TYPES: readonly (readonly [
+  string,
   string,
   string,
   readonly [string, readonly string[]],
   string | null,
 ])[] = [
-  ['String', '@db.VarChar(255)', ['VarChar', ['255']], 'String(StringLen::N(255))'],
-  ['String', '@db.VarChar', ['VarChar', []], null],
-  ['String', '@db.Char(10)', ['Char', ['10']], 'String(StringLen::N(10))'],
-  ['String', '@db.Char', ['Char', []], null],
-  ['String', '@db.Text', ['Text', []], 'Text'],
-  ['String', '@db.MediumText', ['MediumText', []], 'Text'],
-  ['String', '@db.LongText', ['LongText', []], 'Text'],
-  ['String', '@db.TinyText', ['TinyText', []], 'Text'],
-  ['Int', '@db.SmallInt', ['SmallInt', []], null],
-  ['Int', '@db.TinyInt', ['TinyInt', []], null],
-  ['Int', '@db.MediumInt', ['MediumInt', []], 'Integer'],
-  ['Float', '@db.DoublePrecision', ['DoublePrecision', []], 'Double'],
-  ['Float', '@db.Double', ['Double', []], 'Double'],
-  ['Float', '@db.Real', ['Real', []], 'Double'],
-  ['Decimal', '@db.Decimal(10, 2)', ['Decimal', ['10', '2']], 'Decimal(Some((10, 2)))'],
-  ['Decimal', '@db.Decimal', ['Decimal', []], 'Decimal(None)'],
-  ['Decimal', '@db.Money(10, 2)', ['Money', ['10', '2']], 'Decimal(Some((10, 2)))'],
-  ['String', '@db.Uuid', ['Uuid', []], null],
-  ['DateTime', '@db.Timestamp', ['Timestamp', []], null],
-  ['DateTime', '@db.Timestamptz', ['Timestamptz', []], 'TimestampWithTimeZone'],
-  ['DateTime', '@db.Date', ['Date', []], 'Date'],
-  ['DateTime', '@db.Time', ['Time', []], 'Time'],
-  ['Json', '@db.JsonB', ['JsonB', []], 'JsonBinary'],
-  ['String', '@db.Xml', ['Xml', []], null],
+  ['postgresql', 'String', '@db.VarChar(255)', ['VarChar', ['255']], 'String(StringLen::N(255))'],
+  ['postgresql', 'String', '@db.VarChar', ['VarChar', []], null],
+  ['postgresql', 'String', '@db.Char(10)', ['Char', ['10']], 'Char(Some(10))'],
+  ['postgresql', 'String', '@db.Char', ['Char', []], 'Char(None)'],
+  ['mysql', 'String', '@db.Char(2)', ['Char', ['2']], 'Char(Some(2))'],
+  ['postgresql', 'String', '@db.Text', ['Text', []], 'Text'],
+  ['mysql', 'String', '@db.TinyText', ['TinyText', []], 'custom("tinytext")'],
+  ['mysql', 'String', '@db.MediumText', ['MediumText', []], 'custom("mediumtext")'],
+  ['mysql', 'String', '@db.LongText', ['LongText', []], 'custom("longtext")'],
+  ['postgresql', 'String', '@db.Citext', ['Citext', []], 'custom("citext")'],
+  ['postgresql', 'String', '@db.Inet', ['Inet', []], 'Inet'],
+  ['postgresql', 'String', '@db.Xml', ['Xml', []], 'custom("xml")'],
+  ['postgresql', 'String', '@db.Bit(3)', ['Bit', ['3']], 'Bit(Some(3))'],
+  ['postgresql', 'String', '@db.Bit', ['Bit', []], 'Bit(None)'],
+  ['postgresql', 'String', '@db.VarBit(5)', ['VarBit', ['5']], 'VarBit(5)'],
+  ['postgresql', 'String', '@db.VarBit', ['VarBit', []], 'custom("varbit")'],
+  ['postgresql', 'String', '@db.Uuid', ['Uuid', []], null],
+  ['postgresql', 'Int', '@db.SmallInt', ['SmallInt', []], null],
+  ['mysql', 'Int', '@db.TinyInt', ['TinyInt', []], null],
+  ['mysql', 'Int', '@db.MediumInt', ['MediumInt', []], 'custom("mediumint")'],
+  [
+    'mysql',
+    'Int',
+    '@db.UnsignedMediumInt',
+    ['UnsignedMediumInt', []],
+    'custom("mediumint unsigned")',
+  ],
+  ['mysql', 'Int', '@db.UnsignedTinyInt', ['UnsignedTinyInt', []], null],
+  ['mysql', 'Int', '@db.UnsignedSmallInt', ['UnsignedSmallInt', []], null],
+  ['mysql', 'Int', '@db.UnsignedInt', ['UnsignedInt', []], null],
+  ['mysql', 'BigInt', '@db.UnsignedBigInt', ['UnsignedBigInt', []], null],
+  ['mysql', 'Int', '@db.Year', ['Year', []], 'Year'],
+  ['postgresql', 'Int', '@db.Oid', ['Oid', []], 'custom("oid")'],
+  ['postgresql', 'Float', '@db.DoublePrecision', ['DoublePrecision', []], 'Double'],
+  ['mysql', 'Float', '@db.Double', ['Double', []], 'Double'],
+  ['mysql', 'Float', '@db.Float', ['Float', []], 'Float'],
+  ['postgresql', 'Float', '@db.Real', ['Real', []], null],
+  [
+    'postgresql',
+    'Decimal',
+    '@db.Decimal(10, 2)',
+    ['Decimal', ['10', '2']],
+    'Decimal(Some((10, 2)))',
+  ],
+  ['postgresql', 'Decimal', '@db.Decimal', ['Decimal', []], 'Decimal(None)'],
+  ['postgresql', 'Decimal', '@db.Money', ['Money', []], 'Money(None)'],
+  ['postgresql', 'DateTime', '@db.Timestamp', ['Timestamp', []], null],
+  ['postgresql', 'DateTime', '@db.Timestamp(6)', ['Timestamp', ['6']], null],
+  ['postgresql', 'DateTime', '@db.Timestamp(0)', ['Timestamp', ['0']], 'custom("timestamp(0)")'],
+  ['postgresql', 'DateTime', '@db.Timestamptz', ['Timestamptz', []], 'TimestampWithTimeZone'],
+  [
+    'postgresql',
+    'DateTime',
+    '@db.Timestamptz(3)',
+    ['Timestamptz', ['3']],
+    'custom("timestamptz(3)")',
+  ],
+  ['postgresql', 'DateTime', '@db.Date', ['Date', []], 'Date'],
+  ['postgresql', 'DateTime', '@db.Time', ['Time', []], 'Time'],
+  ['postgresql', 'DateTime', '@db.Time(3)', ['Time', ['3']], 'custom("time(3)")'],
+  ['mysql', 'DateTime', '@db.DateTime', ['DateTime', []], null],
+  ['mysql', 'DateTime', '@db.DateTime(6)', ['DateTime', ['6']], 'custom("datetime(6)")'],
+  ['mysql', 'DateTime', '@db.Time(3)', ['Time', ['3']], 'custom("time(3)")'],
+  ['mysql', 'DateTime', '@db.Time(0)', ['Time', ['0']], 'Time'],
+  ['mysql', 'DateTime', '@db.Timestamp(3)', ['Timestamp', ['3']], 'custom("timestamp(3)")'],
+  ['mysql', 'DateTime', '@db.Timestamp', ['Timestamp', []], null],
+  ['mysql', 'Bytes', '@db.VarBinary(16)', ['VarBinary', ['16']], 'VarBinary(StringLen::N(16))'],
+  ['mysql', 'Bytes', '@db.Binary(16)', ['Binary', ['16']], 'Binary(16)'],
+  ['mysql', 'Bytes', '@db.Blob', ['Blob', []], 'Blob'],
+  ['mysql', 'Bytes', '@db.TinyBlob', ['TinyBlob', []], 'custom("tinyblob")'],
+  ['mysql', 'Bytes', '@db.MediumBlob', ['MediumBlob', []], 'custom("mediumblob")'],
+  ['mysql', 'Bytes', '@db.LongBlob', ['LongBlob', []], 'custom("longblob")'],
+  ['mysql', 'Bytes', '@db.Bit(8)', ['Bit', ['8']], null],
+  ['mysql', 'Boolean', '@db.Bit(1)', ['Bit', ['1']], 'Bit(Some(1))'],
+  ['mysql', 'Boolean', '@db.TinyInt(1)', ['TinyInt', ['1']], null],
+  ['postgresql', 'Bytes', '@db.ByteA', ['ByteA', []], null],
+  ['postgresql', 'Json', '@db.JsonB', ['JsonB', []], 'JsonBinary'],
+  ['postgresql', 'Json', '@db.Json', ['Json', []], null],
 ]
 
-// `@db.*` is the only way a Prisma schema pins a column type. `null` means the Rust type already
-// says everything sea-orm needs, so no `column_type` attribute is written at all - which is a
-// different statement from "unmapped", and the one this table exists to keep honest.
 describe('DateTime defaults and @updatedAt', () => {
   const field = (overrides: Partial<DMMF.Field> & { name: string; type: string }): DMMF.Field => ({
     kind: 'scalar',
@@ -1102,9 +1159,13 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
+    #[sea_orm(column_type = "custom(\\"timestamp(3)\\")")]
     pub at: DateTime,
+    #[sea_orm(column_type = "custom(\\"timestamp(3)\\")")]
     pub created: DateTime,
+    #[sea_orm(column_type = "custom(\\"timestamp(3)\\")")]
     pub literal: DateTime,
+    #[sea_orm(column_type = "custom(\\"timestamp(3)\\")")]
     pub updated: Option<DateTime>,
 }
 
@@ -1179,39 +1240,77 @@ impl ActiveModelBehavior for ActiveModel {
 })
 
 describe('resolveSeaOrmColumnType', () => {
-  it.each(NATIVE_TYPES)('maps %s `%s`', (type, _attribute, nativeType, columnType) => {
-    const field: DMMF.Field = {
-      name: 'value',
-      type,
-      nativeType,
-      kind: 'scalar',
-      isList: false,
-      isRequired: true,
-      isUnique: false,
-      isId: false,
-      isReadOnly: false,
-      isGenerated: false,
-      isUpdatedAt: false,
-      hasDefaultValue: false,
-    }
-    expect(resolveSeaOrmColumnType(field)).toBe(columnType)
+  const field = (overrides: Partial<DMMF.Field> & { type: string }): DMMF.Field => ({
+    name: 'value',
+    kind: 'scalar',
+    isList: false,
+    isRequired: true,
+    isUnique: false,
+    isId: false,
+    isReadOnly: false,
+    isGenerated: false,
+    isUpdatedAt: false,
+    hasDefaultValue: false,
+    ...overrides,
   })
 
-  it('writes no column type for a field the schema left unqualified', () => {
-    const field: DMMF.Field = {
-      name: 'value',
-      type: 'String',
-      kind: 'scalar',
-      isList: false,
-      isRequired: true,
-      isUnique: false,
-      isId: false,
-      isReadOnly: false,
-      isGenerated: false,
-      isUpdatedAt: false,
-      hasDefaultValue: false,
-    }
-    expect(resolveSeaOrmColumnType(field)).toBeNull()
+  it.each(NATIVE_TYPES)(
+    'maps a %s %s `%s`',
+    (provider, type, _attribute, nativeType, columnType) => {
+      expect(resolveSeaOrmColumnType(field({ type, nativeType }), provider)).toBe(columnType)
+    },
+  )
+
+  // Prisma Migrate's column of each scalar without a native type, where it is not the one sea-orm
+  // derives from the Rust type.
+  it.each([
+    ['mysql', 'String', 'String(StringLen::N(191))'],
+    ['mysql', 'Decimal', 'Decimal(Some((65, 30)))'],
+    ['mysql', 'DateTime', 'custom("datetime(3)")'],
+    ['mysql', 'Bytes', 'custom("longblob")'],
+    ['mysql', 'Json', null],
+    ['mysql', 'Int', null],
+    ['mysql', 'Float', null],
+    ['postgresql', 'String', 'Text'],
+    ['postgresql', 'Decimal', 'Decimal(Some((65, 30)))'],
+    ['postgresql', 'DateTime', 'custom("timestamp(3)")'],
+    ['postgresql', 'Json', 'JsonBinary'],
+    ['postgresql', 'Bytes', null],
+    ['postgresql', 'BigInt', null],
+    ['sqlite', 'String', 'Text'],
+    ['sqlite', 'Bytes', 'Blob'],
+    ['sqlite', 'DateTime', null],
+    ['sqlite', 'Decimal', null],
+  ])('maps a %s %s without a native type', (provider, type, columnType) => {
+    expect(resolveSeaOrmColumnType(field({ type }), provider)).toBe(columnType)
+  })
+
+  it('makes a list an array of the type', () => {
+    expect(
+      ['String', 'Decimal', 'DateTime', 'Json', 'Int'].map((type) =>
+        resolveSeaOrmColumnType(field({ type, isList: true }), 'postgresql'),
+      ),
+    ).toStrictEqual([
+      'Array(RcOrArc::new(ColumnType::Text))',
+      'Array(RcOrArc::new(ColumnType::Decimal(Some((65, 30)))))',
+      'Array(RcOrArc::new(ColumnType::custom("timestamp(3)")))',
+      'Array(RcOrArc::new(ColumnType::JsonBinary))',
+      null,
+    ])
+    expect(
+      resolveSeaOrmColumnType(
+        field({ type: 'String', isList: true, nativeType: ['VarChar', ['10']] }),
+        'postgresql',
+      ),
+    ).toBe('Array(RcOrArc::new(ColumnType::String(StringLen::N(10))))')
+  })
+
+  it('writes no column type for an enum', () => {
+    expect(resolveSeaOrmColumnType(field({ type: 'Role', kind: 'enum' }), 'mysql')).toBeNull()
+  })
+
+  it('writes no column type for a field the schema left unqualified, without a provider', () => {
+    expect(resolveSeaOrmColumnType(field({ type: 'String' }))).toBeNull()
   })
 })
 
@@ -1384,6 +1483,7 @@ pub struct Model {
     pub reviewer_id: Option<Uuid>,
     pub refs: Vec<Uuid>,
     pub trace: Option<Uuid>,
+    #[sea_orm(column_type = "Text")]
     pub token: String,
 }
 
@@ -1562,6 +1662,255 @@ impl ActiveModelBehavior for ActiveModel {}
     #[sea_orm(primary_key, auto_increment = false, column_name = "B")]
     pub tag_id: i16,
 }
+`)
+  })
+})
+
+// `Schema::create_table_from_entity` creates the column Prisma Migrate creates: the column type
+// where sea-orm would derive another from the Rust type, and the Rust type sqlx decodes the
+// column into.
+describe('the column Prisma Migrate creates', () => {
+  const field = (o: Record<string, unknown>): any => ({
+    kind: 'scalar',
+    type: 'String',
+    isList: false,
+    isRequired: true,
+    isUnique: false,
+    isId: false,
+    isReadOnly: false,
+    isGenerated: false,
+    isUpdatedAt: false,
+    hasDefaultValue: false,
+    ...o,
+  })
+  const model = (name: string, fields: readonly unknown[]): any => ({
+    name,
+    dbName: null,
+    primaryKey: null,
+    uniqueFields: [],
+    uniqueIndexes: [],
+    fields,
+  })
+  const native = (name: string, ...args: string[]) => ({ nativeType: [name, args] })
+  const id = (o: Record<string, unknown> = {}) =>
+    field({
+      name: 'id',
+      type: 'Int',
+      isId: true,
+      hasDefaultValue: true,
+      default: { name: 'autoincrement', args: [] },
+      ...o,
+    })
+
+  it('gives a MySQL column the type, the precision and the width Prisma gives it', () => {
+    const item = model('Item', [
+      id(native('UnsignedInt')),
+      field({ name: 'name' }),
+      field({ name: 'code', ...native('Char', '2') }),
+      field({ name: 'note', isRequired: false, ...native('TinyText') }),
+      field({ name: 'summary', ...native('MediumText') }),
+      field({ name: 'body', ...native('LongText') }),
+      field({ name: 'price', type: 'Decimal' }),
+      field({ name: 'at', type: 'DateTime', isRequired: false }),
+      field({ name: 'clock', type: 'DateTime', ...native('Time', '3') }),
+      field({ name: 'stamp', type: 'DateTime', ...native('Timestamp', '3') }),
+      field({ name: 'data', type: 'Bytes' }),
+      field({ name: 'digest', type: 'Bytes', ...native('Binary', '16') }),
+      field({ name: 'key', type: 'Bytes', ...native('VarBinary', '16') }),
+      field({ name: 'blob', type: 'Bytes', ...native('Blob') }),
+      field({ name: 'thumb', type: 'Bytes', ...native('TinyBlob') }),
+      field({ name: 'image', type: 'Bytes', ...native('MediumBlob') }),
+      field({ name: 'rank', type: 'Int', ...native('MediumInt') }),
+      field({ name: 'stock', type: 'Int', ...native('UnsignedMediumInt') }),
+      field({ name: 'level', type: 'Int', ...native('UnsignedTinyInt') }),
+      field({ name: 'port', type: 'Int', ...native('UnsignedSmallInt') }),
+      field({
+        name: 'views',
+        type: 'Int',
+        isRequired: false,
+        hasDefaultValue: true,
+        default: 0,
+        ...native('UnsignedInt'),
+      }),
+      field({ name: 'bytes', type: 'BigInt', ...native('UnsignedBigInt') }),
+      field({ name: 'year', type: 'Int', ...native('Year') }),
+      field({ name: 'ratio', type: 'Float', ...native('Float') }),
+      field({ name: 'active', type: 'Boolean', ...native('Bit', '1') }),
+    ])
+    expect(generateEntityFile(item, [item], [], {}, 'mysql')).toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "Item")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: u32,
+    #[sea_orm(column_type = "String(StringLen::N(191))")]
+    pub name: String,
+    #[sea_orm(column_type = "Char(Some(2))")]
+    pub code: String,
+    #[sea_orm(column_type = "custom(\\"tinytext\\")")]
+    pub note: Option<String>,
+    #[sea_orm(column_type = "custom(\\"mediumtext\\")")]
+    pub summary: String,
+    #[sea_orm(column_type = "custom(\\"longtext\\")")]
+    pub body: String,
+    #[sea_orm(column_type = "Decimal(Some((65, 30)))")]
+    pub price: Decimal,
+    #[sea_orm(column_type = "custom(\\"datetime(3)\\")")]
+    pub at: Option<DateTime>,
+    #[sea_orm(column_type = "custom(\\"time(3)\\")")]
+    pub clock: Time,
+    #[sea_orm(column_type = "custom(\\"timestamp(3)\\")")]
+    pub stamp: DateTimeUtc,
+    #[sea_orm(column_type = "custom(\\"longblob\\")")]
+    pub data: Vec<u8>,
+    #[sea_orm(column_type = "Binary(16)")]
+    pub digest: Vec<u8>,
+    #[sea_orm(column_type = "VarBinary(StringLen::N(16))")]
+    pub key: Vec<u8>,
+    #[sea_orm(column_type = "Blob")]
+    pub blob: Vec<u8>,
+    #[sea_orm(column_type = "custom(\\"tinyblob\\")")]
+    pub thumb: Vec<u8>,
+    #[sea_orm(column_type = "custom(\\"mediumblob\\")")]
+    pub image: Vec<u8>,
+    #[sea_orm(column_type = "custom(\\"mediumint\\")")]
+    pub rank: i32,
+    #[sea_orm(column_type = "custom(\\"mediumint unsigned\\")")]
+    pub stock: u32,
+    pub level: u8,
+    pub port: u16,
+    #[sea_orm(default_value = 0)]
+    pub views: Option<u32>,
+    pub bytes: u64,
+    #[sea_orm(column_type = "Year")]
+    pub year: u16,
+    #[sea_orm(column_type = "Float")]
+    pub ratio: f64,
+    #[sea_orm(column_type = "Bit(Some(1))")]
+    pub active: bool,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {}
+`)
+  })
+
+  it('gives a PostgreSQL column its type, and casts a String column sqlx cannot bind or decode', () => {
+    const host = model('Host', [
+      id(),
+      field({ name: 'name' }),
+      field({ name: 'aliases', isList: true }),
+      field({ name: 'code', ...native('Char', '2') }),
+      field({ name: 'address', ...native('Inet') }),
+      field({ name: 'peers', isList: true, ...native('Inet') }),
+      field({ name: 'config', ...native('Xml') }),
+      field({ name: 'flags', ...native('Bit', '3') }),
+      field({ name: 'mask', isRequired: false, ...native('VarBit') }),
+      field({ name: 'meta', type: 'Json' }),
+      field({ name: 'price', type: 'Decimal' }),
+      field({ name: 'fee', type: 'Decimal', ...native('Money') }),
+      field({ name: 'load', type: 'Float', ...native('Real') }),
+      field({ name: 'owner', type: 'Int', ...native('Oid') }),
+      field({ name: 'seen', type: 'DateTime' }),
+    ])
+    expect(generateEntityFile(host, [host], [], {}, 'postgresql'))
+      .toBe(`use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "Host")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i32,
+    #[sea_orm(column_type = "Text")]
+    pub name: String,
+    #[sea_orm(column_type = "Array(RcOrArc::new(ColumnType::Text))")]
+    pub aliases: Vec<String>,
+    #[sea_orm(column_type = "Char(Some(2))")]
+    pub code: String,
+    #[sea_orm(column_type = "Inet", select_as = "name", save_as = "inet")]
+    pub address: String,
+    #[sea_orm(
+        column_type = "Array(RcOrArc::new(ColumnType::Inet))",
+        select_as = "name[]",
+        save_as = "inet[]"
+    )]
+    pub peers: Vec<String>,
+    #[sea_orm(column_type = "custom(\\"xml\\")", select_as = "text", save_as = "xml")]
+    pub config: String,
+    #[sea_orm(column_type = "Bit(Some(3))", select_as = "text", save_as = "bit(3)")]
+    pub flags: String,
+    #[sea_orm(
+        column_type = "custom(\\"varbit\\")",
+        select_as = "text",
+        save_as = "varbit"
+    )]
+    pub mask: Option<String>,
+    #[sea_orm(column_type = "JsonBinary")]
+    pub meta: Json,
+    #[sea_orm(column_type = "Decimal(Some((65, 30)))")]
+    pub price: Decimal,
+    #[sea_orm(column_type = "Money(None)", select_as = "numeric", save_as = "money")]
+    pub fee: Decimal,
+    pub load: f32,
+    #[sea_orm(column_type = "custom(\\"oid\\")")]
+    pub owner: u32,
+    #[sea_orm(column_type = "custom(\\"timestamp(3)\\")")]
+    pub seen: DateTime,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {}
+`)
+  })
+
+  it('names a SQLite String TEXT and a Bytes BLOB, as Prisma does', () => {
+    const file = model('File', [
+      id(),
+      field({ name: 'name' }),
+      field({ name: 'data', type: 'Bytes' }),
+    ])
+    expect(generateEntityFile(file, [file], [], {}, 'sqlite')).toContain(`pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i32,
+    #[sea_orm(column_type = "Text")]
+    pub name: String,
+    #[sea_orm(column_type = "Blob")]
+    pub data: Vec<u8>,
+}
+`)
+  })
+
+  it("gives the join table of an implicit many-to-many each key's column", () => {
+    const post = model('Post', [id(native('UnsignedInt'))])
+    const tag = model('Tag', [field({ name: 'id', isId: true })])
+    expect(generateM2MEntity('Post', 'Tag', 'PostToTag', [post, tag], {}, 'mysql'))
+      .toContain(`pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]
+    pub post_id: u32,
+    #[sea_orm(
+        primary_key,
+        auto_increment = false,
+        column_name = "B",
+        column_type = "String(StringLen::N(191))"
+    )]
+    pub tag_id: String,
+}
+`)
+    expect(generateM2MEntity('Post', 'Tag', 'PostToTag', [post, tag], {}, 'postgresql'))
+      .toContain(`    #[sea_orm(
+        primary_key,
+        auto_increment = false,
+        column_name = "B",
+        column_type = "Text"
+    )]
+    pub tag_id: String,
 `)
   })
 })

@@ -8,10 +8,12 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
+    #[sea_orm(column_type = "Text")]
     pub action: String,
-    #[sea_orm(default_value = "{}")]
+    #[sea_orm(column_type = "JsonBinary", default_value = "{}")]
     pub payload: Json,
     pub signature: Option<Vec<u8>>,
+    #[sea_orm(column_type = "custom(\"timestamp(3)\")")]
     pub logged_at: DateTime,
 }
 

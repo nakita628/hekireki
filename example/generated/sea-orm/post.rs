@@ -12,9 +12,12 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     /// Primary key
     #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(column_type = "Text")]
     pub id: String,
     /// Article title
+    #[sea_orm(column_type = "Text")]
     pub title: String,
+    #[sea_orm(column_type = "Text")]
     pub content: Option<String>,
     #[sea_orm(default_value = "link_only")]
     pub visibility: Visibility,
@@ -22,7 +25,9 @@ pub struct Model {
     pub published: bool,
     #[sea_orm(default_value = 0)]
     pub view_count: i32,
+    #[sea_orm(column_type = "Text")]
     pub author_id: String,
+    #[sea_orm(column_type = "custom(\"timestamp(3)\")")]
     pub created_at: DateTime,
 }
 

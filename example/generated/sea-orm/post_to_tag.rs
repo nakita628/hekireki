@@ -5,7 +5,12 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 #[sea_orm(table_name = "_PostToTag")]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false, column_name = "A")]
+    #[sea_orm(
+        primary_key,
+        auto_increment = false,
+        column_name = "A",
+        column_type = "Text"
+    )]
     pub post_id: String,
     #[sea_orm(primary_key, auto_increment = false, column_name = "B")]
     pub tag_id: i32,

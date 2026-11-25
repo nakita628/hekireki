@@ -10,9 +10,11 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
+    #[sea_orm(column_type = "Text")]
     pub user_id: String,
     #[sea_orm(column_type = "Decimal(Some((12, 2)))")]
     pub total: Decimal,
+    #[sea_orm(column_type = "custom(\"timestamp(3)\")")]
     pub placed_at: DateTime,
 }
 
