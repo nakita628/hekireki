@@ -568,7 +568,7 @@ function readableTagName(name: string | null | undefined, provider: string | und
 
 // The name a unique or plain index takes in the tag: the one the schema gives it (`map:`, or an
 // index's `name:`), or Prisma's own where it gives none (`Post_authorId_idx`, `User_email_key`), so
-// AutoMigrate and the migration agree. A given name the tag cannot hold (readableTagName) is
+// AutoMigrate and the migration agree. A given name GORM cannot write (readableTagName) is
 // reported by gormProblems before any tag is written.
 function indexTagName(
   model: DMMF.Model,
@@ -701,8 +701,8 @@ function collectCompositeIndexTags(
   const uniques = ownIndexes.filter((idx) => idx.type === 'unique')
   const partialUniques = uniques.filter((idx) => indexWhere(model, idx) !== undefined)
   const plainUniques = uniques.filter((idx) => indexWhere(model, idx) === undefined)
-  // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it; one the
-  // struct tag cannot hold (readableTagName) is reported by gormProblems.
+  // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it; one GORM
+  // cannot write (readableTagName) is reported by gormProblems.
   const mappedUniques = new Map(
     plainUniques.map((idx) => [
       idx.fields.map((f) => f.name).join(','),
@@ -1656,11 +1656,10 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
 /**
  * What keeps the schema from becoming models that compile and read as it says: a model whose Go
  * name is that of a type or function written beside the models, where the schema needs it; a
- * column whose name the struct tag cannot hold (a `;`, or a `\` at its end); an index whose
- * `map:` name the tag cannot hold (readableTagName), or written into the tags under a name holding
- * a `,` or `;`; and two fields under one json name (jsonTagName), which encoding/json drops. Index
- * names made from a column are escaped for the tag (escapeTagValue), so a `"` or `\` in one is
- * held.
+ * column whose name the struct tag cannot hold (a `;`, or a `\` at its end); an index whose name
+ * GORM cannot write (nameFlaw), whether the schema gives it or Prisma's naming makes it; and two
+ * fields under one json name (jsonTagName), a relation's Go name among them, of which encoding/json
+ * keeps at most one.
  */
 export function gormProblems(
   models: readonly DMMF.Model[],
