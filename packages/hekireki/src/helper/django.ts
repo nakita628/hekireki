@@ -1265,6 +1265,34 @@ function writtenIndexes(
   )
 }
 
+/** A partial index (the `partialIndexes` preview feature) and its condition as SQL. */
+export type PartialIndex = { readonly index: DMMF.Index; readonly where: string }
+
+// A partial index is left out of Meta: Django's `condition=` takes a Q, which SQL does not turn
+// into. It is named, by the name Prisma Migrate gives it, with its condition, so that a migration
+// can create it.
+function partialIndexComment(
+  index: DMMF.Index,
+  where: string,
+  tableName: string,
+  columnRef: (prismaFieldName: string) => string,
+) {
+  const columns = index.fields.map((f) => columnRef(f.name))
+  const suffix = index.type === 'unique' ? 'key' : 'idx'
+  const name = index.dbName ?? `${tableName}_${columns.join('_')}_${suffix}`
+  const kind = index.type === 'unique' ? 'unique index' : 'index'
+  const on = columns.map((c) => quotedIdentifier(c)).join(', ')
+  // A comment is one line: a raw condition that spans lines is read as one.
+  const condition = where
+    .split(/\r\n|\r|\n/u)
+    .map((line) => line.trim())
+    .join(' ')
+  return [
+    `        # The partial ${kind} ${quotedIdentifier(name)} on (${on}) WHERE ${condition} is left out:`,
+    "        # Django's condition= takes a Q, not SQL, so it is left to a migration (e.g. RunSQL).",
+  ]
+}
+
 function generateMetaLines(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
@@ -1272,6 +1300,7 @@ function generateMetaLines(
   names: Names,
   views: ReadonlySet<string>,
   provider: string,
+  partials: readonly PartialIndex[],
 ) {
   const tableName = model.dbName ?? model.name
 
@@ -1334,6 +1363,11 @@ function generateMetaLines(
       : `${ctor}(fields=[${fieldNames}]${name})`
   })
 
+  const partialComments = (unique: boolean) =>
+    partials
+      .filter((p) => p.index.model === model.name && (p.index.type === 'unique') === unique)
+      .flatMap((p) => partialIndexComment(p.index, p.where, tableName, columnRef))
+
   return [
     '',
     '    class Meta:',
@@ -1343,6 +1377,7 @@ function generateMetaLines(
     ...(constraints.length > 0
       ? ['        constraints = [', ...constraints.map((c) => `            ${c},`), '        ]']
       : []),
+    ...partialComments(true),
     // Two @@index over the same columns differ only in map:, which an index too
     // long for Django leaves out: Django would derive one name for both
     // (models.E029), so the index is written once.
@@ -1353,6 +1388,7 @@ function generateMetaLines(
           '        ]',
         ]
       : []),
+    ...partialComments(false),
   ]
 }
 
@@ -1423,6 +1459,7 @@ export function generateModelBody(
   provider: string,
   enumTypes: ReadonlyMap<string, string> = new Map(),
   views: ReadonlySet<string> = new Set(),
+  partials: readonly PartialIndex[] = [],
 ) {
   const pkFields = primaryKeyFields(model)
   if (pkFields.length === 0) return null
@@ -1470,7 +1507,7 @@ export function generateModelBody(
     ...(model.fields.some((f) => f.isUpdatedAt === true)
       ? ['    objects = AutoNowQuerySet.as_manager()']
       : []),
-    ...generateMetaLines(model, allModels, indexes, names, views, provider),
+    ...generateMetaLines(model, allModels, indexes, names, views, provider, partials),
   ].join('\n')
 }
 
