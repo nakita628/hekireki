@@ -7,13 +7,17 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "audit_logs")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(default_expr = "Expr::cust(\"gen_random_uuid()\")")]
     pub id: Uuid,
     #[sea_orm(column_type = "Text")]
     pub action: String,
     #[sea_orm(column_type = "JsonBinary", default_value = "{}")]
     pub payload: Json,
     pub signature: Option<Vec<u8>>,
-    #[sea_orm(column_type = "custom(\"timestamp(3)\")")]
+    #[sea_orm(
+        column_type = "custom(\"timestamp(3)\")",
+        default_expr = "Expr::cust(\"now()\")"
+    )]
     pub logged_at: DateTime,
 }
 
