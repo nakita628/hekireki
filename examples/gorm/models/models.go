@@ -95,9 +95,9 @@ type Post struct {
 	Title string `gorm:"column:title;not null" json:"title"`
 	// A non-empty default: "" set on purpose must be stored as "", not replaced by it.
 	Slug       *string   `gorm:"column:slug;default:'untitled';not null" json:"slug"`
-	Status     string    `gorm:"column:status;index:posts_author_id_status_idx;default:'DRAFT';not null" json:"status"`
+	Status     string    `gorm:"column:status;index:posts_author_id_status_idx,priority:2;default:'DRAFT';not null" json:"status"`
 	Views      int       `gorm:"column:views;size:32;default:0;not null" json:"views"`
-	AuthorID   *int      `gorm:"column:author_id;index:posts_author_id_status_idx;size:32" json:"author_id"`
+	AuthorID   *int      `gorm:"column:author_id;index:posts_author_id_status_idx,priority:1;size:32" json:"author_id"`
 	CategoryID *int      `gorm:"column:category_id;size:32;default:1;not null" json:"category_id"`
 	CreatedAt  DateTime  `gorm:"column:created_at;autoCreateTime:false;not null" json:"created_at"`
 	UpdatedAt  DateTime  `gorm:"column:updated_at;autoUpdateTime:false;not null" json:"updated_at"`
@@ -135,7 +135,7 @@ func (*Post) BeforeUpdate(tx *gorm.DB) error {
 // A random primary key made by the client: `uuid()` is not a database default, so the struct
 // has to make one before it is inserted.
 type Tag struct {
-	ID    string `gorm:"column:id;primaryKey;type:char(36)" json:"id"`
+	ID    string `gorm:"column:id;primaryKey;type:char(36);not null" json:"id"`
 	Name  string `gorm:"column:name;uniqueIndex:tags_name_key;not null" json:"name"`
 	Posts []Post `gorm:"many2many:_PostToTag;joinForeignKey:B;joinReferences:A"`
 }
@@ -154,10 +154,10 @@ func (m *Tag) BeforeCreate(_ *gorm.DB) error {
 // A `cuid()` key, a self relation for replies, and a unique pair: a comment's `slot` is unique
 // within its post. The author cannot be deleted while a comment of theirs stands (Restrict).
 type Comment struct {
-	ID       string    `gorm:"column:id;primaryKey" json:"id"`
+	ID       string    `gorm:"column:id;primaryKey;not null" json:"id"`
 	Body     string    `gorm:"column:body;not null" json:"body"`
-	Slot     int       `gorm:"column:slot;uniqueIndex:comments_post_id_slot_key;size:32;not null" json:"slot"`
-	PostID   int       `gorm:"column:post_id;uniqueIndex:comments_post_id_slot_key;size:32;not null" json:"post_id"`
+	Slot     int       `gorm:"column:slot;uniqueIndex:comments_post_id_slot_key,priority:2;size:32;not null" json:"slot"`
+	PostID   int       `gorm:"column:post_id;uniqueIndex:comments_post_id_slot_key,priority:1;size:32;not null" json:"post_id"`
 	AuthorID int       `gorm:"column:author_id;size:32;not null" json:"author_id"`
 	ParentID *string   `gorm:"column:parent_id" json:"parent_id"`
 	Post     *Post     `gorm:"belongsTo"`
@@ -180,8 +180,8 @@ func (m *Comment) BeforeCreate(_ *gorm.DB) error {
 // A composite primary key, and the join model of an explicit self many-to-many: two relations
 // to the same model, each named, each gone with either user.
 type Follow struct {
-	FollowerID int      `gorm:"column:follower_id;primaryKey;size:32" json:"follower_id"`
-	FolloweeID int      `gorm:"column:followee_id;primaryKey;size:32" json:"followee_id"`
+	FollowerID int      `gorm:"column:follower_id;primaryKey;size:32;not null" json:"follower_id"`
+	FolloweeID int      `gorm:"column:followee_id;primaryKey;size:32;not null" json:"followee_id"`
 	Since      DateTime `gorm:"column:since;not null" json:"since"`
 	Follower   *User    `gorm:"foreignKey:FollowerID;belongsTo"`
 	Followee   *User    `gorm:"foreignKey:FolloweeID;belongsTo"`
@@ -226,7 +226,7 @@ func (m *AuditLog) BeforeCreate(tx *gorm.DB) error {
 // The two client-made keys Go needs a library for: a `cuid(2)` primary key and a `nanoid(8)`
 // column beside it, which is not a key at all and is made all the same.
 type Invite struct {
-	ID        string    `gorm:"column:id;primaryKey" json:"id"`
+	ID        string    `gorm:"column:id;primaryKey;not null" json:"id"`
 	Code      string    `gorm:"column:code;uniqueIndex:invites_code_key;not null" json:"code"`
 	Email     string    `gorm:"column:email;not null" json:"email"`
 	ExpiresAt *DateTime `gorm:"column:expires_at" json:"expires_at"`
@@ -248,7 +248,7 @@ func (m *Invite) BeforeCreate(_ *gorm.DB) error {
 
 // A country keyed by its code, not by an `id`: an address refers to it through `countryCode`.
 type Country struct {
-	Code      string    `gorm:"column:code;primaryKey" json:"code"`
+	Code      string    `gorm:"column:code;primaryKey;not null" json:"code"`
 	Name      string    `gorm:"column:name;not null" json:"name"`
 	Addresses []Address `gorm:"foreignKey:CountryCode;references:Code;constraint:addresses_country_code_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
