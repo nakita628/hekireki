@@ -1720,7 +1720,7 @@ export function gormProblems(
     // The table's name goes through the same QuoteTo in every statement GORM writes.
     const tableFlaw = quoteFlaw(model.dbName ?? model.name, provider)
     // So does the join table of an implicit many-to-many relation, `_` and the relation's name,
-    // written into the tag (escapeTagValue) of either field; a `\\` at its end would still join
+    // written into the tag (escapeTagValue) of either field; a `\` at its end would still join
     // the setting with the next one. Reported once, on side A.
     const joinTables = getAssociations(model, models, provider).manyToMany.flatMap((assoc) => {
       if (!assoc.isSideA) return []

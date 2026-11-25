@@ -1713,8 +1713,6 @@ func (Profile) TableName() string {
 `)
   })
 
-  // Under GORM's default naming the table would be `_post_to_tags` and its columns `post_id` and
-  // `tag_id`: "no such table".
   it('escapes a ";" or a double quote of a relation name in the many2many tag', () => {
     const code = gormFor(`
 model Post {
@@ -1730,6 +1728,8 @@ model Tag {
     expect(code).toContain('`gorm:"many2many:_a\\\\;b\\"c;joinForeignKey:A;joinReferences:B"`')
   })
 
+  // Under GORM's default naming the table would be `_post_to_tags` and its columns `post_id` and
+  // `tag_id`: "no such table".
   it("goes through Prisma's join table, its columns A and B, under a naming strategy that keeps them", () => {
     expect(
       gormFor(`
