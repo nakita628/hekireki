@@ -1111,8 +1111,8 @@ model Tag {
       }),
     )
     expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
-      'model Note: the index on pair is named "Note_a,b_key", whose "," GORM\'s tag cannot hold; change the @map of its column or table, or give it a name with map:',
-      'model Tag: the index on label is named "tag;s_label_idx", whose ";" GORM\'s tag cannot hold; change the @map of its column or table, or give it a name with map:',
+      'model Note: the index on pair is named "Note_a,b_key", which GORM cannot write (a ","); change the @map of its column or table, or give it a name with map:',
+      'model Tag: the index on label is named "tag;s_label_idx", which GORM cannot write (a ";"); change the @map of its column or table, or give it a name with map:',
     ])
   })
 
@@ -1146,7 +1146,7 @@ model Item {
         partialIndexWhere(prismaBlocks(source), 'postgresql'),
       ),
     ).toStrictEqual([
-      'model Item: the index on code is named "item,code", which GORM\'s tag cannot hold (a , ; " or backtick, or a \\ at its end); change it',
+      'model Item: the index on code is named "item,code", which GORM cannot write (a ","); change it',
     ])
   })
 
@@ -1170,13 +1170,13 @@ model Item {
       }),
     )
     expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
-      'model Item: the index on code is named "a,b", which GORM\'s tag cannot hold (a , ; " or backtick, or a \\ at its end); change it',
-      'model Item: the index on slug is named "slug;idx", which GORM\'s tag cannot hold (a , ; " or backtick, or a \\ at its end); change it',
-      'model Item: label and other are both written json:"Label", and encoding/json drops both; change the @map of one',
+      'model Item: the index on code is named "a,b", which GORM cannot write (a ","); change it',
+      'model Item: the index on slug is named "slug;idx", which GORM cannot write (a ";"); change it',
+      'model Item: label and other are both written json:"Label", and encoding/json drops one or both; change the @map of one',
     ])
   })
 
-  it('names a map: name with a quote or a backtick, which the dialector takes as a quote of its own', () => {
+  it('names an index name the dialector would quote as another: a ".", a quote at its start, two quotes in a row', () => {
     const datamodel = datamodelOf(
       getDMMF({
         datamodel: `datasource db {
@@ -1184,18 +1184,58 @@ model Item {
 }
 
 model Item {
-  id   Int    @id
-  code String @unique(map: "\\"code_key")
-  slug String
+  id    Int    @id
+  code  String @unique(map: "\\"code_key")
+  slug  String
+  tag   String
+  mark  String @unique(map: "item\`mark")
+  note  String @unique(map: "item\\"note")
+  label String
 
-  @@index([slug], map: "item\`slug")
+  @@index([slug], map: "item.slug_idx")
+  @@index([tag], map: "item\\"\\"tag")
+}
+
+model Box {
+  id   Int    @id
+  code String @unique
+
+  @@map("\`boxes")
 }
 `,
       }),
     )
     expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
-      'model Item: the index on code is named "\\"code_key", which GORM\'s tag cannot hold (a , ; " or backtick, or a \\ at its end); change it',
-      'model Item: the index on slug is named "item`slug", which GORM\'s tag cannot hold (a , ; " or backtick, or a \\ at its end); change it',
+      'model Item: the index on code is named "\\"code_key", which GORM cannot write (a quote at its start); change it',
+      'model Item: the index on slug is named "item.slug_idx", which GORM cannot write (a "."); change it',
+      'model Item: the index on tag is named "item\\"\\"tag", which GORM cannot write (two quotes in a row); change it',
+      'model Box: the index on code is named "`boxes_code_key", which GORM cannot write (a quote at its start); change the @map of its column or table, or give it a name with map:',
+    ])
+  })
+
+  it('names a relation whose Go name a column takes as its json name', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id    Int    @id
+  posts Post[]
+}
+
+model Post {
+  id         Int    @id
+  authorId   Int
+  authorName String @map("Author")
+  author     User   @relation(fields: [authorId], references: [id])
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Post: authorName and author are both written json:"Author", and encoding/json drops one or both; change the @map of one',
     ])
   })
 
@@ -1217,7 +1257,7 @@ model Item {
       }),
     )
     expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
-      'model Item: label and other are both written json:"Label", and encoding/json drops both; change the @map of one',
+      'model Item: label and other are both written json:"Label", and encoding/json drops one or both; change the @map of one',
     ])
   })
 
@@ -1958,7 +1998,7 @@ model Account {
   @@unique([alive, n], where: { alive: true })
   @@index([alive], where: { alive: true })
   @@index([note], where: raw("note IN ('a,b', 'c\\\\\\"d', 'e\\\\,f')"))
-  @@index([n, note], where: raw("note <> ';'"))
+  @@index([n, note], where: raw("note <> ';'"), map: "account,n,note")
 }
 `,
         'postgresql',
@@ -1969,7 +2009,7 @@ type Account struct {
 	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	Email string \`gorm:"column:email;uniqueIndex:Account_email_key;uniqueIndex:account_email_alive,where:(alive);not null" json:"email"\`
 	Alive bool   \`gorm:"column:alive;uniqueIndex:Account_alive_n_key,priority:1,where:(\\"alive\\" = true);index:Account_alive_idx,where:(\\"alive\\" = true);not null" json:"alive"\`
-	// The partial index "Account_n_note_idx" is left out: its condition holds a ";", at which GORM splits the tag.
+	// The partial index "account,n,note" is left out: its condition holds a ";", at which GORM splits the tag.
 	N    int     \`gorm:"column:n;uniqueIndex:Account_alive_n_key,priority:2,where:(\\"alive\\" = true);size:32;not null" json:"n"\`
 	Code string  \`gorm:"column:code;uniqueIndex:Account_code_key,where:(n > 0);not null" json:"code"\`
 	Note *string \`gorm:"column:note;index:Account_note_idx,where:(note IN ('a\\\\,b'\\\\, 'c\\\\\\\\\\"d'\\\\, 'e\\\\\\\\,f'))" json:"note"\`

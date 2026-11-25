@@ -542,12 +542,22 @@ function goTagLiteral(tag: string) {
     : `\`${tag}\``
 }
 
-// A name the schema gives an index, unless the struct tag cannot hold it: GORM reads past a `,` as
-// settings and splits at a `;`, a `\` at the end joins the setting with the next one, and the
-// dialector's QuoteTo takes a `"` or a backtick at the edge of a name as a quote of its own. Such a
-// name is reported by gormProblems.
+// What keeps GORM from writing an index under a name, or undefined: in the tag, GORM reads past a
+// `,` as settings and splits at a `;`, and a `\` at the end joins the setting with the next one;
+// in CREATE INDEX, the dialector's QuoteTo splits a name at a `.` into schema and name, takes a
+// `"` or backtick at its start as a quote of its own, and makes two in a row one.
+function nameFlaw(name: string) {
+  const mark = name.match(/[,;.]/u)?.[0]
+  if (mark !== undefined) return `a "${mark}"`
+  if (name.endsWith('\\')) return 'a \\ at its end'
+  if (/^["`]/u.test(name)) return 'a quote at its start'
+  return /""|``/u.test(name) ? 'two quotes in a row' : undefined
+}
+
+// A name the schema gives an index, unless GORM cannot write it (nameFlaw); such a name is
+// reported by gormProblems.
 function readableTagName(name: string | undefined) {
-  return name !== undefined && !/[,;"`]/u.test(name) && !name.endsWith('\\') ? name : undefined
+  return name !== undefined && nameFlaw(name) === undefined ? name : undefined
 }
 
 // The name a unique or plain index takes in the tag: the one the schema gives it (`map:`, or an
@@ -737,7 +747,7 @@ function collectCompositeIndexTags(
     if (condition === null) {
       notes.push([
         idx.fields[0]?.name ?? '',
-        `The partial ${setting === 'uniqueIndex' ? 'unique ' : ''}index ${JSON.stringify(name)} is left out: its condition holds a ";", at which GORM splits the tag.`,
+        `The partial ${setting === 'uniqueIndex' ? 'unique ' : ''}index ${JSON.stringify(idx.dbName ?? name)} is left out: its condition holds a ";", at which GORM splits the tag.`,
       ])
       return []
     }
@@ -749,7 +759,7 @@ function collectCompositeIndexTags(
       notes.push([
         idx.fields[0]?.name ?? '',
         // The column and the operator class are quoted, so a line break in either stays in the comment.
-        `The index ${JSON.stringify(name)} is left out: the expression of its column ${JSON.stringify(unreadable.name)} with the operator class ${JSON.stringify(unreadable.operatorClass)} holds a ";", at which GORM splits the tag.`,
+        `The index ${JSON.stringify(idx.dbName ?? name)} is left out: the expression of its column ${JSON.stringify(unreadable.name)} with the operator class ${JSON.stringify(unreadable.operatorClass)} holds a ";", at which GORM splits the tag.`,
       ])
       return []
     }
@@ -1693,40 +1703,40 @@ export function gormProblems(
       .filter((idx) => idx.type !== 'id' && !leavesOutIndex(model, idx, provider, indexWhere))
       .flatMap((idx) => {
         const fields = idx.fields.map((f) => f.name).join(', ')
-        // A name the schema gives is the index's name in the database, so one the tag cannot hold
+        // A name the schema gives is the index's name in the database, so one GORM cannot write
         // would leave AutoMigrate making the index under another name.
         const given = idx.dbName ?? (idx.type === 'unique' ? undefined : idx.name)
-        if (given !== undefined && given !== null && readableTagName(given) === undefined) {
+        const givenFlaw = given === undefined || given === null ? undefined : nameFlaw(given)
+        if (givenFlaw !== undefined) {
           return [
-            `model ${model.name}: the index on ${fields} is named ${JSON.stringify(given)}, which GORM's tag cannot hold (a , ; " or backtick, or a \\ at its end); change it`,
+            `model ${model.name}: the index on ${fields} is named ${JSON.stringify(given)}, which GORM cannot write (${givenFlaw}); change it`,
           ]
         }
         const indexName = indexTagName(model, idx, provider)
-        const mark = indexName.match(/[,;]/u)?.[0]
-        return mark === undefined
+        const flaw = nameFlaw(indexName)
+        return flaw === undefined
           ? []
           : [
-              `model ${model.name}: the index on ${fields} is named ${JSON.stringify(indexName)}, whose "${mark}" GORM's tag cannot hold; change the @map of its column or table, or give it a name with map:`,
+              `model ${model.name}: the index on ${fields} is named ${JSON.stringify(indexName)}, which GORM cannot write (${flaw}); change the @map of its column or table, or give it a name with map:`,
             ]
       })
-    // A json name is the column's, or the field's where the column holds a `,` (jsonTagName), so
-    // two fields can come to one; encoding/json then drops both without a word.
+    // A json name is the column's, or the field's Go name where encoding/json cannot take the
+    // column's (jsonTagName); a relation has no json tag, so its key is its Go name. Two fields can
+    // come to one key, and encoding/json then drops them without a word.
     const goNames = goFieldNames(model)
-    const jsonNames = model.fields
-      .filter((field) => field.kind !== 'object')
-      .map((field) => ({
+    const jsonNames = model.fields.map((field) => {
+      const goName = goNames.get(field.name) ?? goFieldName(field.name)
+      return {
         field: field.name,
-        json: jsonTagName(
-          field.dbName ?? field.name,
-          goNames.get(field.name) ?? goFieldName(field.name),
-        ),
-      }))
+        json: field.kind === 'object' ? goName : jsonTagName(field.dbName ?? field.name, goName),
+      }
+    })
     const jsonClashes = jsonNames.flatMap(({ field, json }, i) => {
       const earlier = jsonNames.slice(0, i).find((other) => other.json === json)
       return earlier === undefined
         ? []
         : [
-            `model ${model.name}: ${earlier.field} and ${field} are both written json:${JSON.stringify(json)}, and encoding/json drops both; change the @map of one`,
+            `model ${model.name}: ${earlier.field} and ${field} are both written json:${JSON.stringify(json)}, and encoding/json drops one or both; change the @map of one`,
           ]
     })
     return [
