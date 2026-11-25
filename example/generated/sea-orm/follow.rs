@@ -24,14 +24,16 @@ pub enum Relation {
         belongs_to = "super::user::Entity",
         from = "Column::FollowerId",
         to = "super::user::Column::Id",
-        on_delete = "Cascade"
+        on_delete = "Cascade",
+        fk_name = "follows_follower_id_fkey"
     )]
     Follower,
     #[sea_orm(
         belongs_to = "super::user::Entity",
         from = "Column::FollowingId",
         to = "super::user::Column::Id",
-        on_delete = "Cascade"
+        on_delete = "Cascade",
+        fk_name = "follows_following_id_fkey"
     )]
     Following,
 }

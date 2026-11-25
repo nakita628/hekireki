@@ -18,7 +18,8 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::category::Entity",
         from = "Column::ParentId",
-        to = "super::category::Column::Id"
+        to = "super::category::Column::Id",
+        fk_name = "Category_parent_id_fkey"
     )]
     Parent,
     #[sea_orm(

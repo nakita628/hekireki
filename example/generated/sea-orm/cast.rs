@@ -16,13 +16,15 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::actor::Entity",
         from = "Column::ActorId",
-        to = "super::actor::Column::Id"
+        to = "super::actor::Column::Id",
+        fk_name = "_cast_A_fkey"
     )]
     Actor,
     #[sea_orm(
         belongs_to = "super::film::Entity",
         from = "Column::FilmId",
-        to = "super::film::Column::Id"
+        to = "super::film::Column::Id",
+        fk_name = "_cast_B_fkey"
     )]
     Film,
 }

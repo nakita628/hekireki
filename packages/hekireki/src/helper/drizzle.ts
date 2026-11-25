@@ -728,8 +728,9 @@ function makeColumn(
 
 // What a table has beside its columns, under the names Prisma Migrate gives them where the schema
 // names none: the composite key `<table>_pkey`, every unique a unique index `<table>_<columns>_key`,
-// every index `<table>_<columns>_idx`, and every foreign key `<table>_<columns>_fkey` with the
-// actions Prisma implies (onUpdate Cascade; onDelete Restrict, or SetNull on an optional relation).
+// every index `<table>_<columns>_idx`, and every foreign key `<table>_<columns>_fkey` (or its
+// `@relation(map:)`) with the actions Prisma implies (onUpdate Cascade; onDelete Restrict, or
+// SetNull on an optional relation).
 function makeTableConstraints(
   model: DMMF.Model,
   models: readonly DMMF.Model[],
@@ -739,6 +740,7 @@ function makeTableConstraints(
   tableName: string,
   views: ReadonlySet<string>,
   whereOf: IndexWhere,
+  foreignKeyNames: ReadonlyMap<string, string>,
 ) {
   const sqliteKey = model.fields.find((field) => isNullableSqliteKey(field, model, provider))
   const keyColumns = sqliteKey ? [sqliteKey.name] : model.primaryKey?.fields
@@ -827,14 +829,16 @@ function makeTableConstraints(
     // A relation of a model to itself reads its own columns from the table it is given.
     const target = f.type === model.name ? 'table' : resolveVarNameByType(f.type, models)
     const from = f.relationFromFields ?? []
-    const name = constraintName(
-      tableName,
-      from.map((c) => fieldColumn(model, c)),
-      'fkey',
-      provider,
-    )
+    const name =
+      foreignKeyNames.get(`${model.name}.${f.name}`) ??
+      constraintName(
+        tableName,
+        from.map((c) => fieldColumn(model, c)),
+        'fkey',
+        provider,
+      )
     const { onDelete, onUpdate } = referentialActions(f)
-    return `foreignKey({ name: '${name}', columns: [${from.map((c) => `table.${c}`).join(', ')}], foreignColumns: [${(f.relationToFields ?? []).map((c) => `${target}.${c}`).join(', ')}] }).onDelete('${PRISMA_ACTION_MAP[onDelete] ?? 'no action'}').onUpdate('${PRISMA_ACTION_MAP[onUpdate] ?? 'no action'}')`
+    return `foreignKey({ name: ${tsString(name)}, columns: [${from.map((c) => `table.${c}`).join(', ')}], foreignColumns: [${(f.relationToFields ?? []).map((c) => `${target}.${c}`).join(', ')}] }).onDelete('${PRISMA_ACTION_MAP[onDelete] ?? 'no action'}').onUpdate('${PRISMA_ACTION_MAP[onUpdate] ?? 'no action'}')`
   })
 
   const all = [pkLine, ...indexLines, ...fkLines].filter((l) => l !== null)
@@ -937,6 +941,8 @@ function columnMap(entries: readonly ColumnEntry[]) {
  *
  * @param views - The names of the schema's `view` blocks, which DMMF lists among the models.
  * @param whereOf - The condition of each partial index, which DMMF drops.
+ * @param foreignKeyNames - The name each foreign key is given with `@relation(map:)`, by
+ *   `Model.field`, which DMMF drops.
  */
 export function makeTable(
   model: DMMF.Model,
@@ -947,6 +953,7 @@ export function makeTable(
   indexes: readonly DMMF.Index[],
   views: ReadonlySet<string> = new Set(),
   whereOf: IndexWhere = () => undefined,
+  foreignKeyNames: ReadonlyMap<string, string> = new Map(),
 ) {
   const varName = resolveVarName(model)
   const tableName = resolveTableName(model)
@@ -984,6 +991,7 @@ export function makeTable(
     tableName,
     views,
     whereOf,
+    foreignKeyNames,
   )
   if (constraints === null) {
     return [...modelDoc, `export const ${varName} = ${tableFunc}('${tableName}', ${columns})`].join(

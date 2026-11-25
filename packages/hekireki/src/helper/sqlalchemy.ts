@@ -960,9 +960,8 @@ function foreignKeyArgs(
   field: DMMF.Field,
   associations: ReturnType<typeof getAssociations>,
   allModels: readonly DMMF.Model[],
-  tableName: string,
   columnName: string,
-  provider: string,
+  foreignKeyName: (relationField: string, columns: readonly string[]) => string,
 ) {
   const assoc = associations.belongsTo.find((a) => a.foreignKey === field.name)
   // A composite FK is expressed as a table-level ForeignKeyConstraint; a
@@ -974,8 +973,8 @@ function foreignKeyArgs(
   const targetField = targetModelObj?.fields.find((f) => f.name === assoc.references)
   const targetCol = targetField?.dbName ?? assoc.references
   const fkActions = referentialActionArgs(assoc.onDelete, assoc.onUpdate)
-  const fkName = constraintName(tableName, [columnName], 'fkey', provider)
-  return [`ForeignKey("${targetTable}.${targetCol}"${fkActions}, name="${fkName}")`]
+  const fkName = foreignKeyName(assoc.name, [columnName])
+  return [`ForeignKey("${targetTable}.${targetCol}"${fkActions}, name=${toPythonString(fkName)})`]
 }
 
 function referentialActionArgs(onDelete: string, onUpdate: string) {
@@ -1107,10 +1106,10 @@ function generateColumn(
   provider: string,
   model: DMMF.Model,
   isMapperKey: boolean,
+  foreignKeyName: (relationField: string, columns: readonly string[]) => string,
 ) {
   // The attribute is the field in Python's case; the column is Prisma's, named
   // positionally whenever the two differ.
-  const tableName = model.dbName ?? model.name
   const columnName = field.dbName ?? field.name
   const attrName = attributeName(model, field.name)
   const elemPythonType = field.kind === 'enum' ? 'str' : pythonTypeForNative(field)
@@ -1123,9 +1122,7 @@ function generateColumn(
     // An attribute renamed (`<name>_`, a numbered twin): pin the real column name positionally.
     ...(attrName === columnName ? [] : [`"${columnName}"`]),
     ...columnTypeArgs(field, enumMap, provider),
-    ...(isFk
-      ? foreignKeyArgs(field, associations, allModels, tableName, columnName, provider)
-      : []),
+    ...(isFk ? foreignKeyArgs(field, associations, allModels, columnName, foreignKeyName) : []),
     ...keyArgs(field, isPk, provider),
     // Prisma Migrate leaves a list's column nullable; the model reads it as a list all the same.
     ...(field.isList ? ['nullable=True'] : []),
@@ -1169,6 +1166,7 @@ function generateTableArgs(
   indexes: readonly SqlIndex[],
   provider: string,
   views: ReadonlySet<string>,
+  foreignKeyName: (relationField: string, columns: readonly string[]) => string,
 ) {
   // A view has no index, no foreign key and no table option: its SQL is written by hand.
   if (views.has(model.name)) return []
@@ -1212,8 +1210,8 @@ function generateTableArgs(
       )
       const { onDelete, onUpdate } = referentialActions(f)
       const actions = referentialActionArgs(onDelete, onUpdate)
-      const name = constraintName(tableName, localCols, 'fkey', provider)
-      return `ForeignKeyConstraint([${localCols.map((c) => `"${c}"`).join(', ')}], [${targetCols.join(', ')}]${actions}, name="${name}")`
+      const name = foreignKeyName(f.name, localCols)
+      return `ForeignKeyConstraint([${localCols.map((c) => `"${c}"`).join(', ')}], [${targetCols.join(', ')}]${actions}, name=${toPythonString(name)})`
     })
 
   // The options Prisma Migrate gives each table: MySQL's character set and collation, and
@@ -1492,6 +1490,7 @@ export function generateModelBody(
   }[],
   provider: string,
   views: ReadonlySet<string> = new Set(),
+  foreignKeyNames: ReadonlyMap<string, string> = new Map(),
 ) {
   const idField = model.fields.find((f) => f.isId)
   const compositePkFieldNames = new Set(model.primaryKey?.fields)
@@ -1508,6 +1507,11 @@ export function generateModelBody(
 
   const tableName = model.dbName ?? model.name
   const scalarFields = model.fields.filter((f) => f.kind !== 'object')
+  // A foreign key is named as its `@relation(map: "...")` says, and otherwise as Prisma Migrate
+  // names one, `<table>_<columns>_fkey`.
+  const foreignKeyName = (relationField: string, columns: readonly string[]) =>
+    foreignKeyNames.get(`${model.name}.${relationField}`) ??
+    constraintName(tableName, columns, 'fkey', provider)
 
   const isKeyless = !idField && !model.primaryKey
   const identityNames = new Set(identity)
@@ -1527,12 +1531,20 @@ export function generateModelBody(
         provider,
         model,
         isMapperKey,
+        foreignKeyName,
       ),
     )
     return lines
   })
 
-  const tableArgsLines = generateTableArgs(model, allModels, indexes, provider, views)
+  const tableArgsLines = generateTableArgs(
+    model,
+    allModels,
+    indexes,
+    provider,
+    views,
+    foreignKeyName,
+  )
   // A table with no key is mapped by its first unique: the mapper is told, the table is not.
   const mapperArgsLines = isKeyless
     ? [

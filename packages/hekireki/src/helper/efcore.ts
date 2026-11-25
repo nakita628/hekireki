@@ -32,7 +32,7 @@ import {
   sqlTimestamp,
 } from '../prisma/postgres.js'
 import type { IndexInfo } from '../prisma/postgres.js'
-import { prismaBlocks, viewNames } from '../prisma/schema-text.js'
+import { prismaBlocks, relationMaps, viewNames } from '../prisma/schema-text.js'
 
 // Generated C# names a framework type through a placeholder, `\0T|System.DateTime\0` in a type
 // position or `\0E|...\0` in an expression. Only once a whole file is assembled is it known which
@@ -1126,6 +1126,8 @@ type EfCorePlan = {
   readonly views: ReadonlySet<string>
   readonly indexesOf: (model: DMMF.Model) => readonly EfIndex[]
   readonly foreignKeys: readonly ForeignKey[]
+  /** The name `@relation(map: "...")` gives a foreign key, by `Model.field` of the dependent. */
+  readonly foreignKeyNames: ReadonlyMap<string, string>
   readonly manyToMany: readonly ManyToMany[]
 }
 
@@ -1403,6 +1405,8 @@ export function planEfCore(
     views: viewNames(blocks),
     indexesOf,
     foreignKeys: foreignKeys(datamodel.models, indexesOf),
+    // DMMF drops `@relation(map: "...")`, so the names it gives are read off the schema's text.
+    foreignKeyNames: relationMaps(blocks),
     manyToMany: manyToManyRelations(datamodel.models),
   }
   // The value generators and converters become classes of their own, so their names join the other
@@ -1693,17 +1697,20 @@ function relationConfig(plan: EfCorePlan, fk: ForeignKey) {
         )})`,
       ]
     : []
-  // Prisma names the constraint after the columns in the order `fields` lists them.
-  const constraint = prismaConstraintName(
-    [
-      tableName(fk.dependent),
-      ...(fk.navigation.relationFromFields ?? []).map((from) => {
-        const field = dependentFields.get(from)
-        return field ? columnName(field) : from
-      }),
-    ].join('_'),
-    '_fkey',
-  )
+  // `@relation(map: "...")` names the constraint; without it, Prisma names it after the columns in
+  // the order `fields` lists them.
+  const constraint =
+    plan.foreignKeyNames.get(`${fk.dependent.name}.${fk.navigation.name}`) ??
+    prismaConstraintName(
+      [
+        tableName(fk.dependent),
+        ...(fk.navigation.relationFromFields ?? []).map((from) => {
+          const field = dependentFields.get(from)
+          return field ? columnName(field) : from
+        }),
+      ].join('_'),
+      '_fkey',
+    )
   const calls = [
     ...principalKey,
     `.HasForeignKey${isOneToOne ? `<${modelType(names, fk.dependent)}>` : ''}(${keyLambda(
