@@ -1001,6 +1001,38 @@ function keyArgs(field: DMMF.Field, isPk: boolean, provider: string) {
   ]
 }
 
+// The name PostgreSQL gives the sequence of a serial column, `<table>_<column>_seq`: while the
+// two names are too long for its 63 characters, the longer one loses its last character.
+function serialSequenceName(table: string, column: string) {
+  const room = 63 - '__seq'.length
+  const tableLength = Math.max(Math.ceil(room / 2), room - column.length)
+  const columnLength = room - Math.min(table.length, tableLength)
+  return `${table.slice(0, tableLength)}_${column.slice(0, columnLength)}_seq`
+}
+
+// A column that is not the key but defaults to autoincrement() (a @unique one, which Prisma
+// allows; SQLite does not) is the database's to fill, so the ORM leaves it out of the INSERT and
+// reads it back. SQLAlchemy makes only a key SERIAL or AUTO_INCREMENT: on PostgreSQL the column
+// takes the next value of a sequence create_all() makes, as SERIAL's `DEFAULT nextval(...)`
+// does; CockroachDB's is Prisma's `DEFAULT unique_rowid()`. MySQL's AUTO_INCREMENT is left to
+// Prisma Migrate: the model only knows the database sets it.
+function autoincrementArgs(field: DMMF.Field, provider: string, table: string, column: string) {
+  if (!isAutoincrement(field) || provider === 'sqlite') return []
+  if (provider === 'mysql') return ['server_default=FetchedValue()']
+  if (provider === 'cockroachdb') return ['server_default=text("unique_rowid()")']
+  const sequence = toPythonString(serialSequenceName(table, column))
+  return [`server_default=Sequence(${sequence}, metadata=Base.metadata).next_value()`]
+}
+
+// What a model's non-key autoincrement() columns import, as autoincrementArgs writes them.
+function autoincrementSaImports(model: DMMF.Model, provider: string) {
+  const keys = new Set(model.primaryKey?.fields)
+  const fields = model.fields.filter((f) => !f.isId && !keys.has(f.name) && isAutoincrement(f))
+  if (fields.length === 0 || provider === 'sqlite') return []
+  if (provider === 'mysql') return ['FetchedValue']
+  return provider === 'cockroachdb' ? ['text'] : ['Sequence']
+}
+
 // The process's clock in UTC, as the part of it the column keeps.
 function utcNowExpr(field: DMMF.Field) {
   const nativeName = field.nativeType?.[0]
@@ -1107,6 +1139,7 @@ function generateColumn(
   model: DMMF.Model,
   isMapperKey: boolean,
   foreignKeyName: (relationField: string, columns: readonly string[]) => string,
+  isView: boolean,
 ) {
   // The attribute is the field in Python's case; the column is Prisma's, named
   // positionally whenever the two differ.
@@ -1127,6 +1160,11 @@ function generateColumn(
     // Prisma Migrate leaves a list's column nullable; the model reads it as a list all the same.
     ...(field.isList ? ['nullable=True'] : []),
     ...defaultArgs(field, enumMap, provider),
+    // A key's autoincrement() is keyArgs'. A view's columns are the query's: nothing of a table
+    // is made for them.
+    ...(isPk || isView
+      ? []
+      : autoincrementArgs(field, provider, model.dbName ?? model.name, columnName)),
     ...updatedAtArgs(field),
   ]
 
@@ -1532,6 +1570,7 @@ export function generateModelBody(
         model,
         isMapperKey,
         foreignKeyName,
+        views.has(model.name),
       ),
     )
     return lines
@@ -1701,6 +1740,7 @@ function modelSaImports(
     ...(keyOrderConstraint(model) === null ? [] : ['PrimaryKeyConstraint']),
     ...(modelIndexes(model, indexes).length > 0 ? ['Index'] : []),
     ...(readsLiteralColumn(model, indexes, provider) ? ['literal_column'] : []),
+    ...autoincrementSaImports(model, provider),
   ]
 }
 
