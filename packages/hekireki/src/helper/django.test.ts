@@ -3918,11 +3918,13 @@ model t {
             models.Index(fields=["slug"], name="t_slug_1234abcd"),
             models.Index(fields=["slug"], name="t_slug_1234abcd_like", opclasses=["varchar_pattern_ops"]),
             GinIndex(fields=["data"], name="t_data_idx", opclasses=["jsonb_path_ops"]),
-            models.Index(fields=["-id", "title"]),
-            models.Index(fields=["-title"], name="t_title_like_a_name_f_f278eeb2", opclasses=["text_pattern_ops"]),`)
+            models.Index(fields=["-title"], name="t_title_idx", opclasses=["text_pattern_ops"]),
+        ]
+        # The index "t_id_title_a_name_far_over_thirty" on ("id", "title") is left out: only some of its fields have an operator class,
+        # and Index.opclasses takes one per field, so it is left to a migration (e.g. RunSQL).`)
   })
 
-  it('does not take the name of the _like index Django makes, and says which class it leaves out', () => {
+  it('does not take the name of the _like index Django makes, nor one another index has, and leaves a mixed index out', () => {
     const code = opsDjango(`
 model t {
   id    Int    @id
@@ -3932,13 +3934,32 @@ model t {
 
   @@index([title(ops: raw("text_pattern_ops"))], map: "t_slug_779dc315_like")
   @@index([n, title(ops: raw("text_pattern_ops"))], map: "t_n_title")
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 `)
     expect(code).toContain(
       'models.Index(fields=["title"], name="t_title_idx", opclasses=["text_pattern_ops"]),',
     )
+    // Prisma's name for the Gin index is the one just made, so it takes the next free one.
     expect(code).toContain(
-      `        # The index on ("n", "title") is declared without the operator class of "title":`,
+      'GinIndex(fields=["title"], name="t_title_idx_2", opclasses=["gin_trgm_ops"]),',
+    )
+    expect(code).toContain(
+      `        # The index "t_n_title" on ("n", "title") is left out: only some of its fields have an operator class,`,
+    )
+  })
+
+  it('cuts a name Django refuses to 21 code points and a sha256 digest', () => {
+    const code = opsDjango(`
+model AVeryLongModelNameIndeed {
+  id    Int    @id
+  title String
+
+  @@index([title(ops: raw("text_pattern_ops"))])
+}
+`)
+    expect(code).toMatch(
+      /models\.Index\(fields=\["title"\], name="AVeryLongModelNameInd_[\da-f]{8}", opclasses=\["text_pattern_ops"\]\)/u,
     )
   })
 

@@ -1183,10 +1183,40 @@ function indexOpclasses(model: DMMF.Model, idx: DMMF.Index, provider: string) {
 function djangoIndexName(name: string) {
   // Django counts code points, and refuses only a leading underscore or digit.
   if (codePoints(name).length <= 30 && !/^[_\d]/u.test(name)) return name
-  const digest = createHash('md5').update(name).digest('hex').slice(0, 8)
+  // sha256, which a Node.js in FIPS mode still has (unlike MD5).
+  const digest = createHash('sha256').update(name).digest('hex').slice(0, 8)
   return `${codePoints(name.replace(/^[_\d]+/u, '') || 'idx')
     .slice(0, 21)
     .join('')}_${digest}`
+}
+
+// The name of an operator-class index whose own Django refuses, or that is the name Django gives its
+// own _like index (which is not taken again). Prisma's name for the index is preferred where Django
+// takes it as it is, so the name is one the database may have; the name made is kept clear of every
+// other index of the model, and taken.
+function madeIndexName(
+  dbName: string | null | undefined,
+  ownName: string,
+  likeNames: ReadonlyMap<string, string>,
+  taken: Set<string>,
+) {
+  const base = dbName === null || dbName === undefined || likeNames.has(dbName) ? ownName : dbName
+  const name = freeName(
+    djangoIndexName(ownName) === ownName ? ownName : djangoIndexName(base),
+    taken,
+  )
+  taken.add(name)
+  return name
+}
+
+// A name no other index of the model has: `_2`, `_3`, ... in place of its end, within Django's limit.
+function freeName(name: string, taken: ReadonlySet<string>, n = 2): string {
+  if (!taken.has(name)) return name
+  const suffix = `_${n}`
+  const next = `${codePoints(name)
+    .slice(0, 30 - suffix.length)
+    .join('')}${suffix}`
+  return taken.has(next) ? freeName(name, taken, n + 1) : next
 }
 
 function codePoints(text: string) {
@@ -1363,7 +1393,28 @@ function generateMetaLines(
     })
 
   const likeNames = likeIndexNames(model, allModels, indexes, provider)
-  const indexEntries = writtenIndexes(model, indexes, likeNames).map((idx) => {
+  // An index with only some fields on an operator class cannot be declared (indexOpclasses), and
+  // declared without the classes it may not even be created (an inet column has no default class
+  // for GiST): it is left out, and named in a comment.
+  const isMixed = (idx: DMMF.Index) =>
+    provider === 'postgresql' &&
+    idx.fields.some((f) => f.operatorClass !== undefined) &&
+    indexOpclasses(model, idx, provider) === null
+  const declaredIndexes = writtenIndexes(model, indexes, likeNames).filter((idx) => !isMixed(idx))
+  // The names the indexes keep as they are, which a name made for an operator-class index must not
+  // take again.
+  const takenNames = new Set(
+    declaredIndexes.flatMap((idx) =>
+      idx.dbName !== null &&
+      idx.dbName !== undefined &&
+      idx.dbName.length <= 30 &&
+      /^[a-zA-Z]/u.test(idx.dbName) &&
+      !likeNames.has(idx.dbName)
+        ? [idx.dbName]
+        : [],
+    ),
+  )
+  const indexEntries = declaredIndexes.map((idx) => {
     // Prisma records a descending index column as a sort order; Django spells
     // the same thing as a "-" prefix on the field name.
     const fieldNames = idx.fields
@@ -1394,40 +1445,42 @@ function generateMetaLines(
     if (opclasses === null) return `${ctor}(fields=[${fieldNames}]${name})`
     // An operator class (`ops:`, e.g. the varchar_pattern_ops twin Django makes for LIKE) needs a
     // name, so one Django refuses is made into one it takes.
-    // A name Django gives its own _like index is not taken again: the index is named after its own
-    // columns instead.
-    const ownName = constraintName(
-      tableName,
-      idx.fields.map((f) => columnRef(f.name)),
-      'idx',
-      provider,
-    )
     const opName = toPythonString(
       carriesName && idx.dbName
         ? idx.dbName
-        : djangoIndexName(
-            idx.dbName === null || idx.dbName === undefined || likeNames.has(idx.dbName)
-              ? ownName
-              : idx.dbName,
+        : madeIndexName(
+            idx.dbName,
+            constraintName(
+              tableName,
+              idx.fields.map((f) => columnRef(f.name)),
+              'idx',
+              provider,
+            ),
+            likeNames,
+            takenNames,
           ),
     )
     const list = opclasses.map((o) => toPythonString(o)).join(', ')
     return `${ctor}(fields=[${fieldNames}], name=${opName}, opclasses=[${list}])`
   })
 
-  // An index with only some fields on an operator class is written without it (indexOpclasses),
-  // and says which classes it leaves out.
-  const operatorClassComments = writtenIndexes(model, indexes, likeNames).flatMap((idx) => {
-    const dropped = idx.fields.filter((f) => f.operatorClass !== undefined)
-    return provider === 'postgresql' &&
-      dropped.length > 0 &&
-      indexOpclasses(model, idx, provider) === null
-      ? [
-          `        # The index on (${idx.fields.map((f) => quotedIdentifier(columnRef(f.name))).join(', ')}) is declared without the operator class of ${dropped.map((f) => quotedIdentifier(columnRef(f.name))).join(', ')}:`,
-          '        # Index.opclasses takes one per field, so it is left to a migration (e.g. RunSQL).',
-        ]
-      : []
-  })
+  const operatorClassComments = writtenIndexes(model, indexes, likeNames)
+    .filter(isMixed)
+    .flatMap((idx) => {
+      const name =
+        idx.dbName ??
+        constraintName(
+          tableName,
+          idx.fields.map((f) => columnRef(f.name)),
+          'idx',
+          provider,
+        )
+      const on = idx.fields.map((f) => quotedIdentifier(columnRef(f.name))).join(', ')
+      return [
+        `        # The index ${quotedIdentifier(name)} on (${on}) is left out: only some of its fields have an operator class,`,
+        '        # and Index.opclasses takes one per field, so it is left to a migration (e.g. RunSQL).',
+      ]
+    })
 
   const partialComments = (unique: boolean) =>
     partials
