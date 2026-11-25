@@ -3280,6 +3280,23 @@ ${models}`
     )
   }
 
+  // DMMF leaves isUnique off a @unique with a partial unique beside it, so the key of a model
+  // without an @id was lost and SQLAlchemy refused to map the class. (#287)
+  it('keys a model without an @id by a @unique that has a partial unique beside it', () => {
+    const code = partialCode(
+      'postgresql',
+      `
+model A {
+  email String  @unique
+  alive Boolean
+
+  @@unique([email], where: raw("alive"), map: "a_email_alive")
+}
+`,
+    )
+    expect(code).toContain('    __mapper_args__ = {"primary_key": [email]}')
+  })
+
   it('writes a Boolean as 1 or 0 and a name in brackets on SQL Server, which has no boolean literal', () => {
     expect(
       partialCode(

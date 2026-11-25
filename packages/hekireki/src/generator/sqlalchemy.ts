@@ -8,6 +8,7 @@ import {
   generateModelBody,
 } from '../helper/sqlalchemy.js'
 import type { SqlIndex } from '../helper/sqlalchemy.js'
+import { withPlainUniques } from '../prisma/partial-index.js'
 
 // An index with its condition, if it is partial.
 function withWhere(index: DMMF.Index, where: string | undefined): SqlIndex {
@@ -15,7 +16,7 @@ function withWhere(index: DMMF.Index, where: string | undefined): SqlIndex {
 }
 
 export function generateSingleFile(
-  models: readonly DMMF.Model[],
+  schemaModels: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
   indexes?: readonly DMMF.Index[],
   provider = 'postgresql',
@@ -23,6 +24,7 @@ export function generateSingleFile(
   partialWhere: (model: DMMF.Model, index: DMMF.Index) => string | undefined = () => undefined,
   foreignKeyNames: ReadonlyMap<string, string> = new Map(),
 ) {
+  const models = withPlainUniques(schemaModels, indexes ?? [], partialWhere)
   // Each partial index (the `partialIndexes` preview feature) with its condition, which DMMF drops.
   const modelByName = new Map(models.map((m) => [m.name, m]))
   const idx = (indexes ?? []).map((index) => {
