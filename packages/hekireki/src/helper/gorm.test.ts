@@ -195,9 +195,9 @@ describe('buildGormTags', () => {
         isUpdatedAt: false,
         hasDefaultValue: false,
       }) as any
-    // GORM rejoins what it splits at a `\;`, and reflect.StructTag unquotes a `\"` and a `\\`.
-    expect(buildGormTags(field('a;b'), false, false, [], [], 'postgresql')).toBe(
-      String.raw`${'`'}gorm:"column:a\\;b;not null" json:"a;b"${'`'}`,
+    // reflect.StructTag unquotes a `\"`, a `\\` and a `\n`, and the tag stays on one line.
+    expect(buildGormTags(field('a\nb'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:a\nb;not null" json:"a\nb"${'`'}`,
     )
     expect(buildGormTags(field('a"b'), false, false, [], [], 'postgresql')).toBe(
       String.raw`${'`'}gorm:"column:a\"b;not null" json:"a\"b"${'`'}`,
@@ -1028,13 +1028,35 @@ model Note {
   id    Int    @id
   label String @map("label\\\\")
   body  String @map("a\\\\b")
+  title String @map("a;index")
 }
 `,
       }),
     ).models
     expect(gormProblems(models, 'postgresql')).toStrictEqual([
       "model Note: the column of label ends in \\, which GORM's tag cannot hold; change its @map",
+      'model Note: the column of title holds a ";", at which GORM splits the tag; change its @map',
     ])
+  })
+
+  it('escapes an index name made from a mapped column for the struct tag', () => {
+    const code = gormFor(
+      `model Note {
+  id    Int    @id
+  quote String @unique @map("a\\"b")
+  path  String @map("a\\\\c")
+
+  @@index([path])
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain(
+      String.raw`${'`'}gorm:"column:a\"b;uniqueIndex:Note_a\"b_key;not null" json:"a\"b"${'`'}`,
+    )
+    expect(code).toContain(
+      String.raw`${'`'}gorm:"column:a\\c;index:Note_a\\c_idx;not null" json:"a\\c"${'`'}`,
+    )
   })
 
   it('types a native list as Prisma names it, and an Int list on CockroachDB as INT4', () => {

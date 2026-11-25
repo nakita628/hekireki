@@ -509,9 +509,8 @@ export function buildGormTags(
   ].filter((p) => p !== null)
 
   // encoding/json takes no name with a `"` or `\` and falls back to the field's, but the tag
-  // still has to end where it should.
-  const jsonName = columnName.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
-  return goTagLiteral(`gorm:"${parts.join(';')}" json:"${jsonName}"`)
+  // still has to end where it should. A name with a `;` is refused by gormProblems.
+  return goTagLiteral(`gorm:"${parts.join(';')}" json:"${escapeTagValue(columnName)}"`)
 }
 
 // A struct tag as Go source: a raw string, unless the tag holds a backtick (a MySQL identifier in
@@ -635,7 +634,7 @@ function collectCompositeIndexTags(
       const named = mappedUniques.get(f.name)
       return [
         f.name,
-        `uniqueIndex:${named ?? constraintName(tableName, [f.dbName ?? f.name], 'key', provider ?? '')}${sortSetting(plainUniqueOf.get(f.name), f.name)}`,
+        `uniqueIndex:${escapeTagValue(named ?? constraintName(tableName, [f.dbName ?? f.name], 'key', provider ?? ''))}${sortSetting(plainUniqueOf.get(f.name), f.name)}`,
       ]
     })
 
@@ -648,7 +647,7 @@ function collectCompositeIndexTags(
       const idx = plainUniqueOf.get(fields.join(','))
       return fields.map((f): [string, string] => [
         f,
-        `uniqueIndex:${idxName}${prioritySetting(fields, f)}${sortSetting(idx, f)}`,
+        `uniqueIndex:${escapeTagValue(idxName)}${prioritySetting(fields, f)}${sortSetting(idx, f)}`,
       ])
     })
 
@@ -686,7 +685,7 @@ function collectCompositeIndexTags(
     const fieldNames = idx.fields.map((f) => f.name)
     return fieldNames.map((f, i): [string, string] => [
       f,
-      `${setting}:${name}${typeSetting}${expressions[i] ?? ''}${prioritySetting(fieldNames, f)}${sortSetting(idx, f)}${whereSetting}`,
+      `${setting}:${escapeTagValue(name)}${typeSetting}${expressions[i] ?? ''}${prioritySetting(fieldNames, f)}${sortSetting(idx, f)}${whereSetting}`,
     ])
   }
 
@@ -1584,8 +1583,10 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
 }
 
 /**
- * What keeps the schema from becoming models that compile: a model whose Go name is that of a
- * type or function written beside the models, where the schema needs it.
+ * What keeps the schema from becoming models that compile and read as it says: a model whose Go
+ * name is that of a type or function written beside the models, where the schema needs it, and a
+ * column whose name the struct tag cannot hold (a `;`, or a `\` at its end). Index names made
+ * from a column are escaped for the tag (escapeTagValue), so a `"` or `\` in one is held.
  */
 export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
   const held = new Map<string, string>([
@@ -1601,14 +1602,23 @@ export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
   return models.flatMap((model) => {
     const name = goModelName(model.name)
     const holds = held.get(name)
-    // GORM rejoins a tag setting that ends in `\` with the next one, so a column name ending in
-    // one swallows the settings after it, whatever the escaping.
-    const columns = model.fields
-      .filter((field) => field.kind !== 'object' && (field.dbName ?? field.name).endsWith('\\'))
-      .map(
-        (field) =>
-          `model ${model.name}: the column of ${field.name} ends in \\, which GORM's tag cannot hold; change its @map`,
-      )
+    // GORM reads a field's indexes by splitting its whole tag at every `;`, with no escape, and
+    // rejoins a tag setting that ends in `\` with the next one, so neither a column name holding a
+    // `;` nor one ending in `\` can be written into the tag.
+    const columns = model.fields.flatMap((field) => {
+      const column = field.dbName ?? field.name
+      if (field.kind === 'object') return []
+      if (column.includes(';')) {
+        return [
+          `model ${model.name}: the column of ${field.name} holds a ";", at which GORM splits the tag; change its @map`,
+        ]
+      }
+      return column.endsWith('\\')
+        ? [
+            `model ${model.name}: the column of ${field.name} ends in \\, which GORM's tag cannot hold; change its @map`,
+          ]
+        : []
+    })
     return [
       ...(holds === undefined
         ? []
