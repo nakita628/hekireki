@@ -962,6 +962,24 @@ model Counter {
       '\tMetricID int    `gorm:"column:metric_id;autoIncrement;uniqueIndex:Counter_metric_id_key;size:32;not null" json:"metric_id"`',
     )
   })
+  // MySQL allows one AUTO_INCREMENT column a table: the key, which GORM would make one too, says it
+  // is not.
+  it('keeps an Int key beside it from auto-incrementing on MySQL', () => {
+    const code = gormFor(
+      `
+model Counter {
+  id  Int @id
+  seq Int @unique @default(autoincrement())
+}
+`,
+      'mysql',
+    )
+    expect(code).toContain('`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"`')
+    expect(code).toContain(
+      '`gorm:"column:seq;autoIncrement;uniqueIndex:Counter_seq_key;size:32;not null" json:"seq"`',
+    )
+  })
+
   // GORM writes a `type:` it does not know as given, so a native integer type takes its serial type.
   it('gives an autoincrement @db.SmallInt column its serial type on PostgreSQL', () => {
     const code = gormFor(
