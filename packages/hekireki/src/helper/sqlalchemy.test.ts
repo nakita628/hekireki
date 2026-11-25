@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import { generateSingleFile } from '../generator/sqlalchemy.js'
 import { partialIndexWhere } from '../prisma/partial-index.js'
-import { prismaBlocks } from '../prisma/schema-text.js'
+import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import { prismaTypeToPythonType, prismaTypeToSQLAlchemyType, pythonAttrName } from './sqlalchemy.js'
 
 /** The datamodel of a schema the test expects Prisma to parse. */
@@ -3599,5 +3599,73 @@ model Note {
         PrimaryKeyConstraint("number", "docId"),
     )
 `)
+  })
+})
+
+describe('foreign key names', () => {
+  function fkCode(models: string) {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+${models}`
+    const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
+    return generateSingleFile(
+      result.models,
+      result.enums,
+      result.indexes,
+      'postgresql',
+      new Set(),
+      () => undefined,
+      relationMaps(prismaBlocks(schema)),
+    )
+  }
+
+  it('names a single-column foreign key as its @relation(map:) says', () => {
+    expect(
+      fkCode(`model auth_group {
+  id          Int                      @id
+  permissions auth_group_permissions[]
+}
+model auth_group_permissions {
+  id       Int        @id
+  group_id Int
+  group    auth_group @relation(fields: [group_id], references: [id], map: "auth_group_permissions_group_id_b120cbf9_fk_auth_group_id")
+}`),
+    ).toContain(
+      'group_id: Mapped[int] = mapped_column(ForeignKey("auth_group.id", ondelete="RESTRICT", onupdate="CASCADE", name="auth_group_permissions_group_id_b120cbf9_fk_auth_group_id"))',
+    )
+  })
+
+  it('names a composite foreign key as its @relation(map:) says', () => {
+    expect(
+      fkCode(`model Org {
+  region String
+  code   String
+  teams  Team[]
+  @@id([region, code])
+}
+model Team {
+  id     Int    @id
+  region String
+  code   String
+  org    Org    @relation(fields: [region, code], references: [region, code], map: "team_org_fk")
+}`),
+    ).toContain(
+      'ForeignKeyConstraint(["region", "code"], ["Org.region", "Org.code"], ondelete="RESTRICT", onupdate="CASCADE", name="team_org_fk"),',
+    )
+  })
+
+  it('names a foreign key with no map: as Prisma Migrate does', () => {
+    expect(
+      fkCode(`model auth_group {
+  id          Int                      @id
+  permissions auth_group_permissions[]
+}
+model auth_group_permissions {
+  id       Int        @id
+  group_id Int
+  group    auth_group @relation(fields: [group_id], references: [id])
+}`),
+    ).toContain('name="auth_group_permissions_group_id_fkey"')
   })
 })

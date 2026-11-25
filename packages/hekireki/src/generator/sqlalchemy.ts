@@ -21,6 +21,7 @@ export function generateSingleFile(
   provider = 'postgresql',
   views: ReadonlySet<string> = new Set(),
   partialWhere: (model: DMMF.Model, index: DMMF.Index) => string | undefined = () => undefined,
+  foreignKeyNames: ReadonlyMap<string, string> = new Map(),
 ) {
   // Each partial index (the `partialIndexes` preview feature) with its condition, which DMMF drops.
   const modelByName = new Map(models.map((m) => [m.name, m]))
@@ -35,7 +36,9 @@ export function generateSingleFile(
   const m2mLines = m2mTables.flatMap((t) => ['', generateAssociationTable(t, provider)])
 
   const modelBodies = models
-    .map((model) => generateModelBody(model, models, enums, idx, m2mTables, provider, views))
+    .map((model) =>
+      generateModelBody(model, models, enums, idx, m2mTables, provider, views, foreignKeyNames),
+    )
     .filter((body) => body !== null)
 
   return [
