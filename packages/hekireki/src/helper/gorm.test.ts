@@ -139,6 +139,48 @@ describe('buildGormTags', () => {
     )
   })
 
+  it('writes a dbgenerated() expression that spans lines on one line Go can read', () => {
+    const field = (expression: string) =>
+      ({
+        name: 'classification',
+        kind: 'scalar' as const,
+        type: 'String',
+        isRequired: false,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'dbgenerated', args: [expression] },
+      }) as any
+    // The line breaks are written \n, which reflect.StructTag gives back as they were.
+    expect(
+      buildGormTags(
+        field(
+          "\nCASE\n    WHEN (kind = 'Loan') THEN 'liability'::text\n    ELSE 'asset'::text\nEND",
+        ),
+        false,
+        false,
+        [],
+        [],
+        'postgresql',
+      ),
+    ).toBe(
+      String.raw`${'`'}gorm:"column:classification;default:\nCASE\n    WHEN (kind = 'Loan') THEN 'liability'::text\n    ELSE 'asset'::text\nEND" json:"classification"${'`'}`,
+    )
+    // A `;`, a `"`, a tab and a `--` comment's line end are escaped for the tag.
+    expect(
+      buildGormTags(field('concat(\'a;\',\t"x", -- why\n 0)'), false, false, [], [], 'postgresql'),
+    ).toBe(
+      String.raw`${'`'}gorm:"column:classification;default:concat('a\\;',\t\"x\", -- why\n 0)" json:"classification"${'`'}`,
+    )
+    // A backtick (MySQL quotes an identifier with it) would end a raw string, so the tag is an
+    // interpreted string literal.
+    expect(buildGormTags(field('(`a` + 1)'), false, false, [], [], 'mysql')).toBe(
+      String.raw`"gorm:\"column:classification;type:varchar(191);default:(${'`'}a${'`'} + 1)\" json:\"classification\""`,
+    )
+  })
+
   it('generates primaryKey;autoIncrement for autoincrement', () => {
     const field = {
       name: 'id',
