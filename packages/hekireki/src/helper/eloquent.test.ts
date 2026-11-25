@@ -1295,7 +1295,13 @@ class Counter extends Model
 }`)
   })
 
-  it('keeps incrementing false for a text key the database makes, which may read as a number', () => {
+  // PostgresProcessor::processInsertGetId() makes a returned key that reads as a number an
+  // integer ('00000042' → 42): a text key is read back by the model's own insertAndSetId().
+  it.each([
+    ["lpad(nextval('ticket_seq')::text, 8, '0')"],
+    ['gen_random_uuid()'],
+    ["'w-' || gen_random_uuid()::text"],
+  ])('reads back a text key the database makes (%s) without the integer cast', (expression) => {
     const ticket = makeModel({
       name: 'Ticket',
       fields: [
@@ -1304,17 +1310,16 @@ class Counter extends Model
           type: 'String',
           isId: true,
           hasDefaultValue: true,
-          default: { name: 'dbgenerated', args: ["lpad(nextval('ticket_seq')::text, 8, '0')"] },
+          default: { name: 'dbgenerated', args: [expression] },
         }),
       ],
     })
 
-    expect(
-      eloquentModels([ticket], 'App\\Models', undefined, undefined, { provider: 'postgresql' }),
-    ).toBe(`<?php
+    const expected = `<?php
 
 namespace App\\Models;
 
+use Illuminate\\Database\\Eloquent\\Builder;
 use Illuminate\\Database\\Eloquent\\Model;
 
 class Ticket extends Model
@@ -1323,14 +1328,39 @@ class Ticket extends Model
 
     protected $keyType = 'string';
 
-    public $incrementing = false;
-
     public $timestamps = false;
 
     protected $fillable = [
         'id',
     ];
-}`)
+
+    protected function insertAndSetId(Builder \$query, \$attributes)
+    {
+        \$base = \$query->getQuery();
+        \$base->applyBeforeQueryCallbacks();
+        \$connection = \$base->getConnection();
+        \$connection->recordsHaveBeenModified();
+        \$keyName = \$this->getKeyName();
+        \$row = \$connection->selectFromWriteConnection(
+            \$base->getGrammar()->compileInsertGetId(\$base, \$attributes, \$keyName),
+            \$base->cleanBindings(\$attributes),
+        )[0];
+        \$this->setAttribute(\$keyName, \$row->{\$keyName});
+    }
+}`
+    expect(
+      eloquentModels([ticket], 'App\\Models', undefined, undefined, { provider: 'postgresql' }),
+    ).toBe(expected)
+    expect(
+      eloquentModels([ticket], 'App\\Models', undefined, undefined, { provider: 'cockroachdb' }),
+    ).toBe(expected)
+    // MySQL, SQLite and SQL Server have no `returning`: the key stays the caller's.
+    expect(
+      eloquentModels([ticket], 'App\\Models', undefined, undefined, { provider: 'mysql' }),
+    ).toContain('    public $incrementing = false;\n')
+    expect(
+      eloquentModels([ticket], 'App\\Models', undefined, undefined, { provider: 'mysql' }),
+    ).not.toContain('insertAndSetId')
   })
 
   it('keeps incrementing false for a non-autoincrement Int primary key', () => {

@@ -20,6 +20,7 @@ const MODEL = 'Illuminate\\Database\\Eloquent\\Model'
 const RELATIONS = 'Illuminate\\Database\\Eloquent\\Relations\\'
 const CONCERNS = 'Illuminate\\Database\\Eloquent\\Concerns\\'
 const STR = 'Illuminate\\Support\\Str'
+const BUILDER = 'Illuminate\\Database\\Eloquent\\Builder'
 
 // A PHP single-quoted string: a backslash and a quote are the only characters it escapes.
 function phpString(value: string) {
@@ -1242,6 +1243,39 @@ function isReturnedKey(idField: DMMF.Field | undefined, provider: string | undef
   )
 }
 
+// A text key the database makes (`dbgenerated("'w-' || gen_random_uuid()::text")`) is returned
+// by the pgsql insert as well, but the processor makes what comes back an integer where it reads
+// as one (`'00000042'` → `42`): the model reads it back itself, as insertGetId does without that
+// cast (insertAndSetIdMethod).
+function isTextReturnedKey(idField: DMMF.Field | undefined, provider: string | undefined) {
+  return (
+    idField !== undefined &&
+    (provider === 'postgresql' || provider === 'cockroachdb') &&
+    functionDefault(idField)?.name === 'dbgenerated' &&
+    idField.type === 'String' &&
+    idField.nativeType?.[0] !== 'Uuid'
+  )
+}
+
+// Query\Builder::insertGetId without PostgresProcessor's integer cast of the key it returns.
+function insertAndSetIdMethod(ref: Ref) {
+  return [
+    `    protected function insertAndSetId(${ref(BUILDER)} $query, $attributes)`,
+    '    {',
+    '        $base = $query->getQuery();',
+    '        $base->applyBeforeQueryCallbacks();',
+    '        $connection = $base->getConnection();',
+    '        $connection->recordsHaveBeenModified();',
+    '        $keyName = $this->getKeyName();',
+    '        $row = $connection->selectFromWriteConnection(',
+    '            $base->getGrammar()->compileInsertGetId($base, $attributes, $keyName),',
+    '            $base->cleanBindings($attributes),',
+    '        )[0];',
+    '        $this->setAttribute($keyName, $row->{$keyName});',
+    '    }',
+  ]
+}
+
 // A timestamp's column constant: null where the model has only the other timestamp, the column
 // where it is not Laravel's own name.
 function timestampConst(
@@ -1345,6 +1379,7 @@ type ModelKeyInfo = {
   readonly pkUuidTrait: string | null
   readonly isAutoincrement: boolean
   readonly isReturned: boolean
+  readonly isTextReturned: boolean
   readonly compositeColumns: readonly string[]
 }
 
@@ -1355,7 +1390,9 @@ function keyPropertyBlocks(key: ModelKeyInfo) {
       : []),
     ...(key.compositeColumns.length > 0 ? [['    protected $primaryKey = null;']] : []),
     ...(key.idField?.type === 'String' ? [["    protected $keyType = 'string';"]] : []),
-    ...(key.isAutoincrement || key.isReturned ? [] : [['    public $incrementing = false;']]),
+    ...(key.isAutoincrement || key.isReturned || key.isTextReturned
+      ? []
+      : [['    public $incrementing = false;']]),
   ]
 }
 
@@ -1542,9 +1579,11 @@ function classImports(
   associations: EloquentAssociations,
   pkUuidTrait: string | null,
   makesIds: boolean,
+  readsKey: boolean,
   ref: Ref,
 ) {
   return [
+    ...(readsKey ? [BUILDER] : []),
     ...(pkUuidTrait !== null ? [`${CONCERNS}${pkUuidTrait}`] : []),
     MODEL,
     ...(associations.belongsTo.length > 0 ? [`${RELATIONS}BelongsTo`] : []),
@@ -1599,6 +1638,7 @@ function eloquentModelCode(model: DMMF.Model, ctx: EloquentContext) {
     pkUuidTrait,
     isAutoincrement: isAutoincrementKey(idField),
     isReturned: isReturnedKey(idField, ctx.provider),
+    isTextReturned: isTextReturnedKey(idField, ctx.provider),
     compositeColumns: idField === undefined ? modelKeyOf.columns : [],
   }
 
@@ -1628,6 +1668,7 @@ function eloquentModelCode(model: DMMF.Model, ctx: EloquentContext) {
     ...(insertLines.length > 0 ? [saveMethod(insertLines)] : []),
     ...(extraUpdated.length > 0 ? [timestampsMethod(extraUpdated)] : []),
     ...(pkUuidTrait === 'HasUlids' ? [ulidMethod(ref)] : []),
+    ...(key.isTextReturned ? [insertAndSetIdMethod(ref)] : []),
     ...(key.compositeColumns.length > 0 ? COMPOSITE_KEY_METHODS : []),
     ...relationMethods(associations, relationDoc, ref),
   ]
@@ -1643,7 +1684,7 @@ function eloquentModelCode(model: DMMF.Model, ctx: EloquentContext) {
     '',
     `namespace ${ctx.namespace};`,
     '',
-    ...classImports(associations, pkUuidTrait, madeIds.length > 0, ref).map(
+    ...classImports(associations, pkUuidTrait, madeIds.length > 0, key.isTextReturned, ref).map(
       (fqcn) => `use ${fqcn};`,
     ),
     '',
