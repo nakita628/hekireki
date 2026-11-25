@@ -2504,6 +2504,36 @@ class Row(Base):
 `)
   })
 
+  it('makes a MySQL Float a DOUBLE, as Prisma does, and keeps a @db.Float a FLOAT', () => {
+    const models = [
+      makeModel('t', [
+        makeField({ name: 'id', type: 'Int', isId: true }),
+        makeField({ name: 'amount', type: 'Float' }),
+        makeField({ name: 'ratio', type: 'Float', nativeType: ['Float', []] }),
+      ]),
+    ]
+
+    expect(generateSingleFile(models, [], [], 'mysql')).toBe(`from sqlalchemy import Double, Float
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    type_annotation_map = {float: Double}
+
+
+class T(Base):
+    __tablename__ = "t"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    amount: Mapped[float]
+    ratio: Mapped[float] = mapped_column(Float)
+
+    __table_args__ = (
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
+    )
+`)
+  })
+
   it('gives MySQL DATETIME its precision and undoes the session zone on a TIMESTAMP', () => {
     const models = [
       makeModel('Row', [
