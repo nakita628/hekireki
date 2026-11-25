@@ -54,7 +54,8 @@ Then each thing the schema promises, as Ecto keeps it:
   member, a foreign key. A default the database fills from its clock is read back.
 - **Keys.** An `autoincrement()` key is counted up by SQLite, a `uuid()` key and column are made by
   Ecto, a `cuid()` key has to be given (Ecto has no cuid, and the NOT NULL column refuses a row
-  without one), and a key named `number` stored as `order_number` is `:id` with a `source:`.
+  without one), `Repo.insert_all` fills no `uuid()` key, so its rows bring their own, and a key
+  named `number` stored as `order_number` is `:id` with a `source:`.
 - **Names.** `@@map` is the table, `@map` the column; `__meta__` is a column only, under the field
   `meta`; `type`, `end`, `do`, `fn`, `when`, `schema`, `changeset`, `rescue` and `in` are plain
   columns, read, written and queried.

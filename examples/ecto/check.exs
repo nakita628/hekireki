@@ -199,6 +199,31 @@ check("a cuid() key is Prisma's to make: Ecto has to be given one", fn ->
   reasons([refused, expect(Repo.get!(Tag, tag.id).name, "keyed", "Tag by its given id")])
 end)
 
+# Ecto fills a key in insert_all only when it is an :id or :binary_id key the adapter makes; a
+# uuid() key is a :string, as in Prisma Client, so the rows bring their own id, as they do the
+# uuid() column.
+check("Repo.insert_all fills no uuid() key: its rows bring their own", fn ->
+  account = account!.("insert-all")
+
+  refused =
+    try do
+      Repo.insert_all(Wishlist, [%{account_id: account.id, share_token: Ecto.UUID.generate()}])
+      "insert_all saved a Wishlist without an id"
+    rescue
+      error in Exqlite.Error -> if error.message =~ "NOT NULL", do: nil, else: error.message
+    end
+
+  id = Ecto.UUID.generate()
+  token = Ecto.UUID.generate()
+  {count, _} = Repo.insert_all(Wishlist, [%{id: id, share_token: token, account_id: account.id}])
+
+  reasons([
+    refused,
+    expect(count, 1, "rows insert_all saved"),
+    expect(Repo.get!(Wishlist, id).share_token, token, "Wishlist by the id insert_all was given")
+  ])
+end)
+
 # --- Names ------------------------------------------------------------------------------------
 
 check("@@map and @map name the tables and columns, the schemas keep Elixir's names", fn ->
