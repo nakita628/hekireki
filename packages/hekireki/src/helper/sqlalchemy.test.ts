@@ -3385,9 +3385,7 @@ ${models}`
   @@index([a, b(sort: Desc)], map: "odd\\"idx")
 }`,
     )
-    expect(code).toContain(
-      'Index("odd\\"idx", "a\\"b", literal_column("\\"c\\\\d\\"").desc()),',
-    )
+    expect(code).toContain('Index("odd\\"idx", "a\\"b", literal_column("\\"c\\\\d\\"").desc()),')
   })
 
   it('writes a descending column in double quotes on PostgreSQL', () => {
