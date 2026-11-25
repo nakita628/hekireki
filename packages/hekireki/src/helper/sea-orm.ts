@@ -571,6 +571,22 @@ function columnTypePart(columnType: string) {
   return `column_type = "${columnType.replaceAll('"', '\\"')}"`
 }
 
+// The serial type of an autoincrement column sea-orm does not make auto_increment itself: one off
+// the key (a `@unique` one) or in a composite key. sea-orm's `auto_increment` is one flag of the
+// entity's primary key, which `create_table_from_entity` gives only a single key column, so
+// PostgreSQL's column is a custom `serial` (`bigserial` for a BigInt, `smallserial` for a
+// `@db.SmallInt`), as Prisma Migrate creates it. A MySQL or CockroachDB column keeps its type.
+function serialColumnType(
+  field: DMMF.Field,
+  isPk: boolean,
+  isCompositePk: boolean,
+  provider: string | undefined,
+) {
+  if (provider !== 'postgresql' || (isPk && !isCompositePk) || !isAutoincrement(field)) return null
+  if (field.type === 'BigInt') return 'custom("bigserial")'
+  return field.nativeType?.[0] === 'SmallInt' ? 'custom("smallserial")' : 'custom("serial")'
+}
+
 function columnAttributeParts(
   field: DMMF.Field,
   isPk: boolean,
@@ -589,7 +605,9 @@ function columnAttributeParts(
     columnParts.push(`column_name = "${columnName}"`)
   }
 
-  const colType = resolveSeaOrmColumnType(field, provider)
+  const colType =
+    serialColumnType(field, isPk, isCompositePk, provider) ??
+    resolveSeaOrmColumnType(field, provider)
   if (colType !== null) {
     columnParts.push(columnTypePart(colType))
   }
