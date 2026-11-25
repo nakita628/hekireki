@@ -3779,8 +3779,9 @@ model T {
                 .HasColumnName("raw");`)
   })
 
-  // MySQL indexes a TEXT or BLOB column only by a prefix, which the context does not give.
-  it('leaves an indexed MySQL TEXT or BLOB column to Pomelo', () => {
+  // MySQL indexes a TEXT or BLOB column, and a column given a length:, by a prefix of it, which
+  // Pomelo's HasPrefixLength writes: 0 for a whole column, none where the length covers it.
+  it('writes a MySQL index prefix with HasPrefixLength, and keeps the TEXT and BLOB store types', () => {
     const { plan } = fixture(
       `
 datasource db {
@@ -3788,21 +3789,98 @@ datasource db {
 }
 
 model T {
-  id   Int    @id
-  body String @db.Text
-  lt   String @db.LongText
-  raw  Bytes
+  id    Int    @id
+  title String
+  body  String @db.Text
+  lt    String @db.LongText
+  raw   Bytes
+  uq    String @unique(length: 50) @db.Text
+  whole String @db.VarChar(40)
 
   @@index([body(length: 100)])
+  @@index([title, body(length: 100)])
+  @@index([title(length: 10, sort: Desc)])
   @@index([lt(length: 50), raw(length: 8)])
+  @@index([whole(length: 40)])
+}
+
+model K {
+  code String @id(length: 10) @db.Text
+}
+
+model C {
+  a String @db.Text
+  b Int
+
+  @@id([a(length: 20), b])
+}
+
+model P {
+  id   Int    @id
+  slug String @db.Text
+  kids Kid[]
+
+  @@unique([slug(length: 30)])
+}
+
+model Kid {
+  id   Int    @id
+  slug String @db.Text
+  p    P      @relation(fields: [slug], references: [slug])
 }
 `,
       { ...DEFAULT_OPTIONS, provider: 'mysql' },
     )
-    expect(contextFile(plan).code)
-      .toContain(`            entity.Property(e => e.Body).HasColumnName("body");
-            entity.Property(e => e.Lt).HasColumnName("lt");
-            entity.Property(e => e.Raw).HasColumnName("raw");`)
+    const code = contextFile(plan).code
+    expect(code).toContain(`            entity.HasIndex(e => e.Uq, "T_uq_key")
+                .IsUnique()
+                .HasPrefixLength(50);
+
+            entity.HasIndex(e => e.Body, "T_body_idx").HasPrefixLength(100);
+
+            entity.HasIndex(e => new { e.Title, e.Body }, "T_title_body_idx").HasPrefixLength(0, 100);
+
+            entity.HasIndex(e => e.Title, "T_title_idx")
+                .IsDescending(true)
+                .HasPrefixLength(10);
+
+            entity.HasIndex(e => new { e.Lt, e.Raw }, "T_lt_raw_idx").HasPrefixLength(50, 8);
+
+            entity.HasIndex(e => e.Whole, "T_whole_idx");`)
+    expect(code).toContain(`            entity.Property(e => e.Body)
+                .HasColumnType("text")
+                .HasColumnName("body");
+            entity.Property(e => e.Lt)
+                .HasColumnType("longtext")
+                .HasColumnName("lt");
+            entity.Property(e => e.Raw)
+                .HasColumnType("longblob")
+                .HasColumnName("raw");`)
+    expect(code).toContain(`            entity.HasKey(e => e.Code)
+                .HasName("K_pkey")
+                .HasPrefixLength(10);`)
+    expect(code).toContain(`            entity.HasKey(e => new { e.A, e.B })
+                .HasName("C_pkey")
+                .HasPrefixLength(20, 0);`)
+    expect(code).toContain(`            entity.HasAlternateKey(e => e.Slug)
+                .HasName("P_slug_key")
+                .HasPrefixLength(30);`)
+  })
+
+  it('writes no prefix on PostgreSQL, which indexes a whole column', () => {
+    const { plan } = fixture(`
+datasource db {
+  provider = "postgresql"
+}
+
+model T {
+  id   Int    @id
+  body String
+
+  @@index([body])
+}
+`)
+    expect(contextFile(plan).code).not.toContain('HasPrefixLength')
   })
 
   // MySQL refuses DEFAULT CURRENT_TIMESTAMP on a DATETIME(3): "Invalid default value". (#196)

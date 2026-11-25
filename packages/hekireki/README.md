@@ -139,6 +139,13 @@ API of Npgsql's own plugins, which Npgsql marks experimental (`NPG9001`; checked
 applied. `@db.Decimal(p, s)` with `s` up to 28 needs none of this. A Prisma `view` is mapped with
 `ToView`, so `EnsureCreated()` and migrations leave it alone.
 
+On MySQL, `hekireki-efcore` writes an index's `length:` (on `@@index`, `@unique`, `@@unique` and
+`@id`) with `HasPrefixLength`, the API of Pomelo.EntityFrameworkCore.MySql and of its EF Core 10+
+fork Microting.EntityFrameworkCore.MySql, and gives a TEXT or BLOB column its store type in an index
+too. With Oracle's MySql.EntityFrameworkCore, add `global using MySql.EntityFrameworkCore.Extensions;`
+to compile, and create those tables with Prisma Migrate, since that provider leaves the prefix out of
+its DDL. Before 0.54 such a column was left as `varchar(255)` or `varbinary(3072)` in an index.
+
 A Prisma `view` is the database's own, which Prisma Migrate never creates. `hekireki-django`
 marks its model `managed = False` and a `ForeignKey` to or from it `db_constraint=False` (one from it also `on_delete=DO_NOTHING`), so `migrate`
 leaves it alone. GORM and SeaORM have no way for a model to say it is a view: the struct or entity
