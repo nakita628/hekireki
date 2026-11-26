@@ -1106,6 +1106,13 @@ describe('generateGormModels integer key with no autoincrement()', () => {
 
   // The default: tag leaves a zero key out as well; auto-incrementing too, AutoMigrate would write
   // `bigserial DEFAULT (1000 + 1)`, which PostgreSQL refuses (multiple default values).
+  // The default: tag leaves a zero key to the column's DEFAULT, which Prisma Migrate writes.
+  it('keeps a literal default on an integer key beside autoIncrement:false', () => {
+    expect(
+      gormFor('model Slot {\n  id Int @id @default(5)\n}\n', 'postgresql'),
+    ).toContain('`gorm:"column:id;primaryKey;autoIncrement:false;size:32;default:5" json:"id"`')
+  })
+
   // With no expression there is no default: tag, and GORM has to leave a zero key out itself.
   it('leaves a bare dbgenerated() key to GORM', () => {
     expect(

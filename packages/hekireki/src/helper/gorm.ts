@@ -336,11 +336,15 @@ function gormDefault(
     field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
   // Prisma Migrate writes now() as DEFAULT CURRENT_TIMESTAMP; the hook fills the value all the same.
   const nowDefault = isNowDefault && isPostgresFamily(provider) ? 'CURRENT_TIMESTAMP' : null
+  // A single integer key's literal default is kept: the key says autoIncrement:false
+  // (isImplicitAutoIncrement), and the default: tag is what leaves a zero one to the database.
+  const isIntegerLiteralKey =
+    isPk && ['Int', 'BigInt'].includes(field.type) && !isFunctionDefault(field.default)
   const value =
     dbGeneratedDefault(field) ??
     dateTimeDefault(field, provider) ??
     nowDefault ??
-    ((!isPk || isCompositePk) && !isNowDefault && field.isUpdatedAt !== true
+    ((!isPk || isCompositePk || isIntegerLiteralKey) && !isNowDefault && field.isUpdatedAt !== true
       ? (enumMappedDefault(field, enums) ?? formatGoDefault(field.default, field.type, field.kind))
       : null)
   return value !== null && isMoney(field, provider) ? moneyDefault(value) : value
