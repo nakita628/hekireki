@@ -68,8 +68,6 @@ describe('djangoAttrName', () => {
   })
 })
 
-// The field every zoneless DateTime column is declared with, as the generator
-// writes it once per file.
 // What a field class that can make Prisma's column declares, on PostgreSQL.
 const COLUMN_TYPE_METHODS = `    def __init__(self, *args: Any, db_column_type: str | None = None, **kwargs: Any) -> None:
         self.db_column_type = db_column_type
@@ -92,8 +90,18 @@ function nativeField(base: string) {
 ${COLUMN_TYPE_METHODS}`
 }
 
+// The field every zoneless DateTime column is declared with, as the generator
+// writes it once per file.
 // cspell:ignore datetimefield
-const UTC_DATETIME_FIELD = `class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+const UTC_DATETIME_FIELD = `class _UtcInstant(models.Func):
+    template = "%(expressions)s"
+    output_field = models.DateTimeField()
+
+    def as_postgresql(self, compiler: Any, connection: BaseDatabaseWrapper, **extra_context: Any) -> Any:
+        return self.as_sql(compiler, connection, template="(%(expressions)s AT TIME ZONE 'UTC')", **extra_context)
+
+
+class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
 ${COLUMN_TYPE_METHODS}
 
     def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
@@ -113,7 +121,11 @@ ${COLUMN_TYPE_METHODS}
             return None
         if timezone.is_naive(value):
             value = value.replace(tzinfo=dt_timezone.utc)
-        return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())`
+        return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())
+
+    def get_transform(self, lookup_name: str) -> Any:
+        transform = super().get_transform(lookup_name)
+        return None if transform is None else lambda lhs: transform(_UtcInstant(lhs))`
 
 // The field a PostgreSQL @db.Money is declared with, as the generator writes it once per file.
 const MONEY_FIELD = `class MoneyField(models.DecimalField):  # type: ignore[type-arg]
@@ -139,7 +151,7 @@ const MONEY_FIELD = `class MoneyField(models.DecimalField):  # type: ignore[type
             value = self.get_prep_value(value)
         if value is None or hasattr(value, "as_sql"):
             return value
-        return str(value)`
+        return format(value, "f")`
 
 const AUTO_NOW_QUERY_SET = `_M = TypeVar("_M", bound=models.Model)
 
@@ -774,6 +786,34 @@ class Ledger(models.Model):
     class Meta:
         db_table = "Ledger"
 `)
+  })
+
+  it('leaves an autoincrement @unique standing in for a key to Django, and declares nothing for a foreign key column', () => {
+    const owner = makeModel('Owner', [
+      makeField({
+        name: 'id',
+        type: 'Int',
+        isUnique: true,
+        nativeType: ['Oid', []],
+        default: { name: 'autoincrement', args: [] },
+      }),
+    ])
+    const pet = makeModel('Pet', [
+      makeField({ name: 'id', type: 'String', isId: true }),
+      makeField({ name: 'ownerId', type: 'Int', nativeType: ['Oid', []] }),
+      makeField({
+        name: 'owner',
+        kind: 'object',
+        type: 'Owner',
+        relationName: 'OwnerToPet',
+        relationFromFields: ['ownerId'],
+        relationToFields: ['id'],
+      }),
+    ])
+    const code = djangoCode([owner, pet])
+    expect(code).toContain('    id = models.AutoField(primary_key=True)\n')
+    expect(code).not.toContain('Native')
+    expect(code).not.toContain('validators')
   })
 
   it('makes a CockroachDB column as Prisma does, and leaves Django its own elsewhere', () => {

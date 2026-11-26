@@ -151,7 +151,10 @@ migration names, copy the class from the earlier `models.py` into a module of yo
 those migrations at it, or squash them. On a database Django already migrated, `makemigrations`
 writes an `AlterField` for each such column, every `DateTime` included; PostgreSQL converts a
 `timestamptz` to `timestamp(3)` at the session's wall clock, so run that migration in a UTC session
-(Django's, with `USE_TZ = True`) to keep the UTC instant, rounded to milliseconds. A `text` column becomes `xml`, `bit` or `varbit` only with a
+(Django's, with `USE_TZ = True`) to keep the UTC instant, rounded to milliseconds. Django's date and
+time lookups (`__date`, `__year`, `__hour`, ...) take such a column to the current time zone from
+the UTC instant it holds; `Trunc*` and `Extract*` called on the column directly do not, so reach
+them through the lookup (`values("created_at__date")`) under a time zone other than UTC. A `text` column becomes `xml`, `bit` or `varbit` only with a
 `USING` clause, which Django does not write: replace that operation with
 `migrations.RunSQL('ALTER TABLE "T" ALTER COLUMN "c" TYPE xml USING "c"::xml',
 state_operations=[...the AlterField...])`.

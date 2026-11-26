@@ -316,8 +316,9 @@ function nativeColumnType(field: DMMF.Field, provider: string) {
  */
 function columnTypeOf(field: DMMF.Field, provider: string) {
   if (!hasEnumTypes(provider) || field.kind !== 'scalar') return null
-  // An autoincrement key is one of Django's auto fields, which make the column themselves.
-  if (field.isId && isAutoincrement(field)) return null
+  // An autoincrement key is one of Django's auto fields, which make the column themselves, and a key
+  // can be a @unique standing in for a missing @id.
+  if (isAutoincrement(field)) return null
   return field.type === 'DateTime' ? dateTimeColumnType(field) : nativeColumnType(field, provider)
 }
 
@@ -711,10 +712,30 @@ function nativeFieldClass(base: NativeFieldBase, provider: string) {
 ${columnTypeMethods(provider)}`
 }
 
+// Django's PostgreSQL date and time transforms (__date, __hour, Trunc*, Extract*) take a column to
+// the current zone with AT TIME ZONE, which on a timestamp without a zone goes the other way: the
+// column is read as the UTC instant it holds first.
+function utcInstant(provider: string) {
+  return `class _UtcInstant(models.Func):
+    template = "%(expressions)s"
+    output_field = models.DateTimeField()
+
+    def as_${vendorOf(provider)}(self, compiler: Any, connection: BaseDatabaseWrapper, **extra_context: Any) -> Any:
+        return self.as_sql(compiler, connection, template="(%(expressions)s AT TIME ZONE 'UTC')", **extra_context)`
+}
+
+const UTC_TRANSFORMS = `
+
+    def get_transform(self, lookup_name: str) -> Any:
+        transform = super().get_transform(lookup_name)
+        return None if transform is None else lambda lhs: transform(_UtcInstant(lhs))`
+
 // cspell:ignore datetimefield
 function utcDateTimeField(provider: string) {
-  const columnType = hasEnumTypes(provider) ? `${columnTypeMethods(provider)}\n\n` : ''
-  return `class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+  const zoneless = hasEnumTypes(provider)
+  const columnType = zoneless ? `${columnTypeMethods(provider)}\n\n` : ''
+  const instant = zoneless ? `${utcInstant(provider)}\n\n\n` : ''
+  return `${instant}class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
 ${columnType}    def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
         if not prepared:
             value = self.get_prep_value(value)
@@ -732,7 +753,7 @@ ${columnType}    def get_db_prep_value(self, value: Any, connection: BaseDatabas
             return None
         if timezone.is_naive(value):
             value = value.replace(tzinfo=dt_timezone.utc)
-        return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())`
+        return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())${zoneless ? UTC_TRANSFORMS : ''}`
 }
 
 // PostgreSQL's money is read back as text in the session's currency format ('$1.50'), and has no
@@ -763,7 +784,7 @@ const MONEY_FIELD = `class MoneyField(models.DecimalField):  # type: ignore[type
             value = self.get_prep_value(value)
         if value is None or hasattr(value, "as_sql"):
             return value
-        return str(value)`
+        return format(value, "f")`
 
 const AUTO_NOW_QUERY_SET = `_M = TypeVar("_M", bound=models.Model)
 
@@ -918,6 +939,15 @@ function stampedField(stamped: StampedField, provider: string) {
         return value`
 }
 
+// The scalar fields written as a column of their own: a single-column foreign key's scalar is
+// written as the ForeignKey, which takes its column from the field it references.
+function ownColumnFields(models: readonly DMMF.Model[]) {
+  return models.flatMap((model) => {
+    const collapsed = new Set(singleColumnBelongsTo(model).map((f) => f.relationFromFields?.[0]))
+    return model.fields.filter((f) => f.kind !== 'object' && !collapsed.has(f.name))
+  })
+}
+
 // The Native classes a module declares: those its fields are declared with, and the bases of its
 // @updatedAt classes.
 function nativeClassesOf(scalarFields: readonly DMMF.Field[], provider: string) {
@@ -948,14 +978,15 @@ export function collectFieldClasses(models: readonly DMMF.Model[], provider: str
   const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
   const stamped = new Set(scalarFields.map((f) => stampedFieldClass(f, provider)))
   const stampedClasses = STAMPED_FIELDS.filter((f) => stamped.has(f.name))
-  const declared = nativeClassesOf(scalarFields, provider)
+  const columnFields = ownColumnFields(models)
+  const declared = nativeClassesOf(columnFields, provider)
   return [
     ...NATIVE_FIELD_BASES.filter((base) => declared.has(`Native${base}`)).map((base) =>
       nativeFieldClass(base, provider),
     ),
     scalarFields.some((f) => holdsUtc(f, provider)) ? utcDateTimeField(provider) : null,
     ...stampedClasses.map((f) => stampedField(f, provider)),
-    scalarFields.some((f) => isMoney(f, provider)) ? MONEY_FIELD : null,
+    columnFields.some((f) => isMoney(f, provider)) ? MONEY_FIELD : null,
     scalarFields.some((f) => isEnumArray(f, provider)) ? ENUM_ARRAY_FIELD : null,
     scalarFields.some((f) => isPlainJson(f, provider)) ? PLAIN_JSON_FIELD : null,
     scalarFields.some((f) => f.isUpdatedAt === true) ? AUTO_NOW_QUERY_SET : null,
@@ -2001,9 +2032,10 @@ export function collectGlobalImports(
 ) {
   const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
   const needsUtcField = scalarFields.some((f) => holdsUtc(f, provider))
+  const columnFields = ownColumnFields(models)
   const columnTypes =
-    nativeClassesOf(scalarFields, provider).size > 0 ||
-    scalarFields.some((f) => isMoney(f, provider))
+    nativeClassesOf(columnFields, provider).size > 0 ||
+    columnFields.some((f) => isMoney(f, provider))
   const literalKinds = scalarFields
     .filter(
       (f) =>
@@ -2037,7 +2069,7 @@ export function collectGlobalImports(
     enumArray: scalarFields.some((f) => isEnumArray(f, provider)),
     plainJson: scalarFields.some((f) => isPlainJson(f, provider)),
     columnTypes,
-    validators: scalarFields.some((f) =>
+    validators: columnFields.some((f) =>
       columnTypeArgs(f, provider).some((arg) => arg.startsWith('validators=')),
     ),
     // The field classes that take a connection: UtcDateTimeField, EnumArrayField, PlainJSONField,
@@ -2048,7 +2080,7 @@ export function collectGlobalImports(
       scalarFields.some((f) => isEnumArray(f, provider) || isPlainJson(f, provider)),
     autoNow: scalarFields.some((f) => f.isUpdatedAt === true),
     // MoneyField reads a value as a Decimal.
-    decimal: needsDecimalImport(scalarFields) || scalarFields.some((f) => isMoney(f, provider)),
+    decimal: needsDecimalImport(scalarFields) || columnFields.some((f) => isMoney(f, provider)),
     any: needsAnyImport(scalarFields),
     fromDatetime: ['date', 'datetime', 'time'].filter((kind) => kinds.has(kind)),
     nowHelpers: nowHelperKinds.length > 0,

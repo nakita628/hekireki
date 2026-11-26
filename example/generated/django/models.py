@@ -14,6 +14,14 @@ from django.db.models.expressions import RawSQL
 from django.utils import timezone
 
 
+class _UtcInstant(models.Func):
+    template = "%(expressions)s"
+    output_field = models.DateTimeField()
+
+    def as_postgresql(self, compiler: Any, connection: BaseDatabaseWrapper, **extra_context: Any) -> Any:
+        return self.as_sql(compiler, connection, template="(%(expressions)s AT TIME ZONE 'UTC')", **extra_context)
+
+
 class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
     def __init__(self, *args: Any, db_column_type: str | None = None, **kwargs: Any) -> None:
         self.db_column_type = db_column_type
@@ -48,6 +56,10 @@ class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
         if timezone.is_naive(value):
             value = value.replace(tzinfo=dt_timezone.utc)
         return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())
+
+    def get_transform(self, lookup_name: str) -> Any:
+        transform = super().get_transform(lookup_name)
+        return None if transform is None else lambda lhs: transform(_UtcInstant(lhs))
 
 
 class UtcAutoNowDateTimeField(UtcDateTimeField):
