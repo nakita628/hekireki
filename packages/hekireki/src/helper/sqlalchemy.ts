@@ -23,7 +23,12 @@ import {
   relationEnds,
   uuidDefaultVersion,
 } from '../prisma/model.js'
-import { INDEX_METHODS, operatorClassName, sqlString } from '../prisma/postgres.js'
+import {
+  INDEX_METHODS,
+  operatorClassName,
+  serialSequenceName,
+  sqlString,
+} from '../prisma/postgres.js'
 
 const PRISMA_TO_PYTHON: { [k: string]: string } = {
   String: 'str',
@@ -107,6 +112,7 @@ const MODULE_CLASSES = new Set([
   'Dialect',
   'Double',
   'Enum',
+  'FetchedValue',
   'Float',
   'ForeignKey',
   'ForeignKeyConstraint',
@@ -119,6 +125,7 @@ const MODULE_CLASSES = new Set([
   'Numeric',
   'Optional',
   'PrimaryKeyConstraint',
+  'Sequence',
   'SmallInteger',
   'String',
   'Table',
@@ -1014,6 +1021,32 @@ function keyArgs(field: DMMF.Field, isPk: boolean, provider: string) {
   ]
 }
 
+// A column that is not the key but defaults to autoincrement() (a @unique one, which Prisma
+// allows; SQLite does not) is the database's to fill, so the ORM leaves it out of the INSERT and
+// reads it back. SQLAlchemy makes only a key SERIAL or AUTO_INCREMENT: on PostgreSQL the column
+// takes the next value of a sequence create_all() makes, as SERIAL's `DEFAULT nextval(...)`
+// does; CockroachDB's is Prisma's `DEFAULT unique_rowid()`. MySQL's AUTO_INCREMENT is left to
+// Prisma Migrate: the model only knows the database sets it. The sequence create_all() makes is
+// not OWNED BY the column, as SERIAL's is: drop_all() drops it, a DROP TABLE alone does not.
+function autoincrementArgs(field: DMMF.Field, provider: string, table: string, column: string) {
+  if (!isAutoincrement(field) || provider === 'sqlite') return []
+  // MySQL's AUTO_INCREMENT and SQL Server's IDENTITY are the column's own; SQLAlchemy writes neither
+  // on a column that is not the key.
+  if (provider === 'mysql' || provider === 'sqlserver') return ['server_default=FetchedValue()']
+  if (provider === 'cockroachdb') return ['server_default=text("unique_rowid()")']
+  const sequence = toPythonString(serialSequenceName(table, column))
+  return [`server_default=Sequence(${sequence}, metadata=Base.metadata).next_value()`]
+}
+
+// What a model's non-key autoincrement() columns import, as autoincrementArgs writes them.
+function autoincrementSaImports(model: DMMF.Model, provider: string) {
+  const keys = new Set(model.primaryKey?.fields)
+  const fields = model.fields.filter((f) => !f.isId && !keys.has(f.name) && isAutoincrement(f))
+  if (fields.length === 0 || provider === 'sqlite') return []
+  if (provider === 'mysql' || provider === 'sqlserver') return ['FetchedValue']
+  return provider === 'cockroachdb' ? ['text'] : ['Sequence']
+}
+
 // The process's clock in UTC, as the part of it the column keeps.
 function utcNowExpr(field: DMMF.Field) {
   const nativeName = field.nativeType?.[0]
@@ -1120,6 +1153,7 @@ function generateColumn(
   model: DMMF.Model,
   isMapperKey: boolean,
   foreignKeyName: (relationField: string, columns: readonly string[]) => string,
+  isView: boolean,
 ) {
   // The attribute is the field in Python's case; the column is Prisma's, named
   // positionally whenever the two differ.
@@ -1140,6 +1174,11 @@ function generateColumn(
     // Prisma Migrate leaves a list's column nullable; the model reads it as a list all the same.
     ...(field.isList ? ['nullable=True'] : []),
     ...defaultArgs(field, enumMap, provider),
+    // A key's autoincrement() is keyArgs'. A view's columns are the query's: nothing of a table
+    // is made for them.
+    ...(isPk || isView
+      ? []
+      : autoincrementArgs(field, provider, model.dbName ?? model.name, columnName)),
     ...updatedAtArgs(field),
   ]
 
@@ -1553,6 +1592,7 @@ export function generateModelBody(
         model,
         isMapperKey,
         foreignKeyName,
+        views.has(model.name),
       ),
     )
     return lines
@@ -1722,6 +1762,7 @@ function modelSaImports(
     ...(keyOrderConstraint(model) === null ? [] : ['PrimaryKeyConstraint']),
     ...(modelIndexes(model, indexes).length > 0 ? ['Index'] : []),
     ...(readsLiteralColumn(model, indexes, provider) ? ['literal_column'] : []),
+    ...autoincrementSaImports(model, provider),
   ]
 }
 

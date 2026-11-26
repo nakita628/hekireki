@@ -1550,6 +1550,159 @@ class Article(Base):
   })
 })
 
+// The module for a schema with one datasource, as Prisma parses it.
+function generateFor(provider: string, schema: string, views: ReadonlySet<string> = new Set()) {
+  const { models, enums, indexes } = datamodelOf(
+    getDMMF({
+      datamodel: [['schema.prisma', `datasource db {\n  provider = "${provider}"\n}\n${schema}`]],
+    }),
+  )
+  return generateSingleFile(models, enums, indexes, provider, views)
+}
+
+describe('autoincrement() on a column that is not the key', () => {
+  it("is PostgreSQL's SERIAL: the next value of the sequence the column's DEFAULT reads", () => {
+    const code = generateFor(
+      'postgresql',
+      `model Counter {
+  id       Int    @id
+  metricId Int    @unique @default(autoincrement()) @map("metric_id")
+  total    BigInt @unique @default(autoincrement())
+}
+model TableNameThatIsQuiteLongForTheSequenceToFit1234 {
+  id                                    Int @id
+  column_name_that_is_also_long_for_it_abc Int @unique @default(autoincrement())
+}`,
+    )
+
+    expect(code).toContain('from sqlalchemy import BigInteger, Index, MetaData, Sequence\n')
+    expect(code).toContain(
+      `    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    metric_id: Mapped[int] = mapped_column(server_default=Sequence("Counter_metric_id_seq", metadata=Base.metadata).next_value())
+    total: Mapped[int] = mapped_column(BigInteger, server_default=Sequence("Counter_total_seq", metadata=Base.metadata).next_value())
+`,
+    )
+    // PostgreSQL shortens the longer of the two names until the sequence's fits in 63.
+    expect(code).toContain(
+      'server_default=Sequence("TableNameThatIsQuiteLongForTh_column_name_that_is_also_long_seq", metadata=Base.metadata).next_value())',
+    )
+  })
+
+  it('names the sequence in UTF-8 bytes, as PostgreSQL cuts it', () => {
+    const code = generateFor(
+      'postgresql',
+      `model Counter {
+  id       Int @id
+  metricId Int @unique @default(autoincrement()) @map("metric_id")
+
+  @@map("${'カウンター'.repeat(4)}")
+}`,
+    )
+
+    expect(code).toContain(
+      'server_default=Sequence("カウンターカウンターカウンターカ_metric_id_seq", metadata=Base.metadata).next_value())',
+    )
+  })
+
+  it('keeps a model named Sequence or FetchedValue from shadowing the import', () => {
+    const postgres = generateFor(
+      'postgresql',
+      `model Sequence {
+  id    Int @id
+  total Int @unique @default(autoincrement())
+}`,
+    )
+    const mysql = generateFor(
+      'mysql',
+      `model FetchedValue {
+  id    Int @id
+  total Int @unique @default(autoincrement())
+}`,
+    )
+
+    expect(postgres).toContain(
+      `class Sequence_(Base):
+    __tablename__ = "Sequence"
+`,
+    )
+    expect(postgres).toContain(
+      'server_default=Sequence("Sequence_total_seq", metadata=Base.metadata)',
+    )
+    expect(mysql).toContain(
+      `class FetchedValue_(Base):
+    __tablename__ = "FetchedValue"
+`,
+    )
+  })
+
+  it("is CockroachDB's unique_rowid(), on the BigInt it allows", () => {
+    const code = generateFor(
+      'cockroachdb',
+      `model Counter {
+  id    Int    @id
+  total BigInt @unique @default(autoincrement())
+}`,
+    )
+
+    expect(code).toContain('from sqlalchemy import BigInteger, Index, MetaData, text\n')
+    expect(code).toContain(
+      '    total: Mapped[int] = mapped_column(BigInteger, server_default=text("unique_rowid()"))\n',
+    )
+  })
+
+  it("is MySQL's AUTO_INCREMENT, which the model leaves to the database", () => {
+    const code = generateFor(
+      'mysql',
+      `model Counter {
+  id       Int @id
+  metricId Int @unique @default(autoincrement()) @map("metric_id")
+}`,
+    )
+
+    expect(code).toContain('from sqlalchemy import FetchedValue, Index\n')
+    expect(code).toContain(
+      '    metric_id: Mapped[int] = mapped_column(server_default=FetchedValue())\n',
+    )
+  })
+
+  it("is SQL Server's IDENTITY, which the model leaves to the database", () => {
+    const code = generateFor(
+      'sqlserver',
+      `model Counter {
+  id       Int @id
+  metricId Int @unique @default(autoincrement()) @map("metric_id")
+}`,
+    )
+
+    expect(code).toContain(
+      '    metric_id: Mapped[int] = mapped_column(server_default=FetchedValue())\n',
+    )
+    expect(code).not.toContain('Sequence')
+  })
+
+  it("leaves a view's column as it is: the table's alone takes a sequence", () => {
+    const code = generateFor(
+      'postgresql',
+      `generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["views"]
+}
+model Counter {
+  id       Int @id
+  metricId Int @unique @default(autoincrement()) @map("metric_id")
+}
+view CounterView {
+  id       Int @unique
+  metricId Int @default(autoincrement()) @map("metric_id")
+}`,
+      new Set(['CounterView']),
+    )
+
+    expect(code.split('Sequence(')).toHaveLength(2)
+    expect(code).toContain('Sequence("Counter_metric_id_seq", metadata=Base.metadata)')
+  })
+})
+
 describe('uuid default generation', () => {
   it('generates client-side defaults for uuid() and uuid(7) primary keys', () => {
     const models = [

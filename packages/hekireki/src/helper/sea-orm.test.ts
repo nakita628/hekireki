@@ -152,6 +152,72 @@ describe('buildSeaOrmAttributes', () => {
       ].join('\n'),
     ])
   })
+
+  // `metricId Int @unique @default(autoincrement())`: sea-orm's auto_increment is the key's alone
+  // (on another column it would turn the key's on), so PostgreSQL's column is a serial type.
+  const autoincrementField = (type: string, nativeType: DMMF.Field['nativeType']) =>
+    ({
+      name: 'metricId',
+      dbName: 'metric_id',
+      kind: 'scalar' as const,
+      type,
+      isRequired: true,
+      isId: false,
+      isUnique: true,
+      isList: false,
+      isUpdatedAt: false,
+      hasDefaultValue: true,
+      default: { name: 'autoincrement', args: [] },
+      nativeType,
+    }) as any
+
+  it.each([
+    ['Int', null, 'serial'],
+    ['Int', ['Integer', []], 'serial'],
+    ['BigInt', null, 'bigserial'],
+    ['BigInt', ['BigInt', []], 'bigserial'],
+    ['Int', ['SmallInt', []], 'smallserial'],
+  ] as const)(
+    'makes a non-key autoincrement %s (%j) a PostgreSQL %s',
+    (type, nativeType, serial) => {
+      const field = autoincrementField(type, nativeType)
+      expect(buildSeaOrmAttributes(field, false, false, undefined, [], 'postgresql')).toStrictEqual(
+        ['    #[sea_orm(unique)]', `    #[sea_orm(column_type = "custom(\\"${serial}\\")")]`],
+      )
+    },
+  )
+
+  it('makes an autoincrement member of a composite key a PostgreSQL serial', () => {
+    const field = { ...autoincrementField('Int', null), name: 'seq', dbName: null, isUnique: false }
+    expect(buildSeaOrmAttributes(field, true, true, undefined, [], 'postgresql')).toStrictEqual([
+      '    #[sea_orm(primary_key)]',
+      '    #[sea_orm(column_type = "custom(\\"serial\\")")]',
+    ])
+  })
+
+  it('keeps a single autoincrement key to sea-orm auto_increment on PostgreSQL', () => {
+    const field = { ...autoincrementField('Int', null), name: 'id', dbName: null, isId: true }
+    expect(buildSeaOrmAttributes(field, true, false, undefined, [], 'postgresql')).toStrictEqual([
+      '    #[sea_orm(primary_key)]',
+      '    #[sea_orm(unique)]',
+    ])
+  })
+
+  it.each(['mysql', 'cockroachdb', 'sqlite'])(
+    'leaves a non-key autoincrement column as it was on %s',
+    (provider) => {
+      expect(
+        buildSeaOrmAttributes(
+          autoincrementField('Int', null),
+          false,
+          false,
+          undefined,
+          [],
+          provider,
+        ),
+      ).toStrictEqual(['    #[sea_orm(unique)]'])
+    },
+  )
 })
 
 describe('buildSeaOrmAttributes: a default the database fills (#276)', () => {
