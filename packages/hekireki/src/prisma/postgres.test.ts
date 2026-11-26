@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { operatorClassName, parseDateTimeDefault, prismaConstraintName } from './postgres.js'
+import {
+  operatorClassName,
+  parseDateTimeDefault,
+  prismaConstraintName,
+  serialSequenceName,
+} from './postgres.js'
 
 // Every expected name is the one Prisma Migrate writes for the same table and columns.
 describe('prismaConstraintName', () => {
@@ -27,6 +32,31 @@ describe('prismaConstraintName', () => {
         '_key',
       ),
     ).toBe('日本語のテーブル名前日本語のテーブル_名_key')
+  })
+})
+
+// Every expected name is the one PostgreSQL 16 gave the sequence of a serial column of the table.
+describe('serialSequenceName', () => {
+  it('keeps names that fit in 63 bytes', () => {
+    expect(serialSequenceName('Counter', 'metric_id')).toBe('Counter_metric_id_seq')
+  })
+
+  it('shortens the longer of the two names until the sequence fits', () => {
+    expect(
+      serialSequenceName(
+        'TableNameThatIsQuiteLongForTheSequenceToFit1234',
+        'column_name_that_is_also_long_for_it_abc',
+      ),
+    ).toBe('TableNameThatIsQuiteLongForTh_column_name_that_is_also_long_seq')
+  })
+
+  it('counts UTF-8 bytes and cuts at a character boundary', () => {
+    expect(serialSequenceName('カウンター'.repeat(4), 'metric_id')).toBe(
+      'カウンターカウンターカウンターカ_metric_id_seq',
+    )
+    expect(serialSequenceName('テーブル'.repeat(5), '列名'.repeat(10))).toBe(
+      'テーブルテーブルテ_列名列名列名列名列_seq',
+    )
   })
 })
 
