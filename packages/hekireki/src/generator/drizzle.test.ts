@@ -1,6 +1,7 @@
 import { stripTypeScriptTypes } from 'node:module'
 
 import type { DMMF } from '@prisma/generator-helper'
+import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { prismaBlocks } from '../prisma/schema-text.js'
@@ -2529,5 +2530,118 @@ model Doc {
       "(table) => [index('doc_tags_gin').on(table.tags), index('doc_data_gin').on(table.data), index('doc_title_trgm').on(table.title), index('Doc_code_idx').on(sql`${table.code} DESC`).where(sql`(code <> '')`), index('doc_code_hash').on(table.code)])",
       "(table) => [index('doc_tags_gin').on(table.tags), index('doc_data_gin').on(table.data), index('doc_title_trgm').on(table.title), index('Doc_code_idx').on(sql`${table.code} DESC`), index('doc_code_hash').on(table.code)])",
     ])
+  })
+})
+
+describe('an export that would take a name the module uses', () => {
+  const schemaOf = (models: string, provider = 'postgresql') => {
+    const result = getDMMF({
+      datamodel: [['schema.prisma', `datasource db {\n  provider = "${provider}"\n}\n${models}`]],
+    })
+    if ('type' in result) throw new Error(result.error.message)
+    const { datamodel } = result
+    return drizzleSchema(datamodel, provider as 'postgresql', datamodel.indexes)
+  }
+
+  it('renames a table named after a column function or a helper, on every provider alike', () => {
+    const code = schemaOf(`
+model Bit {
+  id   Int    @id
+  mask String @db.Bit(8)
+}
+model TypedText {
+  id  Int    @id
+  doc String @db.Xml
+}`)
+    expect(code).toContain("export const bitTable = pgTable('Bit', ")
+    expect(code).toContain("mask: bit('mask', { dimensions: 8 })")
+    expect(code).toContain("export const typedTextTable = pgTable('TypedText', ")
+    expect(code).toContain("doc: typedText('doc', { type: 'xml' })")
+    // The set is the provider's, not what this schema imports: MySQL's year() is reserved there
+    // whether or not a field calls it, and PostgreSQL has none.
+    const year = 'model Year {\n  id Int @id\n}'
+    expect(schemaOf(year, 'mysql')).toContain("export const yearTable = mysqlTable('Year', ")
+    expect(schemaOf(year)).toContain("export const year = pgTable('Year', ")
+  })
+
+  it('renames a reserved word and a global the module calls', () => {
+    const code = schemaOf(`
+model Delete {
+  id Int @id
+}
+model Crypto {
+  id String @id @default(uuid())
+}`)
+    expect(code).toContain("export const deleteTable = pgTable('Delete', ")
+    expect(code).toContain("export const cryptoTable = pgTable('Crypto', ")
+    expect(code).toContain('crypto.randomUUID()')
+  })
+
+  it('points a foreign key at a table named Table, not at the callback parameter', () => {
+    const code = schemaOf(`
+model Table {
+  id    Int    @id
+  posts Post[]
+}
+model Post {
+  id      Int   @id
+  tableId Int
+  table   Table @relation(fields: [tableId], references: [id])
+}`)
+    expect(code).toContain("export const tableTable = pgTable('Table', ")
+    expect(code).toContain('foreignColumns: [tableTable.id]')
+    expect(code).toContain('defineRelations({ tableTable, post }')
+    expect(code).toContain('table: r.one.tableTable({ from: r.post.tableId, to: r.tableTable.id')
+  })
+
+  it('makes an identifier of a table name that is not one', () => {
+    const code = schemaOf(`
+model OrderItem {
+  id Int @id
+  @@map("order-items")
+}
+model Code {
+  id Int @id
+  @@map("2fa_codes")
+}`)
+    expect(code).toContain("export const orderItems = pgTable('order-items', ")
+    expect(code).toContain("export const _2faCodes = pgTable('2fa_codes', ")
+  })
+
+  it("steps aside from an enum's export, an earlier table's and a join table's", () => {
+    const code = schemaOf(`
+enum Status {
+  ON
+}
+model StatusEnum {
+  id     Int    @id
+  status Status
+}
+model Line {
+  id Int @id
+  @@map("order_items")
+}
+model OtherLine {
+  id Int @id
+  @@map("orderItems")
+}
+model Article {
+  id   Int   @id
+  tags Tag[]
+}
+model Tag {
+  id       Int       @id
+  articles Article[]
+}
+model ArticleToTag {
+  id Int @id
+}`)
+    expect(code).toContain("export const statusEnum = pgEnum('Status', ['ON'])")
+    expect(code).toContain("export const statusEnumTable = pgTable('StatusEnum', ")
+    expect(code).toContain("export const orderItems = pgTable('order_items', ")
+    expect(code).toContain("export const orderItemsTable = pgTable('orderItems', ")
+    expect(code).toContain("export const articleToTag = pgTable('ArticleToTag', ")
+    expect(code).toContain("export const articleToTagTable = pgTable('_ArticleToTag', ")
+    expect(code).toContain('through(r.articleToTagTable.A)')
   })
 })

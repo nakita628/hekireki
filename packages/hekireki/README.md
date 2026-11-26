@@ -249,6 +249,15 @@ Every generator keeps Prisma's names: a model or field without `@map` keeps the 
 schema, and each ORM is told so where its own convention would say otherwise. Active Record and Ecto
 take `///` lines of their own, described below.
 
+`hekireki-drizzle` exports each table under its table name as a camelCase identifier (`users` for
+`@@map("users")`, `orderItems` for `order-items`, `_2faCodes` for `2fa_codes`), with `Table` after it
+where that name is one the schema module can import or declare on the provider: a drizzle column
+function or one of hekireki's column helpers (`bit`, `typedText`, MySQL's `year`), a JavaScript
+reserved word (`delete`), `relations`, `table`, `crypto`, `queueMicrotask`, `undefined`, `eval`,
+`arguments`, an enum's export (`statusEnum`), or an export an earlier table or a join table already
+has. The set is fixed per provider, so an export never changes because a field was added:
+`model Bit` is `bitTable`, and its relations are `db.query.bitTable`.
+
 ### API
 
 | Provider                    | Writes                                     | Options                                                                                |

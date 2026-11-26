@@ -47,6 +47,24 @@ describe('drizzle', () => {
     expect(sqlFiles(out).length).toBeGreaterThan(0)
   })
 
+  // test/prisma/drizzle.prisma: exports renamed out of the way of what the module imports or
+  // declares, which tsc reads above, and which drizzle-kit has to take too.
+  it('generates migration SQL for the renamed exports', () => {
+    const edgeOut = join(out, 'edge')
+    const result = spawnSync(
+      join(bin, 'drizzle-kit'),
+      [
+        'generate',
+        '--dialect=postgresql',
+        `--schema=${join(harness, 'edge', 'schema.ts')}`,
+        `--out=${edgeOut}`,
+      ],
+      { cwd: root, stdio: ['ignore', 'ignore', 'inherit'] },
+    )
+    expect(result.status).toBe(0)
+    expect(sqlFiles(edgeOut).length).toBeGreaterThan(0)
+  })
+
   // The same schema on SQLite and MySQL (test/lang/setup.ts): the column functions of each
   // dialect type-check, and drizzle-kit writes a migration for each.
   it('type-checks the SQLite and MySQL output', () => {
