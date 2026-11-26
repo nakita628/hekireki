@@ -746,16 +746,19 @@ const AUTO_INCREMENT_BASES: { readonly [base: string]: { name: string; internal:
 
 // What every auto-increment class shares: the column is the database's to fill, so an unset value
 // is inserted as DEFAULT and read back with RETURNING, and an update writes the stored value back.
-// It is never required in a form, and blank stays out of the migration.
+// It is never required in a form, and its default is None, so that adding it to a table writes no
+// DEFAULT beside the identity; both stay out of the migration.
 const AUTO_INCREMENT_COMMON = `    db_returning = True
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs["blank"] = True
+        kwargs["default"] = None
         super().__init__(*args, **kwargs)
 
     def deconstruct(self) -> Any:
         name, path, args, kwargs = super().deconstruct()
         del kwargs["blank"]
+        kwargs.pop("default", None)
         return name, path, args, kwargs`
 
 const AUTO_INCREMENT_PRE_SAVE = `    def pre_save(self, model_instance: models.Model, add: bool) -> Any:
@@ -804,24 +807,31 @@ ${own}
 ${AUTO_INCREMENT_PRE_SAVE}`
 }
 
-/** The class a non-key autoincrement column is declared with, or null for any other field. */
+/**
+ * The class a non-key autoincrement column is declared with, or null for any other field. An
+ * optional one is left a plain nullable field: an identity cannot be NULL.
+ */
 function autoIncrementClass(field: DMMF.Field, isPk: boolean, provider: string) {
-  if (isPk || !isAutoincrement(field)) return null
+  if (isPk || !isAutoincrement(field) || !field.isRequired) return null
   return AUTO_INCREMENT_BASES[columnDjangoField(field, provider).ctor]?.name ?? null
 }
 
-// The non-key autoincrement columns of the models, with the Django field each is declared on: not
-// the single-field key, which is Django's own auto field, nor a foreign key's scalar.
+// The non-key autoincrement columns of a model: not the single-field key, which is Django's own
+// auto field, nor a foreign key's scalar.
+function autoIncrementColumns(model: DMMF.Model, provider: string) {
+  const pk = primaryKeyFields(model)
+  const singlePk = pk.length === 1 ? pk[0] : undefined
+  const collapsed = new Set(singleColumnBelongsTo(model).map((f) => f.relationFromFields?.[0]))
+  return model.fields
+    .filter((f) => f.kind === 'scalar' && !collapsed.has(f.name))
+    .filter((f) => autoIncrementClass(f, f.name === singlePk, provider) !== null)
+}
+
+// The Django field each non-key autoincrement column of the models is declared on.
 function autoIncrementBases(models: readonly DMMF.Model[], provider: string) {
-  return models.flatMap((model) => {
-    const pk = primaryKeyFields(model)
-    const singlePk = pk.length === 1 ? pk[0] : undefined
-    const collapsed = new Set(singleColumnBelongsTo(model).map((f) => f.relationFromFields?.[0]))
-    return model.fields
-      .filter((f) => f.kind === 'scalar' && !collapsed.has(f.name))
-      .filter((f) => autoIncrementClass(f, f.name === singlePk, provider) !== null)
-      .map((f) => columnDjangoField(f, provider).ctor)
-  })
+  return models.flatMap((model) =>
+    autoIncrementColumns(model, provider).map((f) => columnDjangoField(f, provider).ctor),
+  )
 }
 
 // cspell:ignore datetimefield
@@ -1904,6 +1914,32 @@ function compositePkLine(model: DMMF.Model, names: Names) {
 // class; the schema is reported rather than one of them silently dropped. A
 // Python identifier that collides is stepped aside instead, because that one
 // is losslessly renameable.
+/**
+ * What keeps Django's migrate from making the tables: on MySQL, an autoincrement column has to be a
+ * key when the table is created, and Django creates a plain @@index only after it, so a non-key
+ * autoincrement column covered by nothing more than an @@index cannot be made.
+ *
+ * @param models - The models of the datamodel.
+ * @param provider - The datasource's provider.
+ * @returns One message per such column.
+ */
+export function djangoProblems(models: readonly DMMF.Model[], provider: string | undefined) {
+  if (provider !== 'mysql') return []
+  return models.flatMap((model) => {
+    const keyed = new Set([
+      ...model.fields.filter((f) => f.isUnique || f.isId).map((f) => f.name),
+      ...model.uniqueFields.map((fields) => fields[0]),
+      ...(model.primaryKey === null ? [] : [model.primaryKey.fields[0]]),
+    ])
+    return autoIncrementColumns(model, provider)
+      .filter((f) => !keyed.has(f.name))
+      .map(
+        (f) =>
+          `model ${model.name}: ${f.name} is autoincrement and only @@index-ed, which MySQL refuses when Django creates the table before the index; make it @unique or lead a @@unique with it`,
+      )
+  })
+}
+
 export function findNameConflicts(enums?: readonly DMMF.DatamodelEnum[]) {
   // Two enums can only differ in a way PascalCase erases, and every field that
   // names one would then reference the wrong class.

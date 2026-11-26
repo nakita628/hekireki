@@ -3,7 +3,12 @@ import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { djangoCode } from '../generator/django.js'
-import { djangoAttrName, findNameConflicts, prismaTypeToDjangoField } from './django.js'
+import {
+  djangoAttrName,
+  djangoProblems,
+  findNameConflicts,
+  prismaTypeToDjangoField,
+} from './django.js'
 
 describe('prismaTypeToDjangoField', () => {
   it('maps String to TextField', () => {
@@ -838,11 +843,13 @@ class Ledger(models.Model):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs["blank"] = True
+        kwargs["default"] = None
         super().__init__(*args, **kwargs)
 
     def deconstruct(self) -> Any:
         name, path, args, kwargs = super().deconstruct()
         del kwargs["blank"]
+        kwargs.pop("default", None)
         return name, path, args, kwargs
 
     def get_internal_type(self) -> str:
@@ -920,6 +927,49 @@ class Metric(models.Model):
         return None if connection.vendor == "mysql" else super().db_check(connection)`)
     expect(mysql).not.toContain('get_internal_type')
     expect(mysql).toContain('    seq = PositiveAutoIncrementField(unique=True)\n')
+  })
+
+  it('leaves an optional autoincrement column a nullable field, as an identity cannot be NULL', () => {
+    const model = makeModel('Opt', [
+      makeField({ name: 'id', type: 'String', isId: true }),
+      makeField({
+        name: 'seq',
+        type: 'Int',
+        isRequired: false,
+        isUnique: true,
+        default: { name: 'autoincrement', args: [] },
+      }),
+    ])
+    const code = djangoCode([model])
+    expect(code).not.toContain('AutoIncrementField')
+    expect(code).toContain('    seq = models.IntegerField(null=True, unique=True)\n')
+  })
+
+  it('reports a MySQL autoincrement column that only an @@index covers', () => {
+    const autoincrement = { name: 'autoincrement', args: [] }
+    const model = (fields: DMMF.Field[], overrides?: Partial<DMMF.Model>) =>
+      makeModel(
+        'Seq',
+        [makeField({ name: 'id', type: 'String', isId: true }), ...fields],
+        overrides,
+      )
+    const indexed = model([makeField({ name: 'seq', type: 'Int', default: autoincrement })])
+    expect(djangoProblems([indexed], 'mysql')).toStrictEqual([
+      'model Seq: seq is autoincrement and only @@index-ed, which MySQL refuses when Django creates the table before the index; make it @unique or lead a @@unique with it',
+    ])
+    expect(djangoProblems([indexed], 'postgresql')).toStrictEqual([])
+    const unique = model([
+      makeField({ name: 'seq', type: 'Int', isUnique: true, default: autoincrement }),
+    ])
+    expect(djangoProblems([unique], 'mysql')).toStrictEqual([])
+    const leading = model(
+      [
+        makeField({ name: 'seq', type: 'Int', default: autoincrement }),
+        makeField({ name: 'kind', type: 'String' }),
+      ],
+      { uniqueFields: [['seq', 'kind']] },
+    )
+    expect(djangoProblems([leading], 'mysql')).toStrictEqual([])
   })
 
   it('declares a compound-key autoincrement member with an auto field, and leaves a foreign key column alone', () => {

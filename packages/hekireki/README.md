@@ -167,7 +167,10 @@ field is, an identity column (`unique_rowid()` on CockroachDB), which Prisma rea
 On MySQL it keeps its type, unsigned included (`PositiveAutoIncrementField`), and is
 `AUTO_INCREMENT`. MySQL has no `RETURNING`, so reload the row (`refresh_from_db()`) to read the
 value; and MySQL wants an `AUTO_INCREMENT` column to be a key when the table is made, which Django
-makes an `@@index` only after, so give such a column `@unique` or let Prisma create the table. An
+makes an `@@index` only after, so generation stops on such a column covered by nothing more than an
+`@@index`: make it `@unique` or lead a `@@unique` with it. An optional one stays a plain nullable
+field, as an identity cannot be NULL. SQLite has no `DEFAULT` in an `INSERT`, so a test database on
+SQLite needs the value given. An
 existing column gets an `AlterField`. On PostgreSQL, the identity it adds starts at 1, so set it past
 the values already there:
 `SELECT setval(pg_get_serial_sequence('"T"', 'c'), (SELECT max("c") FROM "T"))`. Django's own sequence reset
