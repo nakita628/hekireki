@@ -4226,6 +4226,35 @@ model Field {
 
 // Pomelo maps each MySQL integer and float column to a CLR type of its own: in any other, EF Core
 // casts unchecked and writes an out-of-range value as another number.
+describe('EF Core on a MySQL Boolean @db.Bit(1)', () => {
+  it('keeps a bool and gives it the bit(1) store type Prisma makes', () => {
+    const schema = `
+datasource db {
+  provider = "mysql"
+}
+
+model F {
+  id   Int     @id
+  on   Boolean @default(true) @db.Bit(1)
+  off  Boolean @db.Bit(1)
+}
+`
+    const { datamodel, plan } = fixture(schema, { ...DEFAULT_OPTIONS, provider: 'mysql' })
+    expect(entityFile(plan, model(datamodel, 'F')).code).toContain(
+      '    public bool On { get; set; } = true;\n',
+    )
+    const context = contextFile(plan).code
+    expect(context).toContain(`            entity.Property(e => e.On)
+                .ValueGeneratedNever()
+                .HasDefaultValue(true)
+                .HasColumnType("bit(1)")
+                .HasColumnName("on");
+            entity.Property(e => e.Off)
+                .HasColumnType("bit(1)")
+                .HasColumnName("off");`)
+  })
+})
+
 describe('EF Core on MySQL integer and float columns', () => {
   const schema = `
 datasource db {

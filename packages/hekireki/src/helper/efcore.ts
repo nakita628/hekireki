@@ -666,6 +666,9 @@ const MYSQL_NUMERIC: {
   Year: { type: 'Int', make: () => mapping('short', true, [columnType('year')]) },
   UnsignedBigInt: { type: 'BigInt', make: () => mapping('ulong', true) },
   Float: { type: 'Float', make: () => mapping('float', true) },
+  // Prisma's BIT(1), which both MySQL providers map a bool to through their bit converter; without
+  // the store type they make a tinyint(1).
+  Bit: { type: 'Boolean', make: () => mapping('bool', true, [columnType('bit(1)')]) },
 }
 
 function mysqlNumericMapping(type: string, nativeName: string) {
