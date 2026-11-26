@@ -121,9 +121,16 @@ const MONEY_FIELD = `class MoneyField(models.DecimalField):  # type: ignore[type
         return "money" if connection.vendor == "postgresql" else super().db_type(connection)
 
     def select_format(self, compiler: Any, sql: str, params: Any) -> Any:
-        if compiler.connection.vendor != "postgresql":
+        if compiler.connection.vendor != "postgresql" or compiler.query.subquery:
             return super().select_format(compiler, sql, params)
         return f"({sql})::numeric", params
+
+    def from_db_value(self, value: Any, expression: Any, connection: BaseDatabaseWrapper) -> Any:
+        if not isinstance(value, str):
+            return value
+        negative = value.startswith("-") or value.startswith("(")
+        digits = "".join(c for c in value if c.isdigit() or c == ".")
+        return Decimal(f"-{digits}" if negative else digits)
 
     def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
         if connection.vendor != "postgresql":
@@ -685,6 +692,7 @@ class Uuid(models.Model):
     expect(djangoCode(models)).toBe(
       `from datetime import datetime
 from datetime import timezone as dt_timezone
+from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
@@ -741,6 +749,31 @@ class NativeGrid(models.Model):
         db_table = "NativeGrid"
 `,
     )
+  })
+
+  it('leaves an autoincrement oid key and a money list to Django', () => {
+    const fields = [
+      makeField({
+        name: 'id',
+        type: 'Int',
+        isId: true,
+        nativeType: ['Oid', []],
+        default: { name: 'autoincrement', args: [] },
+      }),
+      makeField({ name: 'prices', type: 'Decimal', isList: true, nativeType: ['Money', []] }),
+    ]
+    expect(djangoCode([makeModel('Ledger', fields)]))
+      .toBe(`from django.contrib.postgres.fields import ArrayField
+from django.db import models
+
+
+class Ledger(models.Model):
+    id = models.AutoField(primary_key=True)
+    prices = ArrayField(models.DecimalField(max_digits=65, decimal_places=30))
+
+    class Meta:
+        db_table = "Ledger"
+`)
   })
 
   it('makes a CockroachDB column as Prisma does, and leaves Django its own elsewhere', () => {

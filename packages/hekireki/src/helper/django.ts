@@ -316,12 +316,22 @@ function nativeColumnType(field: DMMF.Field, provider: string) {
  */
 function columnTypeOf(field: DMMF.Field, provider: string) {
   if (!hasEnumTypes(provider) || field.kind !== 'scalar') return null
+  // An autoincrement key is one of Django's auto fields, which make the column themselves.
+  if (field.isId && isAutoincrement(field)) return null
   return field.type === 'DateTime' ? dateTimeColumnType(field) : nativeColumnType(field, provider)
 }
 
-/** A PostgreSQL @db.Money, which MoneyField reads as numeric. */
+/**
+ * A PostgreSQL @db.Money, which MoneyField reads as numeric. Not a list: ArrayField selects its
+ * column itself, and psycopg has no loader for money[].
+ */
 function isMoney(field: DMMF.Field, provider: string) {
-  return provider === 'postgresql' && field.type === 'Decimal' && field.nativeType?.[0] === 'Money'
+  return (
+    provider === 'postgresql' &&
+    field.type === 'Decimal' &&
+    field.nativeType?.[0] === 'Money' &&
+    !field.isList
+  )
 }
 
 function scalarElementLiteral(field: DMMF.Field, value: unknown) {
@@ -727,15 +737,24 @@ ${columnType}    def get_db_prep_value(self, value: Any, connection: BaseDatabas
 
 // PostgreSQL's money is read back as text in the session's currency format ('$1.50'), and has no
 // comparison with numeric: as Prisma does, it is selected as numeric, and a value is bound untyped,
-// as its text, which PostgreSQL takes as money.
+// as its text, which PostgreSQL takes as money. A subquery keeps it money, for the comparison it
+// feeds, and what INSERT ... RETURNING hands back, which is not selected through select_format, is
+// read from its text.
 const MONEY_FIELD = `class MoneyField(models.DecimalField):  # type: ignore[type-arg]
     def db_type(self, connection: BaseDatabaseWrapper) -> str | None:
         return "money" if connection.vendor == "postgresql" else super().db_type(connection)
 
     def select_format(self, compiler: Any, sql: str, params: Any) -> Any:
-        if compiler.connection.vendor != "postgresql":
+        if compiler.connection.vendor != "postgresql" or compiler.query.subquery:
             return super().select_format(compiler, sql, params)
         return f"({sql})::numeric", params
+
+    def from_db_value(self, value: Any, expression: Any, connection: BaseDatabaseWrapper) -> Any:
+        if not isinstance(value, str):
+            return value
+        negative = value.startswith("-") or value.startswith("(")
+        digits = "".join(c for c in value if c.isdigit() or c == ".")
+        return Decimal(f"-{digits}" if negative else digits)
 
     def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
         if connection.vendor != "postgresql":
@@ -2028,7 +2047,8 @@ export function collectGlobalImports(
       columnTypes ||
       scalarFields.some((f) => isEnumArray(f, provider) || isPlainJson(f, provider)),
     autoNow: scalarFields.some((f) => f.isUpdatedAt === true),
-    decimal: needsDecimalImport(scalarFields),
+    // MoneyField reads a value as a Decimal.
+    decimal: needsDecimalImport(scalarFields) || scalarFields.some((f) => isMoney(f, provider)),
     any: needsAnyImport(scalarFields),
     fromDatetime: ['date', 'datetime', 'time'].filter((kind) => kinds.has(kind)),
     nowHelpers: nowHelperKinds.length > 0,
