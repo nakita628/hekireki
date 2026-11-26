@@ -2543,7 +2543,7 @@ describe('an export that would take a name the module uses', () => {
     return drizzleSchema(datamodel, provider as 'postgresql', datamodel.indexes)
   }
 
-  it('renames a table named after a column function or a helper, on every provider alike', () => {
+  it('renames a table named after a column function or a helper, from a set fixed per provider', () => {
     const code = schemaOf(`
 model Bit {
   id   Int    @id
@@ -2686,6 +2686,31 @@ model StatusEnum {
 }`
     expect(schemaOf(models, 'mysql')).toContain(
       "export const statusEnum = mysqlTable('StatusEnum', ",
+    )
+    // On PostgreSQL an enum keeps its export whether or not a field uses it, so the table's does
+    // not turn on one.
+    const unused = models.replace('  status Status\n', '')
+    expect(schemaOf(unused)).toContain("export const statusEnumTable = pgTable('StatusEnum', ")
+  })
+})
+
+describe('a table name with a quote in it', () => {
+  const datamodel = (() => {
+    const result = getDMMF({
+      datamodel: [
+        [
+          'schema.prisma',
+          `datasource db {\n  provider = "postgresql"\n}\nmodel Name {\n  id Int @id\n  @@map("o'brien")\n}`,
+        ],
+      ],
+    })
+    if ('type' in result) throw new Error(result.error.message)
+    return result.datamodel
+  })()
+
+  it('is written as a string literal', () => {
+    expect(drizzleSchema(datamodel, 'postgresql', datamodel.indexes)).toContain(
+      "export const oBrien = pgTable('o\\'brien', ",
     )
   })
 })

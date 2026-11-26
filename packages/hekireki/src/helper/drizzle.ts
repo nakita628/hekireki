@@ -442,11 +442,9 @@ export function resolveExportNames(
     taken.add(name)
     return name
   }
-  // The enums the module declares, which are PostgreSQL's only and those a field uses, first.
-  const used = new Set(
-    models.flatMap((m) => m.fields.filter((f) => f.kind === 'enum').map((f) => f.type)),
-  )
-  const declared = provider === 'postgresql' ? enums.filter((e) => used.has(e.name)) : []
+  // The enums first, on PostgreSQL, the one provider whose module declares them: every one, used
+  // by a field or not, so that a table's export does not turn on whether a field uses one.
+  const declared = provider === 'postgresql' ? enums : []
   for (const declaredEnum of declared) {
     imports.names.set(`enum:${declaredEnum.name}`, claim(enumIdentifier(declaredEnum.name), ''))
   }
@@ -867,7 +865,7 @@ function makeTableConstraints(
   const columns = keyColumns?.map((f) => `table.${f}`).join(', ')
   // MySQL's primary key is always named PRIMARY, and drizzle's `primaryKey` there takes no name; a
   // single SQLite key goes unnamed, so drizzle-kit writes it inline as Prisma does.
-  const pkName = provider === 'mysql' || sqliteKey ? '' : `name: '${tableName}_pkey', `
+  const pkName = provider === 'mysql' || sqliteKey ? '' : `name: ${tsString(`${tableName}_pkey`)}, `
   const pkLine = columns === undefined ? null : `primaryKey({ ${pkName}columns: [${columns}] })`
 
   // DMMF leaves an `@ignore` field out of the model, but not out of an index that lists it: the
@@ -1088,7 +1086,7 @@ export function makeTable(
     )
     return [
       ...modelDoc,
-      `export const ${varName} = ${viewFunc}('${tableName}', ${viewColumns}).existing()`,
+      `export const ${varName} = ${viewFunc}(${tsString(tableName)}, ${viewColumns}).existing()`,
     ].join('\n')
   }
 
@@ -1113,9 +1111,10 @@ export function makeTable(
     foreignKeyNames,
   )
   if (constraints === null) {
-    return [...modelDoc, `export const ${varName} = ${tableFunc}('${tableName}', ${columns})`].join(
-      '\n',
-    )
+    return [
+      ...modelDoc,
+      `export const ${varName} = ${tableFunc}(${tsString(tableName)}, ${columns})`,
+    ].join('\n')
   }
 
   const configType = isOnForeignKeyCycle(model, models) ? EXTRA_CONFIG_TYPE[provider] : undefined
@@ -1123,7 +1122,7 @@ export function makeTable(
   const params = configType === undefined ? '(table)' : `(table): ${configType}[]`
   return [
     ...modelDoc,
-    `export const ${varName} = ${tableFunc}('${tableName}', ${columns}, ${params} => [${constraints}])`,
+    `export const ${varName} = ${tableFunc}(${tsString(tableName)}, ${columns}, ${params} => [${constraints}])`,
   ].join('\n')
 }
 
@@ -1183,15 +1182,15 @@ export function makeM2MJoinTables(
     )
     const constraints = [
       provider === 'postgresql'
-        ? `primaryKey({ name: '${tableName}_AB_pkey', columns: [table.A, table.B] })`
-        : `uniqueIndex('${tableName}_AB_unique').on(table.A, table.B)`,
-      `index('${tableName}_B_index').on(table.B)`,
+        ? `primaryKey({ name: ${tsString(`${tableName}_AB_pkey`)}, columns: [table.A, table.B] })`
+        : `uniqueIndex(${tsString(`${tableName}_AB_unique`)}).on(table.A, table.B)`,
+      `index(${tsString(`${tableName}_B_index`)}).on(table.B)`,
       ...sides.map(
         (side) =>
           `foreignKey({ name: '${constraintName(tableName, [], `${side.column}_fkey`, provider)}', columns: [table.${side.column}], foreignColumns: [${side.target}.${side.key}] }).onDelete('cascade').onUpdate('cascade')`,
       ),
     ]
-    return `export const ${joinVarName(pair.relationName, imports)} = ${tableFunc}('${tableName}', { ${columns.join(', ')} }, (table) => [${constraints.join(', ')}])`
+    return `export const ${joinVarName(pair.relationName, imports)} = ${tableFunc}(${tsString(tableName)}, { ${columns.join(', ')} }, (table) => [${constraints.join(', ')}])`
   })
 }
 
