@@ -92,8 +92,10 @@ of a key Prisma Migrate keys on a prefix (`@id(length: 100)` on a `@db.VarChar(2
 looser than Prisma's: rows whose first 100 characters are the same are refused by Prisma's table
 and taken by `AutoMigrate`'s. A prefixed key MySQL cannot take whole fails generation: one with a
 TEXT or BLOB column (or a `Bytes` with no native type, `longblob`), which MySQL keys only on a
-prefix, and one whose whole columns take more than the 3072 bytes InnoDB keys, a character
-counting 4 bytes.
+prefix, and one whose whole columns take more than the 3072 bytes InnoDB keys. The count is for
+the tables Prisma Migrate makes, `utf8mb4` (a character counting 4 bytes) in InnoDB's `DYNAMIC`
+row format: `AutoMigrate` leaves a table in the database's default character set, and a
+`COMPACT` or `REDUNDANT` table keys at most 767 bytes.
 
 `hekireki-gorm` also gives a native type the column Prisma Migrate makes for it: `uuid` for a
 PostgreSQL or CockroachDB `@db.Uuid` (not `char(36)`), `int unsigned` and the like for MySQL's

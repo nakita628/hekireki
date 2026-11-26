@@ -1096,9 +1096,18 @@ model Doc {
 }
 model Pair {
   a String @db.Text
-  b String @db.VarChar(20)
+  b String @db.VarChar(255)
 
-  @@id([a(length: 50), b(length: 20)])
+  @@id([a(length: 50), b(length: 10)])
+}
+enum Status {
+  OPEN
+}
+model Flag {
+  a      String @db.VarChar(578)
+  status Status
+
+  @@id([a(length: 100), status])
 }
 model Blob {
   data Bytes @id(length: 16)
@@ -1136,6 +1145,7 @@ model Whole {
     expect(gormProblems(models, 'mysql', indexes)).toStrictEqual([
       "model Doc: its key is on a prefix of a TEXT or BLOB column (key(length: 100)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
       "model Pair: its key is on a prefix of a TEXT or BLOB column (a(length: 50)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
+      "model Flag: its key is on a column prefix (a(length: 100)), which GORM's primaryKey cannot write, and its whole columns take 3076 bytes, more than the 3072 bytes MySQL keys; key it on shorter columns, or use another generator",
       "model Blob: its key is on a prefix of a TEXT or BLOB column (data(length: 16)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
       "model One: its key is on a prefix of a TEXT or BLOB column (key(length: 100)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
       "model Long: its key is on a column prefix (key(length: 100)), which GORM's primaryKey cannot write, and its whole columns take 4000 bytes, more than the 3072 bytes MySQL keys; key it on shorter columns, or use another generator",

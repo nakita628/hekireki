@@ -1935,8 +1935,9 @@ function keyPrefixProblems(
   const bytes = fields.reduce((sum, field) => sum + mysqlKeyBytes(byName.get(field.name)), 0)
   const key = prefixed.map((field) => `${field.name}(length: ${field.prefix})`).join(', ')
   if (unsized.length > 0) {
+    const columns = unsized.map((field) => `${field.name}(length: ${field.prefix})`).join(', ')
     return [
-      `model ${model.name}: its key is on a prefix of a TEXT or BLOB column (${key}), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator`,
+      `model ${model.name}: its key is on a prefix of a TEXT or BLOB column (${columns}), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator`,
     ]
   }
   return bytes > 3072
@@ -1952,7 +1953,8 @@ function mysqlKeyBytes(field: DMMF.Field | undefined) {
   if (field === undefined) return 0
   const [native, args] = field.nativeType ?? [undefined, []]
   if (native !== undefined) return MYSQL_NATIVE_BYTES[native]?.(args) ?? Infinity
-  return MYSQL_TYPE_BYTES[field.type] ?? (field.kind === 'enum' ? 2 : Infinity)
+  // An enum is a Go string with no type of its own, which AutoMigrate keys as varchar(191).
+  return MYSQL_TYPE_BYTES[field.kind === 'enum' ? 'String' : field.type] ?? Infinity
 }
 
 // The bytes of MySQL's DECIMAL(precision, scale): 4 for each 9 digits of either side of the point,
