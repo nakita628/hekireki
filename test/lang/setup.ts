@@ -9,8 +9,8 @@ import { getDMMF } from '@prisma/get-dmmf'
 // Regenerates test/harness/* from test/prisma/schema.prisma with the built generators
 // before the language checks run. One prisma run emits every target, so
 // running a single language's file still starts from fresh output. Further runs
-// cover test/prisma/efcore.prisma and test/prisma/exposed.prisma, the hazards
-// particular to C# and EF Core and to Kotlin and Exposed.
+// cover test/prisma/efcore.prisma, test/prisma/exposed.prisma and test/prisma/drizzle.prisma, the
+// hazards particular to C# and EF Core, to Kotlin and Exposed, and to drizzle's export names.
 //
 // The generators whose output turns most on the database — column types, keys, defaults — are
 // run again on SQLite and on MySQL: the same schema with the provider changed and the lines Prisma
@@ -49,6 +49,7 @@ const STALE_OUTPUT = [
   'django/app/models.py',
   'ecto/lib',
   'drizzle/schema.ts',
+  'drizzle/edge',
   'kysely/types.ts',
   'activerecord/models',
   'eloquent/models',
@@ -146,7 +147,7 @@ export default function setup() {
     }
   }
 
-  for (const schema of ['schema.prisma', 'efcore.prisma', 'exposed.prisma']) {
+  for (const schema of ['schema.prisma', 'efcore.prisma', 'exposed.prisma', 'drizzle.prisma']) {
     execFileSync(
       join(root, 'packages/hekireki/node_modules/.bin/prisma'),
       ['generate', '--schema', join(root, 'test/prisma', schema)],

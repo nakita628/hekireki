@@ -7,6 +7,7 @@ harness/pydantic/models.py
 harness/django/app/models.py
 harness/ecto/lib/
 harness/drizzle/schema.ts
+harness/drizzle/edge/
 harness/kysely/types.ts
 harness/activerecord/models/
 harness/activerecord/config/

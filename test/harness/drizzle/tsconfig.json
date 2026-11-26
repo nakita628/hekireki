@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "types": []
   },
-  "include": ["schema.ts", "smoke.ts"]
+  "include": ["schema.ts", "smoke.ts", "edge/schema.ts"]
 }

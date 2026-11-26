@@ -1,0 +1,82 @@
+// Models whose export would take a name the drizzle schema imports or declares: a column
+// function, a helper, a reserved word, a global the module calls, the `table` parameter, an
+// enum's export, a join table's, and table names that are not identifiers. Only Hekireki-Drizzle
+// reads it; the drizzle language check compiles it and has drizzle-kit write its migration.
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator Hekireki-Drizzle {
+  provider = "hekireki-drizzle"
+  output   = "../harness/drizzle/edge/schema.ts"
+}
+
+enum Status {
+  ON
+  OFF
+}
+
+model Bit {
+  id   Int    @id
+  mask String @db.Bit(8)
+}
+
+model TypedText {
+  id  Int    @id
+  doc String @db.Xml
+}
+
+model Delete {
+  id Int @id
+}
+
+model Crypto {
+  id String @id @default(uuid())
+}
+
+model Relations {
+  id Int @id
+}
+
+model Table {
+  id    Int    @id
+  posts Post[]
+}
+
+model Post {
+  id      Int   @id
+  tableId Int
+  table   Table @relation(fields: [tableId], references: [id])
+}
+
+model StatusEnum {
+  id     Int    @id
+  status Status
+}
+
+model OrderItem {
+  id Int @id
+
+  @@map("order-items")
+}
+
+model Code {
+  id Int @id
+
+  @@map("2fa_codes")
+}
+
+model Article {
+  id   Int   @id
+  tags Tag[]
+}
+
+model Tag {
+  id       Int       @id
+  articles Article[]
+}
+
+model ArticleToTag {
+  id Int @id
+}
