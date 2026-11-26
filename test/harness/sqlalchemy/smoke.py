@@ -48,7 +48,7 @@ def _runtime_smoke() -> None:
             str(CreateIndex(index).compile(dialect=pg_dialect))
 
     # The models are PostgreSQL's: a table SQLite cannot declare (an array, oid,
-    # money, inet) or cannot make (a dbgenerated default: gen_random_uuid(),
+    # money, inet, a sequence default) or cannot make (a dbgenerated default: gen_random_uuid(),
     # interval arithmetic) is left out, and every other one runs against
     # in-memory SQLite so INSERTs exercise the client-side defaults
     # (@updatedAt, uuid, ulid, cuid, nanoid).
@@ -56,7 +56,7 @@ def _runtime_smoke() -> None:
     for table in Base.metadata.sorted_tables:
         try:
             table.create(engine)
-        except (CompileError, OperationalError):
+        except (CompileError, OperationalError, NotImplementedError):
             continue
     with Session(engine) as session:
         session.add(Profile(id="p1", account_id="a1", meta={"k": "v"}))

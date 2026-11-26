@@ -730,6 +730,97 @@ const UTC_TRANSFORMS = `
         transform = super().get_transform(lookup_name)
         return None if transform is None else lambda lhs: transform(_UtcInstant(lhs))`
 
+// The auto field class of each integer field a non-key autoincrement column can be declared on.
+const AUTO_INCREMENT_BASES: { readonly [base: string]: { name: string; internal: string } } = {
+  IntegerField: { name: 'AutoIncrementField', internal: 'AutoField' },
+  BigIntegerField: { name: 'BigAutoIncrementField', internal: 'BigAutoField' },
+  SmallIntegerField: { name: 'SmallAutoIncrementField', internal: 'SmallAutoField' },
+  // MySQL's unsigned integers: AUTO_INCREMENT keeps them unsigned.
+  PositiveIntegerField: { name: 'PositiveAutoIncrementField', internal: 'AutoField' },
+  PositiveBigIntegerField: { name: 'PositiveBigAutoIncrementField', internal: 'BigAutoField' },
+  PositiveSmallIntegerField: {
+    name: 'PositiveSmallAutoIncrementField',
+    internal: 'SmallAutoField',
+  },
+}
+
+// What every auto-increment class shares: the column is the database's to fill, so an unset value
+// is inserted as DEFAULT and read back with RETURNING, and an update writes the stored value back.
+// It is never required in a form, and blank stays out of the migration.
+const AUTO_INCREMENT_COMMON = `    db_returning = True
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs["blank"] = True
+        super().__init__(*args, **kwargs)
+
+    def deconstruct(self) -> Any:
+        name, path, args, kwargs = super().deconstruct()
+        del kwargs["blank"]
+        return name, path, args, kwargs`
+
+const AUTO_INCREMENT_PRE_SAVE = `    def pre_save(self, model_instance: models.Model, add: bool) -> Any:
+        value = super().pre_save(model_instance, add)
+        if value is not None and not isinstance(value, DatabaseDefault):
+            return value
+        if add:
+            return DatabaseDefault(models.Value(None), output_field=self)
+        return models.F(self.attname)`
+
+// A non-key autoincrement column. Django has no auto field that is not the key: on PostgreSQL and
+// CockroachDB the field takes the internal type of Django's auto field, so the schema editor makes
+// and alters it as one (an identity column, or unique_rowid() on CockroachDB, which Prisma reads as
+// autoincrement); SQLite takes no AUTOINCREMENT on a column that is not the key. On MySQL it keeps
+// its own type, unsigned included, and is AUTO_INCREMENT.
+function autoIncrementField(
+  base: string,
+  { name, internal }: { name: string; internal: string },
+  provider: string,
+) {
+  const own =
+    provider === 'mysql'
+      ? `    def db_type(self, connection: BaseDatabaseWrapper) -> str | None:
+        if connection.vendor != "mysql":
+            return super().db_type(connection)
+        return f"{super().db_type(connection)} AUTO_INCREMENT"
+
+    def db_check(self, connection: BaseDatabaseWrapper) -> str | None:
+        return None if connection.vendor == "mysql" else super().db_check(connection)`
+      : `    def get_internal_type(self) -> str:
+        return "${internal}"
+
+    def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
+        return value if prepared else self.get_prep_value(value)
+
+    def db_type_suffix(self, connection: BaseDatabaseWrapper) -> str | None:
+        return None if connection.vendor == "sqlite" else connection.data_types_suffix.get(self.get_internal_type())`
+  return `class ${name}(models.${base}):  # type: ignore[type-arg]
+${AUTO_INCREMENT_COMMON}
+
+${own}
+
+${AUTO_INCREMENT_PRE_SAVE}`
+}
+
+/** The class a non-key autoincrement column is declared with, or null for any other field. */
+function autoIncrementClass(field: DMMF.Field, isPk: boolean, provider: string) {
+  if (isPk || !isAutoincrement(field)) return null
+  return AUTO_INCREMENT_BASES[columnDjangoField(field, provider).ctor]?.name ?? null
+}
+
+// The non-key autoincrement columns of the models, with the Django field each is declared on: not
+// the single-field key, which is Django's own auto field, nor a foreign key's scalar.
+function autoIncrementBases(models: readonly DMMF.Model[], provider: string) {
+  return models.flatMap((model) => {
+    const pk = primaryKeyFields(model)
+    const singlePk = pk.length === 1 ? pk[0] : undefined
+    const collapsed = new Set(singleColumnBelongsTo(model).map((f) => f.relationFromFields?.[0]))
+    return model.fields
+      .filter((f) => f.kind === 'scalar' && !collapsed.has(f.name))
+      .filter((f) => autoIncrementClass(f, f.name === singlePk, provider) !== null)
+      .map((f) => columnDjangoField(f, provider).ctor)
+  })
+}
+
 // cspell:ignore datetimefield
 function utcDateTimeField(provider: string) {
   const zoneless = hasEnumTypes(provider)
@@ -987,6 +1078,9 @@ export function collectFieldClasses(models: readonly DMMF.Model[], provider: str
     scalarFields.some((f) => holdsUtc(f, provider)) ? utcDateTimeField(provider) : null,
     ...stampedClasses.map((f) => stampedField(f, provider)),
     columnFields.some((f) => isMoney(f, provider)) ? MONEY_FIELD : null,
+    ...Object.entries(AUTO_INCREMENT_BASES)
+      .filter(([base]) => autoIncrementBases(models, provider).includes(base))
+      .map(([base, auto]) => autoIncrementField(base, auto, provider)),
     scalarFields.some((f) => isEnumArray(f, provider)) ? ENUM_ARRAY_FIELD : null,
     scalarFields.some((f) => isPlainJson(f, provider)) ? PLAIN_JSON_FIELD : null,
     scalarFields.some((f) => f.isUpdatedAt === true) ? AUTO_NOW_QUERY_SET : null,
@@ -1108,6 +1202,12 @@ function scalarFieldClass(field: DMMF.Field, provider: string, ctor: string) {
   return columnTypeOf(field, provider) === null ? `models.${ctor}` : `Native${ctor}`
 }
 
+// The class a scalar column of a model is declared with: a non-key autoincrement column's own, or
+// the one its type takes.
+function columnFieldClass(field: DMMF.Field, isPk: boolean, provider: string, ctor: string) {
+  return autoIncrementClass(field, isPk, provider) ?? scalarFieldClass(field, provider, ctor)
+}
+
 // What a field's class is given beyond Django's own arguments: the column Prisma makes, and for an
 // oid, which Django holds in a bigint, the range it takes.
 function columnTypeArgs(field: DMMF.Field, provider: string) {
@@ -1178,7 +1278,7 @@ function generateScalarField(
     emptyStringPk ? 'default=None' : null,
   ].filter((a) => a !== null)
 
-  const fieldClass = scalarFieldClass(field, provider, ctorResolved.ctor)
+  const fieldClass = columnFieldClass(field, isPk, provider, ctorResolved.ctor)
   if (field.isList) {
     const inner = `${fieldClass}(${ctorResolved.typeArgs.join(', ')})`
     if (isEnumArray(field, provider)) {
@@ -1961,6 +2061,7 @@ type ImportNeeds = {
   readonly enumArray: boolean
   readonly plainJson: boolean
   readonly columnTypes: boolean
+  readonly autoIncrement: boolean
   readonly validators: boolean
   readonly databaseWrapper: boolean
   readonly autoNow: boolean
@@ -2004,6 +2105,14 @@ function djangoImports(needs: ImportNeeds) {
   ].filter((l) => l !== null)
 }
 
+function expressionsImport(needs: ImportNeeds) {
+  const names = [needs.autoIncrement ? 'DatabaseDefault' : null, needs.rawSql ? 'RawSQL' : null]
+  const imported = names.filter((name) => name !== null)
+  return imported.length > 0
+    ? `from django.db.models.expressions import ${imported.join(', ')}`
+    : null
+}
+
 function thirdPartyImports(needs: ImportNeeds) {
   return [
     // cuid ships no types, nor does typeshed have any; nanoid's are typeshed's types-nanoid.
@@ -2016,7 +2125,7 @@ function thirdPartyImports(needs: ImportNeeds) {
     needs.databaseWrapper ? 'from django.db.backends.base.base import BaseDatabaseWrapper' : null,
     // Under a name of its own: the module holds a class for each model, and one may be named Cast.
     needs.plainJson ? 'from django.db.models import functions as db_functions' : null,
-    needs.rawSql ? 'from django.db.models.expressions import RawSQL' : null,
+    expressionsImport(needs),
     needs.utcField || needs.autoNow || needs.nowDatetime
       ? 'from django.utils import timezone'
       : null,
@@ -2033,6 +2142,7 @@ export function collectGlobalImports(
   const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
   const needsUtcField = scalarFields.some((f) => holdsUtc(f, provider))
   const columnFields = ownColumnFields(models)
+  const autoIncrement = autoIncrementBases(models, provider).length > 0
   const columnTypes =
     nativeClassesOf(columnFields, provider).size > 0 ||
     columnFields.some((f) => isMoney(f, provider))
@@ -2069,6 +2179,7 @@ export function collectGlobalImports(
     enumArray: scalarFields.some((f) => isEnumArray(f, provider)),
     plainJson: scalarFields.some((f) => isPlainJson(f, provider)),
     columnTypes,
+    autoIncrement,
     validators: columnFields.some((f) =>
       columnTypeArgs(f, provider).some((arg) => arg.startsWith('validators=')),
     ),
@@ -2077,6 +2188,7 @@ export function collectGlobalImports(
     databaseWrapper:
       needsUtcField ||
       columnTypes ||
+      autoIncrement ||
       scalarFields.some((f) => isEnumArray(f, provider) || isPlainJson(f, provider)),
     autoNow: scalarFields.some((f) => f.isUpdatedAt === true),
     // MoneyField reads a value as a Decimal.

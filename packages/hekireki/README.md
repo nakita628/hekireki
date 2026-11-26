@@ -159,6 +159,19 @@ them through the lookup (`values("created_at__date")`) under a time zone other t
 `migrations.RunSQL('ALTER TABLE "T" ALTER COLUMN "c" TYPE xml USING "c"::xml',
 state_operations=[...the AlterField...])`.
 
+`hekireki-django` declares a `@default(autoincrement())` column that is not the model's single
+`@id` with an auto field of its own (`AutoIncrementField`, `BigAutoIncrementField`,
+`SmallAutoIncrementField`): an unset value is inserted as `DEFAULT` and read back with `RETURNING`,
+and `save()` keeps the stored value. On PostgreSQL and CockroachDB it is made as Django's own auto
+field is, an identity column (`unique_rowid()` on CockroachDB), which Prisma reads as autoincrement.
+On MySQL it keeps its type, unsigned included (`PositiveAutoIncrementField`), and is
+`AUTO_INCREMENT`. MySQL has no `RETURNING`, so reload the row (`refresh_from_db()`) to read the
+value; and MySQL wants an `AUTO_INCREMENT` column to be a key when the table is made, which Django
+makes an `@@index` only after, so give such a column `@unique` or let Prisma create the table. An
+existing column gets an `AlterField`. On PostgreSQL, the identity it adds starts at 1, so set it past
+the values already there:
+`SELECT setval(pg_get_serial_sequence('"T"', 'c'), (SELECT max("c") FROM "T"))`.
+
 On PostgreSQL, hand the `MapEnums` of the `DbContext` `hekireki-efcore` writes to Npgsql:
 `UseNpgsql(connectionString, AppDbContext.MapEnums)`, or `AppDbContext.MapEnums(builder)` on your
 own `NpgsqlDataSourceBuilder` as well when you pass `UseNpgsql` the data source it builds. It maps
