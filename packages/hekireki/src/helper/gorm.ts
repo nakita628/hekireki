@@ -336,18 +336,22 @@ function gormDefault(
     field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
   // Prisma Migrate writes now() as DEFAULT CURRENT_TIMESTAMP; the hook fills the value all the same.
   const nowDefault = isNowDefault && isPostgresFamily(provider) ? 'CURRENT_TIMESTAMP' : null
-  // A single integer key's literal default is kept: the key says autoIncrement:false
-  // (isImplicitAutoIncrement), and the default: tag is what leaves a zero one to the database.
-  const isIntegerLiteralKey =
-    isPk && ['Int', 'BigInt'].includes(field.type) && !isFunctionDefault(field.default)
   const value =
     dbGeneratedDefault(field) ??
     dateTimeDefault(field, provider) ??
     nowDefault ??
-    ((!isPk || isCompositePk || isIntegerLiteralKey) && !isNowDefault && field.isUpdatedAt !== true
+    (keepsLiteralDefault(field, isPk, isCompositePk) && !isNowDefault && field.isUpdatedAt !== true
       ? (enumMappedDefault(field, enums) ?? formatGoDefault(field.default, field.type, field.kind))
       : null)
   return value !== null && isMoney(field, provider) ? moneyDefault(value) : value
+}
+
+// A single key's literal default is left out, except an integer key's: that key says
+// autoIncrement:false (isImplicitAutoIncrement), and the default: tag is what leaves a zero one to
+// the database.
+function keepsLiteralDefault(field: DMMF.Field, isPk: boolean, isCompositePk: boolean) {
+  if (!isPk || isCompositePk) return true
+  return ['Int', 'BigInt'].includes(field.type) && !isFunctionDefault(field.default)
 }
 
 // GORM parses a number default into a float64 and inserts it bare where the field is zero, past
@@ -389,13 +393,11 @@ function primaryKeyTags(
   // Prisma allows autoincrement() on a @unique field that is not the key (a serial column on
   // PostgreSQL, AUTO_INCREMENT on MySQL). GORM gives such a column its default only when the tag
   // says autoIncrement, and leaves the field out of an INSERT while it is zero; without it GORM
-  // makes a plain column and writes 0. SQL Server's IDENTITY cannot be updated, and GORM's driver
-  // leaves out of an UPDATE only the key it picks, so such a column there is written on create
-  // only (where GORM leaves it out while it is zero).
-  if (!isPk) {
-    if (!isAutoincrement(field)) return []
-    return provider === 'sqlserver' ? ['autoIncrement', '<-:create'] : ['autoIncrement']
-  }
+  // makes a plain column and writes 0. The column is written on create only (where GORM leaves it
+  // out while it is zero): SQL Server refuses to update an IDENTITY, which GORM's driver leaves
+  // out of an UPDATE only for the key it picks, and on MySQL, which has no RETURNING, the field
+  // stays 0 after a create, which a Save would otherwise write over the database's value.
+  if (!isPk) return isAutoincrement(field) ? ['autoIncrement', '<-:create'] : []
   const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
   // A native type wins (columnTypeTag); on MySQL such a key is a String like any other,
   // VARCHAR(191) (isMysqlDefaultString), and on PostgreSQL text, as Prisma Migrate makes it.
@@ -1172,7 +1174,8 @@ function generateStructField(
 // The key field GORM makes auto-increment when its tag does not say (schema.Parse, gorm v1.31.2):
 // the one it finds by the name id, then ID (a column name first, then a Go field name), when that
 // is a key field, and otherwise the sole key field. Of a composite key with no such field GORM
-// makes none auto-increment.
+// makes none auto-increment. (A struct with no key at all, a view's, GORM keys by its ID field;
+// no key tag is written there, so none is picked here.)
 function gormPickedKey(
   scalarFields: readonly DMMF.Field[],
   keyNames: ReadonlySet<string>,
