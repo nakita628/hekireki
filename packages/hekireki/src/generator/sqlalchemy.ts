@@ -47,7 +47,7 @@ export function generateSingleFile(
     ...importLines,
     '',
     '',
-    ...generateBase(models, provider),
+    ...generateBase(models, provider, idx, views),
     ...m2mLines,
     '',
     '',

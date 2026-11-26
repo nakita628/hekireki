@@ -4059,3 +4059,81 @@ model auth_group_permissions {
     ).toContain('name="auth_group_permissions_group_id_fkey"')
   })
 })
+
+// SQLAlchemy's PrimaryKeyConstraint takes plain columns: a MySQL key on a column prefix is the
+// module's PrefixedPrimaryKey, whose DDL writes the prefix for MySQL and MariaDB.
+describe('a MySQL primary key on a column prefix', () => {
+  const prefixed = `model Doc {
+  key  String @id(length: 100) @db.Text
+  body String
+}
+model Pair {
+  a String @db.Text
+  b Int
+
+  @@id([a(length: 50), b])
+}`
+
+  it('declares PrefixedPrimaryKey once and keys each model on it', () => {
+    const code = generateFor('mysql', prefixed)
+    expect(code).toContain(`from sqlalchemy import PrimaryKeyConstraint, String, Text
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Any
+
+
+class PrefixedPrimaryKey(PrimaryKeyConstraint):
+    """A primary key MySQL keys on a prefix of a column, as Prisma Migrate writes \`@id(length: N)\`."""
+
+
+PrefixedPrimaryKey.argument_for("mysql", "length", None)
+
+
+@compiles(PrefixedPrimaryKey, "mysql", "mariadb")
+def _prefixed_primary_key(constraint: PrefixedPrimaryKey, compiler: Any, **kw: Any) -> str:
+    lengths = constraint.dialect_options["mysql"]["length"] or {}
+    columns = ", ".join(
+        f"{compiler.preparer.quote(column.name)}({lengths[column.name]})"
+        if column.name in lengths
+        else compiler.preparer.quote(column.name)
+        for column in constraint.columns
+    )
+    return f"PRIMARY KEY ({columns})"
+`)
+    expect(code).toContain(`    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    body: Mapped[str]
+
+    __table_args__ = (
+        PrefixedPrimaryKey("key", mysql_length={"key": 100}),
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
+    )`)
+    expect(code).toContain('        PrefixedPrimaryKey("a", "b", mysql_length={"a": 50}),\n')
+  })
+
+  it('leaves a length that covers the column, and every other provider, a plain key', () => {
+    const whole = generateFor(
+      'mysql',
+      'model Whole {\n  code String @id(length: 20) @db.VarChar(20)\n}',
+    )
+    expect(whole).not.toContain('PrefixedPrimaryKey')
+    expect(whole).toContain('    code: Mapped[str] = mapped_column(String(20), primary_key=True)\n')
+    // The same key, with its length, written for PostgreSQL, which keys no prefix.
+    const { models, enums, indexes } = datamodelOf(
+      getDMMF({
+        datamodel: [['schema.prisma', `datasource db {\n  provider = "mysql"\n}\n${prefixed}`]],
+      }),
+    )
+    expect(generateSingleFile(models, enums, indexes, 'postgresql')).not.toContain(
+      'PrefixedPrimaryKey',
+    )
+  })
+
+  it('renames a model named after the class', () => {
+    const code = generateFor(
+      'mysql',
+      'model PrefixedPrimaryKey {\n  id String @id(length: 50) @db.Text\n}',
+    )
+    expect(code).toContain('class PrefixedPrimaryKey_(Base):')
+    expect(code).toContain('        PrefixedPrimaryKey("id", mysql_length={"id": 50}),\n')
+  })
+})

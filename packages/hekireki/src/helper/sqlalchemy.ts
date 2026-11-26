@@ -124,6 +124,7 @@ const MODULE_CLASSES = new Set([
   'MetaData',
   'Numeric',
   'Optional',
+  'PrefixedPrimaryKey',
   'PrimaryKeyConstraint',
   'Sequence',
   'SmallInteger',
@@ -1212,6 +1213,81 @@ function keyOrderConstraint(model: DMMF.Model) {
   return `PrimaryKeyConstraint(${columns.join(', ')})`
 }
 
+// The prefix MySQL keys each column of a model's @id / @@id on (`@id(length: 100)`), as Prisma
+// Migrate writes it, `key`(100): a TEXT or BLOB key cannot be keyed whole. A length that covers the
+// column is none. A model keyed by a @unique has no table key to give one.
+function keyPrefixes(model: DMMF.Model, indexes: readonly DMMF.Index[], provider: string) {
+  if (provider !== 'mysql') return []
+  const keyIndex = indexes.find((idx) => idx.model === model.name && idx.type === 'id')
+  return (keyIndex?.fields ?? []).flatMap((field) => {
+    const prefix = indexPrefix(model, field)
+    return prefix === undefined ? [] : [{ column: fieldColumn(model, field.name), prefix }]
+  })
+}
+
+// SQLAlchemy's PrimaryKeyConstraint takes plain columns: a key on a prefix is the module's
+// PrefixedPrimaryKey, in Prisma's key order, with the prefix of each such column.
+function prefixedKeyConstraint(
+  model: DMMF.Model,
+  indexes: readonly DMMF.Index[],
+  provider: string,
+) {
+  const prefixes = keyPrefixes(model, indexes, provider)
+  if (prefixes.length === 0) return null
+  const keyFields =
+    model.primaryKey?.fields ?? model.fields.filter((f) => f.isId).map((f) => f.name)
+  const columns = keyFields.map((name) => toPythonString(fieldColumn(model, name)))
+  const lengths = prefixes.map((p) => `${toPythonString(p.column)}: ${p.prefix}`).join(', ')
+  return `PrefixedPrimaryKey(${columns.join(', ')}, mysql_length={${lengths}})`
+}
+
+/** Whether a model of the module keys on a column prefix, which PrefixedPrimaryKey writes. */
+function usesPrefixedKey(
+  models: readonly DMMF.Model[],
+  indexes: readonly DMMF.Index[],
+  provider: string,
+  views: ReadonlySet<string>,
+) {
+  return models.some(
+    (model) => !views.has(model.name) && keyPrefixes(model, indexes, provider).length > 0,
+  )
+}
+
+// MySQL keys a TEXT or BLOB column only on a prefix, which no PrimaryKeyConstraint argument says:
+// the length is registered as a dialect option of a subclass (other keys keep theirs), and the
+// subclass's DDL is written for MySQL and MariaDB with it. Elsewhere it is a plain key.
+const PREFIXED_PRIMARY_KEY = [
+  'class PrefixedPrimaryKey(PrimaryKeyConstraint):',
+  '    """A primary key MySQL keys on a prefix of a column, as Prisma Migrate writes `@id(length: N)`."""',
+  '',
+  '',
+  'PrefixedPrimaryKey.argument_for("mysql", "length", None)',
+  '',
+  '',
+  '@compiles(PrefixedPrimaryKey, "mysql", "mariadb")',
+  'def _prefixed_primary_key(constraint: PrefixedPrimaryKey, compiler: Any, **kw: Any) -> str:',
+  '    lengths = constraint.dialect_options["mysql"]["length"] or {}',
+  '    columns = ", ".join(',
+  '        f"{compiler.preparer.quote(column.name)}({lengths[column.name]})"',
+  '        if column.name in lengths',
+  '        else compiler.preparer.quote(column.name)',
+  '        for column in constraint.columns',
+  '    )',
+  '    return f"PRIMARY KEY ({columns})"',
+  '',
+  '',
+]
+
+// PrefixedPrimaryKey, written once where a model keys on a column prefix.
+function prefixedKeyLines(
+  models: readonly DMMF.Model[],
+  indexes: readonly DMMF.Index[],
+  provider: string,
+  views: ReadonlySet<string>,
+) {
+  return usesPrefixedKey(models, indexes, provider, views) ? PREFIXED_PRIMARY_KEY : []
+}
+
 function generateTableArgs(
   model: DMMF.Model,
   allModels: readonly DMMF.Model[],
@@ -1277,7 +1353,7 @@ function generateTableArgs(
   // SQLite's AUTOINCREMENT on a lone Int key, whether or not it defaults to autoincrement() (a
   // BigInt's is no INTEGER key, and goes without).
   const options = tableOptions(model, provider)
-  const keyOrder = keyOrderConstraint(model)
+  const keyOrder = prefixedKeyConstraint(model, indexes, provider) ?? keyOrderConstraint(model)
   const allConstraints = [
     ...(keyOrder === null ? [] : [keyOrder]),
     ...indexConstraints,
@@ -1759,7 +1835,9 @@ function modelSaImports(
     ...columns,
     ...(foreignKeys.length > 0 ? ['ForeignKey'] : []),
     ...(foreignKeys.some((assoc) => assoc.foreignKeys.length > 1) ? ['ForeignKeyConstraint'] : []),
-    ...(keyOrderConstraint(model) === null ? [] : ['PrimaryKeyConstraint']),
+    ...(keyOrderConstraint(model) !== null || keyPrefixes(model, indexes, provider).length > 0
+      ? ['PrimaryKeyConstraint']
+      : []),
     ...(modelIndexes(model, indexes).length > 0 ? ['Index'] : []),
     ...(readsLiteralColumn(model, indexes, provider) ? ['literal_column'] : []),
     ...autoincrementSaImports(model, provider),
@@ -1874,7 +1952,10 @@ export function collectGlobalImports(
   provider: string,
   views: ReadonlySet<string> = new Set(),
 ) {
-  const needs = importNeeds(models, provider)
+  const prefixedKey = usesPrefixedKey(models, indexes, provider, views)
+  const needs = prefixedKey
+    ? { ...importNeeds(models, provider), compiles: true, any: true }
+    : importNeeds(models, provider)
   const saImports = new Set([
     ...models.flatMap((model) => modelSaImports(model, models, indexes, provider, views)),
     ...joinTableSaImports(m2mTables, provider),
@@ -1961,7 +2042,12 @@ function utcDateTimeClass(provider: string, needsUtcTimestamp: boolean) {
  * for `now()` and `@updatedAt`. The base names keys as Prisma Migrate does and maps each Python
  * type to the column Prisma Migrate gives it where SQLAlchemy's own is another.
  */
-export function generateBase(models: readonly DMMF.Model[], provider: string) {
+export function generateBase(
+  models: readonly DMMF.Model[],
+  provider: string,
+  indexes: readonly DMMF.Index[],
+  views: ReadonlySet<string>,
+) {
   const needsUtcDateTime = usesUtcDateTime(models)
   const needsUtcTimestamp = provider === 'mysql' && usesNativeType(models, ['Timestamp'])
   const utcDateTime = needsUtcDateTime ? utcDateTimeClass(provider, needsUtcTimestamp) : []
@@ -2040,6 +2126,7 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
       ]
     : []
   const annotations = annotationMapEntries(models, provider)
+  const prefixedKeyClass = prefixedKeyLines(models, indexes, provider, views)
   const body = [
     // Prisma Migrate's name for a key, `<table>_pkey`.
     ...(provider === 'mysql' || provider === 'sqlite'
@@ -2054,6 +2141,7 @@ export function generateBase(models: readonly DMMF.Model[], provider: string) {
     ...jsonb,
     ...xml,
     ...utcNow,
+    ...prefixedKeyClass,
     'class Base(DeclarativeBase):',
     ...(body.length > 0 ? body : ['    pass']),
   ]

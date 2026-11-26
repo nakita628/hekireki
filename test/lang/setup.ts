@@ -45,6 +45,7 @@ const STALE_OUTPUT = [
   'gorm/model/models.go',
   'sea-orm/src/entities',
   'sqlalchemy/models.py',
+  'sqlalchemy/edge',
   'pydantic/models.py',
   'django/app/models.py',
   'ecto/lib',
@@ -147,7 +148,13 @@ export default function setup() {
     }
   }
 
-  for (const schema of ['schema.prisma', 'efcore.prisma', 'exposed.prisma', 'drizzle.prisma']) {
+  for (const schema of [
+    'schema.prisma',
+    'efcore.prisma',
+    'exposed.prisma',
+    'drizzle.prisma',
+    'sqlalchemy.prisma',
+  ]) {
     execFileSync(
       join(root, 'packages/hekireki/node_modules/.bin/prisma'),
       ['generate', '--schema', join(root, 'test/prisma', schema)],

@@ -3,6 +3,7 @@
 harness/gorm/model/models.go
 harness/sea-orm/src/entities/
 harness/sqlalchemy/models.py
+harness/sqlalchemy/edge/
 harness/pydantic/models.py
 harness/django/app/models.py
 harness/ecto/lib/
