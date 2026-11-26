@@ -4117,7 +4117,23 @@ def _prefixed_primary_key(constraint: PrefixedPrimaryKey, compiler: Any, **kw: A
     )
     expect(whole).not.toContain('PrefixedPrimaryKey')
     expect(whole).toContain('    code: Mapped[str] = mapped_column(String(20), primary_key=True)\n')
-    const postgres = generateFor('postgresql', 'model Doc {\n  key  String @id\n  body String\n}')
-    expect(postgres).not.toContain('PrefixedPrimaryKey')
+    // The same key, with its length, written for PostgreSQL, which keys no prefix.
+    const { models, enums, indexes } = datamodelOf(
+      getDMMF({
+        datamodel: [['schema.prisma', `datasource db {\n  provider = "mysql"\n}\n${prefixed}`]],
+      }),
+    )
+    expect(generateSingleFile(models, enums, indexes, 'postgresql')).not.toContain(
+      'PrefixedPrimaryKey',
+    )
+  })
+
+  it('renames a model named after the class', () => {
+    const code = generateFor(
+      'mysql',
+      'model PrefixedPrimaryKey {\n  id String @id(length: 50) @db.Text\n}',
+    )
+    expect(code).toContain('class PrefixedPrimaryKey_(Base):')
+    expect(code).toContain('        PrefixedPrimaryKey("id", mysql_length={"id": 50}),\n')
   })
 })

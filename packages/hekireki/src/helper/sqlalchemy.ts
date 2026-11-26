@@ -124,6 +124,7 @@ const MODULE_CLASSES = new Set([
   'MetaData',
   'Numeric',
   'Optional',
+  'PrefixedPrimaryKey',
   'PrimaryKeyConstraint',
   'Sequence',
   'SmallInteger',
@@ -1245,8 +1246,11 @@ function usesPrefixedKey(
   models: readonly DMMF.Model[],
   indexes: readonly DMMF.Index[],
   provider: string,
+  views: ReadonlySet<string>,
 ) {
-  return models.some((model) => keyPrefixes(model, indexes, provider).length > 0)
+  return models.some(
+    (model) => !views.has(model.name) && keyPrefixes(model, indexes, provider).length > 0,
+  )
 }
 
 // MySQL keys a TEXT or BLOB column only on a prefix, which no PrimaryKeyConstraint argument says:
@@ -1279,8 +1283,9 @@ function prefixedKeyLines(
   models: readonly DMMF.Model[],
   indexes: readonly DMMF.Index[],
   provider: string,
+  views: ReadonlySet<string>,
 ) {
-  return usesPrefixedKey(models, indexes, provider) ? PREFIXED_PRIMARY_KEY : []
+  return usesPrefixedKey(models, indexes, provider, views) ? PREFIXED_PRIMARY_KEY : []
 }
 
 function generateTableArgs(
@@ -1947,7 +1952,7 @@ export function collectGlobalImports(
   provider: string,
   views: ReadonlySet<string> = new Set(),
 ) {
-  const prefixedKey = usesPrefixedKey(models, indexes, provider)
+  const prefixedKey = usesPrefixedKey(models, indexes, provider, views)
   const needs = prefixedKey
     ? { ...importNeeds(models, provider), compiles: true, any: true }
     : importNeeds(models, provider)
@@ -2041,6 +2046,7 @@ export function generateBase(
   models: readonly DMMF.Model[],
   provider: string,
   indexes: readonly DMMF.Index[],
+  views: ReadonlySet<string>,
 ) {
   const needsUtcDateTime = usesUtcDateTime(models)
   const needsUtcTimestamp = provider === 'mysql' && usesNativeType(models, ['Timestamp'])
@@ -2120,7 +2126,7 @@ export function generateBase(
       ]
     : []
   const annotations = annotationMapEntries(models, provider)
-  const prefixedKeyClass = prefixedKeyLines(models, indexes, provider)
+  const prefixedKeyClass = prefixedKeyLines(models, indexes, provider, views)
   const body = [
     // Prisma Migrate's name for a key, `<table>_pkey`.
     ...(provider === 'mysql' || provider === 'sqlite'
