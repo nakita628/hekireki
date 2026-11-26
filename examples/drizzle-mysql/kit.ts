@@ -13,7 +13,8 @@ const result = spawnSync(
   ['push', '--dialect=mysql', '--schema=src/db/schema.ts', `--url=${url}`, '--force', '--verbose'],
   { encoding: 'utf8' },
 )
-const output = `${result.stdout}${result.stderr}`
+if (result.error !== undefined) throw result.error
+const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
 const bitStatements = output.split('\n').filter((line) => /`(on|off|maybe|mask)`|bit\(/u.test(line))
 if (result.status !== 0 || bitStatements.length > 0) {
   throw new Error(`drizzle-kit push would change the BIT columns:\n${output}`)
