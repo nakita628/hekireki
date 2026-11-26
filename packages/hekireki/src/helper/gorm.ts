@@ -1855,6 +1855,44 @@ export function gormProblems(
   })
 }
 
+// What a Prisma type with no native type is on MySQL, in bytes: String is varchar(191), Float
+// DOUBLE, DateTime DATETIME(3), Decimal DECIMAL(65,30).
+const MYSQL_TYPE_BYTES: { readonly [type: string]: number } = {
+  String: 191 * 4,
+  Int: 4,
+  BigInt: 8,
+  Boolean: 1,
+  Float: 8,
+  Decimal: 30,
+  DateTime: 7,
+}
+
+// The fractional seconds of a time type take a byte for each two digits.
+function fractionBytes(args: readonly string[]) {
+  return Math.ceil(Number(args[0] ?? 0) / 2)
+}
+
+const MYSQL_NATIVE_BYTES: { readonly [native: string]: (args: readonly string[]) => number } = {
+  TinyInt: () => 1,
+  UnsignedTinyInt: () => 1,
+  SmallInt: () => 2,
+  UnsignedSmallInt: () => 2,
+  MediumInt: () => 3,
+  UnsignedMediumInt: () => 3,
+  Int: () => 4,
+  UnsignedInt: () => 4,
+  BigInt: () => 8,
+  UnsignedBigInt: () => 8,
+  Year: () => 1,
+  Bit: (args) => Math.ceil(Number(args[0] ?? 1) / 8),
+  Float: () => 4,
+  Double: () => 8,
+  Date: () => 3,
+  Time: (args) => 3 + fractionBytes(args),
+  DateTime: (args) => 5 + fractionBytes(args),
+  Timestamp: (args) => 4 + fractionBytes(args),
+}
+
 // A MySQL key on a prefix of a column (`@id(length: N)`, `@@id([a(length: N)])`, or the length of
 // the unique that keys a model without an @id), which GORM's primaryKey cannot write: it has no
 // setting for a prefix, so AutoMigrate keys the whole column. That is a looser key than Prisma's
@@ -1882,11 +1920,9 @@ function keyPrefixProblems(
     return prefix === undefined ? [] : [{ name: field.name, prefix }]
   })
   if (prefixed.length === 0) return []
-  const columns = fields.map((field) => model.fields.find((f) => f.name === field.name))
-  const unsized = prefixed.filter(
-    (field) => mysqlKeyBytes(model.fields.find((f) => f.name === field.name)) === Infinity,
-  )
-  const bytes = columns.reduce((sum, field) => sum + mysqlKeyBytes(field), 0)
+  const byName = new Map(model.fields.map((field) => [field.name, field]))
+  const unsized = prefixed.filter((field) => mysqlKeyBytes(byName.get(field.name)) === Infinity)
+  const bytes = fields.reduce((sum, field) => sum + mysqlKeyBytes(byName.get(field.name)), 0)
   const key = prefixed.map((field) => `${field.name}(length: ${field.prefix})`).join(', ')
   if (unsized.length > 0) {
     return [
@@ -1919,42 +1955,6 @@ function decimalBytes(precision: number, scale: number) {
   const leftover = [0, 1, 1, 2, 2, 3, 3, 4, 4]
   const side = (digits: number) => Math.floor(digits / 9) * 4 + (leftover[digits % 9] ?? 0)
   return side(precision - scale) + side(scale)
-}
-
-// What a Prisma type with no native type is on MySQL, in bytes: String is varchar(191), Float
-// DOUBLE, DateTime DATETIME(3), Decimal DECIMAL(65,30).
-const MYSQL_TYPE_BYTES: { readonly [type: string]: number } = {
-  String: 191 * 4,
-  Int: 4,
-  BigInt: 8,
-  Boolean: 1,
-  Float: 8,
-  Decimal: 30,
-  DateTime: 7,
-}
-
-// The fractional seconds of a time type take a byte for each two digits.
-const fractionBytes = (args: readonly string[]) => Math.ceil(Number(args[0] ?? 0) / 2)
-
-const MYSQL_NATIVE_BYTES: { readonly [native: string]: (args: readonly string[]) => number } = {
-  TinyInt: () => 1,
-  UnsignedTinyInt: () => 1,
-  SmallInt: () => 2,
-  UnsignedSmallInt: () => 2,
-  MediumInt: () => 3,
-  UnsignedMediumInt: () => 3,
-  Int: () => 4,
-  UnsignedInt: () => 4,
-  BigInt: () => 8,
-  UnsignedBigInt: () => 8,
-  Year: () => 1,
-  Bit: (args) => Math.ceil(Number(args[0] ?? 1) / 8),
-  Float: () => 4,
-  Double: () => 8,
-  Date: () => 3,
-  Time: (args) => 3 + fractionBytes(args),
-  DateTime: (args) => 5 + fractionBytes(args),
-  Timestamp: (args) => 4 + fractionBytes(args),
 }
 
 function standardImports(
