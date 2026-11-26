@@ -931,7 +931,7 @@ model Item {
     expect(code).toContain(
       [
         // INTEGER UNSIGNED NOT NULL AUTO_INCREMENT
-        '\tID    int     `gorm:"column:id;primaryKey;autoIncrement;type:int unsigned" json:"id"`',
+        '\tID    int     `gorm:"column:id;primaryKey;autoIncrement;type:int unsigned AUTO_INCREMENT" json:"id"`',
         // DECIMAL(65, 30)
         '\tPrice float64 `gorm:"column:price;type:decimal(65,30);not null" json:"price"`',
         '\tMt    string  `gorm:"column:mt;type:mediumtext;not null" json:"mt"`',
@@ -1025,7 +1025,7 @@ model Counter {
 
   it('marks the column autoIncrement on PostgreSQL, which GORM makes serial', () => {
     expect(gormFor(schema, 'postgresql')).toContain(
-      '\tMetricID int    `gorm:"column:metric_id;autoIncrement;<-:create;uniqueIndex:Counter_metric_id_key;size:32;not null" json:"metric_id"`',
+      '\tMetricID int    `gorm:"column:metric_id;autoIncrement;uniqueIndex:Counter_metric_id_key;size:32;not null" json:"metric_id"`',
     )
   })
 
@@ -1034,6 +1034,16 @@ model Counter {
       '\tMetricID int    `gorm:"column:metric_id;autoIncrement;<-:create;uniqueIndex:Counter_metric_id_key;size:32;not null" json:"metric_id"`',
     )
   })
+  // MySQL's driver adds AUTO_INCREMENT only to its own integer types: a native one carries it.
+  it('writes AUTO_INCREMENT into a native integer type on MySQL', () => {
+    expect(
+      gormFor(
+        'model Tick {\n  id  String @id\n  seq Int    @unique @default(autoincrement()) @db.SmallInt\n}\n',
+        'mysql',
+      ),
+    ).toContain('autoIncrement;<-:create;uniqueIndex:Tick_seq_key;type:smallint AUTO_INCREMENT')
+  })
+
   // MySQL allows one AUTO_INCREMENT column a table: the key, which GORM would make one too, says it
   // is not.
   it('keeps an Int key beside it from auto-incrementing on MySQL', () => {
@@ -1066,7 +1076,7 @@ model Tick {
     expect(code).toContain('`gorm:"column:id;primaryKey;autoIncrement;type:smallserial" json:"id"`')
     // An int64 is GORM's own type, which it makes bigserial.
     expect(code).toContain(
-      '`gorm:"column:seq;autoIncrement;<-:create;uniqueIndex:Tick_seq_key;not null" json:"seq"`',
+      '`gorm:"column:seq;autoIncrement;uniqueIndex:Tick_seq_key;not null" json:"seq"`',
     )
   })
 })
@@ -1104,8 +1114,6 @@ describe('generateGormModels integer key with no autoincrement()', () => {
     ).not.toContain('autoIncrement:false')
   })
 
-  // The default: tag leaves a zero key out as well; auto-incrementing too, AutoMigrate would write
-  // `bigserial DEFAULT (1000 + 1)`, which PostgreSQL refuses (multiple default values).
   // The default: tag leaves a zero key to the column's DEFAULT, which Prisma Migrate writes.
   it('keeps a literal default on an integer key beside autoIncrement:false', () => {
     expect(gormFor('model Slot {\n  id Int @id @default(5)\n}\n', 'postgresql')).toContain(

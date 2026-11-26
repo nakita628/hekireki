@@ -393,11 +393,17 @@ function primaryKeyTags(
   // Prisma allows autoincrement() on a @unique field that is not the key (a serial column on
   // PostgreSQL, AUTO_INCREMENT on MySQL). GORM gives such a column its default only when the tag
   // says autoIncrement, and leaves the field out of an INSERT while it is zero; without it GORM
-  // makes a plain column and writes 0. The column is written on create only (where GORM leaves it
-  // out while it is zero): SQL Server refuses to update an IDENTITY, which GORM's driver leaves
-  // out of an UPDATE only for the key it picks, and on MySQL, which has no RETURNING, the field
-  // stays 0 after a create, which a Save would otherwise write over the database's value.
-  if (!isPk) return isAutoincrement(field) ? ['autoIncrement', '<-:create'] : []
+  // makes a plain column and writes 0. On SQL Server and MySQL the column is written on create only
+  // (where GORM leaves it out while it is zero): SQL Server refuses to update an IDENTITY, which
+  // GORM's driver leaves out of an UPDATE only for the key it picks, and on MySQL, which has no
+  // RETURNING, the field stays 0 after a create, which a Save would otherwise write over the
+  // database's value. Elsewhere it is read back on create and can be updated, as with Prisma.
+  if (!isPk) {
+    if (!isAutoincrement(field)) return []
+    return provider === 'sqlserver' || provider === 'mysql'
+      ? ['autoIncrement', '<-:create']
+      : ['autoIncrement']
+  }
   const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
   // A native type wins (columnTypeTag); on MySQL such a key is a String like any other,
   // VARCHAR(191) (isMysqlDefaultString), and on PostgreSQL text, as Prisma Migrate makes it.
@@ -503,9 +509,12 @@ function usesScalarList(models: readonly DMMF.Model[], provider: string | undefi
 // An autoincrement column with a native integer type (@db.SmallInt or @db.TinyInt, which write
 // `type:smallint`) is therefore given its serial or IDENTITY form: SMALLSERIAL on PostgreSQL,
 // `smallint IDENTITY(1,1)` on SQL Server (where Prisma Migrate makes a @db.TinyInt TINYINT, as
-// GORM_NATIVE_FIXED does not). MySQL's driver adds AUTO_INCREMENT to any type.
+// GORM_NATIVE_FIXED does not). MySQL's driver adds AUTO_INCREMENT only to its own integer types as
+// well, so there any native type (`smallint`, `mediumint`, `int unsigned`, ...) carries it.
 function serialType(field: DMMF.Field, nativeType: string, provider: string | undefined) {
-  if (!isAutoincrement(field) || nativeType !== 'smallint') return undefined
+  if (!isAutoincrement(field)) return undefined
+  if (provider === 'mysql') return `${nativeType} AUTO_INCREMENT`
+  if (nativeType !== 'smallint') return undefined
   if (provider === 'postgresql') return 'smallserial'
   return provider === 'sqlserver' ? 'smallint IDENTITY(1,1)' : undefined
 }
