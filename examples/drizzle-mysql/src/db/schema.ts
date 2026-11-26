@@ -22,12 +22,15 @@ const bytes = customType<{
 
 const bitBoolean = customType<{
   data: boolean
-  driverData: Uint8Array | number
+  driverData: Uint8Array | number | bigint | string
   jsonData: number
 }>({
   dataType: () => 'bit(1)',
-  fromDriver: (value) =>
-    typeof value === 'number' ? value !== 0 : value.some((byte) => byte !== 0),
+  fromDriver: (value) => {
+    if (typeof value === 'number' || typeof value === 'bigint') return value !== 0 && value !== 0n
+    if (typeof value === 'string') return [...value].some((char) => char.charCodeAt(0) !== 0)
+    return value.some((byte) => byte !== 0)
+  },
   forJsonSelect: (identifier, sql) => sql`cast(${identifier} as unsigned)`,
   fromJson: (value) => value !== 0,
 })

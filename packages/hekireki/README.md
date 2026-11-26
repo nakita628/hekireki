@@ -285,7 +285,9 @@ const db = drizzle({
 
 On MySQL, a `Boolean @db.Bit(1)` is `bitBoolean`, a `bit(1)` that reads the bytes mysql2 gives and
 whose default is the bit literal (``sql`b'1'` ``), and a `Bytes @db.Bit(n)` is `bytes({ type: 'bit(n)' })`.
-A `bytes` column reads a relational query's nested rows from the base64 MySQL writes there.
+A `bytes` column reads a relational query's nested rows from the base64 MySQL writes there. A
+`Bytes @db.Bit(n)` default stays the `0x…` expression Prisma writes, which drizzle-kit 1.0.0-rc.5
+alters on every push however it is written.
 
 ### API
 

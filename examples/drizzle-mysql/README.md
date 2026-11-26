@@ -25,7 +25,7 @@ read the bits both clients wrote through a plain select and a relational query.
 | ------------------ | -------------- | -------------------------------------- |
 | `DateTime`         | `datetime(3)`  | `datetime({ fsp: 3 })`                 |
 | `@db.DateTime(6)`  | `datetime(6)`  | `datetime({ fsp: 6 })`                 |
-| `@db.DateTime(0)`  | `datetime`     | `datetime({ fsp: 0 })`                 |
+| `@db.DateTime(0)`  | `datetime`     | `datetime()`                           |
 | `@db.Timestamp(3)` | `timestamp(3)` | `timestamp({ fsp: 3 })`                |
 | `@db.Date`         | `date`         | `utcDate()`, generated                 |
 | `@db.Time(3)`      | `time(3)`      | `utcTime({ precision: 3 })`, generated |

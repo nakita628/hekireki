@@ -2765,4 +2765,19 @@ describe('columns drizzle has none of its own for', () => {
     expect(code).toContain("whole: datetime('whole').notNull()")
     expect(code).toContain("stamp: timestamp('stamp').notNull()")
   })
+
+  it('keeps a MySQL Bytes @db.Bit(n) default as Prisma writes it, and a time of precision 0 as MySQL reads it back', () => {
+    const code = schemaOf(
+      'model Switch {\n  id   Int      @id\n  mask Bytes    @default("pQ==") @db.Bit(8)\n  low  Bytes    @default("AQ==") @db.Bit(4)\n  at   DateTime @db.Time(0)\n  on   Boolean  @db.Bit(1)\n}',
+      'mysql',
+    )
+    // Prisma writes a Bytes default as the expression (0xa5), which MySQL keeps as given.
+    expect(code).toContain('.default(sql`0xa5`)')
+    expect(code).toContain('.default(sql`0x01`)')
+    expect(code).toContain("at: utcTime('at').notNull()")
+    // A driver that gives BIT as a string or a bigint reads it as well as mysql2's bytes.
+    expect(code).toContain(
+      "if (typeof value === 'number' || typeof value === 'bigint') return value !== 0 && value !== 0n",
+    )
+  })
 })

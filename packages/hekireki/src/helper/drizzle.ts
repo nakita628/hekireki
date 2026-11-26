@@ -158,23 +158,28 @@ const MYSQL_NATIVE_SIZED: { [k: string]: SizedColumn } = {
   Time: ['utcTime', 'precision'],
 }
 
+// A MySQL date-time column: MySQL reads a precision of 0 back as none, which drizzle-kit would
+// alter again, so it is written without one.
+function precisionColumn(column: SizedColumn, precision: string | undefined) {
+  return sizedColumn(column, precision === '0' ? undefined : precision)
+}
+
 function mysqlNativeType(name: string, args: readonly string[]) {
   switch (name) {
     case 'Decimal': {
       const opts = makeDecimalOpts(args)
       return opts === '' ? 'decimal()' : `decimal(${opts})`
     }
-    // MySQL reads a precision of 0 back as no precision, which drizzle-kit would alter again.
     case 'DateTime':
-      return isPresent(args[0]) && args[0] !== '0' ? `datetime({ fsp: ${args[0]} })` : 'datetime()'
+      return precisionColumn(['datetime', 'fsp'], args[0])
     case 'Timestamp':
-      return isPresent(args[0]) && args[0] !== '0'
-        ? `timestamp({ fsp: ${args[0]} })`
-        : 'timestamp()'
+      return precisionColumn(['timestamp', 'fsp'], args[0])
     // drizzle's binary() and varbinary() read the bytes as text, and it has no blob.
     case 'Binary':
     case 'VarBinary':
       return `bytes({ type: '${name.toLowerCase()}${isPresent(args[0]) ? `(${args[0]})` : ''}' })`
+    case 'Time':
+      return precisionColumn(['utcTime', 'precision'], args[0])
     default: {
       const sized = MYSQL_NATIVE_SIZED[name]
       if (sized !== undefined) return sizedColumn(sized, args[0])
@@ -223,12 +228,15 @@ const COLUMN_HELPERS: { readonly [name: string]: string } = {
 })`,
   bitBoolean: `const bitBoolean = customType<{
   data: boolean
-  driverData: Uint8Array | number
+  driverData: Uint8Array | number | bigint | string
   jsonData: number
 }>({
   dataType: () => 'bit(1)',
-  fromDriver: (value) =>
-    typeof value === 'number' ? value !== 0 : value.some((byte) => byte !== 0),
+  fromDriver: (value) => {
+    if (typeof value === 'number' || typeof value === 'bigint') return value !== 0 && value !== 0n
+    if (typeof value === 'string') return [...value].some((char) => char.charCodeAt(0) !== 0)
+    return value.some((byte) => byte !== 0)
+  },
   forJsonSelect: (identifier, sql) => sql\`cast(\${identifier} as unsigned)\`,
   fromJson: (value) => value !== 0,
 })`,
@@ -752,12 +760,19 @@ function stringDefaultChain(dflt: string, fieldType: string, provider: DbProvide
   return { chain: `.default(${tsString(dflt)})`, imports: [] }
 }
 
-// drizzle-kit writes a boolean default on a BIT as true, which MySQL reads back as b'1' and a push
-// would alter again: there it is the bit literal.
-function booleanDefaultChain(dflt: boolean, field: DMMF.Field, provider: DbProvider): DefaultChain {
-  return provider === 'mysql' && field.nativeType?.[0] === 'Bit'
-    ? { chain: `.default(sql\`b'${dflt ? 1 : 0}'\`)`, imports: [SQL_IMPORT] }
-    : { chain: `.default(${dflt})`, imports: [] }
+// A Boolean default on MySQL's BIT is the bit literal MySQL reads back (b'1'): drizzle-kit writes
+// true, which a push would alter again. A Bytes one stays 0x..., the expression Prisma writes and
+// MySQL keeps as given.
+function bitDefaultChain(
+  dflt: unknown,
+  field: DMMF.Field,
+  provider: DbProvider,
+): DefaultChain | null {
+  if (provider !== 'mysql' || field.nativeType?.[0] !== 'Bit') return null
+  if (typeof dflt === 'boolean') {
+    return { chain: `.default(sql\`b'${dflt ? 1 : 0}'\`)`, imports: [SQL_IMPORT] }
+  }
+  return null
 }
 
 function resolveDefaultValue(
@@ -782,12 +797,14 @@ function resolveDefaultValue(
     return { chain: `.default([${items.join(', ')}])`, imports: [] }
   }
   if (isFunctionDefault(dflt)) return functionDefaultChain(dflt, field, provider)
+  const bit = bitDefaultChain(dflt, field, provider)
+  if (bit !== null) return bit
   if (typeof dflt === 'string') return stringDefaultChain(dflt, field.type, provider)
   if (typeof dflt === 'number') {
     const chain = fieldType === 'Decimal' ? `.default('${dflt}')` : `.default(${dflt})`
     return { chain, imports: [] }
   }
-  if (typeof dflt === 'boolean') return booleanDefaultChain(dflt, field, provider)
+  if (typeof dflt === 'boolean') return { chain: `.default(${dflt})`, imports: [] }
   return { chain: '', imports: [] }
 }
 
