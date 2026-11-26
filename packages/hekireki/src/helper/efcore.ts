@@ -649,7 +649,8 @@ const MYSQL_NATIVE: {
 // maps the column to, so EF Core neither casts a value nor alters the column: an unchecked cast
 // would write an out-of-range value as another number, where the database refuses it. A store type
 // is given where Pomelo maps the CLR type to another column (`int` to `int`, `short` to `smallint`).
-// Each is for one Prisma type: a `Boolean @db.TinyInt` stays a bool.
+// Each is for one Prisma type: a `Boolean @db.TinyInt` stays a bool, and a `Boolean @db.Bit(1)` is a
+// bool too, given the bit(1) store type Prisma makes.
 const MYSQL_NUMERIC: {
   readonly [name: string]: { readonly type: string; readonly make: () => ClrMapping }
 } = {
