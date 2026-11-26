@@ -130,6 +130,7 @@ lezer
 librt
 libsql
 lucsky
+makemigrations
 marginx
 marginy
 matoous

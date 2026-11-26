@@ -70,8 +70,32 @@ describe('djangoAttrName', () => {
 
 // The field every zoneless DateTime column is declared with, as the generator
 // writes it once per file.
+// What a field class that can make Prisma's column declares, on PostgreSQL.
+const COLUMN_TYPE_METHODS = `    def __init__(self, *args: Any, db_column_type: str | None = None, **kwargs: Any) -> None:
+        self.db_column_type = db_column_type
+        super().__init__(*args, **kwargs)
+
+    def deconstruct(self) -> Any:
+        name, path, args, kwargs = super().deconstruct()
+        if self.db_column_type is not None:
+            kwargs["db_column_type"] = self.db_column_type
+        return name, path, args, kwargs
+
+    def db_type(self, connection: BaseDatabaseWrapper) -> str | None:
+        if self.db_column_type is not None and connection.vendor == "postgresql":
+            return self.db_column_type
+        return super().db_type(connection)`
+
+/** The Native class of a Django field, as the generator writes it for PostgreSQL. */
+function nativeField(base: string) {
+  return `class Native${base}(models.${base}):  # type: ignore[type-arg]
+${COLUMN_TYPE_METHODS}`
+}
+
 // cspell:ignore datetimefield
 const UTC_DATETIME_FIELD = `class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+${COLUMN_TYPE_METHODS}
+
     def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
         if not prepared:
             value = self.get_prep_value(value)
@@ -90,6 +114,25 @@ const UTC_DATETIME_FIELD = `class UtcDateTimeField(models.DateTimeField):  # typ
         if timezone.is_naive(value):
             value = value.replace(tzinfo=dt_timezone.utc)
         return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())`
+
+// The field a PostgreSQL @db.Money is declared with, as the generator writes it once per file.
+const MONEY_FIELD = `class MoneyField(models.DecimalField):  # type: ignore[type-arg]
+    def db_type(self, connection: BaseDatabaseWrapper) -> str | None:
+        return "money" if connection.vendor == "postgresql" else super().db_type(connection)
+
+    def select_format(self, compiler: Any, sql: str, params: Any) -> Any:
+        if compiler.connection.vendor != "postgresql":
+            return super().select_format(compiler, sql, params)
+        return f"({sql})::numeric", params
+
+    def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
+        if connection.vendor != "postgresql":
+            return super().get_db_prep_value(value, connection, prepared)
+        if not prepared:
+            value = self.get_prep_value(value)
+        if value is None or hasattr(value, "as_sql"):
+            return value
+        return str(value)`
 
 const AUTO_NOW_QUERY_SET = `_M = TypeVar("_M", bound=models.Model)
 
@@ -253,7 +296,7 @@ ${UTC_DATETIME_FIELD}
 class BlogPost(models.Model):
     id = models.AutoField(primary_key=True)
     view_count = models.IntegerField(db_column="viewCount")
-    created_at = UtcDateTimeField(db_column="created_on")
+    created_at = UtcDateTimeField(db_column_type="timestamp(3)", db_column="created_on")
 
     class Meta:
         db_table = "blog_posts"
@@ -626,41 +669,101 @@ class Uuid(models.Model):
         makeField({ name: 'bigCount', type: 'BigInt', nativeType: ['BigInt', []] }),
         makeField({ name: 'flagged', type: 'Boolean', nativeType: ['Boolean', []] }),
         makeField({ name: 'mystery', type: 'String', nativeType: ['SomethingNew', []] }),
+        makeField({ name: 'letter', type: 'String', nativeType: ['Char', []] }),
+        makeField({ name: 'bits', type: 'String', nativeType: ['VarBit', []] }),
+        makeField({ name: 'handle', type: 'String', nativeType: ['Citext', []] }),
+        makeField({ name: 'rank', type: 'Decimal', nativeType: ['Decimal', []] }),
+        makeField({ name: 'stamp', type: 'DateTime', nativeType: ['Timestamp', ['0']] }),
+        makeField({ name: 'plainStamp', type: 'DateTime', nativeType: ['Timestamp', []] }),
+        makeField({ name: 'instant', type: 'DateTime' }),
+        makeField({ name: 'exactZoned', type: 'DateTime', nativeType: ['Timestamptz', ['3']] }),
+        makeField({ name: 'wallClock', type: 'DateTime', nativeType: ['Time', []] }),
+        makeField({ name: 'zonedClock', type: 'DateTime', nativeType: ['Timetz', ['2']] }),
       ]),
     ]
 
     expect(djangoCode(models)).toBe(
-      `from django.db import models
+      `from datetime import datetime
+from datetime import timezone as dt_timezone
+from typing import Any
+
+from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+from django.utils import timezone
+
+
+${['CharField', 'TextField', 'FloatField', 'BigIntegerField', 'DecimalField', 'TimeField', 'DateTimeField'].map((base) => nativeField(base)).join('\n\n\n')}
+
+
+${UTC_DATETIME_FIELD}
+
+
+${MONEY_FIELD}
 
 
 class NativeGrid(models.Model):
     id = models.AutoField(primary_key=True)
-    code = models.CharField(max_length=3)
+    code = NativeCharField(max_length=3, db_column_type="char(3)")
     label = models.CharField(max_length=32)
     blurb = models.CharField()
     notes = models.TextField()
     tiny = models.SmallIntegerField()
-    ident = models.IntegerField()
-    single = models.FloatField()
+    ident = NativeBigIntegerField(db_column_type="oid", validators=[MinValueValidator(0), MaxValueValidator(4294967295)])
+    single = NativeFloatField(db_column_type="real")
     double = models.FloatField()
-    wealth = models.DecimalField(max_digits=65, decimal_places=30)
+    wealth = MoneyField(max_digits=65, decimal_places=30)
     exact = models.DecimalField(max_digits=38, decimal_places=12)
     blobby = models.BinaryField()
     doc = models.JSONField()
     day = models.DateField()
-    clock = models.TimeField()
+    clock = NativeTimeField(db_column_type="time(3)")
     zoned = models.DateTimeField()
     address = models.GenericIPAddressField()
-    mask = models.TextField()
-    markup = models.TextField()
+    mask = NativeTextField(db_column_type="bit(8)")
+    markup = NativeTextField(db_column_type="xml")
     big_count = models.BigIntegerField(db_column="bigCount")
     flagged = models.BooleanField()
     mystery = models.TextField()
+    letter = NativeCharField(max_length=1, db_column_type="char(1)")
+    bits = NativeTextField(db_column_type="varbit")
+    handle = NativeTextField(db_column_type="citext")
+    rank = NativeDecimalField(max_digits=65, decimal_places=30, db_column_type="decimal")
+    stamp = UtcDateTimeField(db_column_type="timestamp(0)")
+    plain_stamp = UtcDateTimeField(db_column_type="timestamp", db_column="plainStamp")
+    instant = UtcDateTimeField(db_column_type="timestamp(3)")
+    exact_zoned = NativeDateTimeField(db_column_type="timestamptz(3)", db_column="exactZoned")
+    wall_clock = models.TimeField(db_column="wallClock")
+    zoned_clock = NativeTimeField(db_column_type="timetz(2)", db_column="zonedClock")
 
     class Meta:
         db_table = "NativeGrid"
 `,
     )
+  })
+
+  it('makes a CockroachDB column as Prisma does, and leaves Django its own elsewhere', () => {
+    const fields = [
+      makeField({ name: 'id', type: 'String', isId: true, nativeType: ['Char', ['3']] }),
+      makeField({ name: 'single', type: 'Float', nativeType: ['Float4', []] }),
+      makeField({ name: 'instant', type: 'DateTime' }),
+    ]
+    const cockroach = djangoCode([makeModel('Grid', fields)], [], [], 'cockroachdb')
+    expect(cockroach).toContain('connection.vendor == "cockroachdb"')
+    expect(cockroach).toContain(`class Grid(models.Model):
+    id = NativeCharField(max_length=3, db_column_type="char(3)", primary_key=True, default=None)
+    single = NativeFloatField(db_column_type="float4")
+    instant = UtcDateTimeField(db_column_type="timestamp(3)")
+`)
+    // SQLite makes Django's own columns: no db_column_type, and no Native class.
+    const sqlite = djangoCode([makeModel('Grid', fields)], [], [], 'sqlite')
+    expect(sqlite).not.toContain('db_column_type')
+    expect(sqlite).toContain(`class Grid(models.Model):
+    id = models.CharField(max_length=3, primary_key=True, default=None)
+    single = models.FloatField()
+    instant = UtcDateTimeField()
+`)
   })
 
   it("makes MySQL's unsigned integers Django's positive fields", () => {
@@ -774,8 +877,8 @@ def now_milliseconds() -> datetime:
 
 class Stamped(models.Model):
     id = models.AutoField(primary_key=True)
-    created_at = UtcDateTimeField(default=now_milliseconds)
-    updated_at = UtcAutoNowDateTimeField(auto_now=True)
+    created_at = UtcDateTimeField(db_column_type="timestamp(3)", default=now_milliseconds)
+    updated_at = UtcAutoNowDateTimeField(db_column_type="timestamp(3)", auto_now=True)
     objects = AutoNowQuerySet.as_manager()
 
     class Meta:
@@ -819,7 +922,7 @@ ${UTC_DATETIME_FIELD}
 
 class Computed(models.Model):
     id = models.UUIDField(primary_key=True, db_default=RawSQL("gen_random_uuid()", []))
-    when = UtcDateTimeField(db_default=RawSQL("now() + interval '1 day'", []))
+    when = UtcDateTimeField(db_column_type="timestamp(3)", db_default=RawSQL("now() + interval '1 day'", []))
 
     class Meta:
         db_table = "Computed"
@@ -873,9 +976,14 @@ class Computed(models.Model):
     expect(djangoCode(models)).toBe(
       `from datetime import date, datetime, time
 from datetime import timezone as dt_timezone
+from typing import Any
 
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+
+
+${nativeField('TimeField')}
 
 
 def utc_today() -> date:
@@ -894,9 +1002,9 @@ def opening_holidays_default() -> list[date]:
 class Opening(models.Model):
     id = models.AutoField(primary_key=True)
     day = models.DateField(default=utc_today)
-    opens = models.TimeField(default=utc_time)
+    opens = NativeTimeField(db_column_type="time(3)", default=utc_time)
     since = models.DateField(default=date(2024, 1, 15))
-    closes = models.TimeField(default=time(18, 30, 0, 250000))
+    closes = NativeTimeField(db_column_type="time(3)", default=time(18, 30, 0, 250000))
     holidays = ArrayField(models.DateField(), default=opening_holidays_default)
 
     class Meta:
@@ -930,7 +1038,11 @@ from datetime import timezone as dt_timezone
 from typing import Any, TypeVar
 
 from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
 from django.utils import timezone
+
+
+${nativeField('TimeField')}
 
 
 class UtcDateField(models.DateField):  # type: ignore[type-arg]
@@ -945,7 +1057,7 @@ class UtcDateField(models.DateField):  # type: ignore[type-arg]
         return value
 
 
-class UtcTimeField(models.TimeField):  # type: ignore[type-arg]
+class UtcTimeField(NativeTimeField):
     def stamp(self) -> time:
         return utc_time()
 
@@ -972,7 +1084,7 @@ def utc_time() -> time:
 class Shift(models.Model):
     id = models.AutoField(primary_key=True)
     day = UtcDateField(auto_now=True)
-    clock = UtcTimeField(auto_now=True)
+    clock = UtcTimeField(db_column_type="time(3)", auto_now=True)
     objects = AutoNowQuerySet.as_manager()
 
     class Meta:
@@ -997,11 +1109,13 @@ class Shift(models.Model):
       }),
     ]
     const code = djangoCode([makeModel('Visit', fields)], [], [], 'postgresql')
-    expect(code)
-      .toContain(`class AutoNowDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+    expect(code).toContain(`class AutoNowDateTimeField(NativeDateTimeField):
     def stamp(self) -> datetime:
         return now_milliseconds()`)
-    expect(code).toContain('    seen = AutoNowDateTimeField(auto_now=True)\n')
+    expect(code).toContain(nativeField('DateTimeField'))
+    expect(code).toContain(
+      '    seen = AutoNowDateTimeField(db_column_type="timestamptz(3)", auto_now=True)\n',
+    )
     expect(code).not.toContain('UtcDateTimeField')
   })
 
@@ -1032,6 +1146,9 @@ from django.db.backends.base.base import BaseDatabaseWrapper
 from django.utils import timezone
 
 
+${nativeField('DateTimeField')}
+
+
 ${UTC_DATETIME_FIELD}
 
 
@@ -1042,8 +1159,8 @@ def now_milliseconds() -> datetime:
 
 class Clock(models.Model):
     id = models.AutoField(primary_key=True)
-    plain = UtcDateTimeField()
-    zoned = models.DateTimeField(default=now_milliseconds)
+    plain = UtcDateTimeField(db_column_type="timestamp(3)")
+    zoned = NativeDateTimeField(db_column_type="timestamptz(3)", default=now_milliseconds)
 
     class Meta:
         db_table = "Clock"
@@ -1126,7 +1243,7 @@ class Torture(models.Model):
     big_pos = models.BigIntegerField(db_column="bigPos", default=9007199254740993)
     precise = models.DecimalField(max_digits=65, decimal_places=30, default=Decimal("12345.6789"))
     exact_str = models.DecimalField(max_digits=65, decimal_places=30, db_column="exactStr", default=Decimal("99.5"))
-    born = UtcDateTimeField(default=datetime.fromisoformat("2020-02-29T23:59:59.999+00:00"))
+    born = UtcDateTimeField(db_column_type="timestamp(3)", default=datetime.fromisoformat("2020-02-29T23:59:59.999+00:00"))
     quoted = models.TextField(default="it's a \\"quote\\" and a \\\\ backslash")
     empty = models.TextField(default="")
 
@@ -1239,7 +1356,7 @@ class Inventory(models.Model):
     labels = ArrayField(models.TextField(), default=inventory_labels_default)
     weights = ArrayField(models.FloatField())
     flags = ArrayField(models.BooleanField())
-    stamps = ArrayField(UtcDateTimeField())
+    stamps = ArrayField(UtcDateTimeField(db_column_type="timestamp(3)"))
 
     class Meta:
         db_table = "Inventory"
@@ -2555,7 +2672,7 @@ class Organization(models.Model):
     list_field = ArrayField(models.TextField(), db_column="list", default=list)
     tags = ArrayField(models.TextField(), default=list)
     external_id = models.UUIDField(db_column="externalId", default=uuid.uuid4)
-    created_at = UtcDateTimeField(db_column="createdAt", default=now_milliseconds)
+    created_at = UtcDateTimeField(db_column_type="timestamp(3)", db_column="createdAt", default=now_milliseconds)
     date = models.TextField()
 
     class Meta:
@@ -2945,7 +3062,7 @@ def inventory_flags_default() -> list[bool]:
 class Inventory(models.Model):
     id = models.AutoField(primary_key=True)
     decs = ArrayField(models.DecimalField(max_digits=65, decimal_places=30), default=inventory_decs_default)
-    stamps = ArrayField(UtcDateTimeField(), default=inventory_stamps_default)
+    stamps = ArrayField(UtcDateTimeField(db_column_type="timestamp(3)"), default=inventory_stamps_default)
     bigs = ArrayField(models.BigIntegerField(), default=inventory_bigs_default)
     flags = ArrayField(models.BooleanField(), default=inventory_flags_default)
 
