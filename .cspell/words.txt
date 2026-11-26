@@ -221,6 +221,7 @@ siwe
 spawnable
 spgist
 sqld
+sqlsequencereset
 sqlx
 sslmode
 Stampeds

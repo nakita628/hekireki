@@ -3,7 +3,7 @@ import { Effect } from 'effect'
 
 import { emitRaw } from '../emit/index.js'
 import { djangoCode } from '../generator/django.js'
-import { findNameConflicts } from '../helper/django.js'
+import { djangoProblems, findNameConflicts } from '../helper/django.js'
 import { GeneratorConfigError } from './errors.js'
 import { outputFile, requireOutput } from './output.js'
 
@@ -13,7 +13,10 @@ export function django(options: GeneratorOptions) {
     const resolved = outputFile(output, 'models.py')
     const enums = options.dmmf.datamodel.enums
     const indexes = options.dmmf.datamodel.indexes
-    const conflicts = findNameConflicts(enums)
+    const conflicts = [
+      ...findNameConflicts(enums),
+      ...djangoProblems(options.dmmf.datamodel.models, options.datasources[0]?.activeProvider),
+    ]
     if (conflicts.length > 0) {
       return yield* new GeneratorConfigError({
         message: `Hekireki-Django cannot represent this schema:\n${conflicts.map((c) => `  - ${c}`).join('\n')}`,

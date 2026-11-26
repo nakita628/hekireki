@@ -3,7 +3,12 @@ import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { djangoCode } from '../generator/django.js'
-import { djangoAttrName, findNameConflicts, prismaTypeToDjangoField } from './django.js'
+import {
+  djangoAttrName,
+  djangoProblems,
+  findNameConflicts,
+  prismaTypeToDjangoField,
+} from './django.js'
 
 describe('prismaTypeToDjangoField', () => {
   it('maps String to TextField', () => {
@@ -814,6 +819,188 @@ class Ledger(models.Model):
     expect(code).toContain('    id = models.AutoField(primary_key=True)\n')
     expect(code).not.toContain('Native')
     expect(code).not.toContain('validators')
+  })
+
+  it('declares a non-key autoincrement column with an auto field of its own', () => {
+    const autoincrement = { name: 'autoincrement', args: [] }
+    const metric = makeModel('Metric', [
+      makeField({ name: 'id', type: 'Int', isId: true, default: autoincrement }),
+      makeField({ name: 'serial', type: 'Int', isUnique: true, default: autoincrement }),
+      makeField({ name: 'big', type: 'BigInt', default: autoincrement }),
+      makeField({
+        name: 'small',
+        type: 'Int',
+        nativeType: ['SmallInt', []],
+        default: autoincrement,
+      }),
+    ])
+    const autoField = (
+      name: string,
+      base: string,
+      internal: string,
+    ) => `class ${name}(models.${base}):  # type: ignore[type-arg]
+    db_returning = True
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs["blank"] = True
+        kwargs["default"] = None
+        super().__init__(*args, **kwargs)
+
+    def deconstruct(self) -> Any:
+        name, path, args, kwargs = super().deconstruct()
+        del kwargs["blank"]
+        kwargs.pop("default", None)
+        return name, path, args, kwargs
+
+    def get_internal_type(self) -> str:
+        return "${internal}"
+
+    def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
+        return value if prepared else self.get_prep_value(value)
+
+    def db_type_suffix(self, connection: BaseDatabaseWrapper) -> str | None:
+        return None if connection.vendor == "sqlite" else connection.data_types_suffix.get(self.get_internal_type())
+
+    def pre_save(self, model_instance: models.Model, add: bool) -> Any:
+        value = super().pre_save(model_instance, add)
+        if value is not None and not isinstance(value, DatabaseDefault):
+            return value
+        if add:
+            return DatabaseDefault(models.Value(None), output_field=self)
+        return models.F(self.attname)`
+    expect(djangoCode([metric])).toBe(`from typing import Any
+
+from django.db import models
+from django.db.backends.base.base import BaseDatabaseWrapper
+from django.db.models.expressions import DatabaseDefault
+
+
+${autoField('AutoIncrementField', 'IntegerField', 'AutoField')}
+
+
+${autoField('BigAutoIncrementField', 'BigIntegerField', 'BigAutoField')}
+
+
+${autoField('SmallAutoIncrementField', 'SmallIntegerField', 'SmallAutoField')}
+
+
+class Metric(models.Model):
+    id = models.AutoField(primary_key=True)
+    serial = AutoIncrementField(unique=True)
+    big = BigAutoIncrementField()
+    small = SmallAutoIncrementField()
+
+    class Meta:
+        db_table = "Metric"
+`)
+
+    // CockroachDB: Prisma takes autoincrement on a BigInt only, which Django's auto field makes
+    // unique_rowid() there.
+    const cockroach = djangoCode([metric], [], [], 'cockroachdb')
+    expect(cockroach).toContain('        return "BigAutoField"')
+    expect(cockroach).toContain('    big = BigAutoIncrementField()\n')
+
+    // MySQL keeps the column's own type, unsigned included, and makes it AUTO_INCREMENT.
+    const unsigned = makeModel('Seq', [
+      makeField({ name: 'id', type: 'String', isId: true }),
+      makeField({
+        name: 'seq',
+        type: 'Int',
+        isUnique: true,
+        nativeType: ['UnsignedInt', []],
+        default: autoincrement,
+      }),
+    ])
+    const mysql = djangoCode([unsigned], [], [], 'mysql')
+    expect(mysql)
+      .toContain(`class PositiveAutoIncrementField(models.PositiveIntegerField):  # type: ignore[type-arg]
+    db_returning = True`)
+    expect(mysql).toContain(`    def db_type(self, connection: BaseDatabaseWrapper) -> str | None:
+        if connection.vendor != "mysql":
+            return super().db_type(connection)
+        return f"{super().db_type(connection)} AUTO_INCREMENT"
+
+    def rel_db_type(self, connection: BaseDatabaseWrapper) -> str | None:
+        return models.PositiveIntegerField().db_type(connection)
+
+    def db_check(self, connection: BaseDatabaseWrapper) -> str | None:
+        return None if connection.vendor == "mysql" else super().db_check(connection)`)
+    expect(mysql).not.toContain('get_internal_type')
+    expect(mysql).toContain('    seq = PositiveAutoIncrementField(unique=True)\n')
+  })
+
+  it('leaves an optional autoincrement column a nullable field, as an identity cannot be NULL', () => {
+    const model = makeModel('Opt', [
+      makeField({ name: 'id', type: 'String', isId: true }),
+      makeField({
+        name: 'seq',
+        type: 'Int',
+        isRequired: false,
+        isUnique: true,
+        default: { name: 'autoincrement', args: [] },
+      }),
+    ])
+    const code = djangoCode([model])
+    expect(code).not.toContain('AutoIncrementField')
+    expect(code).toContain('    seq = models.IntegerField(null=True, unique=True)\n')
+  })
+
+  it('reports a MySQL autoincrement column that only an @@index covers', () => {
+    const autoincrement = { name: 'autoincrement', args: [] }
+    const model = (fields: DMMF.Field[], overrides?: Partial<DMMF.Model>) =>
+      makeModel(
+        'Seq',
+        [makeField({ name: 'id', type: 'String', isId: true }), ...fields],
+        overrides,
+      )
+    const indexed = model([makeField({ name: 'seq', type: 'Int', default: autoincrement })])
+    expect(djangoProblems([indexed], 'mysql')).toStrictEqual([
+      'model Seq: seq is autoincrement and only @@index-ed, which MySQL refuses when Django creates the table before the index; make it @unique or lead a @@unique with it',
+    ])
+    expect(djangoProblems([indexed], 'postgresql')).toStrictEqual([])
+    const unique = model([
+      makeField({ name: 'seq', type: 'Int', isUnique: true, default: autoincrement }),
+    ])
+    expect(djangoProblems([unique], 'mysql')).toStrictEqual([])
+    const leading = model(
+      [
+        makeField({ name: 'seq', type: 'Int', default: autoincrement }),
+        makeField({ name: 'kind', type: 'String' }),
+      ],
+      { uniqueFields: [['seq', 'kind']] },
+    )
+    expect(djangoProblems([leading], 'mysql')).toStrictEqual([])
+  })
+
+  it('declares a compound-key autoincrement member with an auto field, and leaves a foreign key column alone', () => {
+    const autoincrement = { name: 'autoincrement', args: [] }
+    const pair = makeModel(
+      'Pair',
+      [
+        makeField({ name: 'a', type: 'Int', default: autoincrement }),
+        makeField({ name: 'b', type: 'String' }),
+      ],
+      { primaryKey: { name: null, fields: ['a', 'b'] } },
+    )
+    expect(djangoCode([pair])).toContain(`    pk = models.CompositePrimaryKey("a", "b")
+    a = AutoIncrementField()
+`)
+    const owner = makeModel('Owner', [
+      makeField({ name: 'id', type: 'Int', isId: true, default: autoincrement }),
+    ])
+    const pet = makeModel('Pet', [
+      makeField({ name: 'id', type: 'String', isId: true }),
+      makeField({ name: 'ownerId', type: 'Int', isUnique: true, default: autoincrement }),
+      makeField({
+        name: 'owner',
+        kind: 'object',
+        type: 'Owner',
+        relationName: 'OwnerToPet',
+        relationFromFields: ['ownerId'],
+        relationToFields: ['id'],
+      }),
+    ])
+    expect(djangoCode([owner, pet])).not.toContain('AutoIncrementField')
   })
 
   it('makes a CockroachDB column as Prisma does, and leaves Django its own elsewhere', () => {

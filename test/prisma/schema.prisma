@@ -310,6 +310,14 @@ model Sequence {
   name String
 }
 
+// A non-key autoincrement column: the database fills it, and the generators
+// must leave it unset on insert rather than send NULL.
+model Counter {
+  id     String @id @default(uuid())
+  serial Int    @unique @default(autoincrement())
+  label  String
+}
+
 // snake_case model name: class/struct/module identifiers must be
 // PascalCased per language convention while the table name stays verbatim
 // (Ruby/Elixir reject lowercase class and module names outright).
