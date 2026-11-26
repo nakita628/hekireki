@@ -19,6 +19,7 @@ export function ectoSchemaFiles(
     readonly indexes?: readonly DMMF.Index[]
     readonly foreignKeyNames?: ReadonlyMap<string, string>
     readonly relationMode?: string
+    readonly mysqlFlavor?: 'mysql' | 'mariadb'
   } = {},
 ) {
   return [
@@ -39,7 +40,11 @@ export function ectoSchemaFiles(
     {
       fileName: 'prisma_json.ex',
       code: models.some(hasJsonField)
-        ? ectoJsonType(Array.isArray(app) ? app.join('.') : app, options.provider)
+        ? ectoJsonType(
+            Array.isArray(app) ? app.join('.') : app,
+            options.provider,
+            options.mysqlFlavor,
+          )
         : '',
     },
   ].filter((entry) => entry.code.trim().length > 0)

@@ -137,6 +137,7 @@ maße
 mentees
 Meiryo
 Memberwise
+Microting
 Monarches
 msgpackr
 multicursor
@@ -198,6 +199,7 @@ requiredness
 resvg
 RUSTFLAGS
 rubocop
+sbyte
 schemaname
 scim
 secondaryjoin
@@ -222,6 +224,7 @@ sqlx
 sslmode
 Stampeds
 stringbool
+Submatch
 subplan
 subsecs
 supabase
@@ -261,6 +264,7 @@ uncapitalize
 unixepoch
 unixtime
 Unkeyeds
+Unmarshal
 unstub
 usecase
 usecases

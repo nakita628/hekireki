@@ -3,6 +3,7 @@ import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { generateGormModels } from '../generator/gorm.js'
+import { partialIndexWhere } from '../prisma/partial-index.js'
 import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import { buildGormTags, goFieldName, gormProblems, prismaTypeToGoType } from './gorm.js'
 
@@ -181,6 +182,50 @@ describe('buildGormTags', () => {
     )
   })
 
+  it('writes a json name encoding/json reads as the key: "-," for a "-", the field name for one with a ","', () => {
+    const field = (dbName: string) =>
+      ({
+        name: 'label',
+        dbName,
+        kind: 'scalar' as const,
+        type: 'String',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: false,
+      }) as any
+    expect(buildGormTags(field('-'), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:-;not null" json:"-,"`',
+    )
+    expect(buildGormTags(field('id,string'), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:id,string;not null" json:"Label"`',
+    )
+  })
+
+  it('writes a dbgenerated() default ending in a backslash last, as GORM joins it to the next setting', () => {
+    const field = (expression: string) =>
+      ({
+        name: 'path',
+        kind: 'scalar' as const,
+        type: 'Int',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'dbgenerated', args: [expression] },
+      }) as any
+    expect(buildGormTags(field('x\\'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:path;size:32;not null;default:x\\" json:"path"${'`'}`,
+    )
+    expect(buildGormTags(field('x + 1'), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:path;size:32;default:x + 1;not null" json:"path"`',
+    )
+  })
+
   it('escapes a mapped column name for the struct tag, so GORM reads the column and every setting after it', () => {
     const field = (dbName: string) =>
       ({
@@ -195,15 +240,16 @@ describe('buildGormTags', () => {
         isUpdatedAt: false,
         hasDefaultValue: false,
       }) as any
-    // reflect.StructTag unquotes a `\"`, a `\\` and a `\n`, and the tag stays on one line.
+    // reflect.StructTag unquotes a `\"`, a `\\` and a `\n`, and the tag stays on one line. None of
+    // them is a json key encoding/json takes, so the json name is the field's, as it would be.
     expect(buildGormTags(field('a\nb'), false, false, [], [], 'postgresql')).toBe(
-      String.raw`${'`'}gorm:"column:a\nb;not null" json:"a\nb"${'`'}`,
+      String.raw`${'`'}gorm:"column:a\nb;not null" json:"Label"${'`'}`,
     )
     expect(buildGormTags(field('a"b'), false, false, [], [], 'postgresql')).toBe(
-      String.raw`${'`'}gorm:"column:a\"b;not null" json:"a\"b"${'`'}`,
+      String.raw`${'`'}gorm:"column:a\"b;not null" json:"Label"${'`'}`,
     )
     expect(buildGormTags(field('a\\b'), false, false, [], [], 'postgresql')).toBe(
-      String.raw`${'`'}gorm:"column:a\\b;not null" json:"a\\b"${'`'}`,
+      String.raw`${'`'}gorm:"column:a\\b;not null" json:"Label"${'`'}`,
     )
   })
 
@@ -1011,10 +1057,10 @@ model Team {
   })
 
   it('names a model whose Go name is the list type, where the schema has a list', () => {
-    expect(gormProblems(listModels('ScalarList'), 'postgresql', [])).toStrictEqual([
+    expect(gormProblems(listModels('ScalarList'), 'postgresql')).toStrictEqual([
       'model ScalarList: its Go name is ScalarList, what the models hold a scalar list in; rename the model and keep its table with @@map',
     ])
-    expect(gormProblems(listModels('Tag'), 'postgresql', [])).toStrictEqual([])
+    expect(gormProblems(listModels('Tag'), 'postgresql')).toStrictEqual([])
   })
 
   it('names a column whose mapped name ends in a backslash, which GORM joins to the next setting', () => {
@@ -1033,20 +1079,20 @@ model Note {
 `,
       }),
     ).models
-    expect(gormProblems(models, 'postgresql', [])).toStrictEqual([
+    expect(gormProblems(models, 'postgresql')).toStrictEqual([
       "model Note: the column of label ends in \\, which GORM's tag cannot hold; change its @map",
       'model Note: the column of title holds a ";", at which GORM splits the tag; change its @map',
     ])
   })
 
-  // GORM's primaryKey has no setting for a prefix, and MySQL refuses a TEXT/BLOB key without one
-  // (error 1170). (#331)
-  it('names a MySQL key on a prefix of its column, which GORM cannot write', () => {
+  // GORM's primaryKey has no setting for a prefix, so AutoMigrate keys the whole column: MySQL
+  // refuses that on a TEXT or BLOB (error 1170) and past 3072 bytes (error 1071).
+  it('names a MySQL key on a column prefix that MySQL cannot take whole', () => {
     const source = `datasource db {
   provider = "mysql"
 }
 model Doc {
-  key  String @id(length: 100) @db.Text
+  key String @id(length: 100) @db.Text
 }
 model Pair {
   a String @db.Text
@@ -1054,14 +1100,377 @@ model Pair {
 
   @@id([a(length: 50), b(length: 20)])
 }
+model Blob {
+  data Bytes @id(length: 16)
+}
+model One {
+  key String @unique(length: 100) @db.Text
+}
+model Long {
+  key String @id(length: 100) @db.VarChar(1000)
+}
+model Wide {
+  a String @db.VarChar(766)
+  b Int
+  c DateTime
+
+  @@id([a(length: 100), b, c])
+}
+model Sized {
+  key String @id(length: 100) @db.VarChar(255)
+}
 model Plain {
-  id String @id @db.VarChar(20)
+  key String @id(length: 100)
+}
+model Whole {
+  id String @id(length: 20) @db.VarChar(20)
 }
 `
     const { models, indexes } = datamodelOf(getDMMF({ datamodel: [['schema.prisma', source]] }))
     expect(gormProblems(models, 'mysql', indexes)).toStrictEqual([
-      "model Doc: its key is on a column prefix (key(length: 100)), which GORM's primaryKey cannot write; key it on whole columns (a VarChar the key can hold) or use another generator",
-      "model Pair: its key is on a column prefix (a(length: 50)), which GORM's primaryKey cannot write; key it on whole columns (a VarChar the key can hold) or use another generator",
+      "model Doc: its key is on a prefix of a TEXT or BLOB column (key(length: 100)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
+      "model Pair: its key is on a prefix of a TEXT or BLOB column (a(length: 50)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
+      "model Blob: its key is on a prefix of a TEXT or BLOB column (data(length: 16)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
+      "model One: its key is on a prefix of a TEXT or BLOB column (key(length: 100)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
+      "model Long: its key is on a column prefix (key(length: 100)), which GORM's primaryKey cannot write, and its whole columns take 4000 bytes, more than the 3072 bytes MySQL keys; key it on shorter columns, or use another generator",
+      "model Wide: its key is on a column prefix (a(length: 100)), which GORM's primaryKey cannot write, and its whole columns take 3075 bytes, more than the 3072 bytes MySQL keys; key it on shorter columns, or use another generator",
+    ])
+    expect(gormProblems(models, 'postgresql', indexes)).toStrictEqual([])
+  })
+
+  it('names an index whose name in the tag holds a "," or ";"', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Note {
+  id    Int    @id
+  pair  String @unique @map("a,b")
+  named String @unique(map: "note_named_key") @map("c,d")
+}
+
+model Tag {
+  id    Int    @id
+  label String
+  slug  String
+
+  @@index([label])
+  @@index([slug], map: "tag_slug_idx")
+  @@map("tag;s")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Note: the index on pair is named "Note_a,b_key", which GORM cannot write (a ","); change the @map of its column or table, or give it a name with map:',
+      'model Tag: the index on label is named "tag;s_label_idx", which GORM cannot write (a ";"); change the @map of its column or table, or give it a name with map:',
+    ])
+  })
+
+  it('passes over an index left out with a note, and names a map: name the tag cannot hold', () => {
+    const source = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  output          = "./generated"
+  previewFeatures = ["partialIndexes"]
+}
+
+model Item {
+  id   Int    @id
+  slug String
+  code String @map("c,d")
+
+  @@index([slug], where: raw("slug <> 'a;b'"))
+  @@index([code], map: "item,code")
+  @@map("item,s")
+}
+`
+    const datamodel = datamodelOf(getDMMF({ datamodel: source }))
+    expect(
+      gormProblems(
+        datamodel.models,
+        'postgresql',
+        datamodel.indexes,
+        partialIndexWhere(prismaBlocks(source), 'postgresql'),
+      ),
+    ).toStrictEqual([
+      'model Item: the index on code is named "item,code", which GORM cannot write (a ","); change it',
+    ])
+  })
+
+  it('names a map: name the tag cannot hold even where the name Prisma would give fits, and two fields written under one json name', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Item {
+  id    Int    @id
+  code  String @unique(map: "a,b")
+  slug  String
+  label String @map("x,y")
+  other String @map("Label")
+
+  @@index([slug], map: "slug;idx")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on code is named "a,b", which GORM cannot write (a ","); change it',
+      'model Item: the index on slug is named "slug;idx", which GORM cannot write (a ";"); change it',
+      'model Item: label and other are both written json:"Label", and encoding/json drops one or both; change the @map of one',
+    ])
+  })
+
+  it('names an index name the dialector would quote as another: a ".", a quote at its start, two quotes in a row', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Item {
+  id    Int    @id
+  code  String @unique(map: "\\"code_key")
+  slug  String
+  tag   String
+  mark  String @unique(map: "item\`mark")
+  note  String @unique(map: "item\\"note")
+  label String
+
+  @@index([slug], map: "item.slug_idx")
+  @@index([tag], map: "item\\"\\"tag")
+}
+
+model Box {
+  id   Int    @id
+  code String @unique
+
+  @@map("\\"boxes")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on code is named "\\"code_key", which GORM cannot write (a quote at its start); change it',
+      'model Item: the index on slug is named "item.slug_idx", which GORM cannot write (a "."); change it',
+      'model Item: the index on tag is named "item\\"\\"tag", which GORM cannot write (two quotes in a row); change it',
+      'model Box: its table is named "\\"boxes", which GORM cannot write (a quote at its start); change its @@map',
+      'model Box: the index on code is named "\\"boxes_code_key", which GORM cannot write (a quote at its start); change the @map of its column or table, or give it a name with map:',
+    ])
+  })
+
+  it('escapes a " or \\ of the table name in TableName()', () => {
+    const code = gormFor(
+      `
+model Crate {
+  id Int @id
+
+  @@map("cr\\"a\\\\te")
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain('\treturn "cr\\"a\\\\te"\n')
+  })
+
+  it('names the join table of an implicit many-to-many relation the dialector would quote as another', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id     Int    @id
+  tags   Tag[]  @relation("post.tags")
+  labels Tag[]  @relation("labels\\\\")
+  notes  Tag[]  @relation("no\\"\\"tes")
+  marks  Tag[]  @relation("ma;r\\"ks")
+}
+
+model Tag {
+  id     Int    @id
+  posts  Post[] @relation("post.tags")
+  labels Post[] @relation("labels\\\\")
+  notes  Post[] @relation("no\\"\\"tes")
+  marks  Post[] @relation("ma;r\\"ks")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Post: the join table of tags is named "_post.tags", which GORM cannot write (a "."); change the name of its @relation',
+      'model Post: the join table of labels is named "_labels\\\\", which GORM cannot write (a \\ at its end); change the name of its @relation',
+      'model Post: the join table of notes is named "_no\\"\\"tes", which GORM cannot write (two quotes in a row); change the name of its @relation',
+    ])
+  })
+
+  it('names a column or table name the dialector would quote as another', () => {
+    const problemsOf = (provider: string, body: string) => {
+      const datamodel = datamodelOf(
+        getDMMF({ datamodel: `datasource db {\n  provider = "${provider}"\n}\n${body}` }),
+      )
+      return gormProblems(datamodel.models, provider, datamodel.indexes)
+    }
+    expect(
+      problemsOf(
+        'postgresql',
+        `
+model Item {
+  id    Int    @id
+  dot   String @map("a.b")
+  lead  String @map("\\"lead")
+  twice String @map("a\\"\\"b")
+  tick  String @map("\`tick")
+  mid   String @map("a\\"b")
+  comma String @map("a,b")
+}
+
+model Box {
+  id Int @id
+
+  @@map("box.es")
+}
+
+model Crate {
+  id Int @id
+
+  @@map("cr\\"ate")
+}
+`,
+      ),
+    ).toStrictEqual([
+      'model Item: the column of dot is named "a.b", which GORM cannot write (a "."); change its @map',
+      'model Item: the column of lead is named "\\"lead", which GORM cannot write (a quote at its start); change its @map',
+      'model Item: the column of twice is named "a\\"\\"b", which GORM cannot write (two quotes in a row); change its @map',
+      'model Box: its table is named "box.es", which GORM cannot write (a "."); change its @@map',
+    ])
+    expect(
+      problemsOf(
+        'mysql',
+        `
+model Item {
+  id   Int    @id
+  tick String @map("\`tick")
+  lead String @map("\\"lead")
+
+  @@map("it\`\`ems")
+}
+`,
+      ),
+    ).toStrictEqual([
+      'model Item: its table is named "it``ems", which GORM cannot write (two quotes in a row); change its @@map',
+      'model Item: the column of tick is named "`tick", which GORM cannot write (a quote at its start); change its @map',
+    ])
+    expect(
+      problemsOf(
+        'sqlserver',
+        `
+model Item {
+  id  Int    @id
+  mid String @map("a\\"b")
+  tick String @map("a\`b")
+}
+`,
+      ),
+    ).toStrictEqual([
+      'model Item: the column of mid is named "a\\"b", which GORM cannot write (a double quote); change its @map',
+    ])
+  })
+
+  it("checks the quote of the provider's dialector only: a backtick on MySQL, a double quote elsewhere", () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "mysql"
+}
+
+model Item {
+  id   Int    @id
+  code String @unique(map: "\`code_key")
+  slug String @unique(map: "\\"slug_key")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'mysql', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on code is named "`code_key", which GORM cannot write (a quote at its start); change it',
+    ])
+  })
+
+  it('names a double quote anywhere in an index name on SQL Server, whose QuoteTo does not escape it', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "sqlserver"
+}
+
+model Item {
+  id   Int    @id
+  note String @unique(map: "item\\"note")
+  slug String @unique(map: "item\`slug")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'sqlserver', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on note is named "item\\"note", which GORM cannot write (a double quote); change it',
+    ])
+  })
+
+  it('names a relation whose Go name a column takes as its json name', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id    Int    @id
+  posts Post[]
+}
+
+model Post {
+  id         Int    @id
+  authorId   Int
+  authorName String @map("Author")
+  author     User   @relation(fields: [authorId], references: [id])
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Post: authorName and author are both written json:"Author", and encoding/json drops one or both; change the @map of one',
+    ])
+  })
+
+  it('compares json names as encoding/json takes them: the field name for a column it cannot take, the Go name the struct gives', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Item {
+  id    Int    @id
+  label String @map("it's")
+  other String @map("Label")
+  a_b   String @map("x,1")
+  aB    String @map("x,2")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Item: label and other are both written json:"Label", and encoding/json drops one or both; change the @map of one',
     ])
   })
 
@@ -1078,10 +1487,10 @@ model Plain {
       'postgresql',
     )
     expect(code).toContain(
-      String.raw`${'`'}gorm:"column:a\"b;uniqueIndex:Note_a\"b_key;not null" json:"a\"b"${'`'}`,
+      String.raw`${'`'}gorm:"column:a\"b;uniqueIndex:Note_a\"b_key;not null" json:"Quote"${'`'}`,
     )
     expect(code).toContain(
-      String.raw`${'`'}gorm:"column:a\\c;index:Note_a\\c_idx;not null" json:"a\\c"${'`'}`,
+      String.raw`${'`'}gorm:"column:a\\c;index:Note_a\\c_idx;not null" json:"Path"${'`'}`,
     )
   })
 
@@ -1355,6 +1764,21 @@ func (Profile) TableName() string {
 	return "Profile"
 }
 `)
+  })
+
+  it('escapes a ";" or a double quote of a relation name in the many2many tag', () => {
+    const code = gormFor(`
+model Post {
+  id   Int   @id
+  tags Tag[] @relation("a;b\\"c")
+}
+
+model Tag {
+  id    Int    @id
+  posts Post[] @relation("a;b\\"c")
+}
+`)
+    expect(code).toContain('`gorm:"many2many:_a\\\\;b\\"c;joinForeignKey:A;joinReferences:B"`')
   })
 
   // Under GORM's default naming the table would be `_post_to_tags` and its columns `post_id` and
@@ -1802,7 +2226,7 @@ model Account {
   @@unique([alive, n], where: { alive: true })
   @@index([alive], where: { alive: true })
   @@index([note], where: raw("note IN ('a,b', 'c\\\\\\"d', 'e\\\\,f')"))
-  @@index([n, note], where: raw("note <> ';'"))
+  @@index([n, note], where: raw("note <> ';'"), map: "account,n,note")
 }
 `,
         'postgresql',
@@ -1813,7 +2237,7 @@ type Account struct {
 	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	Email string \`gorm:"column:email;uniqueIndex:Account_email_key;uniqueIndex:account_email_alive,where:(alive);not null" json:"email"\`
 	Alive bool   \`gorm:"column:alive;uniqueIndex:Account_alive_n_key,priority:1,where:(\\"alive\\" = true);index:Account_alive_idx,where:(\\"alive\\" = true);not null" json:"alive"\`
-	// The partial index Account_n_note_idx is left out: its condition holds a ";", at which GORM splits the tag.
+	// The partial index "account,n,note" is left out: its condition holds a ";", at which GORM splits the tag.
 	N    int     \`gorm:"column:n;uniqueIndex:Account_alive_n_key,priority:2,where:(\\"alive\\" = true);size:32;not null" json:"n"\`
 	Code string  \`gorm:"column:code;uniqueIndex:Account_code_key,where:(n > 0);not null" json:"code"\`
 	Note *string \`gorm:"column:note;index:Account_note_idx,where:(note IN ('a\\\\,b'\\\\, 'c\\\\\\\\\\"d'\\\\, 'e\\\\\\\\,f'))" json:"note"\`
@@ -1964,7 +2388,7 @@ model Doc {
         'postgresql',
       ),
     ).toContain(
-      '// The index doc_title_ops is left out: the expression of its column "title" with the operator class "a;b" holds a ";", at which GORM splits the tag.\n\tTitle string `gorm:"column:title;not null"',
+      '// The index "doc_title_ops" is left out: the expression of its column "title" with the operator class "a;b" holds a ";", at which GORM splits the tag.\n\tTitle string `gorm:"column:title;not null"',
     )
   })
 
@@ -2510,5 +2934,102 @@ func (Token) TableName() string {
 	return "Token"
 }
 `)
+  })
+})
+
+// PostgreSQL prints money in its locale's form ("$1,234.50"), which a float64 cannot scan, and
+// datatypes.JSON names jsonb to AutoMigrate whatever the tag says: both have a type of their own.
+describe('generateGormModels PostgreSQL money and json columns', () => {
+  const schema = `
+model Wallet {
+  id      Int      @id
+  balance Decimal  @db.Money
+  bonus   Decimal? @db.Money
+  tip     Decimal  @default(1.5) @db.Money
+  raw     Json     @db.Json
+  extra   Json?    @db.Json
+  doc     Json     @db.JsonB
+}
+`
+
+  it('holds @db.Money in Money and @db.Json in PlainJSON, written beside the models', () => {
+    const code = gormFor(schema, 'postgresql')
+    expect(code).toContain(
+      '\tBalance Money          `gorm:"column:balance;type:money;not null" json:"balance"`\n',
+    )
+    expect(code).toContain(
+      '\tBonus   *Money         `gorm:"column:bonus;type:money" json:"bonus"`\n',
+    )
+    expect(code).toContain(
+      '\tTip     *Money         `gorm:"column:tip;type:money;default:(1.5);not null" json:"tip"`\n',
+    )
+    expect(code).toContain('\tRaw     PlainJSON      `gorm:"column:raw;not null" json:"raw"`\n')
+    expect(code).toContain('\tExtra   PlainJSON      `gorm:"column:extra" json:"extra"`\n')
+    expect(code).toContain(
+      '\tDoc     datatypes.JSON `gorm:"column:doc;type:jsonb;not null" json:"doc"`\n',
+    )
+    expect(code).toContain('type Money float64\n')
+    expect(code).toContain('type PlainJSON json.RawMessage\n')
+    expect(code).toContain(`import (
+	"context"
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"gorm.io/gorm/schema"
+)`)
+    expect(code).toContain(
+      '\treturn clause.Expr{SQL: "CAST(CAST(? AS numeric) AS money)", Vars: []any{strconv.FormatFloat(float64(m), \'f\', -1, 64)}}\n',
+    )
+  })
+
+  it('keeps the money text it cannot read from becoming a wrong amount', () => {
+    const code = gormFor(schema, 'postgresql')
+    expect(code).toContain(
+      '\tmoneyText   = regexp.MustCompile("^(-?)\\\\$(\\\\d{1,3}(?:,\\\\d{3})*)\\\\.(\\\\d{2})$")\n',
+    )
+    expect(code).toContain(
+      '\t\treturn fmt.Errorf("a money column held %q, which is not in the C or en_US form", text)\n',
+    )
+    expect(code).toContain('\tif amount > maxExactMoney || amount < -maxExactMoney {\n')
+  })
+
+  it('leaves CockroachDB, which has no money and whose json is jsonb, as it was', () => {
+    const code = gormFor(
+      `
+model Wallet {
+  id  Int  @id
+  raw Json @db.JsonB
+}
+`,
+      'cockroachdb',
+    )
+    expect(code).not.toContain('PlainJSON')
+    expect(code).not.toContain('Money')
+  })
+
+  it('names a money list, which GORM cannot read, and a model that takes the name of a type', () => {
+    const result = getDMMF({
+      datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Money {
+  id     Int       @id
+  prices Decimal[] @db.Money
+  amount Decimal   @db.Money
+}
+`,
+    })
+    expect(gormProblems(datamodelOf(result).models, 'postgresql')).toStrictEqual([
+      'model Money: its Go name is Money, what the models hold a @db.Money in; rename the model and keep its table with @@map',
+      'model Money: prices is a list of money, which GORM cannot read from the money[] PostgreSQL prints; make it a list of @db.Decimal',
+    ])
   })
 })
