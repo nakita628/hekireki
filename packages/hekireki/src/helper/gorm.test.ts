@@ -857,7 +857,7 @@ model Post {
 
   it('makes an Int @db.Int on SQL Server an INT, as a plain Int', () => {
     const code = gormFor('model A {\n  id Int @id @db.Int\n  n  Int\n}\n', 'sqlserver')
-    expect(code).toContain('`gorm:"column:id;primaryKey;size:32" json:"id"`')
+    expect(code).toContain('`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"`')
     expect(code).toContain('`gorm:"column:n;size:32;not null" json:"n"`')
   })
 
@@ -1009,6 +1009,189 @@ model Part {
     )
     // The key's uuid() is still made in BeforeCreate.
     expect(code).toContain('uuid.NewString()')
+  })
+})
+
+// Prisma allows autoincrement() on a @unique field that is not the key: a serial column on
+// PostgreSQL and an AUTO_INCREMENT one on MySQL. The tag says autoIncrement, so GORM makes the
+// column so and leaves the field out of an INSERT while it is zero rather than writing 0.
+describe('generateGormModels autoincrement on a field that is not the key', () => {
+  const schema = `
+model Counter {
+  id       String @id
+  metricId Int    @unique @default(autoincrement()) @map("metric_id")
+}
+`
+
+  it('marks the column autoIncrement on PostgreSQL, which GORM makes serial', () => {
+    expect(gormFor(schema, 'postgresql')).toContain(
+      '\tMetricID int    `gorm:"column:metric_id;autoIncrement;uniqueIndex:Counter_metric_id_key;size:32;not null" json:"metric_id"`',
+    )
+  })
+
+  it('marks the column autoIncrement on MySQL, which GORM makes INT AUTO_INCREMENT', () => {
+    expect(gormFor(schema, 'mysql')).toContain(
+      '\tMetricID int    `gorm:"column:metric_id;autoIncrement;uniqueIndex:Counter_metric_id_key;size:32;not null" json:"metric_id"`',
+    )
+  })
+  // MySQL allows one AUTO_INCREMENT column a table: the key, which GORM would make one too, says it
+  // is not.
+  it('keeps an Int key beside it from auto-incrementing on MySQL', () => {
+    const code = gormFor(
+      `
+model Counter {
+  id  Int @id
+  seq Int @unique @default(autoincrement())
+}
+`,
+      'mysql',
+    )
+    expect(code).toContain('`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"`')
+    expect(code).toContain(
+      '`gorm:"column:seq;autoIncrement;uniqueIndex:Counter_seq_key;size:32;not null" json:"seq"`',
+    )
+  })
+
+  // GORM writes a `type:` it does not know as given, so a native integer type takes its serial type.
+  it('gives an autoincrement @db.SmallInt column its serial type on PostgreSQL', () => {
+    const code = gormFor(
+      `
+model Tick {
+  id  Int    @id @default(autoincrement()) @db.SmallInt
+  seq BigInt @unique @default(autoincrement()) @db.BigInt
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain('`gorm:"column:id;primaryKey;autoIncrement;type:smallserial" json:"id"`')
+    // An int64 is GORM's own type, which it makes bigserial.
+    expect(code).toContain(
+      '`gorm:"column:seq;autoIncrement;uniqueIndex:Tick_seq_key;not null" json:"seq"`',
+    )
+  })
+})
+
+// GORM's SQL Server dialector writes IDENTITY only on its own integer types, not on a `type:`.
+describe('generateGormModels autoincrement @db.SmallInt on SQL Server', () => {
+  it('writes the IDENTITY into the type', () => {
+    const code = gormFor(
+      `
+model Tick {
+  id  Int @id
+  seq Int @unique @default(autoincrement()) @db.SmallInt
+}
+`,
+      'sqlserver',
+    )
+    expect(code).toContain(
+      '`gorm:"column:seq;autoIncrement;uniqueIndex:Tick_seq_key;type:smallint IDENTITY(1,1);not null" json:"seq"`',
+    )
+  })
+})
+
+// GORM makes the sole integer key auto-increment unless its tag says autoIncrement either way
+// (schema.Parse, gorm v1.31.2): AutoMigrate gives it a sequence default on PostgreSQL (a bigint
+// one for a @db.SmallInt) and AUTO_INCREMENT on MySQL, where Prisma makes a plain integer column.
+// A key with no autoincrement() says autoIncrement:false, and GORM writes its value, 0 included,
+// in an INSERT.
+describe('generateGormModels integer key with no autoincrement()', () => {
+  // CockroachDB's sequence() fills the key, as autoincrement() does: GORM leaves a zero one out.
+  it('leaves a sequence() key on CockroachDB to GORM', () => {
+    expect(
+      gormFor('model Seq {\n  id Int @id @default(sequence())\n}\n', 'cockroachdb'),
+    ).not.toContain('autoIncrement:false')
+  })
+
+  // The default: tag leaves a zero key out as well; auto-incrementing too, AutoMigrate would write
+  // `bigserial DEFAULT (1000 + 1)`, which PostgreSQL refuses (multiple default values).
+  it('keeps a dbgenerated() key from auto-incrementing beside its default', () => {
+    expect(
+      gormFor(
+        'model Account {\n  id BigInt @id @default(dbgenerated("(1000 + 1)"))\n}\n',
+        'postgresql',
+      ),
+    ).toContain('`gorm:"column:id;primaryKey;autoIncrement:false;default:(1000 + 1)" json:"id"`')
+  })
+
+  const schema = `
+model Counter {
+  id Int @id
+}
+
+model Tick {
+  ident Int @id @db.SmallInt
+}
+
+model Ledger {
+  id BigInt @id
+}
+
+model User {
+  id      Int      @id @default(autoincrement())
+  profile Profile?
+}
+
+model Profile {
+  userId Int  @id
+  user   User @relation(fields: [userId], references: [id])
+}
+
+model Pair {
+  a Int
+  b Int
+
+  @@id([a, b])
+}
+
+model Line {
+  orderId Int
+  id      Int
+
+  @@id([orderId, id])
+}
+`
+  const code = gormFor(schema, 'postgresql')
+
+  it('writes autoIncrement:false on an Int key', () => {
+    expect(code).toContain(
+      '\tID int `gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"`',
+    )
+  })
+
+  it('writes autoIncrement:false on an Int @db.SmallInt key, which GORM would make a bigint', () => {
+    expect(code).toContain(
+      '\tIdent int `gorm:"column:ident;primaryKey;autoIncrement:false;type:smallint" json:"ident"`',
+    )
+  })
+
+  it('writes autoIncrement:false on a BigInt key', () => {
+    expect(code).toContain('\tID int64 `gorm:"column:id;primaryKey;autoIncrement:false" json:"id"`')
+  })
+
+  it('writes autoIncrement:false on a key that is also the foreign key of a 1:1 relation', () => {
+    expect(code).toContain(
+      '\tUserID int   `gorm:"column:userId;primaryKey;autoIncrement:false;size:32" json:"userId"`',
+    )
+  })
+
+  it('leaves a composite key alone, which GORM does not make auto-increment', () => {
+    expect(code).toContain('\tA int `gorm:"column:a;primaryKey;size:32" json:"a"`')
+    expect(code).toContain('\tB int `gorm:"column:b;primaryKey;size:32" json:"b"`')
+  })
+
+  it('writes autoIncrement:false on the field of a composite key GORM finds by the name id', () => {
+    expect(code).toContain(
+      '\tOrderID int `gorm:"column:orderId;primaryKey;size:32" json:"orderId"`',
+    )
+    expect(code).toContain(
+      '\tID      int `gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"`',
+    )
+  })
+
+  it('keeps the tags of an autoincrement() key', () => {
+    expect(code).toContain(
+      '\tID      int      `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`',
+    )
   })
 })
 
@@ -1614,7 +1797,7 @@ func (m *User) BeforeCreate(_ *gorm.DB) error {
 }
 
 type Comment struct {
-	ID     int   \`gorm:"column:id;primaryKey;size:32;not null" json:"id"\`
+	ID     int   \`gorm:"column:id;primaryKey;autoIncrement:false;size:32;not null" json:"id"\`
 	PostID int   \`gorm:"column:postId;size:32;not null" json:"postId"\`
 	Post   *Post \`gorm:"belongsTo"\`
 }
@@ -2181,7 +2364,7 @@ model Account {
     ).toBe(`package model
 
 type Account struct {
-	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	ID    int    \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
 	Email string \`gorm:"column:email;uniqueIndex:Account_email_key;uniqueIndex:account_email_alive,where:(alive);not null" json:"email"\`
 	Alive bool   \`gorm:"column:alive;uniqueIndex:Account_alive_n_key,priority:1,where:(\\"alive\\" = true);index:Account_alive_idx,where:(\\"alive\\" = true);not null" json:"alive"\`
 	// The partial index "account,n,note" is left out: its condition holds a ";", at which GORM splits the tag.
@@ -2226,7 +2409,7 @@ model Token {
     ).toBe(`package model
 
 type Pair struct {
-	ID int \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	ID int \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
 	A  int \`gorm:"column:a;uniqueIndex:Pair_a_b_key,priority:1;uniqueIndex:pair_pos,priority:1,where:(a > 0);size:32;not null" json:"a"\`
 	B  int \`gorm:"column:b;uniqueIndex:Pair_a_b_key,priority:2;uniqueIndex:pair_pos,priority:2,where:(a > 0);size:32;not null" json:"b"\`
 }
@@ -2309,7 +2492,7 @@ model Doc {
     ).toBe(`package model
 
 type Doc struct {
-	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	ID    int    \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
 	Title string \`gorm:"column:title;index:doc_title_trgm,type:gist,expression:\\"title\\" gin_trgm_ops;index:Doc_title_n_idx,expression:\\"title\\" text_pattern_ops,priority:1,where:(\\"alive\\" = true);not null" json:"title"\`
 	N     int    \`gorm:"column:n;index:Doc_title_n_idx,priority:2,sort:desc,where:(\\"alive\\" = true);size:32;not null" json:"n"\`
 	Alive bool   \`gorm:"column:alive;not null" json:"alive"\`
@@ -2399,7 +2582,7 @@ model LogEntry {
     expect(gormFor(LOG_ENTRY, 'mysql')).toBe(`package model
 
 type LogEntry struct {
-	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	ID    int    \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
 	Note  string \`gorm:"column:note;index:LogEntry_note_idx,length:100;index:LogEntry_title_note_idx,priority:2,length:10;type:text;not null" json:"note"\`
 	Title string \`gorm:"column:title;index:LogEntry_title_note_idx,priority:1,length:20,sort:desc;type:varchar(255);not null" json:"title"\`
 	Code  string \`gorm:"column:code;uniqueIndex:LogEntry_code_key,length:50;type:text;not null" json:"code"\`
@@ -2442,7 +2625,7 @@ model LogEntry {
     ).toBe(`package model
 
 type LogEntry struct {
-	ID        int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	ID        int    \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
 	UUID      string \`gorm:"column:uuid;index:log_entry_uuid_idx,priority:1;type:varchar(191);not null" json:"uuid"\`
 	Action    string \`gorm:"column:action;index:log_entry_uuid_idx,priority:2;index:LogEntry_action_idx;type:varchar(191);not null" json:"action"\`
 	Timestamp int    \`gorm:"column:timestamp;index:log_entry_uuid_idx,priority:3,sort:desc;size:32;not null" json:"timestamp"\`
@@ -2481,7 +2664,7 @@ model Account {
     ).toBe(`package model
 
 type Account struct {
-	ID    int  \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	ID    int  \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
 	Alive bool \`gorm:"column:alive;index:Account_alive_n_idx,priority:1,where:(alive);not null" json:"alive"\`
 	N     int  \`gorm:"column:n;uniqueIndex:Account_n_key,sort:desc,where:(n > 0);index:Account_alive_n_idx,priority:2,sort:desc,where:(alive);size:32;not null" json:"n"\`
 }
@@ -2613,7 +2796,7 @@ import (
 // Second paragraph */ with \\\\ backslash.
 type User struct {
 	// The key.
-	ID   int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	ID   int    \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
 	Name string \`gorm:"column:name;not null" json:"name"\`
 	// When they joined.
 	// Two lines.
@@ -2636,7 +2819,7 @@ func (m *User) BeforeCreate(tx *gorm.DB) error {
 }
 
 type Post struct {
-	ID int \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	ID int \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
 	// Who wrote it.
 	AuthorID int \`gorm:"column:authorId;size:32;not null" json:"authorId"\`
 	// The author.
@@ -2843,7 +3026,7 @@ func (m *Line) BeforeCreate(_ *gorm.DB) error {
 }
 
 type Part struct {
-	ID         int   \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	ID         int   \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
 	LineOrder  int   \`gorm:"column:lineOrder;size:32;not null" json:"lineOrder"\`
 	LineNumber int   \`gorm:"column:lineNumber;size:32;not null" json:"lineNumber"\`
 	Line       *Line \`gorm:"foreignKey:LineNumber,LineOrder;references:Number,Order;belongsTo"\`

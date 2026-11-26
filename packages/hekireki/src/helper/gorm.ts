@@ -351,8 +351,37 @@ function moneyDefault(value: string) {
   return /^-?[\d.]+$/u.test(value) ? `(${value})` : value
 }
 
-function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
-  if (!isPk) return []
+// GORM makes an integer key auto-increment unless its tag says autoIncrement either way: a key
+// with no autoincrement() would take a sequence default on PostgreSQL (a bigint one where the
+// native type is @db.SmallInt) and AUTO_INCREMENT on MySQL, where Prisma makes a plain integer
+// column. With autoIncrement:false GORM writes the field in an INSERT even when it is zero, as
+// such a key's value comes from the caller (or the row it belongs to).
+// A key the database fills with no `default:` tag (autoincrement(), CockroachDB's sequence()) stays
+// one GORM leaves out of the INSERT when zero and reads back. A dbgenerated() key carries its
+// `default:` tag, which does the same; were GORM to make it auto-increment as well, AutoMigrate
+// would write a serial type beside the DEFAULT, which PostgreSQL refuses ("multiple default values").
+const DATABASE_FILLED_DEFAULTS = new Set(['autoincrement', 'sequence'])
+
+function isImplicitAutoIncrement(field: DMMF.Field, gormPicksKey: boolean) {
+  const isInteger =
+    field.kind === 'scalar' && !field.isList && ['Int', 'BigInt'].includes(field.type)
+  const isDatabaseFilled =
+    isFunctionDefault(field.default) && DATABASE_FILLED_DEFAULTS.has(field.default.name)
+  return gormPicksKey && isInteger && !isDatabaseFilled
+}
+
+function primaryKeyTags(
+  field: DMMF.Field,
+  isPk: boolean,
+  isCompositePk: boolean,
+  provider: string | undefined,
+  gormPicksKey: boolean | undefined,
+) {
+  // Prisma allows autoincrement() on a @unique field that is not the key (a serial column on
+  // PostgreSQL, AUTO_INCREMENT on MySQL). GORM gives such a column its default only when the tag
+  // says autoIncrement, and leaves the field out of an INSERT while it is zero; without it GORM
+  // makes a plain column and writes 0.
+  if (!isPk) return isAutoincrement(field) ? ['autoIncrement'] : []
   const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
   // A native type wins (columnTypeTag); on MySQL such a key is a String like any other,
   // VARCHAR(191) (isMysqlDefaultString), and on PostgreSQL text, as Prisma Migrate makes it.
@@ -363,6 +392,10 @@ function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | und
   return [
     'primaryKey',
     ...(isAutoincrement(field) ? ['autoIncrement'] : []),
+    // Unless the caller says which key field GORM picks, a single-field key is the one.
+    ...(isImplicitAutoIncrement(field, gormPicksKey ?? !isCompositePk)
+      ? ['autoIncrement:false']
+      : []),
     ...(fixedType && defaultName === 'uuid' ? ['type:char(36)'] : []),
     ...(fixedType && defaultName === 'ulid' ? ['type:char(26)'] : []),
   ]
@@ -449,6 +482,17 @@ function usesScalarList(models: readonly DMMF.Model[], provider: string | undefi
   return models.some((m) => m.fields.some((f) => isScalarList(f, provider)))
 }
 
+// GORM's PostgreSQL and SQL Server drivers make an autoIncrement column serial or IDENTITY only
+// from their own integer types; a `type:` they do not know is written as given, without a default.
+// An autoincrement column with a native integer type (@db.SmallInt or @db.TinyInt, which write
+// `type:smallint`) is therefore given what Prisma Migrate makes of it: SMALLSERIAL on PostgreSQL,
+// `smallint IDENTITY(1,1)` on SQL Server. MySQL's dialector adds AUTO_INCREMENT to any type.
+function serialType(field: DMMF.Field, nativeType: string, provider: string | undefined) {
+  if (!isAutoincrement(field) || nativeType !== 'smallint') return undefined
+  if (provider === 'postgresql') return 'smallserial'
+  return provider === 'sqlserver' ? 'smallint IDENTITY(1,1)' : undefined
+}
+
 function columnTypeTag(field: DMMF.Field, provider?: string) {
   if (isScalarList(field, provider)) return `type:${scalarListColumnType(field, provider)}`
   const nativeType = resolveNativeType(field, provider)
@@ -456,7 +500,7 @@ function columnTypeTag(field: DMMF.Field, provider?: string) {
   // which the list type writes and reads as Prisma Client does.
   if (isDateTimeList(field)) return `type:${nativeType ?? 'timestamp(3)'}[]`
   if (isMysqlDefaultString(field, provider)) return 'type:varchar(191)'
-  if (nativeType !== null) return `type:${nativeType}`
+  if (nativeType !== null) return `type:${serialType(field, nativeType, provider) ?? nativeType}`
   const defaultType =
     field.kind === 'scalar' && !field.isList
       ? DEFAULT_TYPES[provider ?? '']?.[field.type]
@@ -514,6 +558,7 @@ export function buildGormTags(
   enums?: readonly DMMF.DatamodelEnum[],
   provider?: string,
   fieldName = goFieldName(field.name),
+  gormPicksKey?: boolean,
 ) {
   const columnName = field.dbName ?? field.name
   const defaultVal = gormDefault(field, isPk, isCompositePk, enums, provider)
@@ -523,7 +568,7 @@ export function buildGormTags(
 
   const parts = [
     `column:${escapeTagValue(columnName)}`,
-    ...primaryKeyTags(field, isPk, provider),
+    ...primaryKeyTags(field, isPk, isCompositePk, provider, gormPicksKey),
     // A model's own unique fields come named in compositeIndexTags.
     field.isUnique && !compositeIndexTags.some((tag) => tag.startsWith('uniqueIndex:'))
       ? 'uniqueIndex'
@@ -1089,14 +1134,41 @@ function generateStructField(
   isPk: boolean,
   isCompositePk: boolean,
   compositeIndexTags: readonly string[],
-  enums?: readonly DMMF.DatamodelEnum[],
-  provider?: string,
+  enums: readonly DMMF.DatamodelEnum[] | undefined,
+  provider: string | undefined,
+  gormPicksKey: boolean,
 ) {
   return [
     fieldName,
     structFieldGoType(field, isPk, provider),
-    buildGormTags(field, isPk, isCompositePk, compositeIndexTags, enums, provider, fieldName),
+    buildGormTags(
+      field,
+      isPk,
+      isCompositePk,
+      compositeIndexTags,
+      enums,
+      provider,
+      fieldName,
+      gormPicksKey,
+    ),
   ]
+}
+
+// The key field GORM makes auto-increment when its tag does not say (schema.Parse, gorm v1.31.2):
+// the one it finds by the name id, then ID (a column name first, then a Go field name), when that
+// is a key field, and otherwise the sole key field. Of a composite key with no such field GORM
+// makes none auto-increment.
+function gormPickedKey(
+  scalarFields: readonly DMMF.Field[],
+  keyNames: ReadonlySet<string>,
+  names: ReadonlyMap<string, string>,
+) {
+  const lookUp = (name: string) =>
+    scalarFields.find((f) => (f.dbName ?? f.name) === name) ??
+    scalarFields.find((f) => (names.get(f.name) ?? goFieldName(f.name)) === name)
+  const byName = lookUp('id') ?? lookUp('ID')
+  if (byName !== undefined && keyNames.has(byName.name)) return byName.name
+  return keyNames.size === 1 ? [...keyNames][0] : undefined
 }
 
 function needsReferencesTag(references: string) {
@@ -1387,6 +1459,11 @@ export function generateModelStruct(
   )
 
   const names = goFieldNames(model)
+  const pickedKey = gormPickedKey(
+    scalarFields,
+    new Set(idField ? [idField.name] : compositePkFieldNames),
+    names,
+  )
   const fieldLines = scalarFields.flatMap((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const fieldIndexTags = indexTags.tags.get(field.name) ?? []
@@ -1403,6 +1480,7 @@ export function generateModelStruct(
         fieldIndexTags,
         enums,
         provider,
+        field.name === pickedKey,
       ),
     )
     return rows

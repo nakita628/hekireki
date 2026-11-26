@@ -171,10 +171,10 @@ model Post {
   it('gorm joins each model on its own key', () => {
     const code = generateGormModels(models, enums, indexes)
     expect(code).toContain(
-      'type User struct {\n\tID    int    `gorm:"column:id;primaryKey;size:32" json:"id"`\n\tPosts []Post `gorm:"foreignKey:UserID;constraint:Post_userId_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`',
+      'type User struct {\n\tID    int    `gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"`\n\tPosts []Post `gorm:"foreignKey:UserID;constraint:Post_userId_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`',
     )
     expect(code).toContain(
-      'type Team struct {\n\tID    int    `gorm:"column:id;primaryKey;size:32" json:"id"`\n\tPosts []Post `gorm:"foreignKey:TeamID;constraint:Post_teamId_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`',
+      'type Team struct {\n\tID    int    `gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"`\n\tPosts []Post `gorm:"foreignKey:TeamID;constraint:Post_teamId_fkey,OnUpdate:CASCADE,OnDelete:RESTRICT"`',
     )
   })
 
