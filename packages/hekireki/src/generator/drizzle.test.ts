@@ -2644,4 +2644,48 @@ model ArticleToTag {
     expect(code).toContain("export const articleToTagTable = pgTable('_ArticleToTag', ")
     expect(code).toContain('through(r.articleToTagTable.A)')
   })
+
+  it("never takes a dialect's own function with the suffix, and keeps a non-ASCII name", () => {
+    const code = schemaOf(`
+enum Pg {
+  A
+}
+model Plain {
+  id   Int @id
+  kind Pg
+  @@map("Pg")
+}
+model Other {
+  id Int @id
+  @@map("pg")
+}
+model User {
+  id Int @id
+  @@map("用户")
+}
+model Cafe {
+  id Int @id
+  @@map("café")
+}`)
+    expect(code).toContain("export const pgEnum2 = pgEnum('Pg', ['A'])")
+    expect(code).toContain("kind: pgEnum2('kind')")
+    expect(code).toContain("export const pg = pgTable('Pg', ")
+    expect(code).toContain("export const pgTable2 = pgTable('pg', ")
+    expect(code).toContain("export const 用户 = pgTable('用户', ")
+    expect(code).toContain("export const café = pgTable('café', ")
+  })
+
+  it('steps aside from no enum where the module declares none', () => {
+    const models = `
+enum Status {
+  ON
+}
+model StatusEnum {
+  id     Int    @id
+  status Status
+}`
+    expect(schemaOf(models, 'mysql')).toContain(
+      "export const statusEnum = mysqlTable('StatusEnum', ",
+    )
+  })
 })

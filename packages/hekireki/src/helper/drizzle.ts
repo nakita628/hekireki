@@ -363,10 +363,13 @@ function resolveTableName(model: DMMF.Model) {
 // A name as a camelCase identifier: `users` for @@map("users"), `orderLineItem` for a snake_case
 // table, `todo` for "Todo", `orderItems` for "order-items", and `_2faCodes` for "2fa_codes".
 function camelIdentifier(name: string) {
-  const camel = snakeToCamel(name.replaceAll(/[^\w$]+/gu, '_')).replace(/^_+(?=[a-zA-Z$])/u, '')
+  const camel = snakeToCamel(name.replaceAll(/[^\p{ID_Continue}$]+/gu, '_')).replace(
+    /^_+(?=[\p{ID_Start}$])/u,
+    '',
+  )
   const lowered = `${camel.charAt(0).toLowerCase()}${camel.slice(1)}`
   if (lowered === '') return '_'
-  return /^\d/u.test(lowered) ? `_${lowered}` : lowered
+  return /^[\p{ID_Start}$_]/u.test(lowered) ? lowered : `_${lowered}`
 }
 
 // What an export cannot be called: JavaScript's reserved words and the names strict mode keeps
@@ -427,25 +430,33 @@ export function resolveExportNames(
     ...Object.keys(COLUMN_HELPERS),
     ...PROVIDER_EXPORTS[provider],
   ])
-  const taken = new Set(enums.map((e) => enumIdentifier(e.name)))
-  const claim = (base: string) => {
-    const preferred = reserved.has(base) || taken.has(base) ? `${base}Table` : base
-    const free = taken.has(preferred)
-      ? Array.from({ length: taken.size + 1 }, (_, i) => `${preferred}${i + 2}`).find(
-          (candidate) => !taken.has(candidate),
-        )
-      : preferred
+  const taken = new Set<string>()
+  const usable = (name: string) => !reserved.has(name) && !taken.has(name)
+  // The name, or the first of `<name><suffix>`, `<name><suffix>2`, ... that is free.
+  const claim = (base: string, suffix: string) => {
+    const preferred = usable(base) ? base : `${base}${suffix}`
+    const free = usable(preferred)
+      ? preferred
+      : Array.from({ length: taken.size + 2 }, (_, i) => `${preferred}${i + 2}`).find(usable)
     const name = free ?? preferred
     taken.add(name)
     return name
   }
+  // The enums the module declares, which are PostgreSQL's only and those a field uses, first.
+  const used = new Set(
+    models.flatMap((m) => m.fields.filter((f) => f.kind === 'enum').map((f) => f.type)),
+  )
+  const declared = provider === 'postgresql' ? enums.filter((e) => used.has(e.name)) : []
+  for (const declaredEnum of declared) {
+    imports.names.set(`enum:${declaredEnum.name}`, claim(enumIdentifier(declaredEnum.name), ''))
+  }
   for (const model of models) {
-    imports.names.set(model.name, claim(camelIdentifier(resolveTableName(model))))
+    imports.names.set(model.name, claim(camelIdentifier(resolveTableName(model)), 'Table'))
   }
   for (const pair of implicitJoinTables(models)) {
     imports.names.set(
       `_${pair.relationName}`,
-      claim(camelIdentifier(makeSnakeCase(pair.relationName))),
+      claim(camelIdentifier(makeSnakeCase(pair.relationName)), 'Table'),
     )
   }
 }
@@ -466,6 +477,11 @@ function resolveVarNameByType(
 
 function isFieldDefault(v: unknown) {
   return typeof v === 'object' && v !== null && 'name' in v
+}
+
+// The export of an enum, as resolveExportNames resolved it.
+function enumVarName(enumName: string, imports: DrizzleImports) {
+  return imports.names.get(`enum:${enumName}`) ?? enumIdentifier(enumName)
 }
 
 function enumIdentifier(enumName: string) {
@@ -489,7 +505,7 @@ export function makeEnumDeclarations(
       const values = e.values.map((v) => `'${v.dbName ?? v.name}'`).join(', ')
       return [
         ...docBlockLines(stripAnnotations(e.documentation), ''),
-        `export const ${enumIdentifier(e.name)} = pgEnum('${e.dbName ?? e.name}', [${values}])`,
+        `export const ${enumVarName(e.name, imports)} = pgEnum('${e.dbName ?? e.name}', [${values}])`,
       ].join('\n')
     })
 }
@@ -530,7 +546,7 @@ function makeColumnExpr(
       // References the top-level declaration from makeEnumDeclarations: an
       // inline pgEnum(...) per column is invisible to drizzle-kit, so the
       // migration uses the type without ever emitting CREATE TYPE.
-      return `${enumIdentifier(field.type)}('${colName}')`
+      return `${enumVarName(field.type, imports)}('${colName}')`
     }
     if (provider === 'mysql') {
       imports.core.add('mysqlEnum')
