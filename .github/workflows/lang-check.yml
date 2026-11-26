@@ -182,17 +182,22 @@ jobs:
           sudo systemctl start postgresql.service
           sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres'"
           docker run -d --name mysql -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=drizzle_dates -p 3306:3306 mysql:8.4
-          for _ in $(seq 60); do
-            docker exec mysql mysql -uroot -proot -e 'SELECT 1' drizzle_dates > /dev/null 2>&1 && break
+          # Over TCP: the image's first-run server listens on its socket only, then restarts.
+          for _ in $(seq 90); do
+            if docker exec mysql mysql -h127.0.0.1 -P3306 -uroot -proot -e 'SELECT 1' drizzle_dates > /dev/null 2>&1; then
+              exit 0
+            fi
             sleep 2
           done
+          echo 'MySQL did not come up' >&2
+          exit 1
       - if: matrix.lang == 'drizzle'
         run: vp link ./packages/hekireki
       - if: matrix.lang == 'drizzle'
         working-directory: examples/drizzle-postgresql
         env:
           DRIZZLE_DATABASE: postgresql://postgres:postgres@localhost:5432/postgres
-        run: pnpm run generate && pnpm run db && pnpm run money
+        run: pnpm run generate && pnpm run db && pnpm run typecheck && pnpm run money
       - if: matrix.lang == 'drizzle'
         env:
           DRIZZLE_DATABASE: mysql://root:root@127.0.0.1:3306/drizzle_dates

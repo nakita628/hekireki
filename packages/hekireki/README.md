@@ -262,8 +262,10 @@ provider, so an export never changes because a field was added: on PostgreSQL `m
 `hekireki-drizzle` writes a PostgreSQL `@db.Money` as `moneyDecimal`, a `money` column read as
 numeric text, as Prisma Client reads it: a relational query's rows select it as numeric, and a
 plain select reads the session's `lc_monetary` form, which it takes in the C / en_US form (`$1,234.56`)
-and refuses otherwise rather than read a wrong number. Under another locale, cast it in every select
-with an instance codec:
+and refuses otherwise rather than read a wrong number. A value is written as its numeric text, which
+PostgreSQL also reads in the `lc_monetary` form, as it does Prisma Client's: keep the database's
+`lc_monetary` C or en_US. To read the column under another locale, cast it in every select with an
+instance codec:
 
 ```ts
 import { sql } from 'drizzle-orm'
