@@ -92,6 +92,7 @@ const PG_NATIVE_FIXED: { [k: string]: string } = {
   ByteA: 'bytea()',
   Inet: 'inet()',
   Xml: "typedText({ type: 'xml' })",
+  Oid: 'oidInteger()',
 }
 
 const PG_NATIVE_SIZED: { [k: string]: SizedColumn } = {
@@ -180,7 +181,9 @@ function mysqlNativeType(name: string, args: readonly string[]) {
 
 // Columns drizzle has none of its own for: a DateTime kept in UTC, in the form Prisma Client
 // writes and reads it, a Bytes as the Uint8Array Prisma Client gives, a String in a PostgreSQL type
-// drizzle has no column for (varbit, xml), and a BigInt on SQLite as
+// drizzle has no column for (varbit, xml), an Int in an oid (drizzle's oid codec, which builds an
+// oid[] literal, and read back as a number, which PostgreSQL's JSON gives as a string), and a
+// BigInt on SQLite as
 // the integer Prisma keeps it as. drizzle's own `blob({ mode: 'bigint' })` reads the column as
 // bytes and writes the digits as a BLOB, which neither reads what Prisma wrote nor writes what
 // Prisma reads. Its `blob()` with no mode is JSON in drizzle-orm 1.0, and the buffer mode types
@@ -203,6 +206,11 @@ const COLUMN_HELPERS: { readonly [name: string]: string } = {
 })`,
   typedText: `const typedText = customType<{ data: string; config: { type: string } }>({
   dataType: (config) => config?.type ?? 'text',
+})`,
+  oidInteger: `const oidInteger = customType<{ data: number; driverData: number | string }>({
+  dataType: () => 'oid',
+  codec: 'oid',
+  fromDriver: (value) => Number(value),
 })`,
   utcDateTime: `const utcDateTime = customType<{ data: Date; driverData: string | number }>({
   dataType: () => 'datetime',
@@ -1068,7 +1076,7 @@ export function makeM2MJoinTables(
       `index('${tableName}_B_index').on(table.B)`,
       ...sides.map(
         (side) =>
-          `foreignKey({ name: '${tableName}_${side.column}_fkey', columns: [table.${side.column}], foreignColumns: [${side.target}.${side.key}] }).onDelete('cascade').onUpdate('cascade')`,
+          `foreignKey({ name: '${constraintName(tableName, [], `${side.column}_fkey`, provider)}', columns: [table.${side.column}], foreignColumns: [${side.target}.${side.key}] }).onDelete('cascade').onUpdate('cascade')`,
       ),
     ]
     return `export const ${joinVarName(pair.relationName)} = ${tableFunc}('${tableName}', { ${columns.join(', ')} }, (table) => [${constraints.join(', ')}])`

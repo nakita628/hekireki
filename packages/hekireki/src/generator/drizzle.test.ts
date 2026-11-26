@@ -1284,6 +1284,7 @@ const PG_NATIVE_TYPES: readonly (readonly [
     'customType, integer, pgTable',
     "typedText('value', { type: 'xml' })",
   ],
+  ['Int', '@db.Oid', ['Oid', []], 'customType, integer, pgTable', "oidInteger('value')"],
 ]
 
 /** Prisma type, the attribute as it is written, its DMMF nativeType, the drizzle imports and column. */
@@ -1481,6 +1482,30 @@ const SQLITE_NATIVE_TYPES: readonly (readonly [
 ]
 
 describe('native database types', () => {
+  // PostgreSQL's JSON, which drizzle's relational queries read nested rows through, gives an oid as
+  // a string, so the helper reads it back as a number.
+  it('declares oidInteger for an oid column, with the oid codec and the value read back as a number', () => {
+    const datamodel = makeDatamodel([
+      makeModel({
+        name: 'Row',
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({ name: 'value', type: 'Int', nativeType: ['Oid', []] }),
+        ],
+      }),
+    ])
+    expect(drizzleSchema(datamodel, 'postgresql', []))
+      .toBe(`import { customType, integer, pgTable } from 'drizzle-orm/pg-core'
+
+const oidInteger = customType<{ data: number; driverData: number | string }>({
+  dataType: () => 'oid',
+  codec: 'oid',
+  fromDriver: (value) => Number(value),
+})
+
+export const row = pgTable('Row', { id: integer('id').primaryKey(), value: oidInteger('value').notNull() })`)
+  })
+
   it.each(PG_NATIVE_TYPES)(
     'maps %s `%s` on postgresql',
     (type, _attribute, nativeType, imports, column) => {
@@ -1875,6 +1900,37 @@ describe('keys, indexes and foreign keys as Prisma Migrate makes them', () => {
     expect(join('sqlite')).toBe(
       `(table) => [uniqueIndex('_PostToTag_AB_unique').on(table.A, table.B), ${rest}`,
     )
+  })
+
+  // A long relation name gives a join-table foreign key name Prisma Migrate cuts to the
+  // identifier limit. (#316)
+  it('cuts the name of a join-table foreign key as Prisma Migrate does', () => {
+    const long = 'P'.repeat(70)
+    const side = (name: string, other: string) =>
+      makeModel({
+        name,
+        fields: [
+          makeField({ name: 'id', type: 'Int', isId: true }),
+          makeField({
+            name: 'others',
+            type: other,
+            kind: 'object',
+            isList: true,
+            relationName: long,
+            relationFromFields: [],
+            relationToFields: [],
+          }),
+        ],
+      })
+    const schema = drizzleSchema(
+      makeDatamodel([side('Post', 'Tag'), side('Tag', 'Post')]),
+      'postgresql',
+      [],
+    )
+    // Prisma Migrate cuts the table's name and keeps `_A_fkey` and `_B_fkey` whole, so the two
+    // names stay apart.
+    expect(schema).toContain(`foreignKey({ name: '_${'P'.repeat(55)}_A_fkey', columns: [table.A]`)
+    expect(schema).toContain(`foreignKey({ name: '_${'P'.repeat(55)}_B_fkey', columns: [table.B]`)
   })
 
   // DMMF drops `@relation(map:)`: the name is read off the schema's text, as Prisma Migrate takes

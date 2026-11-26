@@ -6,13 +6,14 @@ import {
   generateDateTypes,
   generateModelStruct,
   generateNamingStrategy,
+  generateNativeTypes,
   generateScalarListType,
 } from '../helper/gorm.js'
-import { partialIndexWhere } from '../prisma/partial-index.js'
+import { partialIndexWhere, withPlainUniques } from '../prisma/partial-index.js'
 import type { PrismaBlock } from '../prisma/schema-text.js'
 
 export function generateGormModels(
-  models: readonly DMMF.Model[],
+  schemaModels: readonly DMMF.Model[],
   enums?: readonly DMMF.DatamodelEnum[],
   indexes?: readonly DMMF.Index[],
   packageName = 'model',
@@ -25,6 +26,7 @@ export function generateGormModels(
 ) {
   const idx = indexes ?? []
   const indexWhere = partialIndexWhere(blocks, provider)
+  const models = withPlainUniques(schemaModels, idx, indexWhere)
 
   const modelBodies = models.map((model) =>
     generateModelStruct(model, models, enums, idx, provider, foreignKeyNames, views, indexWhere),
@@ -38,6 +40,7 @@ export function generateGormModels(
     modelBodies.join('\n\n'),
     ...generateDateTypes(models, provider),
     ...generateScalarListType(models, provider),
+    ...generateNativeTypes(models, provider),
     '',
   ].join('\n')
 }

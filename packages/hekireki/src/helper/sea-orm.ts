@@ -1412,11 +1412,10 @@ function joinColumn(
   provider: string | undefined,
 ) {
   const pkField = models.find((m) => m.name === modelName)?.fields.find((f) => f.isId)
-  const native = pkField ? rustTypeForNative(pkField) : null
-  const rustType =
-    native !== null && !isDateTimeForm(native)
-      ? native
-      : prismaTypeToRustType(pkField?.type ?? 'String', true)
+  // The key's own Rust type, as its entity declares it: a date-time key keeps its form
+  // (DateTimeWithTimeZone, Date, DateTimeUtc on a MySQL TIMESTAMP, PrismaDateTime on SQLite).
+  const native = pkField ? rustTypeForNative(pkField, provider) : null
+  const rustType = native ?? prismaTypeToRustType(pkField?.type ?? 'String', true)
   const columnType = pkField
     ? resolveSeaOrmColumnType({ ...pkField, isList: false }, provider)
     : null
@@ -1430,6 +1429,18 @@ function joinColumn(
     ...(casts === null ? [] : [`select_as = "${casts.selectAs}"`, `save_as = "${casts.saveAs}"`]),
   ])
   return { rustType, attribute }
+}
+
+// The `use` lines of a join entity: PrismaDateTime, a SQLite date-time key's type, is imported
+// from its module beside the entities. rustfmt puts `super` first.
+function joinEntityUses(rustTypes: readonly string[]) {
+  return [
+    ...(rustTypes.includes('PrismaDateTime')
+      ? ['use super::prisma_date_time::PrismaDateTime;']
+      : []),
+    'use sea_orm::entity::prelude::*;',
+    'use serde::{Deserialize, Serialize};',
+  ]
 }
 
 export function generateM2MEntity(
@@ -1468,7 +1479,7 @@ export function generateM2MEntity(
   // Prisma names the join table's foreign keys `_<relation>_A_fkey` and `_<relation>_B_fkey`.
   const fkName = (column: string) => constraintName(tableName, [column], 'fkey', provider ?? '')
 
-  const useLines = ['use sea_orm::entity::prelude::*;', 'use serde::{Deserialize, Serialize};']
+  const useLines = joinEntityUses([left.rustType, right.rustType])
 
   const deriveModel =
     '#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]'

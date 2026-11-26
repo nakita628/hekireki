@@ -60,43 +60,49 @@ export function dateTimeFields(model: DMMF.Model) {
   return model.fields.filter((f) => f.kind === 'scalar' && f.type === 'DateTime')
 }
 
+// The typespec of each Ecto type the schemas use; any other is term().
+const TYPESPECS = new Map([
+  ['string', 'String.t()'],
+  ['integer', 'integer()'],
+  ['float', 'float()'],
+  ['boolean', 'boolean()'],
+  ['binary_id', 'Ecto.UUID.t()'],
+  ['Ecto.UUID', 'Ecto.UUID.t()'],
+  ['Tds.Ecto.UUID', 'Ecto.UUID.t()'],
+  ['Ecto.ULID', 'Ecto.ULID.t()'],
+  ['naive_datetime', 'NaiveDateTime.t()'],
+  ['utc_datetime', 'DateTime.t()'],
+  ['decimal', 'Decimal.t()'],
+  ['map', 'map()'],
+  ['binary', 'binary()'],
+])
+
 export function ectoTypeToTypespec(type: string) {
   // A type written beside the schemas is named with the app's module in front of it.
-  const written = WRITTEN_TYPESPECS.get(type.split('.').at(-1) ?? '')
-  if (written !== undefined) return written
-  switch (type) {
-    case 'string':
-      return 'String.t()'
-    case 'integer':
-      return 'integer()'
-    case 'float':
-      return 'float()'
-    case 'boolean':
-      return 'boolean()'
-    case 'binary_id':
-    case 'Ecto.UUID':
-      return 'Ecto.UUID.t()'
-    case 'Ecto.ULID':
-      return 'Ecto.ULID.t()'
-    case 'naive_datetime':
-      return 'NaiveDateTime.t()'
-    case 'utc_datetime':
-      return 'DateTime.t()'
-    case 'decimal':
-      return 'Decimal.t()'
-    case 'map':
-      return 'map()'
-    case 'binary':
-      return 'binary()'
-    default:
-      return 'term()'
-  }
+  return WRITTEN_TYPESPECS.get(type.split('.').at(-1) ?? '') ?? TYPESPECS.get(type) ?? 'term()'
 }
 
 // A String that PostgreSQL holds in a uuid column, which Postgrex takes as 16 bytes and not as
 // the 36 characters: Ecto.UUID casts the text and dumps the bytes.
 function isUuidColumn(field: DMMF.Field) {
   return field.type === 'String' && field.nativeType?.[0] === 'Uuid'
+}
+
+// A String SQL Server holds in a uniqueidentifier column (the native type is SQL Server's only),
+// which Tds returns as its 16 bytes in SQL Server's mixed-endian order. The Tds adapter loads and
+// dumps :binary_id through Tds.Ecto.UUID, which swaps that order; Ecto.UUID would write the bytes
+// in text order, another GUID, and :string would hold the raw bytes.
+function isUniqueIdentifierColumn(field: DMMF.Field) {
+  return field.type === 'String' && field.nativeType?.[0] === 'UniqueIdentifier'
+}
+
+// The Ecto type of a uniqueidentifier: :binary_id, unless Ecto fills it (a uuid() default), which
+// :binary_id cannot take outside a key, so the type the adapter maps :binary_id to.
+function uniqueIdentifierType(field: DMMF.Field) {
+  const def = field.default
+  return typeof def === 'object' && def !== null && 'name' in def && def.name === 'uuid'
+    ? 'Tds.Ecto.UUID'
+    : 'binary_id'
 }
 
 // Ecto type references are atoms (:binary_id) or modules (Ecto.ULID).
@@ -140,11 +146,15 @@ function getPrimaryKeyConfig(field: DMMF.Field) {
         foreignKeyType: 'string',
       }
     }
+    // A uuid(7) key is not the adapter's to make: Ecto makes it with its type's autogenerate, and on
+    // SQL Server that type has to dump the bytes as :binary_id does, as its foreign keys are.
+    const v7Line =
+      native === 'UniqueIdentifier'
+        ? `@primary_key {:id, Tds.Ecto.UUID, autogenerate: {Ecto.UUID, :generate, [[version: 7]]}${sourceOpt}}`
+        : `@primary_key {:id, Ecto.UUID, autogenerate: [version: 7]${sourceOpt}}`
     return {
       // UUIDv7 autogeneration requires Ecto 3.14+.
-      line: isV7
-        ? `@primary_key {:id, Ecto.UUID, autogenerate: [version: 7]${sourceOpt}}`
-        : `@primary_key {:id, :binary_id, autogenerate: true${sourceOpt}}`,
+      line: isV7 ? v7Line : `@primary_key {:id, :binary_id, autogenerate: true${sourceOpt}}`,
       typeSpec: 'Ecto.UUID.t()',
       omitIdFieldInSchema: true,
       foreignKeyType: 'binary_id',
@@ -305,6 +315,7 @@ function getBelongsToFkType(
   // Autoincrement integer PK → no explicit FK type needed (Ecto default :id)
   if (pkConfig?.line.includes(':id, autogenerate') === true) return null
 
+  if (isUniqueIdentifierColumn(referenced)) return 'binary_id'
   if (referenced.type === 'String') return isUuidColumn(referenced) ? 'Ecto.UUID' : 'string'
   if (referenced.type === 'DateTime') return `${appName}.${dateTimeModule(referenced)}`
 
@@ -444,8 +455,9 @@ function stringDefaultOption(f: DMMF.Field, def: string) {
     const parsed: unknown = JSON.parse(def)
     return parsed === null ? null : `default: ${jsonToElixirLiteral(parsed)}`
   }
-  if (isUuidColumn(f)) {
-    // Ecto dumps a :default when the schema compiles, and Ecto.UUID takes the 36 characters only.
+  if (isUuidColumn(f) || isUniqueIdentifierColumn(f)) {
+    // Ecto dumps a :default when the schema compiles, and Ecto.UUID (Tds.Ecto.UUID on SQL Server)
+    // takes the 36 characters only.
     // PostgreSQL also reads a uuid without its hyphens or in braces, and returns it in lower case:
     // the default is written as the database returns it, and left to the database when it is not
     // a uuid at all.
@@ -1009,6 +1021,7 @@ const NO_PRIMARY_KEY: EctoPrimaryKey = {
 function scalarEctoType(f: DMMF.Field, modulePrefix: string) {
   if (f.type === 'DateTime') return `${modulePrefix}${dateTimeModule(f)}`
   if (f.type === 'Json') return `${modulePrefix}PrismaJson`
+  if (isUniqueIdentifierColumn(f)) return uniqueIdentifierType(f)
   return isUuidColumn(f) ? 'Ecto.UUID' : prismaTypeToEctoType(f.type)
 }
 
@@ -1510,12 +1523,15 @@ const JSON_LIBRARY_APPS: ReadonlyMap<string, string> = new Map([
  * Prisma's `JSONB` column on SQLite has NUMERIC affinity, so SQLite keeps the text of a number as
  * an INTEGER or a REAL (a `1.0` comes back as `1`), which `ecto_sqlite3`'s `:map` loader refuses;
  * MySQL's JSON column is decoded by MyXQL already, and the `:map` loader decoded a string a second
- * time, while MariaDB's is text. A binary that is JSON text is decoded, so on MySQL a JSON string
- * whose contents are JSON text (`"42"`) loads as what it holds.
+ * time, while MariaDB's is text. The value alone cannot tell the two servers apart: `mysqlFlavor`
+ * says which one it is, and a binary is then always the string MyXQL decoded (`mysql`) or always the
+ * text MariaDB keeps (`mariadb`). Without it, a binary that is JSON text is decoded, so on MySQL a
+ * JSON string whose contents are JSON text (`"42"`) loads as what it holds.
  *
  * @param app - The module the schemas are under.
  * @param provider - The datasource's provider: SQLite and MySQL are sent JSON text, every other one
  * the value.
+ * @param mysqlFlavor - On MySQL, the server: `mysql` or `mariadb`, or undefined for either.
  * @returns The Elixir source of the type.
  * @example
  * ```elixir
@@ -1531,7 +1547,11 @@ const JSON_LIBRARY_APPS: ReadonlyMap<string, string> = new Map([
  * end
  * ```
  */
-export function ectoJsonType(app: string, provider: string | undefined) {
+export function ectoJsonType(
+  app: string,
+  provider: string | undefined,
+  mysqlFlavor?: 'mysql' | 'mariadb',
+) {
   const library = JSON_LIBRARY_APPS.get(provider ?? '')
   if (library === undefined) {
     return [
@@ -1563,17 +1583,7 @@ export function ectoJsonType(app: string, provider: string | undefined) {
           '',
           '  def load(_), do: :error',
         ]
-      : [
-          '  def load(value) when is_binary(value) do',
-          `    case ${json}.decode(value) do`,
-          '      {:ok, json} -> {:ok, json}',
-          '      _ -> {:ok, value}',
-          '    end',
-          '  end',
-          '',
-          '  def load(value) when is_json(value), do: {:ok, value}',
-          '  def load(_), do: :error',
-        ]),
+      : mysqlJsonLoad(json, provider === 'mysql' ? mysqlFlavor : undefined)),
     '',
     '  @impl true',
     '  def dump(value) when is_json(value) do',
@@ -1586,6 +1596,26 @@ export function ectoJsonType(app: string, provider: string | undefined) {
     '  def dump(_), do: :error',
     'end',
   ].join('\n')
+}
+
+// PrismaJson's load/1 on MySQL: on MySQL itself a binary is a JSON string MyXQL decoded, kept as
+// it is; on MariaDB it is the column's text, decoded; on a server not named, decoded when it is
+// JSON text.
+function mysqlJsonLoad(json: string, flavor: 'mysql' | 'mariadb' | undefined) {
+  if (flavor === 'mysql') {
+    return ['  def load(value) when is_json(value), do: {:ok, value}', '  def load(_), do: :error']
+  }
+  return [
+    '  def load(value) when is_binary(value) do',
+    `    case ${json}.decode(value) do`,
+    '      {:ok, json} -> {:ok, json}',
+    flavor === 'mariadb' ? '      _ -> :error' : '      _ -> {:ok, value}',
+    '    end',
+    '  end',
+    '',
+    '  def load(value) when is_json(value), do: {:ok, value}',
+    '  def load(_), do: :error',
+  ]
 }
 
 // What every PrismaJson starts with: the module, its primitive type and a cast of any JSON value.

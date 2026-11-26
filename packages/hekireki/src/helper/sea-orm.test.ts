@@ -1819,6 +1819,59 @@ impl ActiveModelBehavior for ActiveModel {
   })
 })
 
+// The join column of an implicit many-to-many holds the key, so it takes the key's Rust type as the
+// key's entity declares it: sqlx-postgres decodes no `timestamptz` or `date` into a NaiveDateTime.
+// (#298)
+describe('the join column of a date-time key', () => {
+  const key = (name: string, nativeType: unknown): any => ({
+    name,
+    dbName: null,
+    primaryKey: null,
+    uniqueFields: [],
+    uniqueIndexes: [],
+    fields: [
+      {
+        name: 'at',
+        kind: 'scalar',
+        type: 'DateTime',
+        isList: false,
+        isRequired: true,
+        isUnique: false,
+        isId: true,
+        isReadOnly: false,
+        isGenerated: false,
+        isUpdatedAt: false,
+        hasDefaultValue: false,
+        nativeType,
+      },
+    ],
+  })
+  const fieldsOf = (code: string) => code.split('\n').filter((line) => line.startsWith('    pub '))
+
+  it('declares the Rust type of the key on each side, as its entity does', () => {
+    const moment = key('Moment', ['Timestamptz', ['3']])
+    const day = key('Day', ['Date', []])
+    expect(
+      fieldsOf(generateM2MEntity('Day', 'Moment', 'DayToMoment', [day, moment], {}, 'postgresql')),
+    ).toStrictEqual(['    pub day_id: Date,', '    pub moment_id: DateTimeWithTimeZone,'])
+    const stamp = key('Stamp', ['Timestamp', ['3']])
+    expect(
+      fieldsOf(generateM2MEntity('Day', 'Stamp', 'DayToStamp', [day, stamp], {}, 'mysql')),
+    ).toStrictEqual(['    pub day_id: Date,', '    pub stamp_id: DateTimeUtc,'])
+  })
+
+  it('declares a SQLite date-time key PrismaDateTime, and imports it', () => {
+    const plain = key('Moment', null)
+    const day = key('Day', null)
+    const code = generateM2MEntity('Day', 'Moment', 'DayToMoment', [day, plain], {}, 'sqlite')
+    expect(code.split('\n')[0]).toBe('use super::prisma_date_time::PrismaDateTime;')
+    expect(fieldsOf(code)).toStrictEqual([
+      '    pub day_id: PrismaDateTime,',
+      '    pub moment_id: PrismaDateTime,',
+    ])
+  })
+})
+
 // sqlx-postgres decodes a `smallint` only into an i16, and sqlx-mysql a `TINYINT` only into an i8.
 describe('@db.SmallInt and @db.TinyInt', () => {
   const field = (o: Record<string, unknown>): any => ({

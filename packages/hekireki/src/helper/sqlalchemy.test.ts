@@ -3363,6 +3363,81 @@ model Row {
   })
 })
 
+// Two relations over one foreign key column, each with a constraint of its own: both are created
+// by Prisma Migrate, and the column held only the first. (#316)
+describe('two foreign keys on one column', () => {
+  it('writes the second relation over a column as a ForeignKeyConstraint', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+model Account {
+  id    Int    @id
+  owned Item[] @relation("owner")
+  held  Item[] @relation("holder")
+}
+model Item {
+  id      Int     @id
+  ref     Int
+  owner   Account @relation("owner", fields: [ref], references: [id], map: "item_owner_fk")
+  holder  Account @relation("holder", fields: [ref], references: [id], map: "item_holder_fk")
+}
+`
+    const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
+    const code = generateSingleFile(
+      result.models,
+      result.enums,
+      result.indexes,
+      'postgresql',
+      new Set(),
+      () => undefined,
+      relationMaps(prismaBlocks(schema)),
+    )
+    expect(code).toContain(
+      'ForeignKey("Account.id", ondelete="RESTRICT", onupdate="CASCADE", name="item_owner_fk")',
+    )
+    expect(code).toContain(
+      'ForeignKeyConstraint(["ref"], ["Account.id"], ondelete="RESTRICT", onupdate="CASCADE", name="item_holder_fk")',
+    )
+  })
+
+  it('gives the column the foreign key of the relation to a table, not one to a view', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["views"]
+}
+view Summary {
+  id    Int    @unique
+  items Item[]
+}
+model Account {
+  id    Int    @id
+  items Item[]
+}
+model Item {
+  id      Int     @id
+  ref     Int
+  summary Summary @relation(fields: [ref], references: [id])
+  account Account @relation(fields: [ref], references: [id], map: "item_account_fk")
+}
+`
+    const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
+    const code = generateSingleFile(
+      result.models,
+      result.enums,
+      result.indexes,
+      'postgresql',
+      new Set(['Summary']),
+      () => undefined,
+      relationMaps(prismaBlocks(schema)),
+    )
+    expect(code).not.toContain('ForeignKey("Summary.id"')
+    expect(code).toContain('name="item_account_fk"')
+  })
+})
+
 // A partial index (the `partialIndexes` preview feature) keeps its condition, which DMMF drops, as
 // the dialect's keyword to Index(): a partial unique is no plain unique index.
 describe('partial indexes', () => {
@@ -3385,6 +3460,23 @@ ${models}`
       partialIndexWhere(prismaBlocks(schema), provider),
     )
   }
+
+  // DMMF leaves isUnique off a @unique with a partial unique beside it, so the key of a model
+  // without an @id was lost and SQLAlchemy refused to map the class. (#287)
+  it('keys a model without an @id by a @unique that has a partial unique beside it', () => {
+    const code = partialCode(
+      'postgresql',
+      `
+model A {
+  email String  @unique
+  alive Boolean
+
+  @@unique([email], where: raw("alive"), map: "a_email_alive")
+}
+`,
+    )
+    expect(code).toContain('    __mapper_args__ = {"primary_key": [email]}')
+  })
 
   it('writes a Boolean as 1 or 0 and a name in brackets on SQL Server, which has no boolean literal', () => {
     expect(
@@ -3480,6 +3572,46 @@ class Account(Base):
     __table_args__ = (
         Index("Account_email_key", "email", unique=True, sqlite_where=literal_column("(\\"alive\\" = true)")),
         {"sqlite_autoincrement": True},
+    )
+`)
+  })
+})
+
+// A column MySQL indexes by a prefix (`length:`) keeps it, as Prisma Migrate writes it, `note`(100),
+// in a literal_column(): mysql_length would be read by `.name`, which a descending column beside it
+// does not have. A TEXT column cannot be indexed without one.
+describe('index prefix length', () => {
+  it('writes each prefixed column with its prefix on MySQL, ascending or descending', () => {
+    const schema = `datasource db {
+  provider = "mysql"
+}
+
+model LogEntry {
+  id    Int    @id
+  note  String @db.Text
+  title String @db.VarChar(255)
+  code  String @unique(length: 50) @db.Text
+  short String @db.VarChar(20)
+  data  Bytes
+  bin   Bytes  @db.VarBinary(20)
+
+  @@index([note(length: 100)])
+  @@index([title(length: 20, sort: Desc), note(length: 10)])
+  @@index([short(length: 30)])
+  @@index([data(length: 200)])
+  @@index([bin(length: 30)])
+}
+`
+    const result = datamodelOf(getDMMF({ datamodel: [['schema.prisma', schema]] }))
+    expect(generateSingleFile(result.models, result.enums, result.indexes, 'mysql')).toContain(`
+    __table_args__ = (
+        Index("LogEntry_code_key", literal_column("\`code\`(50)"), unique=True),
+        Index("LogEntry_note_idx", literal_column("\`note\`(100)")),
+        Index("LogEntry_title_note_idx", literal_column("\`title\`(20)").desc(), literal_column("\`note\`(10)")),
+        Index("LogEntry_short_idx", "short"),
+        Index("LogEntry_data_idx", literal_column("\`data\`(200)")),
+        Index("LogEntry_bin_idx", "bin"),
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
     )
 `)
   })

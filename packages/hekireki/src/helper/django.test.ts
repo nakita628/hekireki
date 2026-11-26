@@ -3553,11 +3553,13 @@ model Note {
 }
 `)
 
-    expect(code).toBe(`from typing import Any
+    expect(code).toBe(`import json
+from typing import Any
 
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.db.backends.base.base import BaseDatabaseWrapper
+from django.db.models import functions as db_functions
 
 
 class PlainJSONField(models.JSONField):
@@ -3568,6 +3570,21 @@ class PlainJSONField(models.JSONField):
         if connection.vendor != "postgresql":
             return super().from_db_value(value, expression, connection)
         return value
+
+    def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
+        if connection.vendor != "postgresql":
+            return super().get_db_prep_value(value, connection, prepared)
+        if not prepared:
+            value = self.get_prep_value(value)
+        return json.dumps(value, cls=self.encoder, ensure_ascii=False, separators=(",", ":"))
+
+    def get_lookup(self, lookup_name: str) -> Any:
+        lookup = super().get_lookup(lookup_name)
+        return None if lookup is None else lambda lhs, rhs: lookup(db_functions.Cast(lhs, models.JSONField()), rhs)
+
+    def get_transform(self, lookup_name: str) -> Any:
+        transform = super().get_transform(lookup_name)
+        return None if transform is None else lambda lhs: transform(db_functions.Cast(lhs, models.JSONField()))
 
 
 class Note(models.Model):

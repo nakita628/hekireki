@@ -1,7 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { stripAnnotations } from '../annotation/index.js'
-import { constraintName } from '../naming/case.js'
+import { constraintName, indexPrefix } from '../naming/case.js'
 import { allocate } from '../naming/index.js'
 import {
   implicitJoinTables,
@@ -118,6 +118,8 @@ function resolveNativeType(field: DMMF.Field, provider: string | undefined) {
   if (nativeName === 'VarChar' || nativeName === 'Char') {
     return args.length > 0 ? `varchar(${args[0]})` : null
   }
+  // A PostgreSQL money column is held in Money, which names it to AutoMigrate as well.
+  if (isMoney(field, provider)) return 'money'
   if (nativeName === 'Decimal' || nativeName === 'Money') {
     return args.length >= 2 ? `decimal(${args[0]},${args[1]})` : 'decimal'
   }
@@ -294,6 +296,34 @@ function isPostgresFamily(provider: string | undefined) {
   return provider === 'postgresql' || provider === 'cockroachdb'
 }
 
+/** A PostgreSQL `Decimal @db.Money` that is not a list: held in the Money type beside the models. */
+function isMoney(field: DMMF.Field, provider: string | undefined) {
+  return (
+    provider === 'postgresql' &&
+    field.type === 'Decimal' &&
+    field.nativeType?.[0] === 'Money' &&
+    !field.isList
+  )
+}
+
+/** A PostgreSQL `Json @db.Json` that is not a list: held in the PlainJSON type beside the models. */
+function isPlainJson(field: DMMF.Field, provider: string | undefined) {
+  return (
+    provider === 'postgresql' &&
+    field.type === 'Json' &&
+    field.nativeType?.[0] === 'Json' &&
+    !field.isList
+  )
+}
+
+function usesMoney(models: readonly DMMF.Model[], provider: string | undefined) {
+  return models.some((m) => m.fields.some((f) => isMoney(f, provider)))
+}
+
+function usesPlainJson(models: readonly DMMF.Model[], provider: string | undefined) {
+  return models.some((m) => m.fields.some((f) => isPlainJson(f, provider)))
+}
+
 function gormDefault(
   field: DMMF.Field,
   isPk: boolean,
@@ -305,45 +335,24 @@ function gormDefault(
     field.type === 'DateTime' && isFunctionDefault(field.default) && field.default.name === 'now'
   // Prisma Migrate writes now() as DEFAULT CURRENT_TIMESTAMP; the hook fills the value all the same.
   const nowDefault = isNowDefault && isPostgresFamily(provider) ? 'CURRENT_TIMESTAMP' : null
-  return (
+  const value =
     dbGeneratedDefault(field) ??
     dateTimeDefault(field, provider) ??
     nowDefault ??
     ((!isPk || isCompositePk) && !isNowDefault && field.isUpdatedAt !== true
       ? (enumMappedDefault(field, enums) ?? formatGoDefault(field.default, field.type, field.kind))
       : null)
-  )
+  return value !== null && isMoney(field, provider) ? moneyDefault(value) : value
 }
 
-// GORM makes an integer key auto-increment unless its tag says autoIncrement either way: a key
-// with no autoincrement() would take a sequence default on PostgreSQL (a bigint one where the
-// native type is @db.SmallInt) and AUTO_INCREMENT on MySQL, where Prisma makes a plain integer
-// column. With autoIncrement:false GORM writes the field in an INSERT even when it is zero, as
-// such a key's value comes from the caller (or the row it belongs to).
-// A key the database fills (autoincrement(), CockroachDB's sequence(), a dbgenerated()) stays one GORM
-// leaves out of the INSERT when zero and reads back.
-const DATABASE_FILLED_DEFAULTS = new Set(['autoincrement', 'sequence', 'dbgenerated'])
-
-function isImplicitAutoIncrement(field: DMMF.Field, gormPicksKey: boolean) {
-  const isInteger =
-    field.kind === 'scalar' && !field.isList && ['Int', 'BigInt'].includes(field.type)
-  const isDatabaseFilled =
-    isFunctionDefault(field.default) && DATABASE_FILLED_DEFAULTS.has(field.default.name)
-  return gormPicksKey && isInteger && !isDatabaseFilled
+// GORM parses a number default into a float64 and inserts it bare where the field is zero, past
+// Money's numeric cast; in parentheses it is not parsed, and the column is left to its DEFAULT.
+function moneyDefault(value: string) {
+  return /^-?[\d.]+$/u.test(value) ? `(${value})` : value
 }
 
-function primaryKeyTags(
-  field: DMMF.Field,
-  isPk: boolean,
-  isCompositePk: boolean,
-  provider: string | undefined,
-  gormPicksKey: boolean | undefined,
-) {
-  // Prisma allows autoincrement() on a @unique field that is not the key (a serial column on
-  // PostgreSQL, AUTO_INCREMENT on MySQL). GORM gives such a column its default only when the tag
-  // says autoIncrement, and leaves the field out of an INSERT while it is zero; without it GORM
-  // makes a plain column and writes 0.
-  if (!isPk) return isAutoincrement(field) ? ['autoIncrement'] : []
+function primaryKeyTags(field: DMMF.Field, isPk: boolean, provider: string | undefined) {
+  if (!isPk) return []
   const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
   // A native type wins (columnTypeTag); on MySQL such a key is a String like any other,
   // VARCHAR(191) (isMysqlDefaultString), and on PostgreSQL text, as Prisma Migrate makes it.
@@ -354,10 +363,6 @@ function primaryKeyTags(
   return [
     'primaryKey',
     ...(isAutoincrement(field) ? ['autoIncrement'] : []),
-    // Unless the caller says which key field GORM picks, a single-field key is the one.
-    ...(isImplicitAutoIncrement(field, gormPicksKey ?? !isCompositePk)
-      ? ['autoIncrement:false']
-      : []),
     ...(fixedType && defaultName === 'uuid' ? ['type:char(36)'] : []),
     ...(fixedType && defaultName === 'ulid' ? ['type:char(26)'] : []),
   ]
@@ -444,19 +449,6 @@ function usesScalarList(models: readonly DMMF.Model[], provider: string | undefi
   return models.some((m) => m.fields.some((f) => isScalarList(f, provider)))
 }
 
-// GORM's PostgreSQL dialector makes an autoIncrement column serial only from its own integer types;
-// a `type:` it does not know is written as given, without a default. An autoincrement column with a
-// native integer type is therefore given its serial type, as Prisma Migrate makes it: `SMALLSERIAL`
-// for an Int @db.SmallInt (@db.Integer and @db.BigInt write no `type:`). MySQL's dialector adds
-// AUTO_INCREMENT to any type.
-const SERIAL_TYPES: { readonly [type: string]: string | undefined } = {
-  smallint: 'smallserial',
-}
-
-function serialType(field: DMMF.Field, nativeType: string, provider: string | undefined) {
-  return provider === 'postgresql' && isAutoincrement(field) ? SERIAL_TYPES[nativeType] : undefined
-}
-
 function columnTypeTag(field: DMMF.Field, provider?: string) {
   if (isScalarList(field, provider)) return `type:${scalarListColumnType(field, provider)}`
   const nativeType = resolveNativeType(field, provider)
@@ -464,7 +456,7 @@ function columnTypeTag(field: DMMF.Field, provider?: string) {
   // which the list type writes and reads as Prisma Client does.
   if (isDateTimeList(field)) return `type:${nativeType ?? 'timestamp(3)'}[]`
   if (isMysqlDefaultString(field, provider)) return 'type:varchar(191)'
-  if (nativeType !== null) return `type:${serialType(field, nativeType, provider) ?? nativeType}`
+  if (nativeType !== null) return `type:${nativeType}`
   const defaultType =
     field.kind === 'scalar' && !field.isList
       ? DEFAULT_TYPES[provider ?? '']?.[field.type]
@@ -522,14 +514,16 @@ export function buildGormTags(
   enums?: readonly DMMF.DatamodelEnum[],
   provider?: string,
   fieldName = goFieldName(field.name),
-  gormPicksKey?: boolean,
 ) {
   const columnName = field.dbName ?? field.name
   const defaultVal = gormDefault(field, isPk, isCompositePk, enums, provider)
+  // GORM joins a setting that ends in `\` with the next one, so such a default (a dbgenerated()
+  // expression) is the last setting; GORM reads the settings in any order.
+  const defaultSetting = defaultParts(defaultVal)
 
   const parts = [
-    `column:${columnName}`,
-    ...primaryKeyTags(field, isPk, isCompositePk, provider, gormPicksKey),
+    `column:${escapeTagValue(columnName)}`,
+    ...primaryKeyTags(field, isPk, provider),
     // A model's own unique fields come named in compositeIndexTags.
     field.isUnique && !compositeIndexTags.some((tag) => tag.startsWith('uniqueIndex:'))
       ? 'uniqueIndex'
@@ -545,15 +539,34 @@ export function buildGormTags(
     !isScalarList(field, provider)
       ? 'serializer:json'
       : null,
-    defaultVal !== null ? `default:${defaultVal}` : null,
+    ...defaultSetting.before,
     ...trackedTimeTags(field, fieldName),
     // A scalar list is a nullable array column in the table Prisma makes.
     field.isRequired && !field.isList && (!isPk || keyNeedsNotNull(field, provider))
       ? 'not null'
       : null,
+    ...defaultSetting.last,
   ].filter((p) => p !== null)
 
-  return goTagLiteral(`gorm:"${parts.join(';')}" json:"${columnName}"`)
+  return goTagLiteral(
+    `gorm:"${parts.join(';')}" json:"${escapeTagValue(jsonTagName(columnName, fieldName))}"`,
+  )
+}
+
+// The default setting, in its place among the others or, where it ends in `\`, after them all.
+function defaultParts(defaultVal: string | null) {
+  if (defaultVal === null) return { before: [], last: [] }
+  const part = `default:${defaultVal}`
+  return defaultVal.endsWith('\\') ? { before: [], last: [part] } : { before: [part], last: [] }
+}
+
+// The json name of a column: a lone `-` means "leave the field out" to encoding/json, so it is
+// written `-,`, and a name encoding/json cannot take as a key (isValidTag: letters, digits and
+// !#$%&()*+-./:;<=>?@[]^_{|}~ and a space; a `,` would start the options) is left for the field's
+// own, which is the key encoding/json gives it anyway.
+function jsonTagName(columnName: string, fieldName: string) {
+  if (columnName === '-') return '-,'
+  return /^[\p{L}\p{Nd}!#$%&()*+\-./:;<=>?@[\]^_{|}~ ]+$/u.test(columnName) ? columnName : fieldName
 }
 
 // A struct tag as Go source: a raw string, unless the tag holds a backtick (a MySQL identifier in
@@ -565,11 +578,54 @@ function goTagLiteral(tag: string) {
     : `\`${tag}\``
 }
 
-// A name the schema gives an index, unless the struct tag cannot hold it: GORM reads past a `,` as
-// settings and splits at a `;`, and a `"` or a backtick ends the tag. Such a name is left for
-// Prisma's default.
-function readableTagName(name: string | undefined) {
-  return name !== undefined && !/[,;"`]/u.test(name) ? name : undefined
+// What keeps GORM from writing an index under a name, or undefined: in the tag, GORM reads past a
+// `,` as settings and splits at a `;`, and a `\` at the end joins the setting with the next one;
+// in CREATE INDEX, the name goes through the dialector's QuoteTo (quoteFlaw).
+function nameFlaw(name: string, provider: string | undefined) {
+  const mark = name.match(/[,;.]/u)?.[0]
+  if (mark !== undefined) return `a "${mark}"`
+  if (name.endsWith('\\')) return 'a \\ at its end'
+  return quoteFlaw(name, provider)
+}
+
+// What keeps the dialector's QuoteTo from writing a name as one identifier, or undefined: it
+// splits a name at a `.` into schema and name, takes its quote (a backtick on MySQL and SQLite, a
+// `"` elsewhere) at the start as a quote of its own, and makes two of it in a row one; SQL
+// Server's does not escape a `"` at all. Table, column and index names all go through it.
+function quoteFlaw(name: string, provider: string | undefined) {
+  if (name.includes('.')) return 'a "."'
+  // SQL Server's QuoteTo writes a `"` inside a name as it is, which ends the quoted name.
+  if (provider === 'sqlserver' && name.includes('"')) return 'a double quote'
+  const quote = provider === 'mysql' || provider === 'sqlite' ? '`' : '"'
+  if (name.startsWith(quote)) return 'a quote at its start'
+  return name.includes(quote + quote) ? 'two quotes in a row' : undefined
+}
+
+// A name the schema gives an index, unless GORM cannot write it (nameFlaw); such a name is
+// reported by gormProblems.
+function readableTagName(name: string | null | undefined, provider: string | undefined) {
+  return name !== undefined && name !== null && nameFlaw(name, provider) === undefined
+    ? name
+    : undefined
+}
+
+// The name a unique or plain index takes in the tag: the one the schema gives it (`map:`, or an
+// index's `name:`), or Prisma's own where it gives none (`Post_authorId_idx`, `User_email_key`), so
+// AutoMigrate and the migration agree. A given name GORM cannot write (readableTagName) is
+// reported by gormProblems before any tag is written.
+function indexTagName(
+  model: DMMF.Model,
+  idx: Pick<DMMF.Index, 'type' | 'dbName' | 'name' | 'fields'>,
+  provider: string | undefined,
+) {
+  const columnOf = new Map(model.fields.map((mf) => [mf.name, mf.dbName ?? mf.name]))
+  const columns = idx.fields.map((f) => columnOf.get(f.name) ?? f.name)
+  const unique = idx.type === 'unique'
+  return (
+    readableTagName(idx.dbName, provider) ??
+    (unique ? undefined : readableTagName(idx.name, provider)) ??
+    constraintName(model.dbName ?? model.name, columns, unique ? 'key' : 'idx', provider ?? '')
+  )
 }
 
 // A partial index's condition (the SQL Prisma Migrate writes after WHERE) as the value of GORM's
@@ -588,6 +644,21 @@ function indexWhereSetting(sql: string) {
 // one named index carries its own. `sort: Asc` is the default and stays plain.
 function sortSetting(idx: Pick<DMMF.Index, 'fields'> | undefined, field: string) {
   return idx?.fields.find((f) => f.name === field)?.sortOrder === 'desc' ? ',sort:desc' : ''
+}
+
+// GORM's `length:` index setting for a field MySQL indexes by a prefix (`note(length: 100)`), which
+// the migrator writes after the column as Prisma Migrate does, `note`(100); a TEXT or BLOB column
+// cannot be indexed without one. The other databases take no prefix.
+function lengthSetting(
+  model: DMMF.Model,
+  idx: Pick<DMMF.Index, 'fields'> | undefined,
+  field: string,
+  provider: string | undefined,
+) {
+  const indexField = idx?.fields.find((f) => f.name === field)
+  const prefix =
+    provider === 'mysql' && indexField !== undefined ? indexPrefix(model, indexField) : undefined
+  return prefix === undefined ? '' : `,length:${prefix}`
 }
 
 // GORM's `priority:` index setting for a field of a composite index: GORM orders an index's columns
@@ -629,6 +700,24 @@ function operatorClassSetting(
   return expression === null ? null : `,expression:${expression}`
 }
 
+/**
+ * Whether an index is left out of the tags, with a note in its place: a partial index whose
+ * condition, or an index whose operator class, GORM cannot read back (indexWhereSetting,
+ * operatorClassSetting). A unique index that holds every row is always written.
+ */
+function leavesOutIndex(
+  model: DMMF.Model,
+  idx: DMMF.Index,
+  provider: string | undefined,
+  indexWhere: IndexWhere,
+) {
+  const where = indexWhere(model, idx)
+  if (where !== undefined && indexWhereSetting(where) === null) return true
+  if (idx.type === 'unique' && where === undefined) return false
+  const fieldByName = new Map(model.fields.map((mf) => [mf.name, mf]))
+  return idx.fields.some((f) => operatorClassSetting(fieldByName.get(f.name), f, provider) === null)
+}
+
 /** The condition of a partial index, as `partialIndexWhere` gives it. */
 type IndexWhere = (
   model: DMMF.Model,
@@ -655,12 +744,12 @@ function collectCompositeIndexTags(
   const uniques = ownIndexes.filter((idx) => idx.type === 'unique')
   const partialUniques = uniques.filter((idx) => indexWhere(model, idx) !== undefined)
   const plainUniques = uniques.filter((idx) => indexWhere(model, idx) === undefined)
-  // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it, unless the
-  // struct tag cannot hold it (readableTagName).
+  // A @unique(map: "...") or @@unique(map: "...") keeps the name the schema gives it; one GORM
+  // cannot write (readableTagName) is reported by gormProblems.
   const mappedUniques = new Map(
     plainUniques.map((idx) => [
       idx.fields.map((f) => f.name).join(','),
-      readableTagName(idx.dbName),
+      readableTagName(idx.dbName, provider),
     ]),
   )
   // DMMF leaves isUnique off a field whose @unique has a partial unique index beside it on the same
@@ -677,7 +766,7 @@ function collectCompositeIndexTags(
       const named = mappedUniques.get(f.name)
       return [
         f.name,
-        `uniqueIndex:${named ?? constraintName(tableName, [f.dbName ?? f.name], 'key', provider ?? '')}${sortSetting(plainUniqueOf.get(f.name), f.name)}`,
+        `uniqueIndex:${escapeTagValue(named ?? constraintName(tableName, [f.dbName ?? f.name], 'key', provider ?? ''))}${lengthSetting(model, plainUniqueOf.get(f.name), f.name, provider)}${sortSetting(plainUniqueOf.get(f.name), f.name)}`,
       ]
     })
 
@@ -690,7 +779,7 @@ function collectCompositeIndexTags(
       const idx = plainUniqueOf.get(fields.join(','))
       return fields.map((f): [string, string] => [
         f,
-        `uniqueIndex:${idxName}${prioritySetting(fields, f)}${sortSetting(idx, f)}`,
+        `uniqueIndex:${escapeTagValue(idxName)}${prioritySetting(fields, f)}${lengthSetting(model, idx, f, provider)}${sortSetting(idx, f)}`,
       ])
     })
 
@@ -707,7 +796,7 @@ function collectCompositeIndexTags(
     if (condition === null) {
       notes.push([
         idx.fields[0]?.name ?? '',
-        `The partial ${setting === 'uniqueIndex' ? 'unique ' : ''}index ${name} is left out: its condition holds a ";", at which GORM splits the tag.`,
+        `The partial ${setting === 'uniqueIndex' ? 'unique ' : ''}index ${JSON.stringify(idx.dbName ?? name)} is left out: its condition holds a ";", at which GORM splits the tag.`,
       ])
       return []
     }
@@ -719,7 +808,7 @@ function collectCompositeIndexTags(
       notes.push([
         idx.fields[0]?.name ?? '',
         // The column and the operator class are quoted, so a line break in either stays in the comment.
-        `The index ${name} is left out: the expression of its column ${JSON.stringify(unreadable.name)} with the operator class ${JSON.stringify(unreadable.operatorClass)} holds a ";", at which GORM splits the tag.`,
+        `The index ${JSON.stringify(idx.dbName ?? name)} is left out: the expression of its column ${JSON.stringify(unreadable.name)} with the operator class ${JSON.stringify(unreadable.operatorClass)} holds a ";", at which GORM splits the tag.`,
       ])
       return []
     }
@@ -728,35 +817,17 @@ function collectCompositeIndexTags(
     const fieldNames = idx.fields.map((f) => f.name)
     return fieldNames.map((f, i): [string, string] => [
       f,
-      `${setting}:${name}${typeSetting}${expressions[i] ?? ''}${prioritySetting(fieldNames, f)}${sortSetting(idx, f)}${whereSetting}`,
+      `${setting}:${escapeTagValue(name)}${typeSetting}${expressions[i] ?? ''}${prioritySetting(fieldNames, f)}${lengthSetting(model, idx, f, provider)}${sortSetting(idx, f)}${whereSetting}`,
     ])
   }
 
   const partialUniqueTags = partialUniques.flatMap((idx) =>
-    tagsOf(
-      idx,
-      'uniqueIndex',
-      readableTagName(idx.dbName) ??
-        constraintName(tableName, columnsOf(idx.fields.map((f) => f.name)), 'key', provider ?? ''),
-    ),
+    tagsOf(idx, 'uniqueIndex', indexTagName(model, idx, provider)),
   )
 
   const indexTags = ownIndexes
     .filter((idx) => idx.type === 'normal' || idx.type === 'fulltext')
-    .flatMap((idx) =>
-      tagsOf(
-        idx,
-        'index',
-        readableTagName(idx.dbName) ??
-          readableTagName(idx.name) ??
-          constraintName(
-            tableName,
-            columnsOf(idx.fields.map((f) => f.name)),
-            'idx',
-            provider ?? '',
-          ),
-      ),
-    )
+    .flatMap((idx) => tagsOf(idx, 'index', indexTagName(model, idx, provider)))
 
   return {
     tags: groupByField([...singleUniqueTags, ...uniqueTags, ...partialUniqueTags, ...indexTags]),
@@ -1005,6 +1076,10 @@ function structFieldGoType(field: DMMF.Field, isPk: boolean, provider: string | 
   }
   if (isDateTimeScalar(field)) return `${field.isRequired ? '' : '*'}${dateTimeGoType(field)}`
   if (field.kind === 'enum') return field.isRequired ? 'string' : '*string'
+  if (isPlainJson(field, provider)) return 'PlainJSON'
+  if (isMoney(field, provider)) {
+    return field.isRequired && !hasNonZeroDefault(field, isPk) ? 'Money' : '*Money'
+  }
   return prismaTypeToGoType(field.type, field.isRequired && !hasNonZeroDefault(field, isPk))
 }
 
@@ -1014,41 +1089,14 @@ function generateStructField(
   isPk: boolean,
   isCompositePk: boolean,
   compositeIndexTags: readonly string[],
-  enums: readonly DMMF.DatamodelEnum[] | undefined,
-  provider: string | undefined,
-  gormPicksKey: boolean,
+  enums?: readonly DMMF.DatamodelEnum[],
+  provider?: string,
 ) {
   return [
     fieldName,
     structFieldGoType(field, isPk, provider),
-    buildGormTags(
-      field,
-      isPk,
-      isCompositePk,
-      compositeIndexTags,
-      enums,
-      provider,
-      fieldName,
-      gormPicksKey,
-    ),
+    buildGormTags(field, isPk, isCompositePk, compositeIndexTags, enums, provider, fieldName),
   ]
-}
-
-// The key field GORM makes auto-increment when its tag does not say (schema.Parse, gorm v1.31.2):
-// the one it finds by the name id, then ID (a column name first, then a Go field name), when that
-// is a key field, and otherwise the sole key field. Of a composite key with no such field GORM
-// makes none auto-increment.
-function gormPickedKey(
-  scalarFields: readonly DMMF.Field[],
-  keyNames: ReadonlySet<string>,
-  names: ReadonlyMap<string, string>,
-) {
-  const lookUp = (name: string) =>
-    scalarFields.find((f) => (f.dbName ?? f.name) === name) ??
-    scalarFields.find((f) => (names.get(f.name) ?? goFieldName(f.name)) === name)
-  const byName = lookUp('id') ?? lookUp('ID')
-  if (byName !== undefined && keyNames.has(byName.name)) return byName.name
-  return keyNames.size === 1 ? [...keyNames][0] : undefined
 }
 
 function needsReferencesTag(references: string) {
@@ -1232,7 +1280,7 @@ function generateRelationFields(
       own(assoc.name),
       `[]${goModelName(assoc.targetModel)}`,
       goTagLiteral(
-        `gorm:"many2many:${joinTable};joinForeignKey:${ownColumn};joinReferences:${related}"`,
+        `gorm:"many2many:${escapeTagValue(joinTable)};joinForeignKey:${ownColumn};joinReferences:${related}"`,
       ),
     ])
   })
@@ -1339,11 +1387,6 @@ export function generateModelStruct(
   )
 
   const names = goFieldNames(model)
-  const pickedKey = gormPickedKey(
-    scalarFields,
-    new Set(idField ? [idField.name] : compositePkFieldNames),
-    names,
-  )
   const fieldLines = scalarFields.flatMap((field) => {
     const isPk = field.isId || compositePkFieldNames.has(field.name)
     const fieldIndexTags = indexTags.tags.get(field.name) ?? []
@@ -1360,7 +1403,6 @@ export function generateModelStruct(
         fieldIndexTags,
         enums,
         provider,
-        field.name === pickedKey,
       ),
     )
     return rows
@@ -1376,11 +1418,12 @@ export function generateModelStruct(
   )
 
   // GORM would pluralise the snake_cased struct name (Warehouse -> warehouses);
-  // the table is Prisma's, so every model says which.
+  // the table is Prisma's, so every model says which. A JSON string is a Go string literal, so a
+  // `"` or `\` in the name is escaped.
   const tableNameMethod = [
     '',
     `func (${goModelName(model.name)}) TableName() string {`,
-    `\treturn "${tableName}"`,
+    `\treturn ${JSON.stringify(tableName)}`,
     '}',
   ]
 
@@ -1659,10 +1702,20 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
 }
 
 /**
- * What keeps the schema from becoming models that compile: a model whose Go name is that of a
- * type or function written beside the models, where the schema needs it.
+ * What keeps the schema from becoming models that compile and read as it says: a model whose Go
+ * name is that of a type or function written beside the models, where the schema needs it; a
+ * table or column whose name GORM cannot write (a `;` or a `\` at its end in a column's tag, or a
+ * quoteFlaw in either); an index whose name
+ * GORM cannot write (nameFlaw), whether the schema gives it or Prisma's naming makes it; and two
+ * fields under one json name (jsonTagName), a relation's Go name among them, of which encoding/json
+ * keeps at most one.
  */
-export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
+export function gormProblems(
+  models: readonly DMMF.Model[],
+  provider?: string,
+  indexes: readonly DMMF.Index[] = [],
+  indexWhere: IndexWhere = () => undefined,
+) {
   const held = new Map<string, string>([
     ...dateTypes(models).map((name): [string, string] => [
       name,
@@ -1672,15 +1725,131 @@ export function gormProblems(models: readonly DMMF.Model[], provider?: string) {
       name,
       'what the models hold a scalar list in',
     ]),
+    ...(usesMoney(models, provider) ? ['Money'] : []).map((name): [string, string] => [
+      name,
+      'what the models hold a @db.Money in',
+    ]),
+    ...(usesPlainJson(models, provider) ? ['PlainJSON'] : []).map((name): [string, string] => [
+      name,
+      'what the models hold a @db.Json in',
+    ]),
   ])
+  const indexesOf = indexes.reduce<Map<string, DMMF.Index[]>>((map, idx) => {
+    map.set(idx.model, [...(map.get(idx.model) ?? []), idx])
+    return map
+  }, new Map())
   return models.flatMap((model) => {
     const name = goModelName(model.name)
     const holds = held.get(name)
-    return holds === undefined
-      ? []
-      : [
-          `model ${model.name}: its Go name is ${name}, ${holds}; rename the model and keep its table with @@map`,
+    // GORM reads a field's indexes by splitting its whole tag at every `;`, with no escape, and
+    // rejoins a tag setting that ends in `\` with the next one, so neither a column name holding a
+    // `;` nor one ending in `\` can be written into the tag; nor can one QuoteTo would write as
+    // another identifier (quoteFlaw).
+    const columns = model.fields.flatMap((field) => {
+      const column = field.dbName ?? field.name
+      if (field.kind === 'object') return []
+      if (column.includes(';')) {
+        return [
+          `model ${model.name}: the column of ${field.name} holds a ";", at which GORM splits the tag; change its @map`,
         ]
+      }
+      if (column.endsWith('\\')) {
+        return [
+          `model ${model.name}: the column of ${field.name} ends in \\, which GORM's tag cannot hold; change its @map`,
+        ]
+      }
+      const flaw = quoteFlaw(column, provider)
+      return flaw === undefined
+        ? []
+        : [
+            `model ${model.name}: the column of ${field.name} is named ${JSON.stringify(column)}, which GORM cannot write (${flaw}); change its @map`,
+          ]
+    })
+    // PostgreSQL prints each money of an array in its locale's form, which neither ScalarList nor
+    // the json serializer reads.
+    const moneyLists = model.fields.flatMap((field) =>
+      provider === 'postgresql' && field.isList && field.nativeType?.[0] === 'Money'
+        ? [
+            `model ${model.name}: ${field.name} is a list of money, which GORM cannot read from the money[] PostgreSQL prints; make it a list of @db.Decimal`,
+          ]
+        : [],
+    )
+    // The table's name goes through the same QuoteTo in every statement GORM writes.
+    const tableFlaw = quoteFlaw(model.dbName ?? model.name, provider)
+    // So does the join table of an implicit many-to-many relation, `_` and the relation's name,
+    // written into the tag (escapeTagValue) of either field; a `\` at its end would still join
+    // the setting with the next one. Reported once, on side A.
+    const joinTables = getAssociations(model, models, provider).manyToMany.flatMap((assoc) => {
+      if (!assoc.isSideA) return []
+      const joinTable = `_${assoc.relationName}`
+      const flaw = joinTable.endsWith('\\') ? 'a \\ at its end' : quoteFlaw(joinTable, provider)
+      return flaw === undefined
+        ? []
+        : [
+            `model ${model.name}: the join table of ${assoc.name} is named ${JSON.stringify(joinTable)}, which GORM cannot write (${flaw}); change the name of its @relation`,
+          ]
+    })
+    // An index whose name GORM cannot write (nameFlaw), whether the schema gives it or Prisma's
+    // naming makes it from a column or a @@map, is reported. One left out of the tags with a note
+    // never reaches them.
+    const indexNames = (indexesOf.get(model.name) ?? [])
+      .filter((idx) => idx.type !== 'id' && !leavesOutIndex(model, idx, provider, indexWhere))
+      .flatMap((idx) => {
+        const fields = idx.fields.map((f) => f.name).join(', ')
+        // A name the schema gives is the index's name in the database, so one GORM cannot write
+        // would leave AutoMigrate making the index under another name.
+        const given = idx.dbName ?? (idx.type === 'unique' ? undefined : idx.name)
+        const givenFlaw =
+          given === undefined || given === null ? undefined : nameFlaw(given, provider)
+        if (givenFlaw !== undefined) {
+          return [
+            `model ${model.name}: the index on ${fields} is named ${JSON.stringify(given)}, which GORM cannot write (${givenFlaw}); change it`,
+          ]
+        }
+        const indexName = indexTagName(model, idx, provider)
+        const flaw = nameFlaw(indexName, provider)
+        return flaw === undefined
+          ? []
+          : [
+              `model ${model.name}: the index on ${fields} is named ${JSON.stringify(indexName)}, which GORM cannot write (${flaw}); change the @map of its column or table, or give it a name with map:`,
+            ]
+      })
+    // A json name is the column's, or the field's Go name where encoding/json cannot take the
+    // column's (jsonTagName); a relation has no json tag, so its key is its Go name. Two fields can
+    // come to one key, and encoding/json then drops them without a word.
+    const goNames = goFieldNames(model)
+    const jsonNames = model.fields.map((field) => {
+      const goName = goNames.get(field.name) ?? goFieldName(field.name)
+      return {
+        field: field.name,
+        json: field.kind === 'object' ? goName : jsonTagName(field.dbName ?? field.name, goName),
+      }
+    })
+    const jsonClashes = jsonNames.flatMap(({ field, json }, i) => {
+      const earlier = jsonNames.slice(0, i).find((other) => other.json === json)
+      return earlier === undefined
+        ? []
+        : [
+            `model ${model.name}: ${earlier.field} and ${field} are both written json:${JSON.stringify(json)}, and encoding/json drops one or both; change the @map of one`,
+          ]
+    })
+    return [
+      ...(holds === undefined
+        ? []
+        : [
+            `model ${model.name}: its Go name is ${name}, ${holds}; rename the model and keep its table with @@map`,
+          ]),
+      ...(tableFlaw === undefined
+        ? []
+        : [
+            `model ${model.name}: its table is named ${JSON.stringify(model.dbName ?? model.name)}, which GORM cannot write (${tableFlaw}); change its @@map`,
+          ]),
+      ...columns,
+      ...moneyLists,
+      ...joinTables,
+      ...indexNames,
+      ...jsonClashes,
+    ]
   })
 }
 
@@ -1688,19 +1857,38 @@ function standardImports(
   types: readonly string[],
   generators: ReadonlySet<string>,
   needsTime: boolean,
-  scalarList: boolean,
+  held: { readonly scalarList: boolean; readonly money: boolean; readonly plainJson: boolean },
 ) {
   const lists = types.some((name) => name.endsWith('List'))
-  const valuers = types.length > 0 || scalarList
+  const uses = typeImportUses(types, lists, held)
   return [
+    held.money ? '"context"' : null,
     generators.has('ulid') ? '"crypto/rand"' : null,
     lists ? '"database/sql"' : null,
-    valuers ? '"database/sql/driver"' : null,
-    valuers ? '"fmt"' : null,
-    valuers ? '"strconv"' : null,
-    types.includes('TimeOfDay') || lists || scalarList ? '"strings"' : null,
+    uses.valuers ? '"database/sql/driver"' : null,
+    held.plainJson ? '"encoding/json"' : null,
+    uses.valuers ? '"fmt"' : null,
+    held.money ? '"regexp"' : null,
+    uses.parses ? '"strconv"' : null,
+    uses.splits ? '"strings"' : null,
     needsTime ? '"time"' : null,
   ]
+}
+
+// What the types written beside the models use of the standard library: each is a Valuer and a
+// Scanner that reports with fmt; the date types, ScalarList and Money parse numbers, and split
+// text where they read a time of day, a list or an amount.
+function typeImportUses(
+  types: readonly string[],
+  lists: boolean,
+  held: { readonly scalarList: boolean; readonly money: boolean; readonly plainJson: boolean },
+) {
+  const parses = types.length > 0 || held.scalarList || held.money
+  return {
+    valuers: parses || held.plainJson,
+    parses,
+    splits: types.includes('TimeOfDay') || lists || held.scalarList || held.money,
+  }
 }
 
 export function collectImports(models: readonly DMMF.Model[], provider?: string) {
@@ -1714,8 +1902,10 @@ export function collectImports(models: readonly DMMF.Model[], provider?: string)
     ),
   )
   const needsDatatypes = models.some((m) =>
-    m.fields.some((f) => f.kind !== 'object' && f.type === 'Json'),
+    m.fields.some((f) => f.kind !== 'object' && f.type === 'Json' && !isPlainJson(f, provider)),
   )
+  const money = usesMoney(models, provider)
+  const plainJson = usesPlainJson(models, provider)
   const generators = new Set(
     models.flatMap((m) =>
       generatedIdFields(m).flatMap((f) =>
@@ -1727,7 +1917,11 @@ export function collectImports(models: readonly DMMF.Model[], provider?: string)
   )
   // Standard library first, then the modules, each group sorted by path, as
   // gofmt keeps them.
-  const standard = standardImports(types, generators, needsTime, usesScalarList(models, provider))
+  const standard = standardImports(types, generators, needsTime, {
+    scalarList: usesScalarList(models, provider),
+    money,
+    plainJson,
+  })
   const modules = [
     generators.has('uuid') ? '"github.com/google/uuid"' : null,
     generators.has('cuid') ? '"github.com/lucsky/cuid"' : null,
@@ -1735,8 +1929,9 @@ export function collectImports(models: readonly DMMF.Model[], provider?: string)
     generators.has('cuid2') ? '"github.com/nrednav/cuid2"' : null,
     generators.has('ulid') ? '"github.com/oklog/ulid/v2"' : null,
     needsDatatypes ? '"gorm.io/datatypes"' : null,
-    generators.size > 0 || fillsTimes ? '"gorm.io/gorm"' : null,
-    hasImplicitManyToMany(models) ? '"gorm.io/gorm/schema"' : null,
+    generators.size > 0 || fillsTimes || money || plainJson ? '"gorm.io/gorm"' : null,
+    money ? '"gorm.io/gorm/clause"' : null,
+    hasImplicitManyToMany(models) || money || plainJson ? '"gorm.io/gorm/schema"' : null,
   ]
   return [standard.filter((i) => i !== null), modules.filter((i) => i !== null)]
 }
@@ -1755,6 +1950,144 @@ export function formatImports(groups: readonly (readonly string[])[]) {
       .join('\n\n')
       .split('\n'),
     ')',
+  ]
+}
+
+const MONEY_TYPE = [
+  '',
+  '// Money holds a PostgreSQL money column (@db.Money), which Prisma Migrate makes and the server',
+  '// prints in its locale\'s form. It reads the C and en_US form ("-$1,234.50") or a plain number,',
+  '// and refuses any other text rather than read a wrong amount; it writes the plain number.',
+  'type Money float64',
+  '',
+  'var (',
+  '\tmoneyText   = regexp.MustCompile("^(-?)\\\\$(\\\\d{1,3}(?:,\\\\d{3})*)\\\\.(\\\\d{2})$")',
+  '\tmoneyNumber = regexp.MustCompile("^-?\\\\d+(?:\\\\.\\\\d+)?$")',
+  ')',
+  '',
+  '// The largest amount a float64 holds to the cent: money counts cents in an int64, past 2^53.',
+  'const maxExactMoney = float64(1<<53) / 100',
+  '',
+  'func (m Money) Value() (driver.Value, error) {',
+  "\treturn strconv.FormatFloat(float64(m), 'f', -1, 64), nil",
+  '}',
+  '',
+  'func (m *Money) Scan(src any) error {',
+  '\tvar text string',
+  '\tswitch value := src.(type) {',
+  '\tcase nil:',
+  '\t\t*m = 0',
+  '\t\treturn nil',
+  '\tcase string:',
+  '\t\ttext = value',
+  '\tcase []byte:',
+  '\t\ttext = string(value)',
+  '\tcase float64:',
+  '\t\t*m = Money(value)',
+  '\t\treturn nil',
+  '\tcase int64:',
+  '\t\t*m = Money(value)',
+  '\t\treturn nil',
+  '\tdefault:',
+  '\t\treturn fmt.Errorf("a money column held %T", src)',
+  '\t}',
+  '\tif parts := moneyText.FindStringSubmatch(text); parts != nil {',
+  '\t\ttext = parts[1] + strings.ReplaceAll(parts[2], ",", "") + "." + parts[3]',
+  '\t} else if !moneyNumber.MatchString(text) {',
+  '\t\treturn fmt.Errorf("a money column held %q, which is not in the C or en_US form", text)',
+  '\t}',
+  '\tamount, err := strconv.ParseFloat(text, 64)',
+  '\tif err != nil {',
+  '\t\treturn err',
+  '\t}',
+  '\tif amount > maxExactMoney || amount < -maxExactMoney {',
+  '\t\treturn fmt.Errorf("a money column held %q, more than a float64 holds to the cent", text)',
+  '\t}',
+  '\t*m = Money(amount)',
+  '\treturn nil',
+  '}',
+  '',
+  '// GormValue writes the amount through numeric, which PostgreSQL turns into money without reading',
+  '// it in the locale\'s form, where a locale whose decimal mark is "," would read "1234.5" as 12345.',
+  'func (m Money) GormValue(_ context.Context, db *gorm.DB) clause.Expr {',
+  '\tif float64(m) > maxExactMoney || float64(m) < -maxExactMoney {',
+  '\t\t_ = db.AddError(fmt.Errorf("%v is more money than a float64 holds to the cent", float64(m)))',
+  '\t}',
+  '\treturn clause.Expr{SQL: "CAST(CAST(? AS numeric) AS money)", Vars: []any{strconv.FormatFloat(float64(m), \'f\', -1, 64)}}',
+  '}',
+  '',
+  'func (Money) GormDataType() string {',
+  '\treturn "money"',
+  '}',
+  '',
+  'func (Money) GormDBDataType(db *gorm.DB, _ *schema.Field) string {',
+  '\tif db.Dialector.Name() == "postgres" {',
+  '\t\treturn "money"',
+  '\t}',
+  '\treturn ""',
+  '}',
+]
+
+const PLAIN_JSON_TYPE = [
+  '',
+  '// PlainJSON holds a PostgreSQL json column (@db.Json), which keeps the text as it was written:',
+  '// datatypes.JSON names jsonb to AutoMigrate whatever the tag says.',
+  'type PlainJSON json.RawMessage',
+  '',
+  'func (j PlainJSON) Value() (driver.Value, error) {',
+  '\tif len(j) == 0 {',
+  '\t\treturn nil, nil',
+  '\t}',
+  '\treturn string(j), nil',
+  '}',
+  '',
+  'func (j *PlainJSON) Scan(src any) error {',
+  '\tswitch value := src.(type) {',
+  '\tcase nil:',
+  '\t\t*j = nil',
+  '\tcase []byte:',
+  '\t\t*j = append(PlainJSON(nil), value...)',
+  '\tcase string:',
+  '\t\t*j = PlainJSON(value)',
+  '\tdefault:',
+  '\t\treturn fmt.Errorf("a json column held %T", src)',
+  '\t}',
+  '\treturn nil',
+  '}',
+  '',
+  'func (j PlainJSON) MarshalJSON() ([]byte, error) {',
+  '\tif len(j) == 0 {',
+  '\t\treturn []byte("null"), nil',
+  '\t}',
+  '\treturn j, nil',
+  '}',
+  '',
+  'func (j *PlainJSON) UnmarshalJSON(data []byte) error {',
+  '\t*j = append((*j)[0:0], data...)',
+  '\treturn nil',
+  '}',
+  '',
+  'func (PlainJSON) GormDataType() string {',
+  '\treturn "json"',
+  '}',
+  '',
+  'func (PlainJSON) GormDBDataType(db *gorm.DB, _ *schema.Field) string {',
+  '\tif db.Dialector.Name() == "postgres" {',
+  '\t\treturn "json"',
+  '\t}',
+  '\treturn ""',
+  '}',
+]
+
+/**
+ * The types a PostgreSQL `@db.Money` and `@db.Json` are held in, where the schema has one: GORM's
+ * float64 cannot read the money text PostgreSQL prints, and datatypes.JSON makes AutoMigrate's
+ * column jsonb.
+ */
+export function generateNativeTypes(models: readonly DMMF.Model[], provider?: string) {
+  return [
+    ...(usesMoney(models, provider) ? MONEY_TYPE : []),
+    ...(usesPlainJson(models, provider) ? PLAIN_JSON_TYPE : []),
   ]
 }
 

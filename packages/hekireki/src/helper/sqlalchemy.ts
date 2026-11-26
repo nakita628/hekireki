@@ -7,7 +7,7 @@ import {
   pythonDocstringLines,
   toPythonString,
 } from '../literal/python.js'
-import { constraintName, makePascalCase, makeSnakeCase } from '../naming/case.js'
+import { constraintName, indexPrefix, makePascalCase, makeSnakeCase } from '../naming/case.js'
 import { allocate } from '../naming/index.js'
 import {
   backRelation,
@@ -214,15 +214,24 @@ function columnOperatorClass(model: DMMF.Model, field: DMMF.IndexField, provider
   return operatorClassName(field.operatorClass, nativeType)
 }
 
-// A column of an index as the argument of Index(): its name, or, sorted descending, the quoted
-// column with its operator class and order, which a name alone cannot carry (postgresql_ops would
-// put the class after DESC). The index keeps its table from `__table_args__` all the same.
+// The prefix MySQL indexes a column of an index by (`note(length: 100)`), as Prisma Migrate writes
+// it, `note`(100); a TEXT or BLOB column cannot be indexed without one. Other dialects take none.
+function columnPrefix(model: DMMF.Model, field: DMMF.IndexField, provider: string) {
+  return provider === 'mysql' ? indexPrefix(model, field) : undefined
+}
+
+// A column of an index as the argument of Index(): its name, or, sorted descending or indexed by a
+// prefix, the quoted column with its prefix, operator class and order, which a name alone cannot
+// carry (postgresql_ops would put the class after DESC, and MySQL's DDL compiler reads
+// mysql_length by `.name`, which a descending column beside it does not have). The index keeps its
+// table from `__table_args__` all the same.
 function indexColumnArg(model: DMMF.Model, field: DMMF.IndexField, provider: string) {
   const column = fieldColumn(model, field.name)
-  if (field.sortOrder !== 'desc') return toPythonString(column)
+  const prefix = columnPrefix(model, field, provider)
+  if (field.sortOrder !== 'desc' && prefix === undefined) return toPythonString(column)
   const operatorClass = columnOperatorClass(model, field, provider)
-  const sql = `${sqlQuoted(column, provider)}${operatorClass === null ? '' : ` ${operatorClass}`}`
-  return `literal_column(${toPythonString(sql)}).desc()`
+  const sql = `${sqlQuoted(column, provider)}${prefix === undefined ? '' : `(${prefix})`}${operatorClass === null ? '' : ` ${operatorClass}`}`
+  return `literal_column(${toPythonString(sql)})${field.sortOrder === 'desc' ? '.desc()' : ''}`
 }
 
 // The method (`type:`) and the operator classes of the ascending columns of an index on
@@ -244,11 +253,15 @@ function postgresIndexArgs(model: DMMF.Model, index: SqlIndex, provider: string)
   ]
 }
 
-// Whether the indexes of a model read literal_column(): for a partial index's condition or a
-// descending column.
+// Whether the indexes of a model read literal_column(): for a partial index's condition, a
+// descending column or a column indexed by a prefix.
 function readsLiteralColumn(model: DMMF.Model, indexes: readonly SqlIndex[], provider: string) {
   return modelIndexes(model, indexes).some(
-    (idx) => whereArg(idx, provider) !== null || idx.fields.some((f) => f.sortOrder === 'desc'),
+    (idx) =>
+      whereArg(idx, provider) !== null ||
+      idx.fields.some(
+        (f) => f.sortOrder === 'desc' || columnPrefix(model, f, provider) !== undefined,
+      ),
   )
 }
 
@@ -1231,12 +1244,19 @@ function generateTableArgs(
   })
 
   const modelByName = new Map(allModels.map((m) => [m.name, m]))
+  // A column takes one inline ForeignKey (foreignKeyArgs), the first relation's over it; another
+  // relation over the same single column, with a constraint of its own, is written here.
+  const belongsTo = realForeignKeys(model, getAssociations(model, allModels), views)
+  const isInline = (f: DMMF.Field) =>
+    f.relationFromFields?.length === 1 &&
+    belongsTo.find((a) => a.foreignKey === f.relationFromFields?.[0])?.name === f.name
   const fkConstraints = model.fields
     .filter(
       (f) =>
         f.kind === 'object' &&
         f.relationFromFields !== undefined &&
-        f.relationFromFields.length > 1 &&
+        f.relationFromFields.length > 0 &&
+        !isInline(f) &&
         f.relationToFields !== undefined &&
         !views.has(f.type),
     )
@@ -1565,7 +1585,8 @@ export function generateModelBody(
         field,
         isPk,
         isFk,
-        associations,
+        // The column's ForeignKey is that of a relation the database holds: none to a view.
+        { ...associations, belongsTo: realForeignKeys(model, associations, views) },
         allModels,
         enumMap,
         provider,

@@ -63,19 +63,19 @@ The `provider` of the generator block picks the output. Every option is optional
 
 ### ORM models
 
-| Provider                | Writes                        | Options                                            |
-| ----------------------- | ----------------------------- | -------------------------------------------------- |
-| `hekireki-drizzle`      | Drizzle tables                |                                                    |
-| `hekireki-kysely`       | Kysely `DB` interface         |                                                    |
-| `hekireki-sqlalchemy`   | SQLAlchemy models             |                                                    |
-| `hekireki-django`       | Django models                 |                                                    |
-| `hekireki-activerecord` | Rails models                  | `locales`: directory of the translated messages    |
-| `hekireki-gorm`         | GORM structs                  | `package` (`model`)                                |
-| `hekireki-sea-orm`      | SeaORM entities               | `renameAll`: serde's `rename_all`                  |
-| `hekireki-ecto`         | Ecto schemas                  | `app` (`MyApp`)                                    |
-| `hekireki-eloquent`     | Eloquent models               | `namespace` (`App\Models`)                         |
-| `hekireki-efcore`       | EF Core entities, `DbContext` | `namespace` (`Models`), `context` (`AppDbContext`) |
-| `hekireki-exposed`      | Exposed tables                | `package` (`models`), `dao` (`true`)               |
+| Provider                | Writes                        | Options                                              |
+| ----------------------- | ----------------------------- | ---------------------------------------------------- |
+| `hekireki-drizzle`      | Drizzle tables                |                                                      |
+| `hekireki-kysely`       | Kysely `DB` interface         |                                                      |
+| `hekireki-sqlalchemy`   | SQLAlchemy models             |                                                      |
+| `hekireki-django`       | Django models                 |                                                      |
+| `hekireki-activerecord` | Rails models                  | `locales`: directory of the translated messages      |
+| `hekireki-gorm`         | GORM structs                  | `package` (`model`)                                  |
+| `hekireki-sea-orm`      | SeaORM entities               | `renameAll`: serde's `rename_all`                    |
+| `hekireki-ecto`         | Ecto schemas                  | `app` (`MyApp`), `mysqlFlavor`: `mysql` or `mariadb` |
+| `hekireki-eloquent`     | Eloquent models               | `namespace` (`App\Models`)                           |
+| `hekireki-efcore`       | EF Core entities, `DbContext` | `namespace` (`Models`), `context` (`AppDbContext`)   |
+| `hekireki-exposed`      | Exposed tables                | `package` (`models`), `dao` (`true`)                 |
 
 Every ORM generator stores a `DateTime` as Prisma Client stores it, so the ORM and Prisma read
 each other's rows alike.
@@ -94,6 +94,21 @@ made, the next one alters such a column, and the database refuses that while a f
 at it or from it: drop the foreign keys, alter the key and its foreign key columns together, and
 add the foreign keys back, or migrate with Prisma Migrate.
 
+On PostgreSQL, `hekireki-gorm` holds a `Decimal @db.Money` in `Money` and a `Json @db.Json` in
+`PlainJSON`, types written beside the models. PostgreSQL prints money in its locale's form
+(`$1,234.50`), which a `float64` cannot scan: `Money` reads the C and en_US form or a plain number,
+refuses any other text (a locale whose decimal mark is `,`) and an amount past $90 trillion,
+which a `float64` does not hold to the cent, and writes the amount through
+`numeric`, which no locale reads.
+`PlainJSON` keeps the JSON text as written and tells `AutoMigrate` the column is `json`, where
+`datatypes.JSON` makes it `jsonb`. Both answer `money` and `json` to `AutoMigrate`, so the next
+`AutoMigrate` on a table an earlier one made alters a `jsonb` column to `json` (which PostgreSQL
+refuses while a GIN index is on it: drop the index first), and a `decimal` column to `money`,
+which keeps two decimal places. These fields were a `float64` and a
+`datatypes.JSON` before 0.54, so code that uses them changes:
+`float64(field)` and `datatypes.JSON(field)` convert back. A `Decimal[] @db.Money` cannot be read
+at all and fails generation; make it a list of `@db.Decimal`.
+
 `hekireki-sqlalchemy` and `hekireki-django` give a `uuid()`, `cuid()`, `ulid()` or `nanoid()`
 default the value Prisma Client would make, with a package from PyPI where Python's standard
 library has none: `uuid6` for `uuid(7)`, `python-ulid` for `ulid()`, `cuid` for `cuid()`, `cuid2`
@@ -101,6 +116,13 @@ for `cuid(2)` (2.1 or later, for `create_id()`) and `nanoid` for `nanoid()` (and
 for mypy). A module imports only the ones its schema uses. With such a default on a Django primary
 key, `save()` on a new instance given an existing key inserts, as with `uuid()`: update with
 `update_or_create()` or `save(force_update=True)`.
+
+On PostgreSQL, `hekireki-django` writes a `Json @db.Json` field as Prisma Client does: the value
+goes in as compact JSON text, which a `json` column keeps as given, key order included. Lookups and
+key lookups on the column compare it as `jsonb`. The value on the other side of a comparison is not
+cast, so these still fail: comparing two `@db.Json` columns with `F()`, filtering a whole
+`Json[] @db.Json` list, and `distinct()`, `order_by()` or grouping on the whole column, since
+`json` has no equality or ordering.
 
 On PostgreSQL, hand the `MapEnums` of the `DbContext` `hekireki-efcore` writes to Npgsql:
 `UseNpgsql(connectionString, AppDbContext.MapEnums)`, or `AppDbContext.MapEnums(builder)` on your
@@ -116,6 +138,23 @@ API of Npgsql's own plugins, which Npgsql marks experimental (`NPG9001`; checked
 `DbConnection` passed to `UseNpgsql`, EF Core uses no data source and the converter is not
 applied. `@db.Decimal(p, s)` with `s` up to 28 needs none of this. A Prisma `view` is mapped with
 `ToView`, so `EnsureCreated()` and migrations leave it alone.
+
+On MySQL, `hekireki-efcore` gives a native integer or float type the C# type the MySQL provider
+maps its column to, so `EnsureCreated()` and migrations make Prisma's column: `@db.TinyInt` is
+`sbyte`, `@db.SmallInt` and `@db.Year` `short`, `@db.UnsignedTinyInt` `byte`, `@db.UnsignedSmallInt`
+`ushort`, `@db.UnsignedMediumInt` and `@db.UnsignedInt` `uint`, `@db.UnsignedBigInt` `ulong` and
+`@db.Float` `float` (a `Boolean @db.TinyInt` stays a `bool`). An `int` written to a `smallint` would
+go through EF Core's unchecked cast, which writes a value out of range as another number where the
+database refuses it. These properties were `int`, `long` and `double` before 0.55, so code that uses
+them changes, and a column an earlier `EnsureCreated()` or migration made is altered by the next
+migration.
+
+On MySQL, `hekireki-efcore` writes an index's `length:` (on `@@index`, `@unique`, `@@unique` and
+`@id`) with `HasPrefixLength`, the API of Pomelo.EntityFrameworkCore.MySql and of its EF Core 10+
+fork Microting.EntityFrameworkCore.MySql, and gives a TEXT or BLOB column its store type in an index
+too. With Oracle's MySql.EntityFrameworkCore, add `global using MySql.EntityFrameworkCore.Extensions;`
+to compile, and create those tables with Prisma Migrate, since that provider leaves the prefix out of
+its DDL. Before 0.56 such a column was left as `varchar(255)` or `varbinary(3072)` in an index.
 
 A Prisma `view` is the database's own, which Prisma Migrate never creates. `hekireki-django`
 marks its model `managed = False` and a `ForeignKey` to or from it `db_constraint=False` (one from it also `on_delete=DO_NOTHING`), so `migrate`
@@ -433,6 +472,23 @@ A `Json` is kept in `PrismaJson`, written alongside them too: Ecto's `:map` load
 only, and a `Json` column holds any JSON value, so an array, a string, a number or a boolean that
 Prisma Client wrote reads back as it is (on SQLite as the column keeps it: a `1.0` is `1`), and an
 `@default("[]")` is a default of the field.
+On MySQL, the type cannot tell a JSON string MyXQL decoded from the JSON text MariaDB keeps in its
+`LONGTEXT` column, so by default it decodes a value that is JSON text: a MySQL string such as
+`"12345"`, `"true"` or `"null"` then loads as a number, a boolean or `nil`. `mysqlFlavor = "mysql"`
+keeps every MySQL string as it is, and `mysqlFlavor = "mariadb"` decodes every MariaDB value.
+
+A `uuid()` or `uuid(7)` key without `@db.Uuid` or `@db.UniqueIdentifier` is a text column, so it
+is a `:string` key that `Repo.insert/2` fills with `Ecto.UUID.generate()` (`generate(version: 7)`
+for `uuid(7)`, Ecto 3.14 or later). As in Prisma Client, an id you give is neither checked nor
+lower-cased. `Repo.insert_all/3` fills only an `autoincrement()` key and a `uuid()` key of a
+`@db.Uuid` or `@db.UniqueIdentifier` column (`:id` and `:binary_id`), so its rows need an `id` of
+their own for any other generated key (a text `uuid()`, a `uuid(7)`, a `ulid()`), as they need a
+value for a `uuid()` or `ulid()` field that is not the key.
+
+On SQL Server, a `String @db.UniqueIdentifier` is `:binary_id`, or `Tds.Ecto.UUID` where Ecto
+fills it (a `uuid()` or `uuid(7)` default, a `uuid(7)` key): the Tds adapter loads and dumps both
+in SQL Server's byte order, where `Ecto.UUID` would write the bytes of another GUID and `:string`
+would hold the raw bytes.
 
 `examples/ecto` in the repository runs a schema against Ecto on SQLite.
 

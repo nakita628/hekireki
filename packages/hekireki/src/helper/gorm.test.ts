@@ -3,6 +3,7 @@ import { getDMMF } from '@prisma/get-dmmf'
 import { describe, expect, it } from 'vite-plus/test'
 
 import { generateGormModels } from '../generator/gorm.js'
+import { partialIndexWhere } from '../prisma/partial-index.js'
 import { prismaBlocks, relationMaps } from '../prisma/schema-text.js'
 import { buildGormTags, goFieldName, gormProblems, prismaTypeToGoType } from './gorm.js'
 
@@ -178,6 +179,77 @@ describe('buildGormTags', () => {
     // interpreted string literal.
     expect(buildGormTags(field('(`a` + 1)'), false, false, [], [], 'mysql')).toBe(
       String.raw`"gorm:\"column:classification;type:varchar(191);default:(${'`'}a${'`'} + 1)\" json:\"classification\""`,
+    )
+  })
+
+  it('writes a json name encoding/json reads as the key: "-," for a "-", the field name for one with a ","', () => {
+    const field = (dbName: string) =>
+      ({
+        name: 'label',
+        dbName,
+        kind: 'scalar' as const,
+        type: 'String',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: false,
+      }) as any
+    expect(buildGormTags(field('-'), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:-;not null" json:"-,"`',
+    )
+    expect(buildGormTags(field('id,string'), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:id,string;not null" json:"Label"`',
+    )
+  })
+
+  it('writes a dbgenerated() default ending in a backslash last, as GORM joins it to the next setting', () => {
+    const field = (expression: string) =>
+      ({
+        name: 'path',
+        kind: 'scalar' as const,
+        type: 'Int',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: true,
+        default: { name: 'dbgenerated', args: [expression] },
+      }) as any
+    expect(buildGormTags(field('x\\'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:path;size:32;not null;default:x\\" json:"path"${'`'}`,
+    )
+    expect(buildGormTags(field('x + 1'), false, false, [], [], 'postgresql')).toBe(
+      '`gorm:"column:path;size:32;default:x + 1;not null" json:"path"`',
+    )
+  })
+
+  it('escapes a mapped column name for the struct tag, so GORM reads the column and every setting after it', () => {
+    const field = (dbName: string) =>
+      ({
+        name: 'label',
+        dbName,
+        kind: 'scalar' as const,
+        type: 'String',
+        isRequired: true,
+        isId: false,
+        isUnique: false,
+        isList: false,
+        isUpdatedAt: false,
+        hasDefaultValue: false,
+      }) as any
+    // reflect.StructTag unquotes a `\"`, a `\\` and a `\n`, and the tag stays on one line. None of
+    // them is a json key encoding/json takes, so the json name is the field's, as it would be.
+    expect(buildGormTags(field('a\nb'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:a\nb;not null" json:"Label"${'`'}`,
+    )
+    expect(buildGormTags(field('a"b'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:a\"b;not null" json:"Label"${'`'}`,
+    )
+    expect(buildGormTags(field('a\\b'), false, false, [], [], 'postgresql')).toBe(
+      String.raw`${'`'}gorm:"column:a\\b;not null" json:"Label"${'`'}`,
     )
   })
 
@@ -785,7 +857,7 @@ model Post {
 
   it('makes an Int @db.Int on SQL Server an INT, as a plain Int', () => {
     const code = gormFor('model A {\n  id Int @id @db.Int\n  n  Int\n}\n', 'sqlserver')
-    expect(code).toContain('`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"`')
+    expect(code).toContain('`gorm:"column:id;primaryKey;size:32" json:"id"`')
     expect(code).toContain('`gorm:"column:n;size:32;not null" json:"n"`')
   })
 
@@ -940,160 +1012,6 @@ model Part {
   })
 })
 
-// Prisma allows autoincrement() on a @unique field that is not the key: a serial column on
-// PostgreSQL and an AUTO_INCREMENT one on MySQL. The tag says autoIncrement, so GORM makes the
-// column so and leaves the field out of an INSERT while it is zero rather than writing 0.
-describe('generateGormModels autoincrement on a field that is not the key', () => {
-  const schema = `
-model Counter {
-  id       String @id
-  metricId Int    @unique @default(autoincrement()) @map("metric_id")
-}
-`
-
-  it('marks the column autoIncrement on PostgreSQL, which GORM makes serial', () => {
-    expect(gormFor(schema, 'postgresql')).toContain(
-      '\tMetricID int    `gorm:"column:metric_id;autoIncrement;uniqueIndex:Counter_metric_id_key;size:32;not null" json:"metric_id"`',
-    )
-  })
-
-  it('marks the column autoIncrement on MySQL, which GORM makes INT AUTO_INCREMENT', () => {
-    expect(gormFor(schema, 'mysql')).toContain(
-      '\tMetricID int    `gorm:"column:metric_id;autoIncrement;uniqueIndex:Counter_metric_id_key;size:32;not null" json:"metric_id"`',
-    )
-  })
-  // MySQL allows one AUTO_INCREMENT column a table: the key, which GORM would make one too, says it
-  // is not.
-  it('keeps an Int key beside it from auto-incrementing on MySQL', () => {
-    const code = gormFor(
-      `
-model Counter {
-  id  Int @id
-  seq Int @unique @default(autoincrement())
-}
-`,
-      'mysql',
-    )
-    expect(code).toContain('`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"`')
-    expect(code).toContain(
-      '`gorm:"column:seq;autoIncrement;uniqueIndex:Counter_seq_key;size:32;not null" json:"seq"`',
-    )
-  })
-
-  // GORM writes a `type:` it does not know as given, so a native integer type takes its serial type.
-  it('gives an autoincrement @db.SmallInt column its serial type on PostgreSQL', () => {
-    const code = gormFor(
-      `
-model Tick {
-  id  Int    @id @default(autoincrement()) @db.SmallInt
-  seq BigInt @unique @default(autoincrement()) @db.BigInt
-}
-`,
-      'postgresql',
-    )
-    expect(code).toContain('`gorm:"column:id;primaryKey;autoIncrement;type:smallserial" json:"id"`')
-    // An int64 is GORM's own type, which it makes bigserial.
-    expect(code).toContain(
-      '`gorm:"column:seq;autoIncrement;uniqueIndex:Tick_seq_key;not null" json:"seq"`',
-    )
-  })
-})
-
-// GORM makes the sole integer key auto-increment unless its tag says autoIncrement either way
-// (schema.Parse, gorm v1.31.2): AutoMigrate gives it a sequence default on PostgreSQL (a bigint
-// one for a @db.SmallInt) and AUTO_INCREMENT on MySQL, where Prisma makes a plain integer column.
-// A key with no autoincrement() says autoIncrement:false, and GORM writes its value, 0 included,
-// in an INSERT.
-describe('generateGormModels integer key with no autoincrement()', () => {
-  // CockroachDB's sequence() fills the key, as autoincrement() does: GORM leaves a zero one out.
-  it('leaves a sequence() key on CockroachDB to GORM', () => {
-    expect(
-      gormFor('model Seq {\n  id Int @id @default(sequence())\n}\n', 'cockroachdb'),
-    ).not.toContain('autoIncrement:false')
-  })
-
-  const schema = `
-model Counter {
-  id Int @id
-}
-
-model Tick {
-  ident Int @id @db.SmallInt
-}
-
-model Ledger {
-  id BigInt @id
-}
-
-model User {
-  id      Int      @id @default(autoincrement())
-  profile Profile?
-}
-
-model Profile {
-  userId Int  @id
-  user   User @relation(fields: [userId], references: [id])
-}
-
-model Pair {
-  a Int
-  b Int
-
-  @@id([a, b])
-}
-
-model Line {
-  orderId Int
-  id      Int
-
-  @@id([orderId, id])
-}
-`
-  const code = gormFor(schema, 'postgresql')
-
-  it('writes autoIncrement:false on an Int key', () => {
-    expect(code).toContain(
-      '\tID int `gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"`',
-    )
-  })
-
-  it('writes autoIncrement:false on an Int @db.SmallInt key, which GORM would make a bigint', () => {
-    expect(code).toContain(
-      '\tIdent int `gorm:"column:ident;primaryKey;autoIncrement:false;type:smallint" json:"ident"`',
-    )
-  })
-
-  it('writes autoIncrement:false on a BigInt key', () => {
-    expect(code).toContain('\tID int64 `gorm:"column:id;primaryKey;autoIncrement:false" json:"id"`')
-  })
-
-  it('writes autoIncrement:false on a key that is also the foreign key of a 1:1 relation', () => {
-    expect(code).toContain(
-      '\tUserID int   `gorm:"column:userId;primaryKey;autoIncrement:false;size:32" json:"userId"`',
-    )
-  })
-
-  it('leaves a composite key alone, which GORM does not make auto-increment', () => {
-    expect(code).toContain('\tA int `gorm:"column:a;primaryKey;size:32" json:"a"`')
-    expect(code).toContain('\tB int `gorm:"column:b;primaryKey;size:32" json:"b"`')
-  })
-
-  it('writes autoIncrement:false on the field of a composite key GORM finds by the name id', () => {
-    expect(code).toContain(
-      '\tOrderID int `gorm:"column:orderId;primaryKey;size:32" json:"orderId"`',
-    )
-    expect(code).toContain(
-      '\tID      int `gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"`',
-    )
-  })
-
-  it('keeps the tags of an autoincrement() key', () => {
-    expect(code).toContain(
-      '\tID      int      `gorm:"column:id;primaryKey;autoIncrement;size:32" json:"id"`',
-    )
-  })
-})
-
 // Prisma makes every scalar list a PostgreSQL array column, which takes no JSON text: each list is
 // a ScalarList written and read in the array's text form.
 describe('generateGormModels scalar lists on PostgreSQL', () => {
@@ -1143,6 +1061,400 @@ model Team {
       'model ScalarList: its Go name is ScalarList, what the models hold a scalar list in; rename the model and keep its table with @@map',
     ])
     expect(gormProblems(listModels('Tag'), 'postgresql')).toStrictEqual([])
+  })
+
+  it('names a column whose mapped name ends in a backslash, which GORM joins to the next setting', () => {
+    const models = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Note {
+  id    Int    @id
+  label String @map("label\\\\")
+  body  String @map("a\\\\b")
+  title String @map("a;index")
+}
+`,
+      }),
+    ).models
+    expect(gormProblems(models, 'postgresql')).toStrictEqual([
+      "model Note: the column of label ends in \\, which GORM's tag cannot hold; change its @map",
+      'model Note: the column of title holds a ";", at which GORM splits the tag; change its @map',
+    ])
+  })
+
+  it('names an index whose name in the tag holds a "," or ";"', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Note {
+  id    Int    @id
+  pair  String @unique @map("a,b")
+  named String @unique(map: "note_named_key") @map("c,d")
+}
+
+model Tag {
+  id    Int    @id
+  label String
+  slug  String
+
+  @@index([label])
+  @@index([slug], map: "tag_slug_idx")
+  @@map("tag;s")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Note: the index on pair is named "Note_a,b_key", which GORM cannot write (a ","); change the @map of its column or table, or give it a name with map:',
+      'model Tag: the index on label is named "tag;s_label_idx", which GORM cannot write (a ";"); change the @map of its column or table, or give it a name with map:',
+    ])
+  })
+
+  it('passes over an index left out with a note, and names a map: name the tag cannot hold', () => {
+    const source = `datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  output          = "./generated"
+  previewFeatures = ["partialIndexes"]
+}
+
+model Item {
+  id   Int    @id
+  slug String
+  code String @map("c,d")
+
+  @@index([slug], where: raw("slug <> 'a;b'"))
+  @@index([code], map: "item,code")
+  @@map("item,s")
+}
+`
+    const datamodel = datamodelOf(getDMMF({ datamodel: source }))
+    expect(
+      gormProblems(
+        datamodel.models,
+        'postgresql',
+        datamodel.indexes,
+        partialIndexWhere(prismaBlocks(source), 'postgresql'),
+      ),
+    ).toStrictEqual([
+      'model Item: the index on code is named "item,code", which GORM cannot write (a ","); change it',
+    ])
+  })
+
+  it('names a map: name the tag cannot hold even where the name Prisma would give fits, and two fields written under one json name', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Item {
+  id    Int    @id
+  code  String @unique(map: "a,b")
+  slug  String
+  label String @map("x,y")
+  other String @map("Label")
+
+  @@index([slug], map: "slug;idx")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on code is named "a,b", which GORM cannot write (a ","); change it',
+      'model Item: the index on slug is named "slug;idx", which GORM cannot write (a ";"); change it',
+      'model Item: label and other are both written json:"Label", and encoding/json drops one or both; change the @map of one',
+    ])
+  })
+
+  it('names an index name the dialector would quote as another: a ".", a quote at its start, two quotes in a row', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Item {
+  id    Int    @id
+  code  String @unique(map: "\\"code_key")
+  slug  String
+  tag   String
+  mark  String @unique(map: "item\`mark")
+  note  String @unique(map: "item\\"note")
+  label String
+
+  @@index([slug], map: "item.slug_idx")
+  @@index([tag], map: "item\\"\\"tag")
+}
+
+model Box {
+  id   Int    @id
+  code String @unique
+
+  @@map("\\"boxes")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on code is named "\\"code_key", which GORM cannot write (a quote at its start); change it',
+      'model Item: the index on slug is named "item.slug_idx", which GORM cannot write (a "."); change it',
+      'model Item: the index on tag is named "item\\"\\"tag", which GORM cannot write (two quotes in a row); change it',
+      'model Box: its table is named "\\"boxes", which GORM cannot write (a quote at its start); change its @@map',
+      'model Box: the index on code is named "\\"boxes_code_key", which GORM cannot write (a quote at its start); change the @map of its column or table, or give it a name with map:',
+    ])
+  })
+
+  it('escapes a " or \\ of the table name in TableName()', () => {
+    const code = gormFor(
+      `
+model Crate {
+  id Int @id
+
+  @@map("cr\\"a\\\\te")
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain('\treturn "cr\\"a\\\\te"\n')
+  })
+
+  it('names the join table of an implicit many-to-many relation the dialector would quote as another', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id     Int    @id
+  tags   Tag[]  @relation("post.tags")
+  labels Tag[]  @relation("labels\\\\")
+  notes  Tag[]  @relation("no\\"\\"tes")
+  marks  Tag[]  @relation("ma;r\\"ks")
+}
+
+model Tag {
+  id     Int    @id
+  posts  Post[] @relation("post.tags")
+  labels Post[] @relation("labels\\\\")
+  notes  Post[] @relation("no\\"\\"tes")
+  marks  Post[] @relation("ma;r\\"ks")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Post: the join table of tags is named "_post.tags", which GORM cannot write (a "."); change the name of its @relation',
+      'model Post: the join table of labels is named "_labels\\\\", which GORM cannot write (a \\ at its end); change the name of its @relation',
+      'model Post: the join table of notes is named "_no\\"\\"tes", which GORM cannot write (two quotes in a row); change the name of its @relation',
+    ])
+  })
+
+  it('names a column or table name the dialector would quote as another', () => {
+    const problemsOf = (provider: string, body: string) => {
+      const datamodel = datamodelOf(
+        getDMMF({ datamodel: `datasource db {\n  provider = "${provider}"\n}\n${body}` }),
+      )
+      return gormProblems(datamodel.models, provider, datamodel.indexes)
+    }
+    expect(
+      problemsOf(
+        'postgresql',
+        `
+model Item {
+  id    Int    @id
+  dot   String @map("a.b")
+  lead  String @map("\\"lead")
+  twice String @map("a\\"\\"b")
+  tick  String @map("\`tick")
+  mid   String @map("a\\"b")
+  comma String @map("a,b")
+}
+
+model Box {
+  id Int @id
+
+  @@map("box.es")
+}
+
+model Crate {
+  id Int @id
+
+  @@map("cr\\"ate")
+}
+`,
+      ),
+    ).toStrictEqual([
+      'model Item: the column of dot is named "a.b", which GORM cannot write (a "."); change its @map',
+      'model Item: the column of lead is named "\\"lead", which GORM cannot write (a quote at its start); change its @map',
+      'model Item: the column of twice is named "a\\"\\"b", which GORM cannot write (two quotes in a row); change its @map',
+      'model Box: its table is named "box.es", which GORM cannot write (a "."); change its @@map',
+    ])
+    expect(
+      problemsOf(
+        'mysql',
+        `
+model Item {
+  id   Int    @id
+  tick String @map("\`tick")
+  lead String @map("\\"lead")
+
+  @@map("it\`\`ems")
+}
+`,
+      ),
+    ).toStrictEqual([
+      'model Item: its table is named "it``ems", which GORM cannot write (two quotes in a row); change its @@map',
+      'model Item: the column of tick is named "`tick", which GORM cannot write (a quote at its start); change its @map',
+    ])
+    expect(
+      problemsOf(
+        'sqlserver',
+        `
+model Item {
+  id  Int    @id
+  mid String @map("a\\"b")
+  tick String @map("a\`b")
+}
+`,
+      ),
+    ).toStrictEqual([
+      'model Item: the column of mid is named "a\\"b", which GORM cannot write (a double quote); change its @map',
+    ])
+  })
+
+  it("checks the quote of the provider's dialector only: a backtick on MySQL, a double quote elsewhere", () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "mysql"
+}
+
+model Item {
+  id   Int    @id
+  code String @unique(map: "\`code_key")
+  slug String @unique(map: "\\"slug_key")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'mysql', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on code is named "`code_key", which GORM cannot write (a quote at its start); change it',
+    ])
+  })
+
+  it('names a double quote anywhere in an index name on SQL Server, whose QuoteTo does not escape it', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "sqlserver"
+}
+
+model Item {
+  id   Int    @id
+  note String @unique(map: "item\\"note")
+  slug String @unique(map: "item\`slug")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'sqlserver', datamodel.indexes)).toStrictEqual([
+      'model Item: the index on note is named "item\\"note", which GORM cannot write (a double quote); change it',
+    ])
+  })
+
+  it('names a relation whose Go name a column takes as its json name', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id    Int    @id
+  posts Post[]
+}
+
+model Post {
+  id         Int    @id
+  authorId   Int
+  authorName String @map("Author")
+  author     User   @relation(fields: [authorId], references: [id])
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Post: authorName and author are both written json:"Author", and encoding/json drops one or both; change the @map of one',
+    ])
+  })
+
+  it('compares json names as encoding/json takes them: the field name for a column it cannot take, the Go name the struct gives', () => {
+    const datamodel = datamodelOf(
+      getDMMF({
+        datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Item {
+  id    Int    @id
+  label String @map("it's")
+  other String @map("Label")
+  a_b   String @map("x,1")
+  aB    String @map("x,2")
+}
+`,
+      }),
+    )
+    expect(gormProblems(datamodel.models, 'postgresql', datamodel.indexes)).toStrictEqual([
+      'model Item: label and other are both written json:"Label", and encoding/json drops one or both; change the @map of one',
+    ])
+  })
+
+  it('escapes an index name made from a mapped column for the struct tag', () => {
+    const code = gormFor(
+      `model Note {
+  id    Int    @id
+  quote String @unique @map("a\\"b")
+  path  String @map("a\\\\c")
+
+  @@index([path])
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain(
+      String.raw`${'`'}gorm:"column:a\"b;uniqueIndex:Note_a\"b_key;not null" json:"Quote"${'`'}`,
+    )
+    expect(code).toContain(
+      String.raw`${'`'}gorm:"column:a\\c;index:Note_a\\c_idx;not null" json:"Path"${'`'}`,
+    )
+  })
+
+  it('leaves a mapped index name ending in a backslash for Prisma default, as GORM joins it to the next setting', () => {
+    const code = gormFor(
+      `model Note {
+  id    Int    @id
+  code  String @unique(map: "code\\\\")
+  title String
+
+  @@index([title], map: "title\\\\")
+}
+`,
+      'postgresql',
+    )
+    expect(code).toContain('`gorm:"column:code;uniqueIndex:Note_code_key;not null" json:"code"`')
+    expect(code).toContain('`gorm:"column:title;index:Note_title_idx;not null" json:"title"`')
   })
 
   it('types a native list as Prisma names it, and an Int list on CockroachDB as INT4', () => {
@@ -1302,7 +1614,7 @@ func (m *User) BeforeCreate(_ *gorm.DB) error {
 }
 
 type Comment struct {
-	ID     int   \`gorm:"column:id;primaryKey;autoIncrement:false;size:32;not null" json:"id"\`
+	ID     int   \`gorm:"column:id;primaryKey;size:32;not null" json:"id"\`
 	PostID int   \`gorm:"column:postId;size:32;not null" json:"postId"\`
 	Post   *Post \`gorm:"belongsTo"\`
 }
@@ -1399,6 +1711,21 @@ func (Profile) TableName() string {
 	return "Profile"
 }
 `)
+  })
+
+  it('escapes a ";" or a double quote of a relation name in the many2many tag', () => {
+    const code = gormFor(`
+model Post {
+  id   Int   @id
+  tags Tag[] @relation("a;b\\"c")
+}
+
+model Tag {
+  id    Int    @id
+  posts Post[] @relation("a;b\\"c")
+}
+`)
+    expect(code).toContain('`gorm:"many2many:_a\\\\;b\\"c;joinForeignKey:A;joinReferences:B"`')
   })
 
   // Under GORM's default naming the table would be `_post_to_tags` and its columns `post_id` and
@@ -1779,6 +2106,29 @@ func (User) TableName() string {
 // drops the condition; the tag gives it to GORM in `where:`, so AutoMigrate makes the index Prisma
 // Migrate makes (schema.Parse, gorm v1.31.2, reads each condition back as written here).
 describe('generateGormModels partial indexes', () => {
+  // DMMF leaves isUnique off a @unique with a partial unique beside it, so the key of a model
+  // without an @id was lost. (#287)
+  it('keys a model without an @id by a @unique that has a partial unique beside it', () => {
+    const code = gormFor(
+      `
+generator client {
+  provider        = "prisma-client"
+  output          = "./generated"
+  previewFeatures = ["partialIndexes"]
+}
+
+model A {
+  email String  @unique
+  alive Boolean
+
+  @@unique([email], where: raw("alive"), map: "a_email_alive")
+}
+`,
+      'postgresql',
+    )
+    expect(code.split('\n').find((line) => line.includes('column:email'))).toContain('primaryKey')
+  })
+
   it('writes a Boolean as 1 and a name in brackets on SQL Server, which has no boolean literal', () => {
     const code = gormFor(
       `
@@ -1823,7 +2173,7 @@ model Account {
   @@unique([alive, n], where: { alive: true })
   @@index([alive], where: { alive: true })
   @@index([note], where: raw("note IN ('a,b', 'c\\\\\\"d', 'e\\\\,f')"))
-  @@index([n, note], where: raw("note <> ';'"))
+  @@index([n, note], where: raw("note <> ';'"), map: "account,n,note")
 }
 `,
         'postgresql',
@@ -1831,10 +2181,10 @@ model Account {
     ).toBe(`package model
 
 type Account struct {
-	ID    int    \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
+	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	Email string \`gorm:"column:email;uniqueIndex:Account_email_key;uniqueIndex:account_email_alive,where:(alive);not null" json:"email"\`
 	Alive bool   \`gorm:"column:alive;uniqueIndex:Account_alive_n_key,priority:1,where:(\\"alive\\" = true);index:Account_alive_idx,where:(\\"alive\\" = true);not null" json:"alive"\`
-	// The partial index Account_n_note_idx is left out: its condition holds a ";", at which GORM splits the tag.
+	// The partial index "account,n,note" is left out: its condition holds a ";", at which GORM splits the tag.
 	N    int     \`gorm:"column:n;uniqueIndex:Account_alive_n_key,priority:2,where:(\\"alive\\" = true);size:32;not null" json:"n"\`
 	Code string  \`gorm:"column:code;uniqueIndex:Account_code_key,where:(n > 0);not null" json:"code"\`
 	Note *string \`gorm:"column:note;index:Account_note_idx,where:(note IN ('a\\\\,b'\\\\, 'c\\\\\\\\\\"d'\\\\, 'e\\\\\\\\,f'))" json:"note"\`
@@ -1876,7 +2226,7 @@ model Token {
     ).toBe(`package model
 
 type Pair struct {
-	ID int \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
+	ID int \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	A  int \`gorm:"column:a;uniqueIndex:Pair_a_b_key,priority:1;uniqueIndex:pair_pos,priority:1,where:(a > 0);size:32;not null" json:"a"\`
 	B  int \`gorm:"column:b;uniqueIndex:Pair_a_b_key,priority:2;uniqueIndex:pair_pos,priority:2,where:(a > 0);size:32;not null" json:"b"\`
 }
@@ -1959,7 +2309,7 @@ model Doc {
     ).toBe(`package model
 
 type Doc struct {
-	ID    int    \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
+	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	Title string \`gorm:"column:title;index:doc_title_trgm,type:gist,expression:\\"title\\" gin_trgm_ops;index:Doc_title_n_idx,expression:\\"title\\" text_pattern_ops,priority:1,where:(\\"alive\\" = true);not null" json:"title"\`
 	N     int    \`gorm:"column:n;index:Doc_title_n_idx,priority:2,sort:desc,where:(\\"alive\\" = true);size:32;not null" json:"n"\`
 	Alive bool   \`gorm:"column:alive;not null" json:"alive"\`
@@ -1985,7 +2335,7 @@ model Doc {
         'postgresql',
       ),
     ).toContain(
-      '// The index doc_title_ops is left out: the expression of its column "title" with the operator class "a;b" holds a ";", at which GORM splits the tag.\n\tTitle string `gorm:"column:title;not null"',
+      '// The index "doc_title_ops" is left out: the expression of its column "title" with the operator class "a;b" holds a ";", at which GORM splits the tag.\n\tTitle string `gorm:"column:title;not null"',
     )
   })
 
@@ -2023,6 +2373,48 @@ model Doc {
   })
 })
 
+// An index column MySQL indexes by a prefix (`length:`) takes GORM's `length:` in that field's index
+// setting, which the migrator writes after the column, `note`(100), as Prisma Migrate does; a TEXT
+// column cannot be indexed without one. A length the column does not exceed is no prefix.
+describe('generateGormModels index prefix length', () => {
+  const LOG_ENTRY = `
+model LogEntry {
+  id    Int    @id
+  note  String @db.Text
+  title String @db.VarChar(255)
+  code  String @unique(length: 50) @db.Text
+  short String @db.VarChar(20)
+  data  Bytes
+  bin   Bytes  @db.VarBinary(20)
+
+  @@index([note(length: 100)])
+  @@index([title(length: 20, sort: Desc), note(length: 10)])
+  @@index([short(length: 30)])
+  @@index([data(length: 200)])
+  @@index([bin(length: 30)])
+}
+`
+
+  it('writes length: on MySQL', () => {
+    expect(gormFor(LOG_ENTRY, 'mysql')).toBe(`package model
+
+type LogEntry struct {
+	ID    int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
+	Note  string \`gorm:"column:note;index:LogEntry_note_idx,length:100;index:LogEntry_title_note_idx,priority:2,length:10;type:text;not null" json:"note"\`
+	Title string \`gorm:"column:title;index:LogEntry_title_note_idx,priority:1,length:20,sort:desc;type:varchar(255);not null" json:"title"\`
+	Code  string \`gorm:"column:code;uniqueIndex:LogEntry_code_key,length:50;type:text;not null" json:"code"\`
+	Short string \`gorm:"column:short;index:LogEntry_short_idx;type:varchar(20);not null" json:"short"\`
+	Data  []byte \`gorm:"column:data;index:LogEntry_data_idx,length:200;not null" json:"data"\`
+	Bin   []byte \`gorm:"column:bin;index:LogEntry_bin_idx;type:varbinary(20);not null" json:"bin"\`
+}
+
+func (LogEntry) TableName() string {
+	return "LogEntry"
+}
+`)
+  })
+})
+
 // An index column with `sort: Desc` takes GORM's `sort:desc` in that field's index setting, so
 // AutoMigrate writes it DESC in CREATE INDEX as Prisma Migrate does (schema.Parse, gorm v1.31.2,
 // reads Sort "desc" from each tag written here); `sort: Asc` is the default and stays plain.
@@ -2050,7 +2442,7 @@ model LogEntry {
     ).toBe(`package model
 
 type LogEntry struct {
-	ID        int    \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
+	ID        int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	UUID      string \`gorm:"column:uuid;index:log_entry_uuid_idx,priority:1;type:varchar(191);not null" json:"uuid"\`
 	Action    string \`gorm:"column:action;index:log_entry_uuid_idx,priority:2;index:LogEntry_action_idx;type:varchar(191);not null" json:"action"\`
 	Timestamp int    \`gorm:"column:timestamp;index:log_entry_uuid_idx,priority:3,sort:desc;size:32;not null" json:"timestamp"\`
@@ -2089,7 +2481,7 @@ model Account {
     ).toBe(`package model
 
 type Account struct {
-	ID    int  \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
+	ID    int  \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	Alive bool \`gorm:"column:alive;index:Account_alive_n_idx,priority:1,where:(alive);not null" json:"alive"\`
 	N     int  \`gorm:"column:n;uniqueIndex:Account_n_key,sort:desc,where:(n > 0);index:Account_alive_n_idx,priority:2,sort:desc,where:(alive);size:32;not null" json:"n"\`
 }
@@ -2221,7 +2613,7 @@ import (
 // Second paragraph */ with \\\\ backslash.
 type User struct {
 	// The key.
-	ID   int    \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
+	ID   int    \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	Name string \`gorm:"column:name;not null" json:"name"\`
 	// When they joined.
 	// Two lines.
@@ -2244,7 +2636,7 @@ func (m *User) BeforeCreate(tx *gorm.DB) error {
 }
 
 type Post struct {
-	ID int \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
+	ID int \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	// Who wrote it.
 	AuthorID int \`gorm:"column:authorId;size:32;not null" json:"authorId"\`
 	// The author.
@@ -2451,7 +2843,7 @@ func (m *Line) BeforeCreate(_ *gorm.DB) error {
 }
 
 type Part struct {
-	ID         int   \`gorm:"column:id;primaryKey;autoIncrement:false;size:32" json:"id"\`
+	ID         int   \`gorm:"column:id;primaryKey;size:32" json:"id"\`
 	LineOrder  int   \`gorm:"column:lineOrder;size:32;not null" json:"lineOrder"\`
 	LineNumber int   \`gorm:"column:lineNumber;size:32;not null" json:"lineNumber"\`
 	Line       *Line \`gorm:"foreignKey:LineNumber,LineOrder;references:Number,Order;belongsTo"\`
@@ -2489,5 +2881,102 @@ func (Token) TableName() string {
 	return "Token"
 }
 `)
+  })
+})
+
+// PostgreSQL prints money in its locale's form ("$1,234.50"), which a float64 cannot scan, and
+// datatypes.JSON names jsonb to AutoMigrate whatever the tag says: both have a type of their own.
+describe('generateGormModels PostgreSQL money and json columns', () => {
+  const schema = `
+model Wallet {
+  id      Int      @id
+  balance Decimal  @db.Money
+  bonus   Decimal? @db.Money
+  tip     Decimal  @default(1.5) @db.Money
+  raw     Json     @db.Json
+  extra   Json?    @db.Json
+  doc     Json     @db.JsonB
+}
+`
+
+  it('holds @db.Money in Money and @db.Json in PlainJSON, written beside the models', () => {
+    const code = gormFor(schema, 'postgresql')
+    expect(code).toContain(
+      '\tBalance Money          `gorm:"column:balance;type:money;not null" json:"balance"`\n',
+    )
+    expect(code).toContain(
+      '\tBonus   *Money         `gorm:"column:bonus;type:money" json:"bonus"`\n',
+    )
+    expect(code).toContain(
+      '\tTip     *Money         `gorm:"column:tip;type:money;default:(1.5);not null" json:"tip"`\n',
+    )
+    expect(code).toContain('\tRaw     PlainJSON      `gorm:"column:raw;not null" json:"raw"`\n')
+    expect(code).toContain('\tExtra   PlainJSON      `gorm:"column:extra" json:"extra"`\n')
+    expect(code).toContain(
+      '\tDoc     datatypes.JSON `gorm:"column:doc;type:jsonb;not null" json:"doc"`\n',
+    )
+    expect(code).toContain('type Money float64\n')
+    expect(code).toContain('type PlainJSON json.RawMessage\n')
+    expect(code).toContain(`import (
+	"context"
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"gorm.io/gorm/schema"
+)`)
+    expect(code).toContain(
+      '\treturn clause.Expr{SQL: "CAST(CAST(? AS numeric) AS money)", Vars: []any{strconv.FormatFloat(float64(m), \'f\', -1, 64)}}\n',
+    )
+  })
+
+  it('keeps the money text it cannot read from becoming a wrong amount', () => {
+    const code = gormFor(schema, 'postgresql')
+    expect(code).toContain(
+      '\tmoneyText   = regexp.MustCompile("^(-?)\\\\$(\\\\d{1,3}(?:,\\\\d{3})*)\\\\.(\\\\d{2})$")\n',
+    )
+    expect(code).toContain(
+      '\t\treturn fmt.Errorf("a money column held %q, which is not in the C or en_US form", text)\n',
+    )
+    expect(code).toContain('\tif amount > maxExactMoney || amount < -maxExactMoney {\n')
+  })
+
+  it('leaves CockroachDB, which has no money and whose json is jsonb, as it was', () => {
+    const code = gormFor(
+      `
+model Wallet {
+  id  Int  @id
+  raw Json @db.JsonB
+}
+`,
+      'cockroachdb',
+    )
+    expect(code).not.toContain('PlainJSON')
+    expect(code).not.toContain('Money')
+  })
+
+  it('names a money list, which GORM cannot read, and a model that takes the name of a type', () => {
+    const result = getDMMF({
+      datamodel: `datasource db {
+  provider = "postgresql"
+}
+
+model Money {
+  id     Int       @id
+  prices Decimal[] @db.Money
+  amount Decimal   @db.Money
+}
+`,
+    })
+    expect(gormProblems(datamodelOf(result).models, 'postgresql')).toStrictEqual([
+      'model Money: its Go name is Money, what the models hold a @db.Money in; rename the model and keep its table with @@map',
+      'model Money: prices is a list of money, which GORM cannot read from the money[] PostgreSQL prints; make it a list of @db.Decimal',
+    ])
   })
 })
