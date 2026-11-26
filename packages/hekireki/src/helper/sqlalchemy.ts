@@ -23,7 +23,12 @@ import {
   relationEnds,
   uuidDefaultVersion,
 } from '../prisma/model.js'
-import { INDEX_METHODS, operatorClassName, sqlString } from '../prisma/postgres.js'
+import {
+  INDEX_METHODS,
+  operatorClassName,
+  serialSequenceName,
+  sqlString,
+} from '../prisma/postgres.js'
 
 const PRISMA_TO_PYTHON: { [k: string]: string } = {
   String: 'str',
@@ -107,6 +112,7 @@ const MODULE_CLASSES = new Set([
   'Dialect',
   'Double',
   'Enum',
+  'FetchedValue',
   'Float',
   'ForeignKey',
   'ForeignKeyConstraint',
@@ -119,6 +125,7 @@ const MODULE_CLASSES = new Set([
   'Numeric',
   'Optional',
   'PrimaryKeyConstraint',
+  'Sequence',
   'SmallInteger',
   'String',
   'Table',
@@ -1012,15 +1019,6 @@ function keyArgs(field: DMMF.Field, isPk: boolean, provider: string) {
       ? ['autoincrement=False']
       : []),
   ]
-}
-
-// The name PostgreSQL gives the sequence of a serial column, `<table>_<column>_seq`: while the
-// two names are too long for its 63 characters, the longer one loses its last character.
-function serialSequenceName(table: string, column: string) {
-  const room = 63 - '__seq'.length
-  const tableLength = Math.max(Math.ceil(room / 2), room - column.length)
-  const columnLength = room - Math.min(table.length, tableLength)
-  return `${table.slice(0, tableLength)}_${column.slice(0, columnLength)}_seq`
 }
 
 // A column that is not the key but defaults to autoincrement() (a @unique one, which Prisma

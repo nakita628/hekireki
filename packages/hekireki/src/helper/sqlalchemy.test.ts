@@ -1588,6 +1588,53 @@ model TableNameThatIsQuiteLongForTheSequenceToFit1234 {
     )
   })
 
+  it('names the sequence in UTF-8 bytes, as PostgreSQL cuts it', () => {
+    const code = generateFor(
+      'postgresql',
+      `model Counter {
+  id       Int @id
+  metricId Int @unique @default(autoincrement()) @map("metric_id")
+
+  @@map("${'カウンター'.repeat(4)}")
+}`,
+    )
+
+    expect(code).toContain(
+      'server_default=Sequence("カウンターカウンターカウンターカ_metric_id_seq", metadata=Base.metadata).next_value())',
+    )
+  })
+
+  it('keeps a model named Sequence or FetchedValue from shadowing the import', () => {
+    const postgres = generateFor(
+      'postgresql',
+      `model Sequence {
+  id    Int @id
+  total Int @unique @default(autoincrement())
+}`,
+    )
+    const mysql = generateFor(
+      'mysql',
+      `model FetchedValue {
+  id    Int @id
+  total Int @unique @default(autoincrement())
+}`,
+    )
+
+    expect(postgres).toContain(
+      `class Sequence_(Base):
+    __tablename__ = "Sequence"
+`,
+    )
+    expect(postgres).toContain(
+      'server_default=Sequence("Sequence_total_seq", metadata=Base.metadata)',
+    )
+    expect(mysql).toContain(
+      `class FetchedValue_(Base):
+    __tablename__ = "FetchedValue"
+`,
+    )
+  })
+
   it("is CockroachDB's unique_rowid(), on the BigInt it allows", () => {
     const code = generateFor(
       'cockroachdb',

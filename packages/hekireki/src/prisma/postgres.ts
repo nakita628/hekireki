@@ -26,10 +26,36 @@ function utf8Length(value: string) {
 export function prismaConstraintName(base: string, suffix: string, limit = IDENTIFIER_LIMIT) {
   const room = limit - utf8Length(suffix)
   if (utf8Length(base) <= room) return `${base}${suffix}`
-  const chars = [...base.matchAll(/./gsu)].map(([char]) => char)
+  return `${utf8Prefix(base, room)}${suffix}`
+}
+
+// The longest prefix of the value, cut at a character boundary, that takes no more than `bytes`
+// bytes of UTF-8, as PostgreSQL cuts a name.
+function utf8Prefix(value: string, bytes: number) {
+  const chars = [...value.matchAll(/./gsu)].map(([char]) => char)
   // Prefix lengths only grow, so the characters that fit are a prefix of the name.
-  const kept = chars.filter((_, index) => utf8Length(chars.slice(0, index + 1).join('')) <= room)
-  return `${kept.join('')}${suffix}`
+  return chars
+    .filter((_, index) => utf8Length(chars.slice(0, index + 1).join('')) <= bytes)
+    .join('')
+}
+
+/**
+ * The name PostgreSQL gives the sequence of a serial column, `<table>_<column>_seq`. While the two
+ * names take more than its 63 bytes, the longer one (the column's, when they are equal) loses a
+ * byte; each is then cut at a character boundary, so a name of wide characters may come out
+ * shorter.
+ *
+ * @param table - The table's name in the database.
+ * @param column - The column's name in the database.
+ * @returns The sequence `SERIAL` creates for the column.
+ */
+export function serialSequenceName(table: string, column: string) {
+  const room = IDENTIFIER_LIMIT - utf8Length('__seq')
+  const tableBytes = Math.min(
+    utf8Length(table),
+    Math.max(Math.ceil(room / 2), room - utf8Length(column)),
+  )
+  return `${utf8Prefix(table, tableBytes)}_${utf8Prefix(column, room - tableBytes)}_seq`
 }
 
 export type IndexInfo = {
