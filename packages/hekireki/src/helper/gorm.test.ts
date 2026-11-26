@@ -1268,6 +1268,79 @@ model Note {
     ])
   })
 
+  // GORM's primaryKey has no setting for a prefix, so AutoMigrate keys the whole column: MySQL
+  // refuses that on a TEXT or BLOB (error 1170) and past 3072 bytes (error 1071).
+  it('names a MySQL key on a column prefix that MySQL cannot take whole', () => {
+    const source = `datasource db {
+  provider = "mysql"
+}
+model Doc {
+  key String @id(length: 100) @db.Text
+}
+model Pair {
+  a String @db.Text
+  b String @db.VarChar(255)
+
+  @@id([a(length: 50), b(length: 10)])
+}
+enum Status {
+  OPEN
+}
+model Flag {
+  a      String @db.VarChar(578)
+  status Status
+
+  @@id([a(length: 100), status])
+}
+model Blob {
+  data Bytes @id(length: 16)
+}
+model One {
+  key String @unique(length: 100) @db.Text
+}
+model Long {
+  key String @id(length: 100) @db.VarChar(1000)
+}
+model Wide {
+  a String @db.VarChar(766)
+  b Int
+  c DateTime
+
+  @@id([a(length: 100), b, c])
+}
+model Dec {
+  a String  @db.VarChar(767)
+  d Decimal @db.Decimal
+
+  @@id([a(length: 100), d])
+}
+model Sized {
+  key String @id(length: 100) @db.VarChar(255)
+}
+model Plain {
+  key String @id(length: 100)
+}
+model Whole {
+  id String @id(length: 20) @db.VarChar(20)
+}
+`
+    const { models, indexes } = datamodelOf(getDMMF({ datamodel: [['schema.prisma', source]] }))
+    expect(gormProblems(models, 'mysql', indexes)).toStrictEqual([
+      "model Doc: its key is on a prefix of a TEXT or BLOB column (key(length: 100)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
+      "model Pair: its key is on a prefix of a TEXT or BLOB column (a(length: 50)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
+      "model Flag: its key is on a column prefix (a(length: 100)), which GORM's primaryKey cannot write, and its whole columns take 3076 bytes, more than the 3072 bytes MySQL keys; key it on shorter columns, or use another generator",
+      "model Blob: its key is on a prefix of a TEXT or BLOB column (data(length: 16)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
+      "model One: its key is on a prefix of a TEXT or BLOB column (key(length: 100)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
+      "model Long: its key is on a column prefix (key(length: 100)), which GORM's primaryKey cannot write, and its whole columns take 4000 bytes, more than the 3072 bytes MySQL keys; key it on shorter columns, or use another generator",
+      "model Wide: its key is on a column prefix (a(length: 100)), which GORM's primaryKey cannot write, and its whole columns take 3075 bytes, more than the 3072 bytes MySQL keys; key it on shorter columns, or use another generator",
+      "model Dec: its key is on a column prefix (a(length: 100)), which GORM's primaryKey cannot write, and its whole columns take 3073 bytes, more than the 3072 bytes MySQL keys; key it on shorter columns, or use another generator",
+    ])
+    expect(gormProblems(models, 'postgresql', indexes)).toStrictEqual([])
+    // GORM never migrates a view, so nothing is keyed from one.
+    const views = new Set(models.map((model) => model.name))
+    expect(gormProblems(models, 'mysql', indexes, undefined, views)).toStrictEqual([])
+  })
+
   it('names an index whose name in the tag holds a "," or ";"', () => {
     const datamodel = datamodelOf(
       getDMMF({

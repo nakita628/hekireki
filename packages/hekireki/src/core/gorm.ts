@@ -13,11 +13,13 @@ import { outputFile, requireOutput } from './output.js'
 export function gorm(options: GeneratorOptions) {
   return Effect.gen(function* () {
     const output = yield* requireOutput(options, 'Hekireki-GORM')
+    const blocks = prismaBlocks(options.datamodel)
     const problems = gormProblems(
       options.dmmf.datamodel.models,
       options.datasources[0]?.activeProvider,
       options.dmmf.datamodel.indexes,
-      partialIndexWhere(prismaBlocks(options.datamodel), options.datasources[0]?.activeProvider),
+      partialIndexWhere(blocks, options.datasources[0]?.activeProvider),
+      viewNames(blocks),
     )
     if (problems.length > 0) {
       return yield* new GeneratorConfigError({
@@ -28,7 +30,6 @@ export function gorm(options: GeneratorOptions) {
     const packageName = getString(options.generator.config['package']) ?? 'model'
     const enums = options.dmmf.datamodel.enums
     const indexes = options.dmmf.datamodel.indexes
-    const blocks = prismaBlocks(options.datamodel)
     const code = generateGormModels(
       options.dmmf.datamodel.models,
       enums,
