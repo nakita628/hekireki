@@ -182,8 +182,9 @@ On MySQL, `hekireki-sqlalchemy` keys a model whose `@id` or `@@id` is on a prefi
 (`@id(length: 100)` on a `@db.Text`) with `PrefixedPrimaryKey`, which the models module declares:
 `create_all()` writes the key as Prisma Migrate does, ``PRIMARY KEY (`key`(100))``, for MySQL and
 MariaDB, and a plain key elsewhere. Alembic's autogenerate renders it as a plain
-`PrimaryKeyConstraint`, without the prefix, so add `mysql_length` back by hand in such a migration
-(the option is registered once `env.py` imports the models).
+`sa.PrimaryKeyConstraint(...)`, without the prefix: in such a migration, replace it with
+`PrefixedPrimaryKey(..., mysql_length={...})` imported from the models module, as `mysql_length` is
+accepted on that class only.
 
 On PostgreSQL, hand the `MapEnums` of the `DbContext` `hekireki-efcore` writes to Npgsql:
 `UseNpgsql(connectionString, AppDbContext.MapEnums)`, or `AppDbContext.MapEnums(builder)` on your

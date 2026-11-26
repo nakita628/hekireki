@@ -2040,7 +2040,7 @@ function utcDateTimeClass(provider: string, needsUtcTimestamp: boolean) {
 export function generateBase(
   models: readonly DMMF.Model[],
   provider: string,
-  indexes: readonly DMMF.Index[] = [],
+  indexes: readonly DMMF.Index[],
 ) {
   const needsUtcDateTime = usesUtcDateTime(models)
   const needsUtcTimestamp = provider === 'mysql' && usesNativeType(models, ['Timestamp'])
