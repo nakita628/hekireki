@@ -1,0 +1,29 @@
+// MySQL keys that SQLAlchemy has no argument for: a primary key on a prefix of a TEXT column
+// (`@id(length: N)`), alone and in a compound key, and a length that covers the column, which is
+// no prefix. Only Hekireki-SQLAlchemy reads it; the sqlalchemy language check type-checks the
+// models and compiles their DDL for MySQL and MariaDB.
+
+datasource db {
+  provider = "mysql"
+}
+
+generator Hekireki-SQLAlchemy {
+  provider = "hekireki-sqlalchemy"
+  output   = "../harness/sqlalchemy/edge"
+}
+
+model Doc {
+  key  String @id(length: 100) @db.Text
+  body String
+}
+
+model Pair {
+  a String @db.Text
+  b Int
+
+  @@id([a(length: 50), b])
+}
+
+model Whole {
+  code String @id(length: 20) @db.VarChar(20)
+}

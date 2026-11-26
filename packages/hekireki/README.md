@@ -178,6 +178,13 @@ the values already there:
 loading rows with their values. On MySQL a member of a compound `@@id` is never read back after an
 insert, so the instance has no key until you query it by the rest of the row.
 
+On MySQL, `hekireki-sqlalchemy` keys a model whose `@id` or `@@id` is on a prefix of a column
+(`@id(length: 100)` on a `@db.Text`) with `PrefixedPrimaryKey`, which the models module declares:
+`create_all()` writes the key as Prisma Migrate does, ``PRIMARY KEY (`key`(100))``, for MySQL and
+MariaDB, and a plain key elsewhere. Alembic's autogenerate renders it as a plain
+`PrimaryKeyConstraint`, without the prefix, so add `mysql_length` back by hand in such a migration
+(the option is registered once `env.py` imports the models).
+
 On PostgreSQL, hand the `MapEnums` of the `DbContext` `hekireki-efcore` writes to Npgsql:
 `UseNpgsql(connectionString, AppDbContext.MapEnums)`, or `AppDbContext.MapEnums(builder)` on your
 own `NpgsqlDataSourceBuilder` as well when you pass `UseNpgsql` the data source it builds. It maps
