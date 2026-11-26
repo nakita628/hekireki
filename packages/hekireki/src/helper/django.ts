@@ -1074,6 +1074,7 @@ export function collectFieldClasses(models: readonly DMMF.Model[], provider: str
   const stampedClasses = STAMPED_FIELDS.filter((f) => stamped.has(f.name))
   const columnFields = ownColumnFields(models)
   const declared = nativeClassesOf(columnFields, provider)
+  const autoIncrementUsed = new Set(autoIncrementBases(models, provider))
   return [
     ...NATIVE_FIELD_BASES.filter((base) => declared.has(`Native${base}`)).map((base) =>
       nativeFieldClass(base, provider),
@@ -1082,7 +1083,7 @@ export function collectFieldClasses(models: readonly DMMF.Model[], provider: str
     ...stampedClasses.map((f) => stampedField(f, provider)),
     columnFields.some((f) => isMoney(f, provider)) ? MONEY_FIELD : null,
     ...Object.entries(AUTO_INCREMENT_BASES)
-      .filter(([base]) => autoIncrementBases(models, provider).includes(base))
+      .filter(([base]) => autoIncrementUsed.has(base))
       .map(([base, auto]) => autoIncrementField(base, auto, provider)),
     scalarFields.some((f) => isEnumArray(f, provider)) ? ENUM_ARRAY_FIELD : null,
     scalarFields.some((f) => isPlainJson(f, provider)) ? PLAIN_JSON_FIELD : null,
