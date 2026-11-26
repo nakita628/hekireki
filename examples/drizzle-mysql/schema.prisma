@@ -30,3 +30,23 @@ model Moment {
 
   @@map("moments")
 }
+
+/// A Boolean and a Bytes in MySQL's BIT, read through a relation too.
+model Panel {
+  id       Int      @id @default(autoincrement())
+  name     String   @unique
+  switches Switch[]
+}
+
+model Switch {
+  id      Int      @id @default(autoincrement())
+  name    String   @unique
+  on      Boolean  @default(true) @db.Bit(1)
+  off     Boolean  @db.Bit(1)
+  maybe   Boolean? @db.Bit(1)
+  mask    Bytes    @db.Bit(8)
+  panelId Int      @map("panel_id")
+  panel   Panel    @relation(fields: [panelId], references: [id])
+
+  @@map("switches")
+}

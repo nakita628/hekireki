@@ -1350,13 +1350,7 @@ const MYSQL_NATIVE_TYPES: readonly (readonly [
     'datetime, int, mysqlTable',
     "datetime('value', { fsp: 3 })",
   ],
-  [
-    'DateTime',
-    '@db.DateTime',
-    ['DateTime', []],
-    'datetime, int, mysqlTable',
-    "datetime('value', { fsp: 0 })",
-  ],
+  ['DateTime', '@db.DateTime', ['DateTime', []], 'datetime, int, mysqlTable', "datetime('value')"],
   [
     'DateTime',
     '@db.Timestamp(3)',
@@ -1369,7 +1363,7 @@ const MYSQL_NATIVE_TYPES: readonly (readonly [
     '@db.Timestamp',
     ['Timestamp', []],
     'int, mysqlTable, timestamp',
-    "timestamp('value', { fsp: 0 })",
+    "timestamp('value')",
   ],
   ['DateTime', '@db.Date', ['Date', []], 'customType, int, mysqlTable', "utcDate('value')"],
   [
@@ -1678,7 +1672,7 @@ describe('dates', () => {
       }),
     ])
     expect(drizzleSchema(datamodel, 'mysql', []).split('\n').at(-1)).toBe(
-      "export const row = mysqlTable('Row', { id: int('id').primaryKey(), plain: datetime('plain', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`).$defaultFn(utcNow), ts: timestamp('ts', { fsp: 0 }).notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow), dt6: datetime('dt6', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`).$defaultFn(utcNow) })",
+      "export const row = mysqlTable('Row', { id: int('id').primaryKey(), plain: datetime('plain', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`).$defaultFn(utcNow), ts: timestamp('ts').notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(utcNow), dt6: datetime('dt6', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`).$defaultFn(utcNow) })",
     )
   })
 
@@ -2712,5 +2706,63 @@ describe('a table name with a quote in it', () => {
     expect(drizzleSchema(datamodel, 'postgresql', datamodel.indexes)).toContain(
       "export const itS = pgTable('it\\'s', ",
     )
+  })
+})
+
+describe('columns drizzle has none of its own for', () => {
+  const schemaOf = (models: string, provider: 'postgresql' | 'mysql') => {
+    const result = getDMMF({
+      datamodel: [['schema.prisma', `datasource db {\n  provider = "${provider}"\n}\n${models}`]],
+    })
+    if ('type' in result) throw new Error(result.error.message)
+    return drizzleSchema(result.datamodel, provider, result.datamodel.indexes)
+  }
+
+  it('reads a PostgreSQL @db.Money as numeric text, and refuses a form it cannot read', () => {
+    const code = schemaOf(
+      'model Purse {\n  id      Int       @id\n  cash    Decimal   @db.Money\n  history Decimal[] @db.Money\n  fee     Decimal   @default(1.5) @db.Money\n}',
+      'postgresql',
+    )
+    expect(code)
+      .toContain(`const moneyDecimal = customType<{ data: string; driverData: string | number }>({
+  dataType: () => 'money',
+  codec: 'money',
+  forJsonSelect: (identifier, sql, arrayDimensions) =>
+    arrayDimensions
+      ? sql\`\${identifier}::numeric[]::text[]\`
+      : sql\`\${identifier}::numeric::text\`,`)
+    expect(code).toContain('const money = /^(-?)\\$(\\d{1,3}(?:,\\d{3})*\\.\\d{2})$/u.exec(value)')
+    expect(code).toContain("cash: moneyDecimal('cash').notNull()")
+    expect(code).toContain("history: moneyDecimal('history').array()")
+    expect(code).toContain("fee: moneyDecimal('fee').notNull().default('1.5')")
+  })
+
+  it('makes a MySQL Boolean @db.Bit(1) a bitBoolean and a Bytes @db.Bit(n) bytes of bit(n)', () => {
+    const code = schemaOf(
+      'model Switch {\n  id   Int     @id\n  on   Boolean @default(true) @db.Bit(1)\n  off  Boolean @default(false) @db.Bit(1)\n  mask Bytes   @db.Bit(8)\n}',
+      'mysql',
+    )
+    expect(code).toContain("dataType: () => 'bit(1)',")
+    expect(code).toContain(
+      'forJsonSelect: (identifier, sql) => sql`cast(${identifier} as unsigned)`,',
+    )
+    expect(code).toContain("on: bitBoolean('on')")
+    expect(code).toContain(".default(sql`b'1'`)")
+    expect(code).toContain(".default(sql`b'0'`)")
+    expect(code).toContain("mask: bytes('mask', { type: 'bit(8)' }).notNull()")
+    // bytes reads a relational query's nested rows from the base64 MySQL writes there.
+    expect(code).toContain('forJsonSelect: (identifier, sql) => sql`to_base64(${identifier})`,')
+    expect(code).toContain(
+      'fromJson: (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0)),',
+    )
+  })
+
+  it('writes a MySQL date-time of precision 0 without one, as MySQL reads it back', () => {
+    const code = schemaOf(
+      'model Moment {\n  id    Int      @id\n  whole DateTime @db.DateTime(0)\n  stamp DateTime @db.Timestamp(0)\n}',
+      'mysql',
+    )
+    expect(code).toContain("whole: datetime('whole').notNull()")
+    expect(code).toContain("stamp: timestamp('stamp').notNull()")
   })
 })

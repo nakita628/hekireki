@@ -1,5 +1,31 @@
-import { customType, pgTable, serial, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
-import { sql } from 'drizzle-orm'
+import {
+  customType,
+  foreignKey,
+  integer,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core'
+import { defineRelations, sql } from 'drizzle-orm'
+
+const moneyDecimal = customType<{ data: string; driverData: string | number }>({
+  dataType: () => 'money',
+  codec: 'money',
+  forJsonSelect: (identifier, sql, arrayDimensions) =>
+    arrayDimensions ? sql`${identifier}::numeric[]::text[]` : sql`${identifier}::numeric::text`,
+  fromDriver: (value) => {
+    if (typeof value === 'number' || /^-?\d+(\.\d+)?$/u.test(value)) return String(value)
+    const money = /^(-?)\$(\d{1,3}(?:,\d{3})*\.\d{2})$/u.exec(value)
+    if (money === null) {
+      throw new Error(
+        `money ${value} is not in the C / en_US form (lc_monetary): cast it with an instance codec`,
+      )
+    }
+    return `${money[1]}${money[2]?.replaceAll(',', '') ?? ''}`
+  },
+})
 
 const utcDate = customType<{ data: Date; driverData: string }>({
   dataType: () => 'date',
@@ -71,3 +97,38 @@ export const moments = pgTable(
   },
   (table) => [uniqueIndex('moments_name_key').on(table.name)],
 )
+
+/** A Decimal in PostgreSQL's money, read through a relation too. */
+export const owner = pgTable(
+  'Owner',
+  { id: serial('id').primaryKey(), name: text('name').notNull() },
+  (table) => [uniqueIndex('Owner_name_key').on(table.name)],
+)
+
+export const purses = pgTable(
+  'purses',
+  {
+    id: serial('id').primaryKey(),
+    name: text('name').notNull(),
+    cash: moneyDecimal('cash').notNull(),
+    spare: moneyDecimal('spare'),
+    history: moneyDecimal('history').array(),
+    fee: moneyDecimal('fee').notNull().default('1.5'),
+    ownerId: integer('owner_id').notNull(),
+  },
+  (table) => [
+    uniqueIndex('purses_name_key').on(table.name),
+    foreignKey({
+      name: 'purses_owner_id_fkey',
+      columns: [table.ownerId],
+      foreignColumns: [owner.id],
+    })
+      .onDelete('restrict')
+      .onUpdate('cascade'),
+  ],
+)
+
+export const relations = defineRelations({ moments, owner, purses }, (r) => ({
+  owner: { purses: r.many.purses() },
+  purses: { owner: r.one.owner({ from: r.purses.ownerId, to: r.owner.id, optional: false }) },
+}))

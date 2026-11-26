@@ -1,13 +1,36 @@
 import {
   customType,
   datetime,
+  foreignKey,
   int,
   mysqlTable,
   timestamp,
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/mysql-core'
-import { sql } from 'drizzle-orm'
+import { defineRelations, sql } from 'drizzle-orm'
+
+const bytes = customType<{
+  data: Uint8Array
+  jsonData: string
+  config: { type: string }
+}>({
+  dataType: (config) => config?.type ?? 'longblob',
+  forJsonSelect: (identifier, sql) => sql`to_base64(${identifier})`,
+  fromJson: (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0)),
+})
+
+const bitBoolean = customType<{
+  data: boolean
+  driverData: Uint8Array | number
+  jsonData: number
+}>({
+  dataType: () => 'bit(1)',
+  fromDriver: (value) =>
+    typeof value === 'number' ? value !== 0 : value.some((byte) => byte !== 0),
+  forJsonSelect: (identifier, sql) => sql`cast(${identifier} as unsigned)`,
+  fromJson: (value) => value !== 0,
+})
 
 const utcDate = customType<{ data: Date; driverData: string }>({
   dataType: () => 'date',
@@ -46,7 +69,7 @@ export const moments = mysqlTable(
     name: varchar('name', { length: 191 }).notNull(),
     at: datetime('at', { fsp: 3 }).notNull(),
     precise: datetime('precise', { fsp: 6 }).notNull(),
-    whole: datetime('whole', { fsp: 0 }).notNull(),
+    whole: datetime('whole').notNull(),
     stamped: timestamp('stamped', { fsp: 3 }).notNull(),
     day: utcDate('day').notNull(),
     dayOpt: utcDate('day_opt'),
@@ -60,3 +83,40 @@ export const moments = mysqlTable(
   },
   (table) => [uniqueIndex('moments_name_key').on(table.name)],
 )
+
+/** A Boolean and a Bytes in MySQL's BIT, read through a relation too. */
+export const panel = mysqlTable(
+  'Panel',
+  { id: int('id').primaryKey().autoincrement(), name: varchar('name', { length: 191 }).notNull() },
+  (table) => [uniqueIndex('Panel_name_key').on(table.name)],
+)
+
+export const switches = mysqlTable(
+  'switches',
+  {
+    id: int('id').primaryKey().autoincrement(),
+    name: varchar('name', { length: 191 }).notNull(),
+    on: bitBoolean('on')
+      .notNull()
+      .default(sql`b'1'`),
+    off: bitBoolean('off').notNull(),
+    maybe: bitBoolean('maybe'),
+    mask: bytes('mask', { type: 'bit(8)' }).notNull(),
+    panelId: int('panel_id').notNull(),
+  },
+  (table) => [
+    uniqueIndex('switches_name_key').on(table.name),
+    foreignKey({
+      name: 'switches_panel_id_fkey',
+      columns: [table.panelId],
+      foreignColumns: [panel.id],
+    })
+      .onDelete('restrict')
+      .onUpdate('cascade'),
+  ],
+)
+
+export const relations = defineRelations({ moments, panel, switches }, (r) => ({
+  panel: { switches: r.many.switches() },
+  switches: { panel: r.one.panel({ from: r.switches.panelId, to: r.panel.id, optional: false }) },
+}))

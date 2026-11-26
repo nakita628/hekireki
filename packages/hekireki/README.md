@@ -259,6 +259,32 @@ export an earlier table already has (join tables come after every model). The se
 provider, so an export never changes because a field was added: on PostgreSQL `model Bit` is
 `bitTable`, and its relations are `db.query.bitTable`.
 
+`hekireki-drizzle` writes a PostgreSQL `@db.Money` as `moneyDecimal`, a `money` column read as
+numeric text, as Prisma Client reads it: a relational query's rows select it as numeric, and a
+plain select reads the session's `lc_monetary` form, which it takes in the C / en_US form (`$1,234.56`)
+and refuses otherwise rather than read a wrong number. Under another locale, cast it in every select
+with an instance codec:
+
+```ts
+import { sql } from 'drizzle-orm'
+import { nodePgCodecs } from 'drizzle-orm/node-postgres'
+
+const db = drizzle({
+  client,
+  codecs: {
+    ...nodePgCodecs,
+    money: {
+      cast: (name) => sql`${name}::numeric::text`,
+      castArray: (name) => sql`${name}::numeric[]::text[]`,
+    },
+  },
+})
+```
+
+On MySQL, a `Boolean @db.Bit(1)` is `bitBoolean`, a `bit(1)` that reads the bytes mysql2 gives and
+whose default is the bit literal (``sql`b'1'` ``), and a `Bytes @db.Bit(n)` is `bytes({ type: 'bit(n)' })`.
+A `bytes` column reads a relational query's nested rows from the base64 MySQL writes there.
+
 ### API
 
 | Provider                    | Writes                                     | Options                                                                                |

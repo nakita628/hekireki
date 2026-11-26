@@ -35,3 +35,23 @@ model Moment {
 
   @@map("moments")
 }
+
+/// A Decimal in PostgreSQL's money, read through a relation too.
+model Owner {
+  id      Int     @id @default(autoincrement())
+  name    String  @unique
+  purses  Purse[]
+}
+
+model Purse {
+  id      Int       @id @default(autoincrement())
+  name    String    @unique
+  cash    Decimal   @db.Money
+  spare   Decimal?  @db.Money
+  history Decimal[] @db.Money
+  fee     Decimal   @default(1.5) @db.Money
+  ownerId Int       @map("owner_id")
+  owner   Owner     @relation(fields: [ownerId], references: [id])
+
+  @@map("purses")
+}

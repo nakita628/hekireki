@@ -41,3 +41,9 @@ for each.
   time it names, and `@default(now())` and `@updatedAt` are filled by drizzle as one instant.
 
 [drizzle](../drizzle/README.md) says what the connection has to be for these to hold.
+
+## Money
+
+`Owner` and `Purse` hold `Decimal @db.Money` columns, a list among them. `money.ts` (`pnpm run money`, the
+last step of `demo`) writes them through drizzle and Prisma Client and reads them back through a plain
+select, RETURNING and a relational query, each as the numeric text Prisma Client reads.

@@ -22,6 +22,8 @@ on:
       - packages/hekireki/src/**
       - test/**
       - examples/active-record/**
+      - examples/drizzle-mysql/**
+      - examples/drizzle-postgresql/**
       - examples/ecto/**
       - examples/eloquent/**
       - examples/gorm/**
@@ -169,6 +171,32 @@ jobs:
         run: vp link ./packages/hekireki
       - if: matrix.lang == 'activerecord'
         run: vp run --filter ./examples/active-record demo
+
+      # The drizzle leg reads and writes the columns drizzle has none of its own for on real servers:
+      # PostgreSQL's money on the runner's PostgreSQL (examples/drizzle-postgresql, money.ts), and
+      # MySQL's BIT on a pinned MySQL 8.4 (examples/drizzle-mysql: prisma db push, drizzle-kit push
+      # leaving the BIT columns alone, then reads and writes, a relational query among them). Both
+      # servers only live as long as the job, so their passwords are no secret.
+      - if: matrix.lang == 'drizzle'
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres'"
+          docker run -d --name mysql -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=drizzle_dates -p 3306:3306 mysql:8.4
+          for _ in $(seq 60); do
+            docker exec mysql mysql -uroot -proot -e 'SELECT 1' drizzle_dates > /dev/null 2>&1 && break
+            sleep 2
+          done
+      - if: matrix.lang == 'drizzle'
+        run: vp link ./packages/hekireki
+      - if: matrix.lang == 'drizzle'
+        working-directory: examples/drizzle-postgresql
+        env:
+          DRIZZLE_DATABASE: postgresql://postgres:postgres@localhost:5432/postgres
+        run: pnpm run generate && pnpm run db && pnpm run money
+      - if: matrix.lang == 'drizzle'
+        env:
+          DRIZZLE_DATABASE: mysql://root:root@127.0.0.1:3306/drizzle_dates
+        run: vp run --filter ./examples/drizzle-mysql demo
 
       # examples/{kysely,gorm,sqlalchemy,ecto,eloquent} end to end, as active-record: each schema
       # is generated, pushed to SQLite and used through the real library (every scalar, default,
