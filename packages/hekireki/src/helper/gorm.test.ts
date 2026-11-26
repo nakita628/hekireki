@@ -1116,6 +1116,12 @@ model Wide {
 
   @@id([a(length: 100), b, c])
 }
+model Dec {
+  a String  @db.VarChar(767)
+  d Decimal @db.Decimal
+
+  @@id([a(length: 100), d])
+}
 model Sized {
   key String @id(length: 100) @db.VarChar(255)
 }
@@ -1134,8 +1140,12 @@ model Whole {
       "model One: its key is on a prefix of a TEXT or BLOB column (key(length: 100)), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator",
       "model Long: its key is on a column prefix (key(length: 100)), which GORM's primaryKey cannot write, and its whole columns take 4000 bytes, more than the 3072 bytes MySQL keys; key it on shorter columns, or use another generator",
       "model Wide: its key is on a column prefix (a(length: 100)), which GORM's primaryKey cannot write, and its whole columns take 3075 bytes, more than the 3072 bytes MySQL keys; key it on shorter columns, or use another generator",
+      "model Dec: its key is on a column prefix (a(length: 100)), which GORM's primaryKey cannot write, and its whole columns take 3073 bytes, more than the 3072 bytes MySQL keys; key it on shorter columns, or use another generator",
     ])
     expect(gormProblems(models, 'postgresql', indexes)).toStrictEqual([])
+    // GORM never migrates a view, so nothing is keyed from one.
+    const views = new Set(models.map((model) => model.name))
+    expect(gormProblems(models, 'mysql', indexes, undefined, views)).toStrictEqual([])
   })
 
   it('names an index whose name in the tag holds a "," or ";"', () => {

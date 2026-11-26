@@ -1709,13 +1709,15 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
  * quoteFlaw in either); an index whose name
  * GORM cannot write (nameFlaw), whether the schema gives it or Prisma's naming makes it; and two
  * fields under one json name (jsonTagName), a relation's Go name among them, of which encoding/json
- * keeps at most one.
+ * keeps at most one; and a MySQL key on a column prefix that the table cannot take on its whole
+ * columns (keyPrefixProblems).
  */
 export function gormProblems(
   models: readonly DMMF.Model[],
   provider?: string,
   indexes: readonly DMMF.Index[] = [],
   indexWhere: IndexWhere = () => undefined,
+  views: ReadonlySet<string> = new Set(),
 ) {
   const held = new Map<string, string>([
     ...dateTypes(models).map((name): [string, string] => [
@@ -1850,7 +1852,10 @@ export function gormProblems(
       ...joinTables,
       ...indexNames,
       ...jsonClashes,
-      ...keyPrefixProblems(model, provider, indexes),
+      // GORM never migrates a view, so no table is keyed from it.
+      ...(views.has(model.name)
+        ? []
+        : keyPrefixProblems(model, provider, indexesOf.get(model.name) ?? [])),
     ]
   })
 }
@@ -1873,6 +1878,12 @@ function fractionBytes(args: readonly string[]) {
 }
 
 const MYSQL_NATIVE_BYTES: { readonly [native: string]: (args: readonly string[]) => number } = {
+  VarChar: (args) => Number(args[0] ?? 1) * 4,
+  Char: (args) => Number(args[0] ?? 1) * 4,
+  VarBinary: (args) => Number(args[0] ?? 1),
+  Binary: (args) => Number(args[0] ?? 1),
+  // A bare `@db.Decimal` is MySQL's DECIMAL, which is DECIMAL(10,0).
+  Decimal: (args) => decimalBytes(Number(args[0] ?? 10), Number(args[1] ?? 0)),
   TinyInt: () => 1,
   UnsignedTinyInt: () => 1,
   SmallInt: () => 2,
@@ -1901,13 +1912,12 @@ const MYSQL_NATIVE_BYTES: { readonly [native: string]: (args: readonly string[])
 function keyPrefixProblems(
   model: DMMF.Model,
   provider: string | undefined,
-  indexes: readonly DMMF.Index[],
+  modelIndexes: readonly DMMF.Index[],
 ) {
   if (provider !== 'mysql') return []
   const keyFields = primaryKeyFields(model)
-  const keyIndex = indexes.find(
+  const keyIndex = modelIndexes.find(
     (idx) =>
-      idx.model === model.name &&
       (idx.type === 'id' || idx.type === 'unique') &&
       isSameList(
         idx.fields.map((field) => field.name),
@@ -1941,10 +1951,6 @@ function keyPrefixProblems(
 function mysqlKeyBytes(field: DMMF.Field | undefined) {
   if (field === undefined) return 0
   const [native, args] = field.nativeType ?? [undefined, []]
-  const size = Number(args[0] ?? 1)
-  if (native === 'VarChar' || native === 'Char') return size * 4
-  if (native === 'VarBinary' || native === 'Binary') return size
-  if (native === 'Decimal') return decimalBytes(size, Number(args[1] ?? 0))
   if (native !== undefined) return MYSQL_NATIVE_BYTES[native]?.(args) ?? Infinity
   return MYSQL_TYPE_BYTES[field.type] ?? (field.kind === 'enum' ? 2 : Infinity)
 }
