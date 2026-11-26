@@ -1,6 +1,7 @@
 import type { DMMF } from '@prisma/generator-helper'
 
 import { stripAnnotations } from '../annotation/index.js'
+import { isSameList } from '../list/index.js'
 import { constraintName, indexPrefix } from '../naming/case.js'
 import { allocate } from '../naming/index.js'
 import {
@@ -1708,13 +1709,15 @@ export function generateDateTypes(models: readonly DMMF.Model[], provider?: stri
  * quoteFlaw in either); an index whose name
  * GORM cannot write (nameFlaw), whether the schema gives it or Prisma's naming makes it; and two
  * fields under one json name (jsonTagName), a relation's Go name among them, of which encoding/json
- * keeps at most one.
+ * keeps at most one; and a MySQL key on a column prefix that the table cannot take on its whole
+ * columns (keyPrefixProblems).
  */
 export function gormProblems(
   models: readonly DMMF.Model[],
   provider?: string,
   indexes: readonly DMMF.Index[] = [],
   indexWhere: IndexWhere = () => undefined,
+  views: ReadonlySet<string> = new Set(),
 ) {
   const held = new Map<string, string>([
     ...dateTypes(models).map((name): [string, string] => [
@@ -1849,8 +1852,117 @@ export function gormProblems(
       ...joinTables,
       ...indexNames,
       ...jsonClashes,
+      // GORM never migrates a view, so no table is keyed from it.
+      ...(views.has(model.name)
+        ? []
+        : keyPrefixProblems(model, provider, indexesOf.get(model.name) ?? [])),
     ]
   })
+}
+
+// What a Prisma type with no native type is on MySQL, in bytes: String is varchar(191), Float
+// DOUBLE, DateTime DATETIME(3), Decimal DECIMAL(65,30).
+const MYSQL_TYPE_BYTES: { readonly [type: string]: number } = {
+  String: 191 * 4,
+  Int: 4,
+  BigInt: 8,
+  Boolean: 1,
+  Float: 8,
+  Decimal: 30,
+  DateTime: 7,
+}
+
+// The fractional seconds of a time type take a byte for each two digits.
+function fractionBytes(args: readonly string[]) {
+  return Math.ceil(Number(args[0] ?? 0) / 2)
+}
+
+const MYSQL_NATIVE_BYTES: { readonly [native: string]: (args: readonly string[]) => number } = {
+  VarChar: (args) => Number(args[0] ?? 1) * 4,
+  Char: (args) => Number(args[0] ?? 1) * 4,
+  VarBinary: (args) => Number(args[0] ?? 1),
+  Binary: (args) => Number(args[0] ?? 1),
+  // A bare `@db.Decimal` is MySQL's DECIMAL, which is DECIMAL(10,0).
+  Decimal: (args) => decimalBytes(Number(args[0] ?? 10), Number(args[1] ?? 0)),
+  TinyInt: () => 1,
+  UnsignedTinyInt: () => 1,
+  SmallInt: () => 2,
+  UnsignedSmallInt: () => 2,
+  MediumInt: () => 3,
+  UnsignedMediumInt: () => 3,
+  Int: () => 4,
+  UnsignedInt: () => 4,
+  BigInt: () => 8,
+  UnsignedBigInt: () => 8,
+  Year: () => 1,
+  Bit: (args) => Math.ceil(Number(args[0] ?? 1) / 8),
+  Float: () => 4,
+  Double: () => 8,
+  Date: () => 3,
+  Time: (args) => 3 + fractionBytes(args),
+  DateTime: (args) => 5 + fractionBytes(args),
+  Timestamp: (args) => 4 + fractionBytes(args),
+}
+
+// A MySQL key on a prefix of a column (`@id(length: N)`, `@@id([a(length: N)])`, or the length of
+// the unique that keys a model without an @id), which GORM's primaryKey cannot write: it has no
+// setting for a prefix, so AutoMigrate keys the whole column. That is a looser key than Prisma's
+// but one MySQL takes, unless a column is TEXT or BLOB, which MySQL keys only on a prefix (error
+// 1170), or the whole columns take more than the 3072 bytes InnoDB keys (error 1071).
+function keyPrefixProblems(
+  model: DMMF.Model,
+  provider: string | undefined,
+  modelIndexes: readonly DMMF.Index[],
+) {
+  if (provider !== 'mysql') return []
+  const keyFields = primaryKeyFields(model)
+  const keyIndex = modelIndexes.find(
+    (idx) =>
+      (idx.type === 'id' || idx.type === 'unique') &&
+      isSameList(
+        idx.fields.map((field) => field.name),
+        keyFields,
+      ),
+  )
+  const fields = keyIndex?.fields ?? []
+  const prefixed = fields.flatMap((field) => {
+    const prefix = indexPrefix(model, field)
+    return prefix === undefined ? [] : [{ name: field.name, prefix }]
+  })
+  if (prefixed.length === 0) return []
+  const byName = new Map(model.fields.map((field) => [field.name, field]))
+  const unsized = prefixed.filter((field) => mysqlKeyBytes(byName.get(field.name)) === Infinity)
+  const bytes = fields.reduce((sum, field) => sum + mysqlKeyBytes(byName.get(field.name)), 0)
+  const key = prefixed.map((field) => `${field.name}(length: ${field.prefix})`).join(', ')
+  if (unsized.length > 0) {
+    const columns = unsized.map((field) => `${field.name}(length: ${field.prefix})`).join(', ')
+    return [
+      `model ${model.name}: its key is on a prefix of a TEXT or BLOB column (${columns}), which GORM's primaryKey cannot write, and MySQL keys such a column only on a prefix; key it on a VarChar or VarBinary the key can hold whole, or use another generator`,
+    ]
+  }
+  return bytes > 3072
+    ? [
+        `model ${model.name}: its key is on a column prefix (${key}), which GORM's primaryKey cannot write, and its whole columns take ${bytes} bytes, more than the 3072 bytes MySQL keys; key it on shorter columns, or use another generator`,
+      ]
+    : []
+}
+
+// The bytes a whole column takes in a MySQL key, a character 4 in utf8mb4: a TEXT, a BLOB and a
+// Bytes with no native type (`longblob`) have no end.
+function mysqlKeyBytes(field: DMMF.Field | undefined) {
+  if (field === undefined) return 0
+  const [native, args] = field.nativeType ?? [undefined, []]
+  if (native !== undefined) return MYSQL_NATIVE_BYTES[native]?.(args) ?? Infinity
+  // An enum is a Go string with no type of its own, which AutoMigrate keys as varchar(191).
+  return MYSQL_TYPE_BYTES[field.kind === 'enum' ? 'String' : field.type] ?? Infinity
+}
+
+// The bytes of MySQL's DECIMAL(precision, scale): 4 for each 9 digits of either side of the point,
+// and fewer for the digits left over.
+function decimalBytes(precision: number, scale: number) {
+  const leftover = [0, 1, 1, 2, 2, 3, 3, 4, 4]
+  const side = (digits: number) => Math.floor(digits / 9) * 4 + (leftover[digits % 9] ?? 0)
+  return side(precision - scale) + side(scale)
 }
 
 function standardImports(
