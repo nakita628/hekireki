@@ -130,6 +130,7 @@ lezer
 librt
 libsql
 lucsky
+makemigrations
 marginx
 marginy
 matoous
@@ -220,6 +221,7 @@ siwe
 spawnable
 spgist
 sqld
+sqlsequencereset
 sqlx
 sslmode
 Stampeds

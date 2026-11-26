@@ -134,6 +134,50 @@ cast, so these still fail: comparing two `@db.Json` columns with `F()`, filterin
 `Json[] @db.Json` list, and `distinct()`, `order_by()` or grouping on the whole column, since
 `json` has no equality or ordering.
 
+On PostgreSQL and CockroachDB, `hekireki-django` declares a column Django has no field for with a
+field that makes Prisma's: `NativeCharField`, `NativeTextField`, `NativeFloatField`,
+`NativeBigIntegerField`, `NativeDecimalField`, `NativeTimeField` and `NativeDateTimeField`, each
+Django's own field with an optional `db_column_type` (`NativeCharField(max_length=2,
+db_column_type="char(2)")`), and `UtcDateTimeField` takes it too. So `migrate` makes `timestamp(3)`
+for a `DateTime`, the precision of `@db.Timestamp(p)`, `@db.Time(p)`, `@db.Timetz(p)` and
+`@db.Timestamptz(p)`, `char(n)`, `bit(n)`, `varbit`, `xml`, `citext`, `real`, `oid` and an
+unconstrained `decimal`, as Prisma does. The column type is used on the schema's own database only:
+a test database on SQLite gets Django's. A `@db.Oid` is held in a `bigint` field that validates the
+range of an `oid`, and a `@db.Money` is a `MoneyField`, which reads the column as `numeric` and
+binds a value as its text, so it reads back as a `Decimal` and compares with one (a `Decimal[]
+@db.Money` stays a list of `DecimalField`). Migrations import these classes from the models module,
+and the module declares only the ones its schema uses: when a schema stops using one that an old
+migration names, copy the class from the earlier `models.py` into a module of your own and point
+those migrations at it, or squash them. On a database Django already migrated, `makemigrations`
+writes an `AlterField` for each such column, every `DateTime` included; PostgreSQL converts a
+`timestamptz` to `timestamp(3)` at the session's wall clock, so run that migration in a UTC session
+(Django's, with `USE_TZ = True`) to keep the UTC instant, rounded to milliseconds. Django's date and
+time lookups (`__date`, `__year`, `__hour`, ...) take such a column to the current time zone from
+the UTC instant it holds; `Trunc*` and `Extract*` called on the column directly do not, so reach
+them through the lookup (`values("created_at__date")`) under a time zone other than UTC. A `text` column becomes `xml`, `bit` or `varbit` only with a
+`USING` clause, which Django does not write: replace that operation with
+`migrations.RunSQL('ALTER TABLE "T" ALTER COLUMN "c" TYPE xml USING "c"::xml',
+state_operations=[...the AlterField...])`.
+
+`hekireki-django` declares a `@default(autoincrement())` column that is not the model's single
+`@id` with an auto field of its own (`AutoIncrementField`, `BigAutoIncrementField`,
+`SmallAutoIncrementField`): an unset value is inserted as `DEFAULT` and read back with `RETURNING`,
+and `save()` keeps the stored value. On PostgreSQL and CockroachDB it is made as Django's own auto
+field is, an identity column (`unique_rowid()` on CockroachDB), which Prisma reads as autoincrement.
+On MySQL it keeps its type, unsigned included (`PositiveAutoIncrementField`), and is
+`AUTO_INCREMENT`. MySQL has no `RETURNING`, so reload the row (`refresh_from_db()`) to read the
+value; and MySQL wants an `AUTO_INCREMENT` column to be a key when the table is made, which Django
+makes an `@@index` only after, so generation stops on such a column covered by nothing more than an
+`@@index`: make it `@unique` or lead a `@@unique` with it. An optional one stays a plain nullable
+field, as an identity cannot be NULL. SQLite has no `DEFAULT` in an `INSERT`, so a test database on
+SQLite needs the value given. An
+existing column gets an `AlterField`. On PostgreSQL, the identity it adds starts at 1, so set it past
+the values already there:
+`SELECT setval(pg_get_serial_sequence('"T"', 'c'), (SELECT max("c") FROM "T"))`. Django's own sequence reset
+(`loaddata`, `sqlsequencereset`, `reset_sequences`) passes these columns by, so run the same after
+loading rows with their values. On MySQL a member of a compound `@@id` is never read back after an
+insert, so the instance has no key until you query it by the rest of the row.
+
 On PostgreSQL, hand the `MapEnums` of the `DbContext` `hekireki-efcore` writes to Npgsql:
 `UseNpgsql(connectionString, AppDbContext.MapEnums)`, or `AppDbContext.MapEnums(builder)` on your
 own `NpgsqlDataSourceBuilder` as well when you pass `UseNpgsql` the data source it builds. It maps

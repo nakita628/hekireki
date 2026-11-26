@@ -14,7 +14,30 @@ from django.db.models.expressions import RawSQL
 from django.utils import timezone
 
 
+class _UtcInstant(models.Func):
+    template = "%(expressions)s"
+    output_field = models.DateTimeField()
+
+    def as_postgresql(self, compiler: Any, connection: BaseDatabaseWrapper, **extra_context: Any) -> Any:
+        return self.as_sql(compiler, connection, template="(%(expressions)s AT TIME ZONE 'UTC')", **extra_context)
+
+
 class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+    def __init__(self, *args: Any, db_column_type: str | None = None, **kwargs: Any) -> None:
+        self.db_column_type = db_column_type
+        super().__init__(*args, **kwargs)
+
+    def deconstruct(self) -> Any:
+        name, path, args, kwargs = super().deconstruct()
+        if self.db_column_type is not None:
+            kwargs["db_column_type"] = self.db_column_type
+        return name, path, args, kwargs
+
+    def db_type(self, connection: BaseDatabaseWrapper) -> str | None:
+        if self.db_column_type is not None and connection.vendor == "postgresql":
+            return self.db_column_type
+        return super().db_type(connection)
+
     def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
         if not prepared:
             value = self.get_prep_value(value)
@@ -33,6 +56,10 @@ class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
         if timezone.is_naive(value):
             value = value.replace(tzinfo=dt_timezone.utc)
         return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())
+
+    def get_transform(self, lookup_name: str) -> Any:
+        transform = super().get_transform(lookup_name)
+        return None if transform is None else lambda lhs: transform(_UtcInstant(lhs))
 
 
 class UtcAutoNowDateTimeField(UtcDateTimeField):
@@ -108,8 +135,8 @@ class User(models.Model):
     """Display name"""
     role = models.TextField(choices=Role.choices, default=Role.VIEWER)
     interests = ArrayField(models.TextField(), default=list)
-    created_at = UtcDateTimeField(default=now_milliseconds)
-    updated_at = UtcAutoNowDateTimeField(auto_now=True)
+    created_at = UtcDateTimeField(db_column_type="timestamp(3)", default=now_milliseconds)
+    updated_at = UtcAutoNowDateTimeField(db_column_type="timestamp(3)", auto_now=True)
     objects = AutoNowQuerySet.as_manager()
 
     class Meta:
@@ -152,7 +179,7 @@ class Post(models.Model):
     view_count = models.IntegerField(default=0)
     author = models.ForeignKey("User", on_delete=models.CASCADE, related_name="posts", db_index=False)
     tags: "models.ManyToManyField[Tag, PostToTag]" = models.ManyToManyField("Tag", through="PostToTag", related_name="posts")
-    created_at = UtcDateTimeField(default=now_milliseconds)
+    created_at = UtcDateTimeField(db_column_type="timestamp(3)", default=now_milliseconds)
 
     class Meta:
         db_table = "posts"
@@ -180,7 +207,7 @@ class Comment(models.Model):
     body = models.TextField()
     post = models.ForeignKey("Post", on_delete=models.CASCADE, related_name="comments", db_index=False)
     author = models.ForeignKey("User", on_delete=models.SET_NULL, related_name="comments", null=True, db_index=False)
-    created_at = UtcDateTimeField(default=now_milliseconds)
+    created_at = UtcDateTimeField(db_column_type="timestamp(3)", default=now_milliseconds)
 
     class Meta:
         db_table = "comments"
@@ -195,7 +222,7 @@ class Follow(models.Model):
     pk = models.CompositePrimaryKey("follower_id", "following_id")
     follower = models.ForeignKey("User", on_delete=models.CASCADE, related_name="following", db_index=False)
     following = models.ForeignKey("User", on_delete=models.CASCADE, related_name="followers", db_index=False)
-    since = UtcDateTimeField(default=now_milliseconds)
+    since = UtcDateTimeField(db_column_type="timestamp(3)", default=now_milliseconds)
 
     class Meta:
         db_table = "follows"
@@ -221,7 +248,7 @@ class Order(models.Model):
     id = models.BigAutoField(primary_key=True)
     user = models.ForeignKey("User", on_delete=models.RESTRICT, related_name="orders", db_index=False)
     total = models.DecimalField(max_digits=12, decimal_places=2)
-    placed_at = UtcDateTimeField(default=now_milliseconds)
+    placed_at = UtcDateTimeField(db_column_type="timestamp(3)", default=now_milliseconds)
 
     class Meta:
         db_table = "orders"
@@ -250,7 +277,7 @@ class AuditLog(models.Model):
     action = models.TextField()
     payload = models.JSONField(default=dict)
     signature = models.BinaryField(null=True)
-    logged_at = UtcDateTimeField(db_default=RawSQL("now()", []))
+    logged_at = UtcDateTimeField(db_column_type="timestamp(3)", db_default=RawSQL("now()", []))
 
     class Meta:
         db_table = "audit_logs"
