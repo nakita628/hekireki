@@ -45,6 +45,10 @@ function utf8Prefix(value: string, bytes: number) {
  * byte; each is then cut at a character boundary, so a name of wide characters may come out
  * shorter.
  *
+ * @remarks
+ * PostgreSQL numbers a name that is already taken (`…_seq1`); this does not, as it sees one column
+ * at a time. Only names cut to the same 63 bytes can meet.
+ *
  * @param table - The table's name in the database.
  * @param column - The column's name in the database.
  * @returns The sequence `SERIAL` creates for the column.

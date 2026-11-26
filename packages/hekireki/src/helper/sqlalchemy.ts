@@ -1026,7 +1026,8 @@ function keyArgs(field: DMMF.Field, isPk: boolean, provider: string) {
 // reads it back. SQLAlchemy makes only a key SERIAL or AUTO_INCREMENT: on PostgreSQL the column
 // takes the next value of a sequence create_all() makes, as SERIAL's `DEFAULT nextval(...)`
 // does; CockroachDB's is Prisma's `DEFAULT unique_rowid()`. MySQL's AUTO_INCREMENT is left to
-// Prisma Migrate: the model only knows the database sets it.
+// Prisma Migrate: the model only knows the database sets it. The sequence create_all() makes is
+// not OWNED BY the column, as SERIAL's is: drop_all() drops it, a DROP TABLE alone does not.
 function autoincrementArgs(field: DMMF.Field, provider: string, table: string, column: string) {
   if (!isAutoincrement(field) || provider === 'sqlite') return []
   // MySQL's AUTO_INCREMENT and SQL Server's IDENTITY are the column's own; SQLAlchemy writes neither
