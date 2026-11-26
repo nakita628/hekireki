@@ -783,6 +783,9 @@ function autoIncrementField(
             return super().db_type(connection)
         return f"{super().db_type(connection)} AUTO_INCREMENT"
 
+    def rel_db_type(self, connection: BaseDatabaseWrapper) -> str | None:
+        return models.${base}().db_type(connection)
+
     def db_check(self, connection: BaseDatabaseWrapper) -> str | None:
         return None if connection.vendor == "mysql" else super().db_check(connection)`
       : `    def get_internal_type(self) -> str:

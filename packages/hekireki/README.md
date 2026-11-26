@@ -170,7 +170,10 @@ value; and MySQL wants an `AUTO_INCREMENT` column to be a key when the table is 
 makes an `@@index` only after, so give such a column `@unique` or let Prisma create the table. An
 existing column gets an `AlterField`. On PostgreSQL, the identity it adds starts at 1, so set it past
 the values already there:
-`SELECT setval(pg_get_serial_sequence('"T"', 'c'), (SELECT max("c") FROM "T"))`.
+`SELECT setval(pg_get_serial_sequence('"T"', 'c'), (SELECT max("c") FROM "T"))`. Django's own sequence reset
+(`loaddata`, `sqlsequencereset`, `reset_sequences`) passes these columns by, so run the same after
+loading rows with their values. On MySQL a member of a compound `@@id` is never read back after an
+insert, so the instance has no key until you query it by the rest of the row.
 
 On PostgreSQL, hand the `MapEnums` of the `DbContext` `hekireki-efcore` writes to Npgsql:
 `UseNpgsql(connectionString, AppDbContext.MapEnums)`, or `AppDbContext.MapEnums(builder)` on your

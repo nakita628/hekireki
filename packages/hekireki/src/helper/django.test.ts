@@ -913,6 +913,9 @@ class Metric(models.Model):
             return super().db_type(connection)
         return f"{super().db_type(connection)} AUTO_INCREMENT"
 
+    def rel_db_type(self, connection: BaseDatabaseWrapper) -> str | None:
+        return models.PositiveIntegerField().db_type(connection)
+
     def db_check(self, connection: BaseDatabaseWrapper) -> str | None:
         return None if connection.vendor == "mysql" else super().db_check(connection)`)
     expect(mysql).not.toContain('get_internal_type')
