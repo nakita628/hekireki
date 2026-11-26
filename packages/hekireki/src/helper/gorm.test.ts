@@ -1072,8 +1072,10 @@ model Tick {
 })
 
 // GORM's SQL Server dialector writes IDENTITY only on its own integer types, not on a `type:`.
+// An IDENTITY cannot be updated, and the driver leaves out of an UPDATE only the key it picks, so
+// the column is written on create only.
 describe('generateGormModels autoincrement @db.SmallInt on SQL Server', () => {
-  it('writes the IDENTITY into the type', () => {
+  it('writes the IDENTITY into the type, and the column on create only', () => {
     const code = gormFor(
       `
 model Tick {
@@ -1084,7 +1086,7 @@ model Tick {
       'sqlserver',
     )
     expect(code).toContain(
-      '`gorm:"column:seq;autoIncrement;uniqueIndex:Tick_seq_key;type:smallint IDENTITY(1,1);not null" json:"seq"`',
+      '`gorm:"column:seq;autoIncrement;<-:create;uniqueIndex:Tick_seq_key;type:smallint IDENTITY(1,1);not null" json:"seq"`',
     )
   })
 })
@@ -1104,6 +1106,13 @@ describe('generateGormModels integer key with no autoincrement()', () => {
 
   // The default: tag leaves a zero key out as well; auto-incrementing too, AutoMigrate would write
   // `bigserial DEFAULT (1000 + 1)`, which PostgreSQL refuses (multiple default values).
+  // With no expression there is no default: tag, and GORM has to leave a zero key out itself.
+  it('leaves a bare dbgenerated() key to GORM', () => {
+    expect(
+      gormFor('model Account {\n  id BigInt @id @default(dbgenerated())\n}\n', 'postgresql'),
+    ).toContain('`gorm:"column:id;primaryKey" json:"id"`')
+  })
+
   it('keeps a dbgenerated() key from auto-incrementing beside its default', () => {
     expect(
       gormFor(

@@ -361,13 +361,17 @@ function moneyDefault(value: string) {
 // one GORM leaves out of the INSERT when zero and reads back. A dbgenerated() key carries its
 // `default:` tag, which does the same; were GORM to make it auto-increment as well, AutoMigrate
 // would write a serial type beside the DEFAULT, which PostgreSQL refuses ("multiple default values").
+// A bare dbgenerated(), whose expression the schema does not say, has no `default:` tag, so it is
+// left to GORM as autoincrement() is.
 const DATABASE_FILLED_DEFAULTS = new Set(['autoincrement', 'sequence'])
 
 function isImplicitAutoIncrement(field: DMMF.Field, gormPicksKey: boolean) {
   const isInteger =
     field.kind === 'scalar' && !field.isList && ['Int', 'BigInt'].includes(field.type)
   const isDatabaseFilled =
-    isFunctionDefault(field.default) && DATABASE_FILLED_DEFAULTS.has(field.default.name)
+    isFunctionDefault(field.default) &&
+    (DATABASE_FILLED_DEFAULTS.has(field.default.name) ||
+      (field.default.name === 'dbgenerated' && dbGeneratedDefault(field) === null))
   return gormPicksKey && isInteger && !isDatabaseFilled
 }
 
@@ -381,8 +385,13 @@ function primaryKeyTags(
   // Prisma allows autoincrement() on a @unique field that is not the key (a serial column on
   // PostgreSQL, AUTO_INCREMENT on MySQL). GORM gives such a column its default only when the tag
   // says autoIncrement, and leaves the field out of an INSERT while it is zero; without it GORM
-  // makes a plain column and writes 0.
-  if (!isPk) return isAutoincrement(field) ? ['autoIncrement'] : []
+  // makes a plain column and writes 0. SQL Server's IDENTITY cannot be updated, and GORM's driver
+  // leaves out of an UPDATE only the key it picks, so such a column there is written on create
+  // only (where GORM leaves it out while it is zero).
+  if (!isPk) {
+    if (!isAutoincrement(field)) return []
+    return provider === 'sqlserver' ? ['autoIncrement', '<-:create'] : ['autoIncrement']
+  }
   const defaultName = isFunctionDefault(field.default) ? field.default.name : undefined
   // A native type wins (columnTypeTag); on MySQL such a key is a String like any other,
   // VARCHAR(191) (isMysqlDefaultString), and on PostgreSQL text, as Prisma Migrate makes it.
@@ -486,8 +495,9 @@ function usesScalarList(models: readonly DMMF.Model[], provider: string | undefi
 // GORM's PostgreSQL and SQL Server drivers make an autoIncrement column serial or IDENTITY only
 // from their own integer types; a `type:` they do not know is written as given, without a default.
 // An autoincrement column with a native integer type (@db.SmallInt or @db.TinyInt, which write
-// `type:smallint`) is therefore given what Prisma Migrate makes of it: SMALLSERIAL on PostgreSQL,
-// `smallint IDENTITY(1,1)` on SQL Server. MySQL's dialector adds AUTO_INCREMENT to any type.
+// `type:smallint`) is therefore given its serial or IDENTITY form: SMALLSERIAL on PostgreSQL,
+// `smallint IDENTITY(1,1)` on SQL Server (where Prisma Migrate makes a @db.TinyInt TINYINT, as
+// GORM_NATIVE_FIXED does not). MySQL's driver adds AUTO_INCREMENT to any type.
 function serialType(field: DMMF.Field, nativeType: string, provider: string | undefined) {
   if (!isAutoincrement(field) || nativeType !== 'smallint') return undefined
   if (provider === 'postgresql') return 'smallserial'
