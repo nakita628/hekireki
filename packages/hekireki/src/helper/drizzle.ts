@@ -93,6 +93,7 @@ const PG_NATIVE_FIXED: { [k: string]: string } = {
   Inet: 'inet()',
   Xml: "typedText({ type: 'xml' })",
   Oid: 'oidInteger()',
+  Money: 'moneyDecimal()',
 }
 
 const PG_NATIVE_SIZED: { [k: string]: SizedColumn } = {
@@ -157,6 +158,12 @@ const MYSQL_NATIVE_SIZED: { [k: string]: SizedColumn } = {
   Time: ['utcTime', 'precision'],
 }
 
+// A MySQL date-time column: MySQL reads a precision of 0 back as none, which drizzle-kit would
+// alter again, so it is written without one.
+function precisionColumn(column: SizedColumn, precision: string | undefined) {
+  return sizedColumn(column, precision === '0' ? undefined : precision)
+}
+
 function mysqlNativeType(name: string, args: readonly string[]) {
   switch (name) {
     case 'Decimal': {
@@ -164,13 +171,15 @@ function mysqlNativeType(name: string, args: readonly string[]) {
       return opts === '' ? 'decimal()' : `decimal(${opts})`
     }
     case 'DateTime':
-      return `datetime({ fsp: ${args[0] ?? 0} })`
+      return precisionColumn(['datetime', 'fsp'], args[0])
     case 'Timestamp':
-      return `timestamp({ fsp: ${args[0] ?? 0} })`
+      return precisionColumn(['timestamp', 'fsp'], args[0])
     // drizzle's binary() and varbinary() read the bytes as text, and it has no blob.
     case 'Binary':
     case 'VarBinary':
       return `bytes({ type: '${name.toLowerCase()}${isPresent(args[0]) ? `(${args[0]})` : ''}' })`
+    case 'Time':
+      return precisionColumn(['utcTime', 'precision'], args[0])
     default: {
       const sized = MYSQL_NATIVE_SIZED[name]
       if (sized !== undefined) return sizedColumn(sized, args[0])
@@ -188,6 +197,13 @@ function mysqlNativeType(name: string, args: readonly string[]) {
 // bytes and writes the digits as a BLOB, which neither reads what Prisma wrote nor writes what
 // Prisma reads. Its `blob()` with no mode is JSON in drizzle-orm 1.0, and the buffer mode types
 // the bytes as a Buffer, which the Uint8Array Prisma Client gives is not.
+// PostgreSQL's money reads as text in the session's lc_monetary form ('$1,234.56'), which Prisma
+// Client reads as `"money"::numeric`: a relational query's rows select it as numeric text, and a
+// plain select, which no schema can cast, takes the C / en_US form and refuses any other rather
+// than read a wrong number (an instance codec, `money: { cast, castArray }`, casts it there too).
+// MySQL's BIT reads as bytes through mysql2 and as base64 text inside JSON_OBJECT: a Boolean
+// @db.Bit(1) is true when a byte is set, and a relational query's rows select it as a number;
+// a Bytes column (bit(n) and the blob family) selects as base64 there, which it decodes.
 const COLUMN_HELPERS: { readonly [name: string]: string } = {
   bigInteger: `const bigInteger = customType<{ data: bigint; driverData: number | bigint }>({
   dataType: () => 'bigint',
@@ -201,8 +217,44 @@ const COLUMN_HELPERS: { readonly [name: string]: string } = {
   dataType: () => 'blob',
   codec: 'blob',
 })`,
-  bytes: `const bytes = customType<{ data: Uint8Array; config: { type: string } }>({
+  bytes: `const bytes = customType<{
+  data: Uint8Array
+  jsonData: string
+  config: { type: string }
+}>({
   dataType: (config) => config?.type ?? 'longblob',
+  forJsonSelect: (identifier, sql) => sql\`to_base64(\${identifier})\`,
+  fromJson: (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0)),
+})`,
+  bitBoolean: `const bitBoolean = customType<{
+  data: boolean
+  driverData: Uint8Array | number | bigint | string
+  jsonData: number
+}>({
+  dataType: () => 'bit(1)',
+  fromDriver: (value) => {
+    if (typeof value === 'number' || typeof value === 'bigint') return value !== 0 && value !== 0n
+    if (typeof value === 'string') return [...value].some((char) => char.charCodeAt(0) !== 0)
+    return value.some((byte) => byte !== 0)
+  },
+  forJsonSelect: (identifier, sql) => sql\`cast(\${identifier} as unsigned)\`,
+  fromJson: (value) => value !== 0,
+})`,
+  moneyDecimal: `const moneyDecimal = customType<{ data: string; driverData: string | number }>({
+  dataType: () => 'money',
+  codec: 'money',
+  forJsonSelect: (identifier, sql, arrayDimensions) =>
+    arrayDimensions
+      ? sql\`\${identifier}::numeric[]::text[]\`
+      : sql\`\${identifier}::numeric::text\`,
+  fromDriver: (value) => {
+    if (typeof value === 'number' || /^-?\\d+(\\.\\d+)?$/u.test(value)) return String(value)
+    const money = /^(-?)\\$(\\d{1,3}(?:,\\d{3})*\\.\\d{2})$/u.exec(value)
+    if (money === null) {
+      throw new Error(\`money \${value} is not in the C / en_US form (lc_monetary): cast it with an instance codec\`)
+    }
+    return \`\${money[1]}\${money[2]?.replaceAll(',', '') ?? ''}\`
+  },
 })`,
   typedText: `const typedText = customType<{ data: string; config: { type: string } }>({
   dataType: (config) => config?.type ?? 'text',
@@ -514,7 +566,17 @@ const SCALAR_MAP_BY_PROVIDER: { readonly [p in DbProvider]: { readonly [k: strin
   sqlite: SQLITE_SCALAR_MAP,
 }
 
+// MySQL's BIT(n): a Boolean's bit(1), and a Bytes' bit(n), as Prisma Migrate makes them.
+function mysqlBitType(field: DMMF.Field) {
+  if (field.nativeType?.[0] !== 'Bit') return null
+  if (field.type === 'Boolean') return 'bitBoolean()'
+  const length = field.nativeType[1][0]
+  return `bytes({ type: 'bit(${isPresent(length) ? length : 1})' })`
+}
+
 function resolveScalarType(field: DMMF.Field, provider: DbProvider) {
+  const bit = provider === 'mysql' ? mysqlBitType(field) : null
+  if (bit !== null) return bit
   if (field.nativeType && provider !== 'sqlite') {
     const [nativeName, nativeArgs] = field.nativeType
     const override =
@@ -698,6 +760,21 @@ function stringDefaultChain(dflt: string, fieldType: string, provider: DbProvide
   return { chain: `.default(${tsString(dflt)})`, imports: [] }
 }
 
+// A Boolean default on MySQL's BIT is the bit literal MySQL reads back (b'1'): drizzle-kit writes
+// true, which a push would alter again. A Bytes one stays 0x..., the expression Prisma writes and
+// MySQL keeps as given.
+function bitDefaultChain(
+  dflt: unknown,
+  field: DMMF.Field,
+  provider: DbProvider,
+): DefaultChain | null {
+  if (provider !== 'mysql' || field.nativeType?.[0] !== 'Bit') return null
+  if (typeof dflt === 'boolean') {
+    return { chain: `.default(sql\`b'${dflt ? 1 : 0}'\`)`, imports: [SQL_IMPORT] }
+  }
+  return null
+}
+
 function resolveDefaultValue(
   field: DMMF.Field,
   provider: DbProvider,
@@ -720,6 +797,8 @@ function resolveDefaultValue(
     return { chain: `.default([${items.join(', ')}])`, imports: [] }
   }
   if (isFunctionDefault(dflt)) return functionDefaultChain(dflt, field, provider)
+  const bit = bitDefaultChain(dflt, field, provider)
+  if (bit !== null) return bit
   if (typeof dflt === 'string') return stringDefaultChain(dflt, field.type, provider)
   if (typeof dflt === 'number') {
     const chain = fieldType === 'Decimal' ? `.default('${dflt}')` : `.default(${dflt})`

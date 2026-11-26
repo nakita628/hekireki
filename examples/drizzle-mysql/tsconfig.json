@@ -13,5 +13,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["check.ts", "src/db/schema.ts"]
+  "include": ["check.ts", "kit.ts", "src/db/schema.ts"]
 }

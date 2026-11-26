@@ -9,7 +9,7 @@ import { drizzle } from 'drizzle-orm/mysql2'
 import mysql from 'mysql2'
 
 import { PrismaClient } from './generated/client/client.ts'
-import { moments } from './src/db/schema.ts'
+import { moments, panel, relations, switches } from './src/db/schema.ts'
 
 const url = process.env.DRIZZLE_DATABASE ?? 'mysql://root:root@localhost:3306/drizzle_dates'
 // MySQL converts a TIMESTAMP through the session's zone: the session is UTC.
@@ -139,6 +139,44 @@ check(
   updated.dayOpt === null && updated.updatedAt > written.updatedAt
     ? undefined
     : `dayOpt ${updated.dayOpt?.toISOString()}, updated ${updated.updatedAt.toISOString()}`,
+)
+
+// MySQL's BIT: mysql2 reads it as bytes, and a relational query's rows as base64 text inside
+// JSON_OBJECT, which the generated bitBoolean and bytes read back.
+const rq = drizzle({ client: pool, relations })
+await prisma.switch.deleteMany()
+await prisma.panel.deleteMany()
+const [inserted] = await db.insert(panel).values({ name: 'board' }).$returningId()
+if (inserted === undefined) throw new Error('drizzle inserted no panel')
+const panelId = inserted.id
+await db.insert(switches).values({
+  name: 'drizzle',
+  off: false,
+  maybe: true,
+  mask: Uint8Array.from([0b1010_0101]),
+  panelId,
+})
+await prisma.switch.create({
+  data: { name: 'prisma', on: false, off: true, mask: Uint8Array.from([0]), panelId },
+})
+const bits = (row: { on: boolean; off: boolean; maybe: boolean | null; mask: Uint8Array }) =>
+  `${row.on} ${row.off} ${row.maybe} ${[...row.mask].join(',')}`
+const wantBits = ['true false true 165', 'false true null 0']
+const plainBits = (await db.select().from(switches).orderBy(switches.name)).map(bits)
+check(
+  'drizzle reads the bits both clients wrote',
+  plainBits.join(' | ') === wantBits.join(' | ') ? undefined : plainBits.join(' | '),
+)
+const prismaBits = (await prisma.switch.findMany({ orderBy: { name: 'asc' } })).map(bits)
+check(
+  'Prisma reads the bits both clients wrote',
+  prismaBits.join(' | ') === wantBits.join(' | ') ? undefined : prismaBits.join(' | '),
+)
+const nested = await rq.query.panel.findFirst({ with: { switches: { orderBy: { name: 'asc' } } } })
+const nestedBits = (nested?.switches ?? []).map(bits)
+check(
+  'a relational query reads the bits in its nested rows',
+  nestedBits.join(' | ') === wantBits.join(' | ') ? undefined : nestedBits.join(' | '),
 )
 
 await prisma.$disconnect()

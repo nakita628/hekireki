@@ -7,7 +7,8 @@
     "db": "prisma db push --url ${DRIZZLE_DATABASE:-mysql://root:root@localhost:3306/drizzle_dates}",
     "typecheck": "tsc -p tsconfig.json",
     "verify": "TZ=UTC node check.ts && TZ=Asia/Tokyo node check.ts",
-    "demo": "pnpm run generate && pnpm run db && pnpm run typecheck && pnpm run verify"
+    "demo": "pnpm run generate && pnpm run db && pnpm run kit && pnpm run typecheck && pnpm run verify",
+    "kit": "node kit.ts"
   },
   "devDependencies": {
     "@prisma/adapter-mariadb": "8.1.0-dev.9",

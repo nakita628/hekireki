@@ -15,13 +15,17 @@ Client, makes the tables in the database named `drizzle_dates` with `prisma db p
 `check.ts` against both, and runs the checks in UTC and in `Asia/Tokyo`, printing one `ok:` line
 for each.
 
+`Panel` and `Switch` hold a `Boolean @db.Bit(1)` and a `Bytes @db.Bit(8)`: `kit` runs drizzle-kit
+push on the tables `prisma db push` made and fails if it would change a BIT column, and the checks
+read the bits both clients wrote through a plain select and a relational query.
+
 ## The columns
 
 | Prisma             | MySQL          | drizzle                                |
 | ------------------ | -------------- | -------------------------------------- |
 | `DateTime`         | `datetime(3)`  | `datetime({ fsp: 3 })`                 |
 | `@db.DateTime(6)`  | `datetime(6)`  | `datetime({ fsp: 6 })`                 |
-| `@db.DateTime(0)`  | `datetime`     | `datetime({ fsp: 0 })`                 |
+| `@db.DateTime(0)`  | `datetime`     | `datetime()`                           |
 | `@db.Timestamp(3)` | `timestamp(3)` | `timestamp({ fsp: 3 })`                |
 | `@db.Date`         | `date`         | `utcDate()`, generated                 |
 | `@db.Time(3)`      | `time(3)`      | `utcTime({ precision: 3 })`, generated |
