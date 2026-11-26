@@ -2700,7 +2700,7 @@ describe('a table name with a quote in it', () => {
       datamodel: [
         [
           'schema.prisma',
-          `datasource db {\n  provider = "postgresql"\n}\nmodel Name {\n  id Int @id\n  @@map("o'brien")\n}`,
+          `datasource db {\n  provider = "postgresql"\n}\nmodel Name {\n  id Int @id\n  @@map("it's")\n}`,
         ],
       ],
     })
@@ -2710,7 +2710,7 @@ describe('a table name with a quote in it', () => {
 
   it('is written as a string literal', () => {
     expect(drizzleSchema(datamodel, 'postgresql', datamodel.indexes)).toContain(
-      "export const oBrien = pgTable('o\\'brien', ",
+      "export const itS = pgTable('it\\'s', ",
     )
   })
 })
