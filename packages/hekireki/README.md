@@ -134,6 +134,31 @@ cast, so these still fail: comparing two `@db.Json` columns with `F()`, filterin
 `Json[] @db.Json` list, and `distinct()`, `order_by()` or grouping on the whole column, since
 `json` has no equality or ordering.
 
+On PostgreSQL and CockroachDB, `hekireki-django` declares a column Django has no field for with a
+field that makes Prisma's: `NativeCharField`, `NativeTextField`, `NativeFloatField`,
+`NativeBigIntegerField`, `NativeDecimalField`, `NativeTimeField` and `NativeDateTimeField`, each
+Django's own field with an optional `db_column_type` (`NativeCharField(max_length=2,
+db_column_type="char(2)")`), and `UtcDateTimeField` takes it too. So `migrate` makes `timestamp(3)`
+for a `DateTime`, the precision of `@db.Timestamp(p)`, `@db.Time(p)`, `@db.Timetz(p)` and
+`@db.Timestamptz(p)`, `char(n)`, `bit(n)`, `varbit`, `xml`, `citext`, `real`, `oid` and an
+unconstrained `decimal`, as Prisma does. The column type is used on the schema's own database only:
+a test database on SQLite gets Django's. A `@db.Oid` is held in a `bigint` field that validates the
+range of an `oid`, and a `@db.Money` is a `MoneyField`, which reads the column as `numeric` and
+binds a value as its text, so it reads back as a `Decimal` and compares with one (a `Decimal[]
+@db.Money` stays a list of `DecimalField`). Migrations import these classes from the models module,
+and the module declares only the ones its schema uses: when a schema stops using one that an old
+migration names, copy the class from the earlier `models.py` into a module of your own and point
+those migrations at it, or squash them. On a database Django already migrated, `makemigrations`
+writes an `AlterField` for each such column, every `DateTime` included; PostgreSQL converts a
+`timestamptz` to `timestamp(3)` at the session's wall clock, so run that migration in a UTC session
+(Django's, with `USE_TZ = True`) to keep the UTC instant, rounded to milliseconds. Django's date and
+time lookups (`__date`, `__year`, `__hour`, ...) take such a column to the current time zone from
+the UTC instant it holds; `Trunc*` and `Extract*` called on the column directly do not, so reach
+them through the lookup (`values("created_at__date")`) under a time zone other than UTC. A `text` column becomes `xml`, `bit` or `varbit` only with a
+`USING` clause, which Django does not write: replace that operation with
+`migrations.RunSQL('ALTER TABLE "T" ALTER COLUMN "c" TYPE xml USING "c"::xml',
+state_operations=[...the AlterField...])`.
+
 On PostgreSQL, hand the `MapEnums` of the `DbContext` `hekireki-efcore` writes to Npgsql:
 `UseNpgsql(connectionString, AppDbContext.MapEnums)`, or `AppDbContext.MapEnums(builder)` on your
 own `NpgsqlDataSourceBuilder` as well when you pass `UseNpgsql` the data source it builds. It maps

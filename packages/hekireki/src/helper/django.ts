@@ -155,7 +155,7 @@ const NATIVE_DJANGO_FIELDS: { readonly [nativeType: string]: string } = {
   TinyInt: 'SmallIntegerField',
   MediumInt: 'IntegerField',
   Integer: 'IntegerField',
-  Oid: 'IntegerField',
+  Oid: 'BigIntegerField',
   BigInt: 'BigIntegerField',
   // MySQL's unsigned integers: Django's positive fields are its unsigned columns there (a
   // smallint unsigned for a tinyint unsigned, which Django has no field for).
@@ -165,6 +165,7 @@ const NATIVE_DJANGO_FIELDS: { readonly [nativeType: string]: string } = {
   UnsignedInt: 'PositiveIntegerField',
   UnsignedBigInt: 'PositiveBigIntegerField',
   Real: 'FloatField',
+  Float4: 'FloatField',
   DoublePrecision: 'FloatField',
   Double: 'FloatField',
   Uuid: 'UUIDField',
@@ -249,6 +250,89 @@ function holdsUtc(field: DMMF.Field, provider: string) {
   if (field.type !== 'DateTime' || resolveDjangoField(field).ctor !== 'DateTimeField') return false
   const zoned = provider === 'postgresql' || provider === 'cockroachdb'
   return !(zoned && field.nativeType?.[0] === 'Timestamptz')
+}
+
+// The precision a date-time native type names, or undefined for none.
+function precisionOf(field: DMMF.Field) {
+  return field.nativeType?.[1]?.[0]
+}
+
+// Prisma's column of a PostgreSQL or CockroachDB date-time field, when Django's own differs: a
+// DateTime is timestamp(3) without a zone where Django makes timestamptz, and a time or a
+// timestamptz of a precision other than 6 keeps it.
+function dateTimeColumnType(field: DMMF.Field) {
+  const precision = precisionOf(field)
+  const sized = (type: string) => (precision === undefined ? type : `${type}(${precision})`)
+  if (!field.nativeType) return 'timestamp(3)'
+  switch (field.nativeType[0]) {
+    case 'Timestamp':
+      return sized('timestamp')
+    case 'Timetz':
+      return sized('timetz')
+    case 'Timestamptz':
+      return precision === undefined || precision === '6' ? null : `timestamptz(${precision})`
+    case 'Time':
+      return precision === undefined || precision === '6' ? null : `time(${precision})`
+    default:
+      return null
+  }
+}
+
+// Prisma's column of a PostgreSQL or CockroachDB native type Django has no field for, by the
+// native type's name; the rest are Django's own.
+function nativeColumnType(field: DMMF.Field, provider: string) {
+  const [name, args] = field.nativeType ?? ['', []]
+  const length = args[0]
+  const sized = (type: string) => (length === undefined ? type : `${type}(${length})`)
+  switch (name) {
+    case 'Char':
+      return `char(${length ?? 1})`
+    case 'Bit':
+      return sized('bit')
+    case 'VarBit':
+      return sized('varbit')
+    case 'Xml':
+      return 'xml'
+    case 'Citext':
+      return 'citext'
+    case 'Real':
+      return 'real'
+    case 'Float4':
+      return provider === 'cockroachdb' ? 'float4' : null
+    case 'Oid':
+      return 'oid'
+    // An unconstrained numeric, which `prisma db pull` writes for a bare @db.Decimal: Django's
+    // DecimalField has to name a precision.
+    case 'Decimal':
+      return args.length === 0 ? 'decimal' : null
+    default:
+      return null
+  }
+}
+
+/**
+ * The column Prisma makes for a field, where Django's own field would make another: what its field
+ * class is given as `db_column_type`. PostgreSQL and CockroachDB only, for now.
+ */
+function columnTypeOf(field: DMMF.Field, provider: string) {
+  if (!hasEnumTypes(provider) || field.kind !== 'scalar') return null
+  // An autoincrement key is one of Django's auto fields, which make the column themselves, and a key
+  // can be a @unique standing in for a missing @id.
+  if (isAutoincrement(field)) return null
+  return field.type === 'DateTime' ? dateTimeColumnType(field) : nativeColumnType(field, provider)
+}
+
+/**
+ * A PostgreSQL @db.Money, which MoneyField reads as numeric. Not a list: ArrayField selects its
+ * column itself, and psycopg has no loader for money[].
+ */
+function isMoney(field: DMMF.Field, provider: string) {
+  return (
+    provider === 'postgresql' &&
+    field.type === 'Decimal' &&
+    field.nativeType?.[0] === 'Money' &&
+    !field.isList
+  )
 }
 
 function scalarElementLiteral(field: DMMF.Field, value: unknown) {
@@ -585,9 +669,74 @@ export function collectDefaultHelpers(
   return [...idHelpers, ...nanoidHelpers, ...nowHelpers, ...fieldHelpers]
 }
 
+// The connection vendor of a provider's database: django-cockroachdb's backend is its own.
+function vendorOf(provider: string) {
+  return provider === 'cockroachdb' ? 'cockroachdb' : 'postgresql'
+}
+
+// What a field class that can make Prisma's column holds: an optional `db_column_type`, written
+// into the migration so that changing it is an AlterField, and the column it names on the schema's
+// own database only (another backend, such as a test database on SQLite, makes Django's column).
+function columnTypeMethods(provider: string) {
+  return `    def __init__(self, *args: Any, db_column_type: str | None = None, **kwargs: Any) -> None:
+        self.db_column_type = db_column_type
+        super().__init__(*args, **kwargs)
+
+    def deconstruct(self) -> Any:
+        name, path, args, kwargs = super().deconstruct()
+        if self.db_column_type is not None:
+            kwargs["db_column_type"] = self.db_column_type
+        return name, path, args, kwargs
+
+    def db_type(self, connection: BaseDatabaseWrapper) -> str | None:
+        if self.db_column_type is not None and connection.vendor == "${vendorOf(provider)}":
+            return self.db_column_type
+        return super().db_type(connection)`
+}
+
+// The Django fields a native column type is declared on, each with a Native class of its own.
+const NATIVE_FIELD_BASES = [
+  'CharField',
+  'TextField',
+  'FloatField',
+  'BigIntegerField',
+  'DecimalField',
+  'TimeField',
+  'DateTimeField',
+] as const
+
+type NativeFieldBase = (typeof NATIVE_FIELD_BASES)[number]
+
+function nativeFieldClass(base: NativeFieldBase, provider: string) {
+  return `class Native${base}(models.${base}):  # type: ignore[type-arg]
+${columnTypeMethods(provider)}`
+}
+
+// Django's PostgreSQL date and time transforms (__date, __hour, Trunc*, Extract*) take a column to
+// the current zone with AT TIME ZONE, which on a timestamp without a zone goes the other way: the
+// column is read as the UTC instant it holds first.
+function utcInstant(provider: string) {
+  return `class _UtcInstant(models.Func):
+    template = "%(expressions)s"
+    output_field = models.DateTimeField()
+
+    def as_${vendorOf(provider)}(self, compiler: Any, connection: BaseDatabaseWrapper, **extra_context: Any) -> Any:
+        return self.as_sql(compiler, connection, template="(%(expressions)s AT TIME ZONE 'UTC')", **extra_context)`
+}
+
+const UTC_TRANSFORMS = `
+
+    def get_transform(self, lookup_name: str) -> Any:
+        transform = super().get_transform(lookup_name)
+        return None if transform is None else lambda lhs: transform(_UtcInstant(lhs))`
+
 // cspell:ignore datetimefield
-const UTC_DATETIME_FIELD = `class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
-    def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
+function utcDateTimeField(provider: string) {
+  const zoneless = hasEnumTypes(provider)
+  const columnType = zoneless ? `${columnTypeMethods(provider)}\n\n` : ''
+  const instant = zoneless ? `${utcInstant(provider)}\n\n\n` : ''
+  return `${instant}class UtcDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+${columnType}    def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
         if not prepared:
             value = self.get_prep_value(value)
         if not isinstance(value, datetime):
@@ -604,7 +753,38 @@ const UTC_DATETIME_FIELD = `class UtcDateTimeField(models.DateTimeField):  # typ
             return None
         if timezone.is_naive(value):
             value = value.replace(tzinfo=dt_timezone.utc)
-        return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())`
+        return value if settings.USE_TZ else timezone.make_naive(value, timezone.get_default_timezone())${zoneless ? UTC_TRANSFORMS : ''}`
+}
+
+// PostgreSQL's money is read back as text in the session's currency format ('$1.50'), and has no
+// comparison with numeric: as Prisma does, it is selected as numeric, and a value is bound untyped,
+// as its text, which PostgreSQL takes as money. A subquery keeps it money, for the comparison it
+// feeds, and what INSERT ... RETURNING hands back, which is not selected through select_format, is
+// read from its text.
+const MONEY_FIELD = `class MoneyField(models.DecimalField):  # type: ignore[type-arg]
+    def db_type(self, connection: BaseDatabaseWrapper) -> str | None:
+        return "money" if connection.vendor == "postgresql" else super().db_type(connection)
+
+    def select_format(self, compiler: Any, sql: str, params: Any) -> Any:
+        if compiler.connection.vendor != "postgresql" or compiler.query.subquery:
+            return super().select_format(compiler, sql, params)
+        return f"({sql})::numeric", params
+
+    def from_db_value(self, value: Any, expression: Any, connection: BaseDatabaseWrapper) -> Any:
+        if not isinstance(value, str):
+            return value
+        negative = value.startswith("-") or value.startswith("(")
+        digits = "".join(c for c in value if c.isdigit() or c == ".")
+        return Decimal(f"-{digits}" if negative else digits)
+
+    def get_db_prep_value(self, value: Any, connection: BaseDatabaseWrapper, prepared: bool = False) -> Any:
+        if connection.vendor != "postgresql":
+            return super().get_db_prep_value(value, connection, prepared)
+        if not prepared:
+            value = self.get_prep_value(value)
+        if value is None or hasattr(value, "as_sql"):
+            return value
+        return format(value, "f")`
 
 const AUTO_NOW_QUERY_SET = `_M = TypeVar("_M", bound=models.Model)
 
@@ -734,8 +914,18 @@ const STAMPED_FIELDS = [
 
 type StampedField = (typeof STAMPED_FIELDS)[number]
 
-function stampedField({ name, base, type, helper }: StampedField) {
-  // UtcDateTimeField is already declared without type arguments.
+// On PostgreSQL and CockroachDB a time or a timestamptz is declared on its Native class, which can
+// make Prisma's column.
+function stampedBase(stamped: StampedField, provider: string) {
+  if (!hasEnumTypes(provider)) return stamped.base
+  if (stamped.name === 'UtcTimeField') return 'NativeTimeField'
+  return stamped.name === 'AutoNowDateTimeField' ? 'NativeDateTimeField' : stamped.base
+}
+
+function stampedField(stamped: StampedField, provider: string) {
+  const { name, type, helper } = stamped
+  const base = stampedBase(stamped, provider)
+  // UtcDateTimeField and the Native classes are already declared without type arguments.
   const ignore = base.startsWith('models.') ? '  # type: ignore[type-arg]' : ''
   return `class ${name}(${base}):${ignore}
     def stamp(self) -> ${type}:
@@ -747,6 +937,29 @@ function stampedField({ name, base, type, helper }: StampedField) {
         value = self.stamp()
         setattr(model_instance, self.attname, value)
         return value`
+}
+
+// The scalar fields written as a column of their own: a single-column foreign key's scalar is
+// written as the ForeignKey, which takes its column from the field it references.
+function ownColumnFields(models: readonly DMMF.Model[]) {
+  return models.flatMap((model) => {
+    const collapsed = new Set(singleColumnBelongsTo(model).map((f) => f.relationFromFields?.[0]))
+    return model.fields.filter((f) => f.kind !== 'object' && !collapsed.has(f.name))
+  })
+}
+
+// The Native classes a module declares: those its fields are declared with, and the bases of its
+// @updatedAt classes.
+function nativeClassesOf(scalarFields: readonly DMMF.Field[], provider: string) {
+  const stamped = new Set(scalarFields.map((f) => stampedFieldClass(f, provider)))
+  return new Set(
+    [
+      ...scalarFields.map((f) =>
+        scalarFieldClass(f, provider, columnDjangoField(f, provider).ctor),
+      ),
+      ...STAMPED_FIELDS.filter((f) => stamped.has(f.name)).map((f) => stampedBase(f, provider)),
+    ].filter((name) => name.startsWith('Native')),
+  )
 }
 
 // The class an @updatedAt column is declared with.
@@ -764,9 +977,16 @@ function stampedFieldClass(field: DMMF.Field, provider: string): StampedField['n
 export function collectFieldClasses(models: readonly DMMF.Model[], provider: string) {
   const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
   const stamped = new Set(scalarFields.map((f) => stampedFieldClass(f, provider)))
+  const stampedClasses = STAMPED_FIELDS.filter((f) => stamped.has(f.name))
+  const columnFields = ownColumnFields(models)
+  const declared = nativeClassesOf(columnFields, provider)
   return [
-    scalarFields.some((f) => holdsUtc(f, provider)) ? UTC_DATETIME_FIELD : null,
-    ...STAMPED_FIELDS.filter((f) => stamped.has(f.name)).map((f) => stampedField(f)),
+    ...NATIVE_FIELD_BASES.filter((base) => declared.has(`Native${base}`)).map((base) =>
+      nativeFieldClass(base, provider),
+    ),
+    scalarFields.some((f) => holdsUtc(f, provider)) ? utcDateTimeField(provider) : null,
+    ...stampedClasses.map((f) => stampedField(f, provider)),
+    columnFields.some((f) => isMoney(f, provider)) ? MONEY_FIELD : null,
     scalarFields.some((f) => isEnumArray(f, provider)) ? ENUM_ARRAY_FIELD : null,
     scalarFields.some((f) => isPlainJson(f, provider)) ? PLAIN_JSON_FIELD : null,
     scalarFields.some((f) => f.isUpdatedAt === true) ? AUTO_NOW_QUERY_SET : null,
@@ -883,7 +1103,22 @@ function scalarFieldClass(field: DMMF.Field, provider: string, ctor: string) {
   const stamped = stampedFieldClass(field, provider)
   if (stamped !== null) return stamped
   if (holdsUtc(field, provider)) return 'UtcDateTimeField'
-  return isPlainJson(field, provider) ? 'PlainJSONField' : `models.${ctor}`
+  if (isMoney(field, provider)) return 'MoneyField'
+  if (isPlainJson(field, provider)) return 'PlainJSONField'
+  return columnTypeOf(field, provider) === null ? `models.${ctor}` : `Native${ctor}`
+}
+
+// What a field's class is given beyond Django's own arguments: the column Prisma makes, and for an
+// oid, which Django holds in a bigint, the range it takes.
+function columnTypeArgs(field: DMMF.Field, provider: string) {
+  const columnType = columnTypeOf(field, provider)
+  if (columnType === null) return []
+  return [
+    `db_column_type=${toPythonString(columnType)}`,
+    ...(field.nativeType?.[0] === 'Oid'
+      ? ['validators=[MinValueValidator(0), MaxValueValidator(4294967295)]']
+      : []),
+  ]
 }
 
 // The field class of a scalar column. Prisma makes a String with no native
@@ -912,7 +1147,12 @@ function generateScalarField(
   const resolved = columnDjangoField(field, provider)
 
   const ctorResolved =
-    isPk && isAutoincrement(field) ? { ctor: autoFieldCtor(field), typeArgs: [] } : resolved
+    isPk && isAutoincrement(field)
+      ? { ctor: autoFieldCtor(field), typeArgs: [] }
+      : {
+          ctor: resolved.ctor,
+          typeArgs: [...resolved.typeArgs, ...columnTypeArgs(field, provider)],
+        }
 
   const defaultArgs = formatDefaultArgs(model, field, names)
 
@@ -1720,6 +1960,8 @@ type ImportNeeds = {
   readonly utcField: boolean
   readonly enumArray: boolean
   readonly plainJson: boolean
+  readonly columnTypes: boolean
+  readonly validators: boolean
   readonly databaseWrapper: boolean
   readonly autoNow: boolean
   readonly decimal: boolean
@@ -1732,9 +1974,8 @@ type ImportNeeds = {
 
 function stdlibImports(needs: ImportNeeds) {
   const fromTyping = [
-    needs.any || needs.utcField || needs.autoNow || needs.enumArray || needs.plainJson
-      ? 'Any'
-      : null,
+    // Every field class that takes a connection is annotated with Any as well.
+    needs.any || needs.autoNow || needs.databaseWrapper ? 'Any' : null,
     needs.autoNow ? 'TypeVar' : null,
   ].filter((name) => name !== null)
   return [
@@ -1748,6 +1989,21 @@ function stdlibImports(needs: ImportNeeds) {
   ].filter((l) => l !== null)
 }
 
+// The imports from django.conf, django.contrib and django.core, in the order isort sorts them.
+function djangoImports(needs: ImportNeeds) {
+  return [
+    needs.utcField ? 'from django.conf import settings' : null,
+    needs.array ? 'from django.contrib.postgres.fields import ArrayField' : null,
+    needs.indexClasses.length > 0
+      ? `from django.contrib.postgres.indexes import ${needs.indexClasses.join(', ')}`
+      : null,
+    needs.validators
+      ? 'from django.core.validators import MaxValueValidator, MinValueValidator'
+      : null,
+    'from django.db import models',
+  ].filter((l) => l !== null)
+}
+
 function thirdPartyImports(needs: ImportNeeds) {
   return [
     // cuid ships no types, nor does typeshed have any; nanoid's are typeshed's types-nanoid.
@@ -1756,12 +2012,7 @@ function thirdPartyImports(needs: ImportNeeds) {
     needs.cuid2 ? 'import cuid2' : null,
     needs.nanoid ? 'import nanoid' : null,
     needs.uuid6 ? 'import uuid6' : null,
-    needs.utcField ? 'from django.conf import settings' : null,
-    needs.array ? 'from django.contrib.postgres.fields import ArrayField' : null,
-    needs.indexClasses.length > 0
-      ? `from django.contrib.postgres.indexes import ${needs.indexClasses.join(', ')}`
-      : null,
-    'from django.db import models',
+    ...djangoImports(needs),
     needs.databaseWrapper ? 'from django.db.backends.base.base import BaseDatabaseWrapper' : null,
     // Under a name of its own: the module holds a class for each model, and one may be named Cast.
     needs.plainJson ? 'from django.db.models import functions as db_functions' : null,
@@ -1781,6 +2032,10 @@ export function collectGlobalImports(
 ) {
   const scalarFields = models.flatMap((m) => m.fields.filter((f) => f.kind !== 'object'))
   const needsUtcField = scalarFields.some((f) => holdsUtc(f, provider))
+  const columnFields = ownColumnFields(models)
+  const columnTypes =
+    nativeClassesOf(columnFields, provider).size > 0 ||
+    columnFields.some((f) => isMoney(f, provider))
   const literalKinds = scalarFields
     .filter(
       (f) =>
@@ -1813,12 +2068,19 @@ export function collectGlobalImports(
     utcField: needsUtcField,
     enumArray: scalarFields.some((f) => isEnumArray(f, provider)),
     plainJson: scalarFields.some((f) => isPlainJson(f, provider)),
-    // The field classes that take a connection: UtcDateTimeField, EnumArrayField, PlainJSONField.
+    columnTypes,
+    validators: columnFields.some((f) =>
+      columnTypeArgs(f, provider).some((arg) => arg.startsWith('validators=')),
+    ),
+    // The field classes that take a connection: UtcDateTimeField, EnumArrayField, PlainJSONField,
+    // MoneyField and the Native ones.
     databaseWrapper:
       needsUtcField ||
+      columnTypes ||
       scalarFields.some((f) => isEnumArray(f, provider) || isPlainJson(f, provider)),
     autoNow: scalarFields.some((f) => f.isUpdatedAt === true),
-    decimal: needsDecimalImport(scalarFields),
+    // MoneyField reads a value as a Decimal.
+    decimal: needsDecimalImport(scalarFields) || columnFields.some((f) => isMoney(f, provider)),
     any: needsAnyImport(scalarFields),
     fromDatetime: ['date', 'datetime', 'time'].filter((kind) => kinds.has(kind)),
     nowHelpers: nowHelperKinds.length > 0,
