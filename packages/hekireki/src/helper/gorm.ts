@@ -347,8 +347,8 @@ function gormDefault(
 }
 
 // A single key's literal default is left out, except an integer key's: that key says
-// autoIncrement:false (isImplicitAutoIncrement), and the default: tag is what leaves a zero one to
-// the database.
+// autoIncrement:false (isImplicitAutoIncrement), and GORM puts the default: tag's literal in place
+// of a zero one, as the column's DEFAULT would.
 function keepsLiteralDefault(field: DMMF.Field, isPk: boolean, isCompositePk: boolean) {
   if (!isPk || isCompositePk) return true
   return ['Int', 'BigInt'].includes(field.type) && !isFunctionDefault(field.default)
