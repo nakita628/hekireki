@@ -9,6 +9,7 @@ import {
   makeRelations,
   makeTable,
   resolveDbProvider,
+  resolveExportNames,
 } from '../helper/drizzle.js'
 import { partialIndexWhere } from '../prisma/partial-index.js'
 import { relationMaps } from '../prisma/schema-text.js'
@@ -30,6 +31,7 @@ export function drizzleSchema(
 ) {
   const db = resolveDbProvider(provider)
   const imports = createImports()
+  resolveExportNames(imports, datamodel.models, datamodel.enums, db)
   const whereOf = partialIndexWhere(blocks, provider)
   const foreignKeyNames = relationMaps(blocks)
 

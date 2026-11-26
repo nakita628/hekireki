@@ -263,6 +263,9 @@ type ImportReq = { readonly pkg: string; readonly kind: 'named' | 'default'; rea
 
 export function createImports() {
   return {
+    // The export of each table, view and join table, resolved once by resolveExportNames: by
+    // model name, and by `_<relationName>` for a join table.
+    names: new Map<string, string>(),
     core: new Set<string>(),
     // Written `type X` in the core import, so a schema compiled with `verbatimModuleSyntax` holds.
     coreTypes: new Set<string>(),
@@ -357,20 +360,126 @@ function resolveTableName(model: DMMF.Model) {
   return model.dbName ?? model.name
 }
 
-// The export is the table's name as a camelCase identifier: `users` for
-// @@map("users"), `orderLineItem` for a snake_case table, `todo` for "Todo".
-function resolveVarName(model: DMMF.Model) {
-  const name = snakeToCamel(resolveTableName(model))
-  return `${name.charAt(0).toLowerCase()}${name.slice(1)}`
+// A name as a camelCase identifier: `users` for @@map("users"), `orderLineItem` for a snake_case
+// table, `todo` for "Todo", `orderItems` for "order-items", and `_2faCodes` for "2fa_codes".
+function camelIdentifier(name: string) {
+  const camel = snakeToCamel(name.replaceAll(/[^\p{ID_Continue}$]+/gu, '_')).replace(
+    /^_+(?=[\p{ID_Start}$])/u,
+    '',
+  )
+  const lowered = `${camel.charAt(0).toLowerCase()}${camel.slice(1)}`
+  if (lowered === '') return '_'
+  return /^[\p{ID_Start}$_]/u.test(lowered) ? lowered : `_${lowered}`
 }
 
-function resolveVarNameByType(type: string, models: readonly DMMF.Model[]) {
+// What an export cannot be called: JavaScript's reserved words and the names strict mode keeps
+// (eval, arguments), the globals the module calls (crypto, queueMicrotask, undefined), the
+// relations export and the `table` parameter of each table's callback.
+const RESERVED_EXPORTS = [
+  'await break case catch class const continue debugger default delete do else enum export',
+  'extends false finally for function if implements import in instanceof interface let new null',
+  'package private protected public return static super switch this throw true try typeof var',
+  'void while with yield eval arguments crypto queueMicrotask undefined relations table',
+  // What the module imports whatever its provider: drizzle-orm's, and the id generators'.
+  'sql defineRelations customType uuidv7 createId cuid nanoid ulid',
+  'foreignKey index uniqueIndex unique primaryKey',
+].flatMap((line) => line.split(' '))
+
+// The column functions a provider's tables can call: the first word of each expression.
+function functionNames(expressions: readonly string[]) {
+  return expressions.flatMap((expression) => /^\w+/u.exec(expression)?.[0] ?? [])
+}
+
+const PROVIDER_EXPORTS: { readonly [p in DbProvider]: readonly string[] } = {
+  postgresql: [
+    ...functionNames([...Object.values(PG_SCALAR_MAP), ...Object.values(PG_NATIVE_FIXED)]),
+    ...Object.values(PG_NATIVE_SIZED).map(([fn]) => fn),
+    ...'numeric timestamp bit serial bigserial pgEnum pgTable pgView'.split(' '),
+  ],
+  mysql: [
+    ...functionNames([...Object.values(MYSQL_SCALAR_MAP), ...Object.values(MYSQL_NATIVE_FIXED)]),
+    ...Object.values(MYSQL_NATIVE_SIZED).map(([fn]) => fn),
+    ...'decimal datetime timestamp mysqlEnum mysqlTable mysqlView'.split(' '),
+  ],
+  sqlite: [
+    ...functionNames(Object.values(SQLITE_SCALAR_MAP)),
+    ...'text sqliteTable sqliteView'.split(' '),
+  ],
+}
+
+/**
+ * The export of every table, view and join table, resolved once: the table's name as a camelCase
+ * identifier, with `Table` after it where that is a name the module imports or declares on this
+ * provider (a drizzle column function, a helper, a reserved word: a fixed set, so a model's export
+ * never turns on another field), an enum's export or an export already taken, in schema order,
+ * models before join tables.
+ *
+ * @param imports - Where the names are kept, for every writer to read.
+ * @param models - The models, views among them.
+ * @param enums - The enums, whose exports (`<name>Enum`) are taken first.
+ * @param provider - The provider, whose column functions are reserved.
+ */
+export function resolveExportNames(
+  imports: DrizzleImports,
+  models: readonly DMMF.Model[],
+  enums: readonly DMMF.DatamodelEnum[],
+  provider: DbProvider,
+) {
+  const reserved = new Set([
+    ...RESERVED_EXPORTS,
+    ...Object.keys(COLUMN_HELPERS),
+    ...PROVIDER_EXPORTS[provider],
+  ])
+  const taken = new Set<string>()
+  const usable = (name: string) => !reserved.has(name) && !taken.has(name)
+  // The name, or the first of `<name><suffix>`, `<name><suffix>2`, ... that is free.
+  const claim = (base: string, suffix: string) => {
+    const preferred = usable(base) ? base : `${base}${suffix}`
+    const free = usable(preferred)
+      ? preferred
+      : Array.from({ length: taken.size + 2 }, (_, i) => `${preferred}${i + 2}`).find(usable)
+    const name = free ?? preferred
+    taken.add(name)
+    return name
+  }
+  // The enums first, on PostgreSQL, the one provider whose module declares them: every one, used
+  // by a field or not, so that a table's export does not turn on whether a field uses one.
+  const declared = provider === 'postgresql' ? enums : []
+  for (const declaredEnum of declared) {
+    imports.names.set(`enum:${declaredEnum.name}`, claim(enumIdentifier(declaredEnum.name), ''))
+  }
+  for (const model of models) {
+    imports.names.set(model.name, claim(camelIdentifier(resolveTableName(model)), 'Table'))
+  }
+  for (const pair of implicitJoinTables(models)) {
+    imports.names.set(
+      `_${pair.relationName}`,
+      claim(camelIdentifier(makeSnakeCase(pair.relationName)), 'Table'),
+    )
+  }
+}
+
+// The export of a model's table, as resolveExportNames resolved it.
+function resolveVarName(model: DMMF.Model, imports: DrizzleImports) {
+  return imports.names.get(model.name) ?? camelIdentifier(resolveTableName(model))
+}
+
+function resolveVarNameByType(
+  type: string,
+  models: readonly DMMF.Model[],
+  imports: DrizzleImports,
+) {
   const target = models.find((m) => m.name === type)
-  return target ? resolveVarName(target) : `${type.charAt(0).toLowerCase()}${type.slice(1)}`
+  return target ? resolveVarName(target, imports) : camelIdentifier(type)
 }
 
 function isFieldDefault(v: unknown) {
   return typeof v === 'object' && v !== null && 'name' in v
+}
+
+// The export of an enum, as resolveExportNames resolved it.
+function enumVarName(enumName: string, imports: DrizzleImports) {
+  return imports.names.get(`enum:${enumName}`) ?? enumIdentifier(enumName)
 }
 
 function enumIdentifier(enumName: string) {
@@ -394,7 +503,7 @@ export function makeEnumDeclarations(
       const values = e.values.map((v) => `'${v.dbName ?? v.name}'`).join(', ')
       return [
         ...docBlockLines(stripAnnotations(e.documentation), ''),
-        `export const ${enumIdentifier(e.name)} = pgEnum('${e.dbName ?? e.name}', [${values}])`,
+        `export const ${enumVarName(e.name, imports)} = pgEnum('${e.dbName ?? e.name}', [${values}])`,
       ].join('\n')
     })
 }
@@ -435,7 +544,7 @@ function makeColumnExpr(
       // References the top-level declaration from makeEnumDeclarations: an
       // inline pgEnum(...) per column is invisible to drizzle-kit, so the
       // migration uses the type without ever emitting CREATE TYPE.
-      return `${enumIdentifier(field.type)}('${colName}')`
+      return `${enumVarName(field.type, imports)}('${colName}')`
     }
     if (provider === 'mysql') {
       imports.core.add('mysqlEnum')
@@ -756,7 +865,7 @@ function makeTableConstraints(
   const columns = keyColumns?.map((f) => `table.${f}`).join(', ')
   // MySQL's primary key is always named PRIMARY, and drizzle's `primaryKey` there takes no name; a
   // single SQLite key goes unnamed, so drizzle-kit writes it inline as Prisma does.
-  const pkName = provider === 'mysql' || sqliteKey ? '' : `name: '${tableName}_pkey', `
+  const pkName = provider === 'mysql' || sqliteKey ? '' : `name: ${tsString(`${tableName}_pkey`)}, `
   const pkLine = columns === undefined ? null : `primaryKey({ ${pkName}columns: [${columns}] })`
 
   // DMMF leaves an `@ignore` field out of the model, but not out of an index that lists it: the
@@ -835,7 +944,7 @@ function makeTableConstraints(
   const fkLines = foreignKeys.map((f) => {
     imports.core.add('foreignKey')
     // A relation of a model to itself reads its own columns from the table it is given.
-    const target = f.type === model.name ? 'table' : resolveVarNameByType(f.type, models)
+    const target = f.type === model.name ? 'table' : resolveVarNameByType(f.type, models, imports)
     const from = f.relationFromFields ?? []
     const name =
       foreignKeyNames.get(`${model.name}.${f.name}`) ??
@@ -963,7 +1072,7 @@ export function makeTable(
   whereOf: IndexWhere = () => undefined,
   foreignKeyNames: ReadonlyMap<string, string> = new Map(),
 ) {
-  const varName = resolveVarName(model)
+  const varName = resolveVarName(model, imports)
   const tableName = resolveTableName(model)
   const modelDoc = docBlockLines(stripAnnotations(model.documentation), '')
   if (views.has(model.name)) {
@@ -977,7 +1086,7 @@ export function makeTable(
     )
     return [
       ...modelDoc,
-      `export const ${varName} = ${viewFunc}('${tableName}', ${viewColumns}).existing()`,
+      `export const ${varName} = ${viewFunc}(${tsString(tableName)}, ${viewColumns}).existing()`,
     ].join('\n')
   }
 
@@ -1002,9 +1111,10 @@ export function makeTable(
     foreignKeyNames,
   )
   if (constraints === null) {
-    return [...modelDoc, `export const ${varName} = ${tableFunc}('${tableName}', ${columns})`].join(
-      '\n',
-    )
+    return [
+      ...modelDoc,
+      `export const ${varName} = ${tableFunc}(${tsString(tableName)}, ${columns})`,
+    ].join('\n')
   }
 
   const configType = isOnForeignKeyCycle(model, models) ? EXTRA_CONFIG_TYPE[provider] : undefined
@@ -1012,12 +1122,13 @@ export function makeTable(
   const params = configType === undefined ? '(table)' : `(table): ${configType}[]`
   return [
     ...modelDoc,
-    `export const ${varName} = ${tableFunc}('${tableName}', ${columns}, ${params} => [${constraints}])`,
+    `export const ${varName} = ${tableFunc}(${tsString(tableName)}, ${columns}, ${params} => [${constraints}])`,
   ].join('\n')
 }
 
-function joinVarName(relationName: string) {
-  return snakeToCamel(makeSnakeCase(relationName))
+// The export of an implicit many-to-many's join table, as resolveExportNames resolved it.
+function joinVarName(relationName: string, imports: DrizzleImports) {
+  return imports.names.get(`_${relationName}`) ?? camelIdentifier(makeSnakeCase(relationName))
 }
 
 function withColumnName(baseExpr: string, colName: string) {
@@ -1061,7 +1172,7 @@ export function makeM2MJoinTables(
       return {
         column,
         model,
-        target: resolveVarNameByType(model, models),
+        target: resolveVarNameByType(model, models, imports),
         key: keyName(model, models),
       }
     })
@@ -1071,15 +1182,15 @@ export function makeM2MJoinTables(
     )
     const constraints = [
       provider === 'postgresql'
-        ? `primaryKey({ name: '${tableName}_AB_pkey', columns: [table.A, table.B] })`
-        : `uniqueIndex('${tableName}_AB_unique').on(table.A, table.B)`,
-      `index('${tableName}_B_index').on(table.B)`,
+        ? `primaryKey({ name: ${tsString(`${tableName}_AB_pkey`)}, columns: [table.A, table.B] })`
+        : `uniqueIndex(${tsString(`${tableName}_AB_unique`)}).on(table.A, table.B)`,
+      `index(${tsString(`${tableName}_B_index`)}).on(table.B)`,
       ...sides.map(
         (side) =>
           `foreignKey({ name: '${constraintName(tableName, [], `${side.column}_fkey`, provider)}', columns: [table.${side.column}], foreignColumns: [${side.target}.${side.key}] }).onDelete('cascade').onUpdate('cascade')`,
       ),
     ]
-    return `export const ${joinVarName(pair.relationName)} = ${tableFunc}('${tableName}', { ${columns.join(', ')} }, (table) => [${constraints.join(', ')}])`
+    return `export const ${joinVarName(pair.relationName, imports)} = ${tableFunc}(${tsString(tableName)}, { ${columns.join(', ')} }, (table) => [${constraints.join(', ')}])`
   })
 }
 
@@ -1113,12 +1224,17 @@ function relationAlias(field: DMMF.Field, relFields: readonly DMMF.Field[]) {
 }
 
 // Both ends of an implicit many-to-many read the join table `through` its columns.
-function manyToManyOptions(field: DMMF.Field, model: DMMF.Model, models: readonly DMMF.Model[]) {
-  const targetVar = resolveVarNameByType(field.type, models)
-  const modelVar = resolveVarName(model)
+function manyToManyOptions(
+  field: DMMF.Field,
+  model: DMMF.Model,
+  models: readonly DMMF.Model[],
+  imports: DrizzleImports,
+) {
+  const targetVar = resolveVarNameByType(field.type, models, imports)
+  const modelVar = resolveVarName(model, imports)
   const [left, right] =
     model.name < field.type ? [model.name, field.type] : [field.type, model.name]
-  const joinVar = joinVarName(field.relationName ?? `${left}To${right}`)
+  const joinVar = joinVarName(field.relationName ?? `${left}To${right}`, imports)
   const inverse = backRelation(field, model, models)
   // A self-relation's end reads the rows that hold its own key: column A for the end on side A.
   const [own, other] = inverse && isJoinSideA(field, model, inverse) ? ['A', 'B'] : ['B', 'A']
@@ -1140,9 +1256,10 @@ function makeRelationField(
   model: DMMF.Model,
   models: readonly DMMF.Model[],
   relFields: readonly DMMF.Field[],
+  imports: DrizzleImports,
 ) {
-  const targetVar = resolveVarNameByType(field.type, models)
-  const modelVar = resolveVarName(model)
+  const targetVar = resolveVarNameByType(field.type, models, imports)
+  const modelVar = resolveVarName(model, imports)
   const alias = relationAlias(field, relFields)
 
   if (field.relationFromFields && field.relationFromFields.length > 0) {
@@ -1158,7 +1275,7 @@ function makeRelationField(
 
   if (field.isList) {
     if (isImplicitManyToMany(field, model, models)) {
-      return `${field.name}: r.many.${targetVar}${manyToManyOptions(field, model, models)}`
+      return `${field.name}: r.many.${targetVar}${manyToManyOptions(field, model, models, imports)}`
     }
     return `${field.name}: r.many.${targetVar}${call(alias)}`
   }
@@ -1198,24 +1315,24 @@ export function makeRelations(models: readonly DMMF.Model[], imports: DrizzleImp
 
   const pairs = implicitJoinTables(models)
   const tables = [
-    ...models.map((model) => resolveVarName(model)),
-    ...pairs.map((pair) => joinVarName(pair.relationName)),
+    ...models.map((model) => resolveVarName(model, imports)),
+    ...pairs.map((pair) => joinVarName(pair.relationName, imports)),
   ]
   const entries = [
     ...modelsWithRels.map((model) => {
       const relFields = model.fields.filter((f) => f.kind === 'object')
       const fieldLines = relFields
-        .map((field) => makeRelationField(field, model, models, relFields))
+        .map((field) => makeRelationField(field, model, models, relFields, imports))
         .join(', ')
-      return `${resolveVarName(model)}: { ${fieldLines} }`
+      return `${resolveVarName(model, imports)}: { ${fieldLines} }`
     }),
     ...pairs.map((pair) => {
-      const joinVar = joinVarName(pair.relationName)
+      const joinVar = joinVarName(pair.relationName, imports)
       const isSelf = pair.left === pair.right
       const sides = (['A', 'B'] as const).map((column) => {
         const modelName = column === 'A' ? pair.left : pair.right
         const key = uncapitalizeName(modelName)
-        return `${isSelf && column === 'B' ? `${key}_` : key}: r.one.${resolveVarNameByType(modelName, models)}({ from: r.${joinVar}.${column}, to: r.${resolveVarNameByType(modelName, models)}.${keyName(modelName, models)}, optional: false })`
+        return `${isSelf && column === 'B' ? `${key}_` : key}: r.one.${resolveVarNameByType(modelName, models, imports)}({ from: r.${joinVar}.${column}, to: r.${resolveVarNameByType(modelName, models, imports)}.${keyName(modelName, models)}, optional: false })`
       })
       return `${joinVar}: { ${sides.join(', ')} }`
     }),
